@@ -1,0 +1,14 @@
+# Local working material: notes, sources, drafts. Lives only on disk, never pushed.
+scratch-pad/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Local state and secrets
+*.sqlite
+*.db
+.env
