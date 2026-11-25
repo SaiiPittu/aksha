@@ -1,0 +1,6 @@
+event_id,date,candidate,event_type,what_was_shown,audience,public,by,source,synthetic
+DISC-01,2026-03-10,C1,trade-show demo,Live demo plus one slide describing the PIR-quiet and door-closed baseline gate,"Future Office Fair 2026, Lyon, open floor, about 200 visitors",yes,"P-07, P-01",disclosures/2026-03-10-trade-show-demo.md,true
+DISC-02,2026-04-15,C3,customer pilot,Count-only aggregator running in one customer office,one customer facilities team,"no, under NDA-2026-03",P-04,NOTE-C3,true
+DISC-03,2026-06-02,C4,blog post,"Full description of event-driven sampling, the 60 second window and the 15 minute heartbeat","public, hushframe.example/blog",yes,P-02,https://hushframe.example/blog/two-year-battery,true
+DISC-04,,C4,investor update email,Battery-life chart and a summary of the sampling schedule,"seed investors, number of recipients not recorded",unclear,P-07,not on file,true
+DISC-05,2025-11-21,C1,outside email,Dr. Varga suggested using the door contact as a room-sealed signal for calibration,private email to Nadia Petrov,no,P-05,disclosures/consultant-email.eml.txt,true

@@ -1,0 +1,43 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0010",
+  "office": "SYN-Office-1",
+  "kind_code": "B2",
+  "title": "Planning mount points for ceiling occupancy sensors",
+  "applicant": "Roofplan Ltd.",
+  "dates": {
+    "priority": "2019-06-30",
+    "filing": "2020-06-29",
+    "publication": "2021-01-07",
+    "grant": "2023-08-22"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2019-0630",
+      "date": "2019-06-30"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0010",
+  "status_observations": [
+    {
+      "wording": "Granted - in force",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-10-01"
+    }
+  ],
+  "abstract": "Footprint at working height and seat coverage drive proposed mount points.",
+  "description": "A planning tool computes the floor footprint of a ceiling sensor at a working height from its field of view and the ceiling height, and proposes mount points that maximise coverage of seats in a floor plan.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan."
+    },
+    {
+      "number": 2,
+      "depends_on": 1,
+      "text": "The method of claim 1, further comprising penalising mount points within a minimum distance of a doorway."
+    }
+  ]
+}
