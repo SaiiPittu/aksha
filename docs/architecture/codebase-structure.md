@@ -1,6 +1,6 @@
 # Aksha codebase structure
 
-*Status on 25 Nov 2026: four primitives are built and tested. The event store and projections (ADR-P01): `runtime/events/`, `runtime/storage/` (hash-chained since 25 Nov 2026, Amendment H), `runtime/projections/`, both storage adapters (SQLite, the default, and PostgreSQL), the file anchor sink and the storage wiring in `app.py`. The agent definition and the core of the extension API (ADR-P20): `runtime/definitions/` and `runtime/api.py`. The tool registry (ADR-P10): `runtime/tools/`. The policy gate (ADR-P11): `runtime/policy/`. Every other primitive holds only the values the built ones need, in its `types.py`; the tree lists only modules that exist, and "Built and planned" lists the rest. The guards in `tests/architecture/` are built and pass. The architecture decision records (ADRs) it follows are in `docs/design/adr/`; their "Amendments from the build" sections record where the code differs from the first text.*
+*Status on 26 Nov 2026: eight primitives are built and tested. The event store and projections (ADR-P01): `runtime/events/`, `runtime/storage/` (hash-chained since 25 Nov 2026, Amendment H), `runtime/projections/`, both storage adapters (SQLite, the default, and PostgreSQL), the file anchor sink and the storage wiring in `app.py`. The agent definition and the core of the extension API (ADR-P20): `runtime/definitions/` and `runtime/api.py`. The tool registry (ADR-P10): `runtime/tools/`. The policy gate (ADR-P11): `runtime/policy/`. Durable execution (ADR-P02, slice 2): `runtime/execution/`, the step executor, step IDs, IDs from the store and recovery on startup. The transactional outbox and idempotency keys (ADR-P03): `runtime/outbox/`, with command receipts in `runtime/session/commands.py`. Budgets, limits, timeouts and bounded retries (ADR-P14): `runtime/budgets/`, every count a reducer over the event store, with resume records and the restart limit in `execution/recovery.py`. Cancellation (ADR-P18): `runtime/cancellation/`, the durable stop request, its holds and the TC-4 audit, the skip and kill boundary in the step executor, and `adapters/sandbox/process.py`. Every other primitive holds only the values the built ones need, in its `types.py`; the tree lists only modules that exist, and "Built and planned" lists the rest. The guards in `tests/architecture/` are built and pass. The architecture decision records (ADRs) it follows are in `docs/design/adr/`; their "Amendments from the build" sections record where the code differs from the first text.*
 
 
 A reader who opens the repository should be able to answer three questions in a minute: where does a concept live, what may it import, and where does its test go. Without a fixed answer, the event store's rules end up split between a SQLite file and the code that calls it, a model driver gets imported by the core, and swapping SQLite for PostgreSQL means editing every primitive. This page fixes the answers. It uses ports and adapters (hexagonal architecture): the runtime is the domain in the middle, it states what it needs from the outside world as `typing.Protocol` classes (the ports), and concrete backends (the adapters) implement those Protocols from outside.
@@ -117,13 +117,24 @@ src/aksha/
 │   │   ├── gate.py                          check(): the one checker, pure; permitted (layers 1-4)
 │   │   ├── matrix.py                        matrix(): one row per (agent, Task, tool), markdown
 │   │   └── events.py                        decision_event, boundary_of, tool_calls_used
-│   ├── execution/                           P02 durable execution (the clock and types so far)
+│   ├── execution/                           P02 durable execution
 │   │   ├── __init__.py                      what is built, what is planned
-│   │   ├── ports.py                         Clock (Protocol)
-│   │   └── types.py                         StepSemantics
-│   ├── outbox/                              P03 transactional outbox (types so far)
+│   │   ├── ports.py                         Clock, IdSource, DurableStepExecutor, RunDriver (Protocols)
+│   │   ├── types.py                         StepId and its grammar, StepSemantics, StepPolicy, StepOutput, StepResult
+│   │   ├── errors.py                        StepIdInvalid, StepMismatch, EffectNeedsOutbox, TransientStepError
+│   │   ├── facts.py                         the five step facts, their boundaries and dedup keys; pure
+│   │   ├── executor.py                      StepExecutor: record before and after, replay, retry, abandon, discard; effect_step
+│   │   ├── ids.py                           LogIdSource: run and other IDs counted from the event store
+│   │   └── recovery.py                      recover_on_startup (outbox phases first), resume_owner, classify_open_run, dangling_steps
+│   ├── outbox/                              P03 transactional outbox and idempotency keys
 │   │   ├── __init__.py                      what is built, what is planned
-│   │   └── types.py                         SystemOfRecordSpec, EffectSpec
+│   │   ├── ports.py                         SystemOfRecord, Authority (Protocols)
+│   │   ├── types.py                         EffectSpec, SystemOfRecordSpec, SystemReceipt, OutboxEntry
+│   │   ├── errors.py                        OutboxRefused, KeyFieldMissing, SystemUnknown, TransientEffectError
+│   │   ├── keys.py                          idempotency_key from key_fields and the owner; request_hash
+│   │   ├── facts.py                         the five outbox facts, their boundaries and dedup keys; pure
+│   │   ├── outbox.py                        the outbox projection, pending_outbox, enqueue
+│   │   └── worker.py                        OutboxWorker: claim, apply, retry, record; recovery by key
 │   ├── artifacts/                           P04 artifacts and lineage (types so far)
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   └── types.py                         ArtifactKind, RelationKind, SaveRequest
@@ -139,18 +150,39 @@ src/aksha/
 │   ├── sandbox/                             P12 sandbox (types so far)
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   └── types.py                         SandboxNeeds, SandboxPolicy, Availability, backend specs
-│   ├── budgets/                             P14 budgets and limits (types so far)
+│   ├── budgets/                             P14 budgets, limits, timeouts and bounded retries
 │   │   ├── __init__.py                      what is built, what is planned
-│   │   └── types.py                         Backoff, Budget, Limits
+│   │   ├── types.py                         Dimension, Backoff, Budget, Limits, LimitHit
+│   │   ├── backoff.py                       next_backoff_ms: fixed backoff, no jitter; pure
+│   │   ├── records.py                       what each recorded fact counts for; pure
+│   │   ├── meter.py                         BudgetAccounting reducer, Meter, meter
+│   │   ├── limits.py                        turn, stop-veto and restart limits, attempt_number, auto starts
+│   │   └── facts.py                         budget.reached, budget.granted
 │   ├── tasks/                               P15 Task model (types so far)
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   └── types.py                         Task, Read, KeySource, Check, CheckResult
 │   ├── stop_policy/                         P16 stop policy (types so far)
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   └── types.py                         StopPolicyOptIn, Goal, Plan, ForcedTool, TodoReminder
-│   ├── interrupts/                          P17 interrupt and suspension (types so far)
+│   ├── cancellation/                        P18 cancellation
 │   │   ├── __init__.py                      what is built, what is planned
-│   │   └── types.py                         DeclaredInterrupt, ApprovalRule
+│   │   ├── types.py                         StopScope, StopRequestView, StopHold, HeldStart, KillPolicy
+│   │   ├── ports.py                         KillableUnit (Protocol)
+│   │   ├── facts.py                         the run.stop_requested event
+│   │   ├── requests.py                      stop_requests, pending_stop, runs_to_resume_for_stop, stop_before_step
+│   │   ├── hold.py                          stop_hold, standing_hold, held_auto_starts (the TC-4 audit)
+│   │   ├── ending.py                        stop_ending, honour_stop: voided interrupts, run.ended stopped
+│   │   ├── command.py                       the stop command, through dispatch
+│   │   └── kill.py                          kill_boundary: settle, bounded grace, terminate
+│   ├── session/                             P19 session API (command receipts so far)
+│   │   ├── __init__.py                      what is built, what is planned
+│   │   ├── types.py                         Command, CommandSpec, CommandAccepted, CommandRefused, CommandReceipt
+│   │   ├── errors.py                        CommandIdReused, CommandNameMismatch
+│   │   └── commands.py                      dispatch, derive_command_id, command_key
+│   ├── interrupts/                          P17 interrupt and suspension (types and one reader so far)
+│   │   ├── __init__.py                      what is built, what is planned
+│   │   ├── types.py                         DeclaredInterrupt, ApprovalRule
+│   │   └── reducers.py                      pending_interrupts, raised_in
 │   └── egress/                              P26 egress policy (types so far)
 │       ├── __init__.py                      what is built, what is planned
 │       └── types.py                         EgressPolicy
@@ -163,10 +195,13 @@ src/aksha/
 │   ├── anchor/                              AnchorSink implementations (chain anchors outside the store)
 │   │   ├── __init__.py                      a sink is only as good as the writer's inability to rewrite it
 │   │   └── file.py                          FileAnchorSink: JSON Lines, fsync, idempotent per seq
-│   └── clock/                               Clock implementations
-│       ├── __init__.py                      the Clock port's adapters
-│       ├── system.py                        SystemClock
-│       └── fake.py                          FakeClock
+│   ├── clock/                               Clock implementations
+│   │   ├── __init__.py                      the Clock port's adapters
+│   │   ├── system.py                        SystemClock
+│   │   └── fake.py                          FakeClock
+│   └── sandbox/                             where a tool body runs so the host can end it
+│       ├── __init__.py                      what is built, what is planned
+│       └── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
 ├── extensions/                              EXTENSIONS: one folder per extension (none yet)
 │   └── __init__.py                          imports aksha.runtime.api only
 ├── agents/                                  AGENTS: one folder per agent (none yet)
@@ -186,8 +221,8 @@ One row per primitive. "Built" exists and is tested. "Planned" is the modules ea
 | Primitive | Built | Planned modules |
 |---|---|---|
 | P01 event store and projections | `events/`, `storage/` (with the hash chain, `chain.py`, `anchors.py`), `projections/`, both storage adapters, `adapters/anchor/file.py` | the blob table for payloads over the cap (with P04); the `chain.anchored` event, scheduled anchoring, `VerifyReport` and a WORM sink (H7, B10); the blob half of H6; `aksha verify` (P19) |
-| P02 durable execution | `execution/ports.py` (`Clock`), `execution/types.py` (`StepSemantics`) | `execution/executor.py` (appends each gate decision), `recovery.py`, `replay.py`; `IdSource` in `ports.py` |
-| P03 transactional outbox | `outbox/types.py` | `outbox/ports.py` (`SystemOfRecord`), `keys.py`, `outbox.py`, `reconcile.py` |
+| P02 durable execution | `execution/` (step IDs, the step executor with retries, timeouts by abandonment and late-result discard, effectful tool calls through the outbox, `LogIdSource`, recovery on startup with the outbox phases in D5's order, the definition-changed ending by resume record, lazy resume, resume records and the restart limit) | the source-change step of recovery (P05), `suspended_with_rebuilds` (S1), rebuild runs, `recovery.completed`, `prior_exit`, the automatic-start limit on resume records, `replay.py` (D11) |
+| P03 transactional outbox | `outbox/` (keys from `key_fields` and the owner, entries committed with their command or a tool step's intent (U2a), the end of a step's entry committed with its `step.completed` (U2), the worker with claims, retries counted from the store and `outcome_unknown`, recovery by key in two phases); command receipts in `session/commands.py` | the receipt artifact (S2, with P04); lifecycle `sent`; the approval and invalidation checks behind `Authority` (P17, P05); the `on_unknown="interrupt"` interrupt (P17); one drainer lane per session; ledger-ID replacement refusal |
 | P04 artifacts and lineage | `artifacts/types.py` | `artifacts/ports.py`, `hashing.py`, `store.py`, `lineage.py`, `relations.py` |
 | P05 invalidation | `invalidation/types.py` | `invalidation/view.py` (the invalidation view, early cutoff) |
 | P06 agent loop | none | `runtime/loop/` (one turn of one Task instance) |
@@ -197,12 +232,12 @@ One row per primitive. "Built" exists and is tested. "Planned" is the modules ea
 | P11 policy gate | `policy/` | none for the first milestone |
 | P12 sandbox | `sandbox/types.py` | `sandbox/ports.py` (`SandboxBackend`); `adapters/sandbox/refusing.py`, `bwrap.py` |
 | P13 grounding | none | `runtime/grounding/` (citation spans, quote checks) |
-| P14 budgets | `budgets/types.py` | `budgets/meter.py` (budget accounting reducer, `Meter`) |
+| P14 budgets | `budgets/` (budget accounting and `Meter`, the turn, stop-veto and restart limits, `attempt_number`, the automatic-start count, the fixed backoff, `budget.reached` and `budget.granted`) | the budget interrupt and `finalize` (P16, P24); automatic-start enforcement on the start paths (P16's hold predicate); narrowing down the Task tree beyond `Budget.narrow` |
 | P15 Task model | `tasks/types.py` | `tasks/view.py`, `tree.py`, `status.py`, `scheduler.py`, `completion.py` |
 | P16 stop policy | `stop_policy/types.py` | `stop_policy/ports.py`, `builtins.py`, `evaluation.py`, `hold.py` |
-| P17 interrupts | `interrupts/types.py` | `interrupts/reducers.py`, `approvals.py` |
-| P18 cancellation | none | `runtime/cancellation/` |
-| P19 session API | none | `runtime/session/` (`commands.py`, `resolutions.py`, `streams.py`, `capabilities.py`); `interfaces/cli/`, `interfaces/http/` |
+| P17 interrupts | `interrupts/types.py`, `interrupts/reducers.py` (`pending_interrupts`, which recovery and the stop ending read) | the interrupt and approval reducers, `approvals.py` |
+| P18 cancellation | `cancellation/` (the stop command, `run.stop_requested`, the stop ending at the resume and turn-end candidates, the standing hold and the TC-4 audit), the skip (D5) and the kill boundary (D6) in `execution/executor.py`, recovery's rule (D3) and hold in `execution/recovery.py`, `adapters/sandbox/process.py` | the `turn` scope (D7), `aksha stop` and exit code 6, the first Ctrl-C as a stop, the web Stop button (P19); the `on_unknown` interrupt for an `effects_unknown` step (P17); the rebuild-run opener's call of the hold (slice 6) |
+| P19 session API | `session/` (`dispatch` with command receipts, from P03) | the named commands, `resolutions.py`, `streams.py`, `capabilities.py`; `interfaces/cli/`, `interfaces/http/` |
 | P20 agent definition and extension API | `definitions/`, `api.py` | none for the first milestone |
 | P21 tracing | none | `runtime/tracing/` (`ports.py`, `spans.py`, `inspection.py`); `adapters/exporters/otel.py` |
 | P23 request router | none | `runtime/router/` |
@@ -217,7 +252,10 @@ The ADR interface sections name a flat file per primitive (for example `aksha/ru
 |---|---|
 | P01 `store.py` | `events/` (event model); `storage/` (the `EventStore` and `AnchorSink` ports, `prepare_append`, the hash chain in `chain.py`, rows, schema version, errors); `projections/` (`Reducer`, `LogView`, `project`, the cache); `adapters/storage/postgres.py` and `sqlite.py` (`PostgresEventStore`, `SQLiteEventStore`, each with `open_store`) |
 | P01 `api.py` part (`register_event_type`) | the declared field `Extension.event_types`, which `definitions/loader.py` registers through `Catalogue.register_extension(spec, extension=name)` |
-| P02 `steps.py`, `clock.py` | `execution/types.py` and the `Clock` Protocol in `execution/ports.py`; `SystemClock` and `FakeClock` in `adapters/clock/` |
+| P02 `steps.py`, `clock.py`, `recovery.py` | `execution/types.py` (values), `execution/ports.py` (`Clock`, `IdSource`, `DurableStepExecutor`), `execution/executor.py` (`StepExecutor`), `execution/ids.py` (`LogIdSource`), `execution/recovery.py`; `SystemClock` and `FakeClock` in `adapters/clock/` |
+| P03 `outbox.py` and the `session.py` part | `outbox/types.py` (values), `outbox/ports.py` (`SystemOfRecord`, `Authority`), `outbox/keys.py`, `outbox/facts.py`, `outbox/outbox.py` (projection, `enqueue`), `outbox/worker.py` (`drain`, `reconcile`, `recover`); `Command`, `CommandReceipt` and `dispatch` in `session/` |
+| P14 `budgets.py` | `budgets/types.py` (values), `budgets/backoff.py` (`next_backoff_ms`), `budgets/records.py` (what each fact counts for), `budgets/meter.py` (`meter`, `Meter`), `budgets/limits.py` (`limit_reached`, `attempt_number`, `auto_start_allowed`), `budgets/facts.py`; the restart limit in `execution/recovery.py` |
+| P18 `cancel.py` and the `session.py` part (`stop`) | `cancellation/types.py` (values), `cancellation/ports.py` (`KillableUnit`), `cancellation/requests.py`, `cancellation/hold.py`, `cancellation/ending.py`, `cancellation/command.py` (`stop`), `cancellation/kill.py`; `ProcessGroupUnit` in `adapters/sandbox/process.py` |
 | P10 `tools.py` | `tools/` |
 | P11 `gate.py` | `policy/gate.py`, with its values in `policy/types.py` |
 | P20 `api.py` | `runtime/api.py` |
@@ -245,7 +283,7 @@ The ADR interface sections name a flat file per primitive (for example `aksha/ru
 | `tests/contract/` | One suite per port, parametrised over every adapter of that port; a new adapter must pass it unchanged | `tests/contract/storage/test_event_store.py` runs against `SQLiteEventStore` and `PostgresEventStore` |
 | `tests/integration/` | Several primitives together through `aksha.app`, on a temporary store | a run that suspends on an approval and resumes after a restart |
 | `tests/architecture/` | The dependency rule, the layout rules and the ADR-named guards, each with a planted violation; the committed snapshots (`api_surface.json`, `permission_matrix.md`) | `test_dependency_rule.py`, `test_definitions.py` |
-| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container), `agents.py` (copies the fixture agent and extension into a temporary folder) |
+| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container, named per session), `steps.py` (simulated crashes, scripted work, `FaultStore`), `systems.py` (mock systems of record), `killrun.py` (the run a real SIGKILL ends after its Nth commit), `agents.py` (copies the fixture agent and extension into a temporary folder) |
 | `tests/fixtures/` | Plugins the loader tests copy, never load in place | `agents/toy/` (the conformance agent), `extensions/echo/` (the conformance extension), `agent_terms.txt` (words the runtime must not contain) |
 
 1. A test function name says the behaviour it checks. A test named in an ADR's Tests section keeps that name (`test_update_and_delete_refused`).
@@ -313,11 +351,52 @@ Each event's `hash` covers its own envelope and the previous event's `hash`, the
 6. Refusal codes the ADRs imply but do not name, chosen in the build: `schema_not_object`, `result_key_without_query`, `key_field_invalid`, `semantics_unknown`, `external_not_allowed`, `sandbox_not_allowed`, `model_alias_not_allowed`, `override_not_allowed`, `override_invalid`, `nul_in_field`, `nul_in_content`, `event_type_invalid`.
 7. `test_injection_world_equals_clean_world` runs with an obedient fake model and the gate in place of the agent loop (ADR-P06 is not built).
 8. The hash chain (ADR-P01 Amendment H) is built with four differences from the ADR's interface: `verify(*, anchors=())` returns the first `ChainBreak` or `None` rather than a `VerifyReport`, and has no `from_seq` or `trusted_hash` yet; the store's id and genesis come from `identity()` (a `StoreIdentity`) rather than `store_id()`; `Event` does not carry `prev_hash` and `hash` (the chain is read through `head()` and `verify()`, so the extension API stays at 1.1); and the encoder is `canonical_bytes` beside the existing `canonical_json`, which other hashes still use. An anchor of another store is a refusal (`anchor_store_mismatch`), not a break. The writer refuses to append onto a head it did not write (`chain_head_moved`). The schema version is 2. H6 is built (ADR-P01 B9): `artifact.saved` carries `content_hash` over `canonical_bytes` of the content, and `verify()` reports an edited artifact row as `artifact_mismatch` at its event. ADR-P01 B10 to B13 record the rest: the H7 deferrals, the two encoders, what `verify()` refuses to read (`not_canonical`, `chain_version_unsupported`, `anchor_invalid`) and the refusals moved before the transaction.
+9. Durable execution (ADR-P02) is built with these differences from the ADR's interface, for its amendment section:
+   1. `DurableStepExecutor.step` takes `args_hash` without `args` (only the hash is recorded), and two keyword arguments: `extra`, the policy gate's fields (`route`, `position`) that ride on `step.started`, and `unit` (item 12.9). `step` refuses `reconcile` (`effect_needs_outbox`): an effectful tool call is `effect_step(step_id, name, request, spec, *, extra, approval_id, resolve)`, which commits `outbox.enqueued` with `step.started` (U2a, `outbox_key` on the intent) and leaves the call to the outbox worker, which commits `outbox.completed` or `outbox.abandoned` with the step's `step.completed` (U2). The step's retries are the worker's policy for the tool; `apply` has no deadline yet.
+   2. Work returns a `StepOutput` (JSON `value`, `ok` or `error`, and the events and artifact rows that commit with `step.completed` in U2) rather than a generic `T`. A retryable failure is a raised `TransientStepError` whose code is matched to `retry_on`; any other `Exception` is a recorded `step_exception` error; a `BaseException` that is not an `Exception` is re-raised with nothing recorded, which is how the tests simulate a crash.
+   3. `StepId` gains `check` (`k01`), from v2 05a section 2.7; walk (`w043`) and the `end`/`handoff` special steps are left to the stop policy. The loader now refuses a Task named like a reserved segment (`task_id_reserved`).
+   4. An `at_most_once` step is never retried, so a transient error ends it `error` and a timeout ends it `interrupted, outcome_unknown`. The unknown close is `step.completed{outcome: interrupted, code: outcome_unknown}` in U2 (the catalogue's separate `outcome_unknown` outcome value is removed); recovery writes it in U2, not U7.
+   5. Step facts hold no clock reading (no `duration_ms`, `mono_ms` or `late_by_ms`), so two fake runs write identical logs with nothing excluded. `step.failed` records `retried` and `backoff_ms`; attempts are numbered from the highest recorded `step.failed` or `attempt.discarded`, so an attempt that crashed unrecorded runs again under its own number.
+   6. Recovery ends a `definition_changed` run with the Run frame's resume record: `interrupt.voided{definition_changed}` for each open interrupt, `run.ended{failed, definition_changed}` and `stop.decided{verdict: stop, cause: resume, reason: definition_changed}` in one U3 transaction. A run whose agent is not loaded counts as `definition_changed`. `suspended` is read from open `interrupt.raised` events, which the core catalogue does not declare yet (P17), so the tests declare a stand-in. Since cancellation (item 12), a `stop_requested` run is classified first and ended by the stop ending, not `run.ended{partial, stopped}`.
+   7. `RecoveryReport` holds per-owner reports (`owners`) and flattens them; `ended` and `closed_unknown` carry the owner, because run IDs are per owner. `reconciled` (the idempotency keys the outbox phases ended) and `effects_unknown` (every such step of an open run) are built; `prior_exit`, `reexecuted` and `rebuild_runs` are later. Recovery runs the outbox's `landed` phase, the (unbuilt) source check and the `unlanded` phase before it closes `at_most_once` steps, and refuses an owner with entries to finish and no worker (`effect_needs_outbox`). The store lists only owners with an open run, so `recover_on_startup` takes `owners=` for the rest.
+   8. `test_runtime_uses_no_ambient_clock_or_randomness` allows one exemption: `secrets` in `runtime/storage/chain.py`, for the store id, which is written once when a store is created and is no fact of a run.
+
+10. The transactional outbox (ADR-P03) is built with these differences from the ADR's interface, for its amendment section:
+   1. There is no transaction object: `enqueue(view, tool, args, spec, ...)` re-checks authority and returns the entry and its `outbox.enqueued` event (`Enqueued`), which the deciding command appends with its own events. A key already enqueued returns the existing entry and no event, so a rebuild run's equal request is answered by the first receipt.
+   2. The drainer is `OutboxWorker(store, owner, clock, systems, policies=, authority=)` with `drain()`, `reconcile(phase)` and `recover()`; each returns the entries it ended. Each attempt is claimed by `outbox.claimed` under `oclaim:{key}/a{n}` before the call, so the unique index makes the claim exclusive. `outbox.failed` records each failed attempt; attempts are counted from the claims, so a restart never resets them. The worker facts are each one U6 transaction, except a tool step's entry, whose end commits with the step's result in U2. `reconcile("unlanded")` also runs entries enqueued and never claimed, after the authority re-check (D7). `finish(key)` brings one entry to an end, which `effect_step` uses.
+   3. An `at_most_once` entry is never retried: a failure after its claim, or a claim found by recovery, is `outbox.abandoned{reason: outcome_unknown, on_unknown}`, and the projection's state is `outcome_unknown`. A system raising something other than `TransientEffectError` abandons an entry `effect_exception`.
+   4. Authority is a port (`Authority`: an entry and the view to a refusal code or None), checked by `enqueue` and again by the worker before each first call and before recovery runs an entry again. The approval signature and the invalidation view behind it arrive with P17 and P05; until then nothing supplies one.
+   5. An entry whose `system` is None is run against the system registered under the tool's own name (`OutboxEntry.target`). `lookup(key, request)` (S1) is never called for an `at_most_once` entry. `resolve`, the hook that pins an artifact reference to its exact version in the key, is supplied by P04.
+   6. `command.refused` carries the same dedup key as `command.accepted` (`cmd:{owner}/{command_id}`), so a refused command's retry also returns its first receipt; the ADR's table gave it none. A command ID reused for another command is refused (`command_id_reused`). A derived command ID is `d-` and 32 hex digits. A command collides with a recorded dedup key of its own events and is refused `already_decided` (D6), so the `decide:` keys need no code of their own.
+   7. Not exported from `aksha.runtime.api`: `SystemOfRecord`, `SystemReceipt` and `TransientEffectError`, which an extension's system-of-record adapter needs. Adding them is a minor API bump (1.2) for the maintainer to approve.
+
+11. Budgets, limits, timeouts and bounded retries (ADR-P14) are built with these differences from the ADR's interface, for its amendment section:
+   1. `stop.decided` is in the core catalogue with only the fields the budget and limit reducers read (`walk`, `verdict`, `cause`, `candidate`, `turn`, `resumes_turn`, `reason`, `limit`, `counts`); `budgets/records.py` lists what each counts for. ADR-P16 widens the schema. The tests' probe `stop.decided` is removed. `task.entered` (P15) is read by name; no core type declares it yet.
+   2. Recovery writes the resume record (`stop.decided{cause: resume}`, ADR-P02 D7) in U3 before it drives a run. With `restart_limit` resumes recorded since the run's last progress, the record is `stop` and `run.ended{failed, restart_limit}` commits with it; the run is never driven. A suspended or stopped run gets no record, so its restarts never count. `resume_owner` takes `limits`.
+   3. Active time is `duration_ms` on `step.failed` and `step.completed`, read on the injected clock (a timed-out attempt records its timeout), plus the `backoff_ms` of a retried failure. This reverses ADR-P02 build amendment 5's "no `duration_ms`" while keeping its reason: two fake runs still write identical logs.
+   4. `run.started` carries the run's `budget` (the capped dimensions); a run that recorded none is metered against the caller's default. `step.completed` carries a model step's `usage` (`input_tokens`, `output_tokens`, `cost_micro_usd`), set through `StepOutput.usage`; `tokens` and `cost_micro_usd` are enforced when a budget caps them.
+   5. `Meter.remaining` returns None for an uncapped dimension, and `Meter.reading()` is the gate's `MeterReading`. `meter` takes `budget=` (a Task's narrowed budget) and `cache=`.
+   6. The attempt number is one more than the highest recorded `step.failed` or `attempt.discarded` (ADR-P02 amendment 5), not one plus the count of `step.failed`; the executor and `attempt_number` share `limits.next_attempt`.
+   7. A limit "bites" at `used >= limit`, checked before the next turn, veto or resume: ten turns run and the eleventh fails; three resumes run and the fourth ends the run. Its reason is `restart_limit`, not `crash_loop`.
+   8. `auto_start_allowed` counts resume records, rebuild-run starts and `stop.decided` records whose cause is `continuation` or `timer`, from their recorded `at`. Nothing calls it yet: refusing a start and holding the run belongs to P16's hold predicate.
+   9. Not exported from `aksha.runtime.api`: `meter`, `Meter`, `LimitHit` and `limit_reached`, which a stop policy of an agent never needs (it opts into built-ins). Adding them would be a minor API bump.
+
+12. Cancellation (ADR-P18) is built with these differences from the ADR's interface, for its amendment section:
+   1. `stop` lives in `cancellation/command.py`, not `session.py`, and goes through `dispatch`: the request commits with `command.accepted` in U4. Its signature adds keyword `by` (the principal, default the owner) and `session`. A refusal (`run_not_open`, `not_found`, `scope_not_built`) still writes its `command.refused` receipt, so "writes nothing" in `test_stop_on_ended_run_refused` reads as "writes no stop request". `run.stop_requested` has the dedup key `rstop:{run}/{command_id}`.
+   2. `run.ended{outcome: stopped}` carries `reason: stop_requested`; the person's words are on the request, which `stop_requests` returns with `by` and `honoured_by`. Recovery's report lists the run with reason `stop_requested`.
+   3. A skipped step is `step.completed{outcome: skipped, code: run_stopped, attempts: 0}` with no `step.started`, the shape of a refusal; the ADR's `reason: run_stopped` is the catalogue's `code`. The ADR says it reuses the budget refusal's skip path; no such path was built, so this is the first skip.
+   4. The between-steps check covers every new step (tool, model and check), not only tool calls, because the TC-4 audit counts any `step.started` after a stop request as a held start. A recorded step still replays. A dangling step of a stopped run starts no new attempt either, for a stop committed while a resumed run drives (recovery ends a run stopped before it resumes it); the audit does not see a new attempt, since an attempt writes no start fact, so `test_a_dangling_step_of_a_stopped_run_starts_no_new_attempt` guards it.
+   5. The stop ending (`ending.py`) writes `interrupt.voided{reason: run_stopped}` for each open interrupt, `run.ended`, then `stop.decided{verdict: stop, reason: stop_requested, cause, candidate}`. Without ADR-P16's evaluation two candidates call it: recovery's resume candidate (`resume`, D3) and the end of the turn a resumed driver returns from (`turn_end`, in `resume_owner`). `interrupt.voided` is in the core catalogue (writer `stop_policy`, U3, key `ivoid:{run}/{interrupt}`); ADR-P17 widens it.
+   6. Recovery classifies `stop_requested` first, before `definition_changed`: a person's stop wins, so a run whose definition changed and that a person stopped ends `stopped`. It ends every stopped run before it classifies the rest, and a new class `held` is an in-flight run whose agent a person's stop holds (D4); it writes nothing and is not driven. `_resume_record` asks the hold again before it writes, so a stop committed since recovery holds the run too.
+   7. `hold_reason` (ADR-P16 D6) is not built; `cancellation/hold.py` holds its stop part, `stop_hold(view, run=, agent=)`, returning `StopHold{reason, scope, by}` for `stop_requested` and `stopped_by_person`. The standing hold clears on a later `run.started{cause: request}` for the agent or a `command.accepted` answering one of the agent's interrupts; a message command arrives with ADR-P19.
+   8. The audit `inv.no_auto_start_while_held` (ADR-P16 D7) is `held_auto_starts(view)`, for the stop's holds only: a `run.started` whose cause is not `request`, a `stop.decided` that continues with an automatic cause, and any `step.started`, each judged on the log before it. `test_the_audit_fails_when_recovery_forgets_the_hold` removes the predicate from recovery and sees the audit fail. The `interrupt_open` half arrives with P16 and P17.
+   9. `KillableUnit` gains `wait(seconds) -> bool`, so the kill boundary waits on the unit (`Popen.wait`) rather than reading a clock; `KillPolicy` gains `reap_seconds` (default 1), the wait after the kill. `kill_boundary` returns `settled` or `killed`, which `step.completed` records as `kill`. Whether a step had external effects is read from its semantics: `at_least_once` is `cancelled`, `at_most_once` is `effects_unknown` with the step's `on_unknown`, and recovery reports it. At the deadline a step with a unit is ended the same way and recorded `error{timeout}` with `kill` (ADR-P14 D5), and a step with a unit is never retried. A step declares its unit with `step(..., unit=)`; the executor polls the stop requests every `stop_poll_ms` (50) while such a step runs. The ADR placed the kill boundary later, behind ADR-P12; it is built here with `ProcessGroupUnit` as the first unit, without a sandbox.
+   10. Not built: the `turn` scope, `aksha stop`, exit code 6, the SIGINT handler and the web Stop button (no interfaces exist yet), and the interrupt for an `effects_unknown` step whose `on_unknown` is `interrupt` (P17). A dangling step of a run with a pending stop starts no new attempt: it is closed `cancelled{run_stopped}` (`skipped` if an `at_most_once` step never dispatched).
 
 ## Sources
 
 1. `scratch-pad/design/primitives/00-index.md` and `00-primitives-catalogue.md`, 25 Nov 2026: the primitive list, IDs and build order.
-2. ADR-P01, P02, P03, P04, P10, P11, P15, P16, P17 and P20 in `docs/design/adr/`, Interface and Decision sections, read on 25 Nov 2026.
+2. ADR-P01, P02, P03, P04, P10, P11, P14, P15, P16, P17, P18 and P20 in `docs/design/adr/`, Interface and Decision sections, read on 25 Nov 2026.
 3. ADR-P20 decisions 1, 2, 3 and 8: the three layers, the one public runtime API, contributions as declared data, and guards shown to fail.
 4. The maintainer's direction of 25 Nov 2026: PostgreSQL over SQLite, and a readable codebase with proper interfaces and structures.
 5. The review of the four built primitives, 25 Nov 2026 (22 issues and a mutation run), which this layout and the ADR amendments answer.
