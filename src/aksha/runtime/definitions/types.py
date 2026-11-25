@@ -77,6 +77,8 @@ class Agent:
     ``name``. ``instructions`` and every ``Task.brief`` are paths of prompt files inside the
     agent folder, read and hashed by the loader. ``tools`` lists the agent's own tools as
     ``ToolDecl`` and names other tools (loader-added, ``ext.tool``) as ``ToolUse``.
+    ``concurrency`` is how many Task instances the scheduler runs at once; v1 accepts only
+    1 (ADR-P15 D5, ``concurrency_unsupported``).
     """
 
     name: str
@@ -98,3 +100,4 @@ class Agent:
     phrases: str | None = "phrases.json"
     extensions: tuple[str, ...] = ()
     requires_api: str = ">=1.0,<2"
+    concurrency: int = 1

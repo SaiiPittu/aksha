@@ -30,6 +30,7 @@ from aksha.runtime.definitions.tree_checks import (
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION, satisfies
 from aksha.runtime.models.types import MODEL_CLASSES
+from aksha.runtime.tasks.tree import MAX_CONCURRENCY
 from aksha.runtime.tools.checks import tool_refusals
 from aksha.runtime.tools.loader_added import LOADER_ADDED_TOOLS
 from aksha.runtime.tools.types import ToolDecl, ToolUse
@@ -87,6 +88,9 @@ def validate_agent(
     for opt in agent.stop_policies:
         if not is_builtin_opt_in(opt):
             out.add("stop_policies", "unknown_stop_policy", stop_policy_message(opt))
+    if agent.concurrency != MAX_CONCURRENCY:
+        message = f"concurrency {agent.concurrency!r} is not built; v1 runs one instance at a time"
+        out.add("concurrency", "concurrency_unsupported", message)
     if any(not is_function(c) for c in agent.completion):
         out.add("completion", "check_not_callable", "every completion check is a function")
     written = {resolve_kind(w, agent.name) for _, t in walk_tasks(agent.tasks) for w in t.writes}

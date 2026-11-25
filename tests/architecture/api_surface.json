@@ -1,7 +1,7 @@
 {
-  "api_version": "1.3",
+  "api_version": "1.4",
   "surface": {
-    "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=1.0,<2') -> None",
+    "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=1.0,<2', concurrency: 'int' = 1) -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None) -> None",
     "ArtifactKind": "class ArtifactKind(name: 'str', schema: 'type | Mapping[str, Any]', keyed: 'bool' = False, reviewable: 'bool' = False, lifecycle: 'bool' = False, derived: 'Callable[..., Mapping[str, Any]] | None' = None, readiness: 'tuple[Check, ...]' = (), writers: \"Literal['one', 'chain']\" = 'one', canon_exclude: 'tuple[str, ...]' = (), list_keys: 'Mapping[str, str]' = <factory>, canonicalize: 'Callable[[Mapping[str, Any]], Mapping[str, Any]] | None' = None, save: \"Literal['any', 'tool_only']\" = 'any', summary: 'str | None' = None, cites: 'tuple[CitePolicy, ...]' = ()) -> None",
     "ArtifactRef": "class ArtifactRef(kind: 'str', key: 'str | None', version: 'int') -> None",
@@ -26,6 +26,8 @@
     "FromField": "class FromField(kind: 'str', path: 'str') -> None",
     "Goal": "def Goal(check: 'Check') -> 'StopPolicyOptIn'",
     "InputRef": "class InputRef(kind: 'InputKind', id: 'str', version: 'str', path: 'str | None' = None, entry_hash: 'str | None' = None) -> None",
+    "InstanceRef": "class InstanceRef(run: 'str', task_path: 'str', key: 'str | None' = None) -> None",
+    "InstanceStatus": "InstanceStatus = typing.Literal['new', 'running', 'suspended', 'done', 'blocked', 'withdrawn']",
     "KeySource": "class KeySource(origin: \"Literal['source', 'artifact']\", name: 'str', path: 'str | None' = None, unless: 'Check | None' = None) -> None",
     "Limits": "class Limits(turn_limit: 'int' = 10, stop_veto_limit: 'int' = 3, restart_limit: 'int' = 3, auto_starts: 'tuple[int, int]' = (3, 300000), max_retries: 'int' = 2, tool_timeout_ms: 'int' = 10000, model_timeout_ms: 'int' = 60000, backoff: 'Backoff' = Backoff(base_ms=500, factor=2, cap_ms=4000)) -> None",
     "LogView": "class LogView(owner: 'str', seq_read: 'int', events: 'tuple[Event, ...]', artifacts: 'ArtifactsView', complete: 'bool' = False) -> None",
@@ -51,6 +53,7 @@
     "SummaryPolicy": "class SummaryPolicy(alias: 'str' = 'generate.summary', trigger_chars: 'int' = 80000, keep_recent_pairs: 'int' = 3, max_per_instance: 'int' = 2) -> None",
     "SystemOfRecordSpec": "class SystemOfRecordSpec(name: 'str', factory: 'Callable[..., object]') -> None",
     "Task": "class Task(id: 'str', tools: 'tuple[str, ...]' = (), reads: 'tuple[str | Read, ...]' = (), writes: 'tuple[str, ...]' = (), done: 'Check | None' = None, children: 'tuple[Task, ...]' = (), per: 'KeySource | None' = None, needs: 'tuple[str, ...]' = (), interrupt: 'DeclaredInterrupt | None' = None, extracts: 'bool' = False, stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), brief: 'str | None' = None, turn_limit: 'int' = 10, max_finish_vetoes: 'int' = 3, on_child_blocked: \"Literal['block', 'partial']\" = 'block', finalizer: 'bool' = False, wakes_on: 'tuple[str, ...]' = (), model_aliases: 'tuple[str, ...]' = ()) -> None",
+    "TaskView": "class TaskView(log: 'LogView', tree: 'CompiledTree', instance: 'InstanceRef') -> None",
     "TodoReminder": "def TodoReminder(every: 'int') -> 'StopPolicyOptIn'",
     "ToolBody": "ToolBody = collections.abc.Callable[[aksha.runtime.tools.types.ToolContext, collections.abc.Mapping[str, typing.Any]], aksha.runtime.tools.types.ToolOutcome]",
     "ToolContext": "class ToolContext(owner: 'str', agent: 'str', task_path: 'str', key: 'str | None', step_id: 'str', attempt: 'int') -> None",

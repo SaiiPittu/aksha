@@ -11,7 +11,8 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``LogView``, ``ArtifactsView``. An extension's own event types are declared data,
    ``Extension.event_types``; the loader registers them, so there is no register call.
 3. Tasks (P15): ``Task``, ``Read``, ``KeySource``, ``source_keys``, ``artifact_keys``,
-   ``FromField``, ``from_field``, ``Check``, ``CheckResult``.
+   ``FromField``, ``from_field``, ``Check``, ``CheckResult``; what a completion check
+   reads: ``TaskView``, ``InstanceRef``, ``InstanceStatus``.
 4. Artifacts (P04): ``ArtifactKind``, ``RelationKind``, ``SaveRequest``, and what a save
    names: ``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``, ``SELF``.
 5. Tools (P10): ``ToolSpec``, ``ToolDecl``, ``ToolUse``, ``ToolBody``, ``RetryPolicy``,
@@ -67,6 +68,8 @@ from aksha.runtime.tasks.types import (
     Check,
     CheckResult,
     FromField,
+    InstanceRef,
+    InstanceStatus,
     KeySource,
     Read,
     Task,
@@ -74,6 +77,7 @@ from aksha.runtime.tasks.types import (
     from_field,
     source_keys,
 )
+from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.tools.types import (
     EffectClass,
     Err,
@@ -115,6 +119,8 @@ __all__ = [
     "FromField",
     "Goal",
     "InputRef",
+    "InstanceRef",
+    "InstanceStatus",
     "KeySource",
     "Limits",
     "LogView",
@@ -139,6 +145,7 @@ __all__ = [
     "SummaryPolicy",
     "SystemOfRecordSpec",
     "Task",
+    "TaskView",
     "TodoReminder",
     "ToolBody",
     "ToolContext",

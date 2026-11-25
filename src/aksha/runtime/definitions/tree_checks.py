@@ -92,6 +92,9 @@ def _siblings(
         if depth > MAX_TASK_DEPTH:
             out.add("children", "tree_too_deep", f"Tasks nest at most {MAX_TASK_DEPTH} deep", path)
             continue
+        if task.per is not None and depth > 1:
+            message = "a keyed Task below the top level is not built in v1 (ADR-P15 D1)"
+            out.add("per", "keyed_child_unsupported", message, path)
         _tools(task, path, parent, ctx, out)
         _reads(task, path, ctx, out)
         _rest(task, path, ctx, out)

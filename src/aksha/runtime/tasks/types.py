@@ -1,8 +1,10 @@
 """Task values: the declared Task, key sources, reads and completion checks (ADR-P15).
 
-Names built so far: ``KeySource``, ``source_keys``, ``artifact_keys``, ``FromField``,
-``from_field``, ``Read``, ``CheckResult``, ``Check`` and ``Task``. ``InstanceRef``,
-``InstanceStatus`` and ``TaskView`` arrive with the scheduler.
+The declared names: ``KeySource``, ``source_keys``, ``artifact_keys``, ``FromField``,
+``from_field``, ``Read``, ``CheckResult``, ``Check`` and ``Task``. What the scheduler
+computes from them: ``InstanceRef`` (one Task instance), ``InstanceStatus`` (a projection,
+never stored), ``Evaluation`` (one completion check evaluation, joined with the children)
+and ``SupervisorMove`` (what the supervisor rule chose). ``TaskView`` is in ``view.py``.
 
 A ``Task`` is declared data the loader inspects; its completion check is a pure function
 the runtime only calls. ``Task.model_aliases`` names the non-generation model aliases the
@@ -13,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 if TYPE_CHECKING:
     from aksha.runtime.interrupts.types import DeclaredInterrupt
@@ -98,3 +100,107 @@ class Task:
     finalizer: bool = False
     wakes_on: tuple[str, ...] = ()
     model_aliases: tuple[str, ...] = ()
+
+
+InstanceStatus = Literal["new", "running", "suspended", "done", "blocked", "withdrawn"]
+"""A Task instance's status (D6), computed by a reducer from the event store, never stored."""
+
+INSTANCE_STATUSES: frozenset[str] = frozenset(get_args(InstanceStatus))
+
+SETTLED: frozenset[InstanceStatus] = frozenset({"done", "blocked", "withdrawn"})
+"""Statuses no turn changes: only a re-entry, a reset or a returning key leaves them."""
+
+EntryCause = Literal["scheduler", "rebuild"]
+"""Why ``task.entered`` was written: the scheduler's pick, or a rebuild run's re-entry."""
+
+ResetCause = Literal["answer", "rebuild"]
+"""Why a blocked instance was reset: a person's answer, or a rebuild run's re-entry."""
+
+EvaluationCode = Literal[
+    "", "check_failed", "check_raised", "children_pending", "child_blocked", "keys_pending"
+]
+"""Why an evaluation failed; empty when it passed."""
+
+FinishVerdict = Literal["done", "veto", "fail"]
+"""What a finish request becomes: DONE, a veto (one more turn) or FAIL (``blocked``)."""
+
+
+@dataclass(frozen=True)
+class InstanceRef:
+    """One tracked Task instance: its run, its Task path and its key (None when not keyed).
+
+    ``instance`` is the instance ID the step-ID grammar uses: the key rides on the keyed
+    segment and its un-keyed children share it, ``collect[n1]/write`` (v1 keys only the
+    top level, ``keyed_child_unsupported``).
+    """
+
+    run: str
+    task_path: str
+    key: str | None = None
+
+    @property
+    def instance(self) -> str:
+        """``collect[n1]/write``, ``scope`` or ``extract[C1]``."""
+        head, sep, rest = self.task_path.partition("/")
+        if self.key is not None:
+            head = f"{head}[{self.key}]"
+        return f"{head}{sep}{rest}"
+
+    @property
+    def task_id(self) -> str:
+        """The last segment of the path: the Task's own ``id``."""
+        return self.task_path.rsplit("/", 1)[-1]
+
+    def child(self, task_id: str) -> InstanceRef:
+        """The instance of child Task ``task_id`` under this one; it shares this key."""
+        return InstanceRef(self.run, f"{self.task_path}/{task_id}", self.key)
+
+    @classmethod
+    def parse(cls, run: str, instance: str) -> InstanceRef:
+        """Read :attr:`instance` back: ``collect[n1]/write`` is ``("collect/write", "n1")``."""
+        head, sep, rest = instance.partition("/")
+        key: str | None = None
+        if head.endswith("]") and "[" in head:
+            head, _, key = head[:-1].partition("[")
+        return cls(run, f"{head}{sep}{rest}", key)
+
+    def __str__(self) -> str:
+        """``R-0001/collect[n1]/write``."""
+        return f"{self.run}/{self.instance}"
+
+
+@dataclass(frozen=True)
+class Evaluation:
+    """One evaluation of an instance's completion, its own check joined with its children's.
+
+    ``code`` says why it failed (empty when ``ok``); ``blockers`` names the blocked child
+    instances a parent waits on (D2); ``clears`` is the check's tag (D7).
+    """
+
+    instance: str
+    ok: bool
+    message: str = ""
+    count: int = 0
+    keys: tuple[str, ...] = ()
+    clears: Literal["supervisor", "worker", "person"] | None = None
+    code: EvaluationCode = ""
+    blockers: tuple[str, ...] = ()
+    check: str = ""
+
+
+SupervisorMoveName = Literal["turn", "push", "done", "hold", "fail"]
+
+
+@dataclass(frozen=True)
+class SupervisorMove:
+    """What the supervisor rule chose for a parent instance on an entry or "next" candidate.
+
+    ``turn``: the parent takes a turn of its own (``reason`` is ``wake`` or ``supervisor``);
+    ``push``: the scheduler pushes ``child``; ``done``: its completion passes; ``hold``:
+    every failing check waits on a person, so the run holds; ``fail``: the activation or
+    no-progress limit bit (``reason`` names it).
+    """
+
+    move: SupervisorMoveName
+    reason: str = ""
+    child: InstanceRef | None = None

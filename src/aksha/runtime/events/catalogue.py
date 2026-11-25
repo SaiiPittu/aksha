@@ -464,6 +464,8 @@ STOP_DECIDED = EventTypeSpec(
             "reason": {"type": "string"},
             "limit": {"type": "string"},
             "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+            # ADR-P15 D6: the decision popped its instance DONE or FAIL (``blocked``).
+            "pop": {"enum": ["done", "fail"]},
         },
         "required": ["walk", "verdict"],
         "additionalProperties": False,
@@ -852,6 +854,128 @@ APPROVAL_REQUESTED = EventTypeSpec(
     boundaries=frozenset({"U2", "U4"}),
 )
 
+# --- P15 Task model and scheduler (``tasks/``) ------------------------------------------
+# Every fact here commits inside a stop decision (U3), so no Task fact has a second writer;
+# a person's answer resets a blocked instance in its resolution (U4), and a source change
+# may list a collection's keys again (U8). Status is a projection over them (D6).
+
+_TASK_KEY: Mapping[str, Any] = {"type": ["string", "null"]}
+_TASK_PATH: Mapping[str, Any] = {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$",
+}
+TASK_ENTERED = EventTypeSpec(
+    name="task.entered",
+    schema={
+        "type": "object",
+        "properties": {
+            "cause": {"enum": ["scheduler", "rebuild"]},
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "writer": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "task_path": _TASK_PATH,
+                    "key": _TASK_KEY,
+                },
+                "required": ["agent", "task_path", "key"],
+                "additionalProperties": False,
+            },
+            "key_source": {
+                "type": "object",
+                "properties": {
+                    "origin": {"enum": ["source", "artifact"]},
+                    "name": {"type": "string", "minLength": 1},
+                    "path": {"type": "string"},
+                },
+                "required": ["origin", "name"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["cause", "task", "key", "writer"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+TASK_WITHDRAWN = EventTypeSpec(
+    name="task.withdrawn",
+    schema={
+        "type": "object",
+        "properties": {"task": _TASK_PATH, "key": _TASK_KEY, "reason": {"const": "key_withdrawn"}},
+        "required": ["task", "key", "reason"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+COMPLETION_CHECK_EVALUATED = EventTypeSpec(
+    name="completion_check.evaluated",
+    schema={
+        "type": "object",
+        "properties": {
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "on": {"enum": ["entry", "finish", "parent"]},
+            "check": {"type": "string"},
+            "ok": {"type": "boolean"},
+            "message": {"type": "string"},
+            "count": {"type": "integer", "minimum": 0},
+            "keys": {"type": "array", "items": {"type": "string"}},
+            "code": {
+                "enum": [
+                    "",
+                    "check_failed",
+                    "check_raised",
+                    "children_pending",
+                    "child_blocked",
+                    "keys_pending",
+                ]
+            },
+            "blockers": {"type": "array", "items": {"type": "string"}},
+            "clears": {"enum": ["supervisor", "worker", "person"]},
+        },
+        "required": ["task", "key", "on", "ok", "message", "count", "keys", "code"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+COMPLETION_CHECK_RESET = EventTypeSpec(
+    name="completion_check.reset",
+    schema={
+        "type": "object",
+        "properties": {
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "cause": {"enum": ["answer", "rebuild"]},
+        },
+        "required": ["task", "key", "cause"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3", "U4"}),
+)
+KEYS_LISTED = EventTypeSpec(
+    name="keys.listed",
+    schema={
+        "type": "object",
+        "properties": {
+            "collection": {"type": "string", "minLength": 1},
+            "keys": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^[^/\\[\\]]+$"},
+                "uniqueItems": True,
+            },
+        },
+        "required": ["collection", "keys"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3", "U8"}),
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -887,6 +1011,11 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     REVIEW_ACCEPTED,
     REVIEW_REJECTED,
     APPROVAL_REQUESTED,
+    TASK_ENTERED,
+    TASK_WITHDRAWN,
+    COMPLETION_CHECK_EVALUATED,
+    COMPLETION_CHECK_RESET,
+    KEYS_LISTED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

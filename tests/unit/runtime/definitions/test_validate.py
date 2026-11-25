@@ -29,6 +29,7 @@ from aksha.runtime.api import (
     ToolUse,
     artifact_keys,
     from_field,
+    source_keys,
 )
 from aksha.runtime.definitions.loader import LoadedExtension, load_extensions
 from aksha.runtime.definitions.validate import validate_agent
@@ -255,6 +256,13 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         "collect/write",
         "model_aliases",
         lambda a: _child(a, "collect", "write", model_aliases=("nope",)),
+    ),
+    ("concurrency_unsupported", None, "concurrency", lambda a: replace(a, concurrency=2)),
+    (
+        "keyed_child_unsupported",
+        "collect/read",
+        "per",
+        lambda a: _child(a, "collect", "read", per=source_keys("notes")),
     ),
     (
         "minting_tool_not_extracting",

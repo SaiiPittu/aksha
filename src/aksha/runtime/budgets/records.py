@@ -13,7 +13,8 @@ Fact                            Counts as
 ``stop.decided`` with           a stop veto: a completion check refused a finish
 ``candidate: finish`` and
 ``verdict: continue``
-``task.entered``                the start of an instance entry (the veto count restarts)
+``task.entered``,               the start of an instance entry (the veto count restarts)
+``completion_check.reset``
 ``step.started{kind: tool}``    a tool call when ``counted`` is true (a retry adds none)
 ``step.completed{refused}``     a tool call when ``counted`` is true (``budget_exhausted``
                                 is not)
@@ -35,6 +36,9 @@ from aksha.runtime.events.envelope import Event
 
 STOP_DECIDED = "stop.decided"
 TASK_ENTERED = "task.entered"
+CHECK_RESET = "completion_check.reset"
+VETO_COUNT_RESETS = frozenset({TASK_ENTERED, CHECK_RESET})
+"""The facts after which an instance's stop vetoes are counted from zero again."""
 RESUME = "resume"
 """The ``cause`` of a resume record: the stop decision recovery writes (ADR-P02 D7)."""
 

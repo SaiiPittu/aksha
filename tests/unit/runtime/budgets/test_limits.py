@@ -96,3 +96,13 @@ def test_automatic_starts_are_counted_in_the_window_from_recorded_times() -> Non
     later = START + timedelta(seconds=320)  # the first start has left the window
     assert automatic_starts(log.view(), RUN, later, 300_000) == 2
     assert auto_start_allowed(log.view(), RUN, limits, later)
+
+
+def test_a_completion_check_reset_starts_the_veto_count_again() -> None:
+    log = Log()
+    log.entered()
+    for _ in range(3):
+        log.decided("continue", candidate="finish")
+    assert vetoes_since_entry(log.view(), RUN, "a") == 3
+    log.add("completion_check.reset", {"cause": "answer"}, instance="a")
+    assert vetoes_since_entry(log.view(), RUN, "a") == 0
