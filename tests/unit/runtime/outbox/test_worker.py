@@ -184,6 +184,19 @@ def test_authority_refusal_abandons_before_any_call(h: Harness) -> None:
     assert h.entry(key).state == "abandoned"
 
 
+def test_authority_revoked_during_a_backoff_stops_the_retry(h: Harness) -> None:
+    key = h.enqueue()
+    h.ledger.transient = 2
+
+    def authority(entry: OutboxEntry, view: LogView) -> str | None:
+        failed = any(e.type == "outbox.failed" for e in view.events)
+        return "approval_revoked" if failed else None
+
+    (done,) = h.worker(authority=authority).drain()
+    assert (done.state, done.reason, done.attempts) == ("abandoned", "approval_revoked", 1)
+    assert h.ledger.applied == [key]  # the first attempt only; the retry was never sent
+
+
 def test_an_unknown_system_is_refused_before_the_claim(h: Harness) -> None:
     h.enqueue(spec=EffectSpec(system="fax", key_fields=("/to",), semantics="reconcile"))
     with pytest.raises(SystemUnknown) as e:

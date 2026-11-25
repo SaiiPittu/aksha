@@ -172,6 +172,16 @@ def test_one_command_id_for_another_command_is_refused(store: EventStore) -> Non
     assert types(store) == ["command.accepted", "message.noted"]
 
 
+def test_one_command_id_answering_another_item_is_refused(store: EventStore) -> None:
+    spec = CommandSpec("send", "U1", Counting().send)
+    first = Command("send", "o", "S-0001", {"text": "hi"}, answers="I-0001", command_id="c-1")
+    dispatch(store, first, spec)
+    other = Command("send", "o", "S-0001", {"text": "hi"}, answers="I-0002", command_id="c-1")
+    with pytest.raises(CommandIdReused):
+        dispatch(store, other, spec)
+    assert dispatch(store, first, spec).duplicate
+
+
 def test_command_ids_are_per_owner(store: EventStore) -> None:
     spec = CommandSpec("send", "U1", Counting().send)
     dispatch(store, send(), spec)

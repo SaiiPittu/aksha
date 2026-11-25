@@ -200,6 +200,23 @@ def test_a_stopped_runs_unclaimed_effect_is_abandoned_not_sent(world: World) -> 
     assert world.ledger.applied == []
 
 
+def test_a_stop_during_a_retry_backoff_keeps_the_retry_from_being_sent(world: World) -> None:
+    world.ledger.transient = 1
+    real_apply = world.ledger.apply
+
+    def apply_then_stop(key: str, request: Any) -> Any:
+        if not world.ledger.applied:  # the first attempt fails, and a person stops the run
+            stop(world.store, "o", "R-0001", command_id="c-1")
+        return real_apply(key, request)
+
+    world.ledger.apply = apply_then_stop  # type: ignore[method-assign]
+    done = world.steps().effect_step(S1, "file", PACKET, FILE)
+    assert (done.outcome, done.code) == ("cancelled", "run_stopped")
+    (entry,) = entries(load_view(world.store, "o")).values()
+    assert (entry.state, entry.reason, entry.attempts) == ("abandoned", "run_stopped", 1)
+    assert len(world.ledger.applied) == 1 and world.ledger.rows == {}
+
+
 def test_effects_need_an_outbox_worker(world: World) -> None:
     with pytest.raises(EffectNeedsOutbox):
         StepExecutor(world.store, "o", world.clock).effect_step(S1, "file", PACKET, FILE)

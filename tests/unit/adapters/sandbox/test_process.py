@@ -59,3 +59,19 @@ def test_a_settle_before_start_means_the_child_never_runs() -> None:
     unit.start()
     assert unit.settled() and unit.returncode is None
     assert unit.wait(0.0)
+
+
+FORKS = (
+    "import subprocess, sys; "
+    "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], "
+    "stdout=subprocess.DEVNULL); print('ready', flush=True)"
+)
+"""A leader that forks a worker into its group and exits at once, leaving the worker."""
+
+
+def test_a_group_whose_leader_exited_is_not_settled_while_a_worker_runs() -> None:
+    unit = _unit(FORKS)
+    assert not unit.wait(1.0)  # the leader is gone; its worker is still in the group
+    assert unit.returncode == 0 and not unit.settled()
+    assert kill_boundary(unit, FAST) == "settled"  # SIGTERM still reaches the worker
+    assert unit.settled()

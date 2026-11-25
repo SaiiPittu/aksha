@@ -7,6 +7,8 @@ For each entry:
 1. Re-check authority (an approval for this exact action, the target current). A
    refusal abandons the entry with that code before any call. A tool step's entry whose
    run a person has stopped is abandoned ``run_stopped`` before any call (ADR-P18 D5).
+   Both checks run again before every retry, so a stop or a revocation during a backoff
+   keeps the next attempt from being sent.
 2. Claim the attempt: ``outbox.claimed`` commits alone, under ``oclaim:{key}/a{n}``.
    A claim already recorded means another worker holds the entry, so this one skips it.
 3. Call ``apply(key, request)`` on the entry's system of record and record
@@ -189,16 +191,18 @@ class OutboxWorker:
     def _run(self, entry: OutboxEntry) -> OutboxEntry | None:
         """Steps 1 to 5 of the module docstring; None when another worker holds the entry."""
         system = self._system(entry)
-        if self._run_stopped(entry):
-            event = facts.abandoned(entry.key, RUN_STOPPED, attempts=entry.attempts)
-            return self._end(entry, event)
-        refusal = self._refusal(entry)
-        if refusal is not None:
-            return self._end(entry, facts.abandoned(entry.key, refusal, attempts=entry.attempts))
         policy = self.policy(entry.tool)
         once = entry.semantics == "at_most_once"
         attempt = entry.attempts + 1
         while True:
+            # Before every attempt, a retry's too: a stop or a revoked authority that came
+            # during the backoff keeps the effect from being sent.
+            if self._run_stopped(entry):
+                event = facts.abandoned(entry.key, RUN_STOPPED, attempts=attempt - 1)
+                return self._end(entry, event)
+            refusal = self._refusal(entry)
+            if refusal is not None:
+                return self._end(entry, facts.abandoned(entry.key, refusal, attempts=attempt - 1))
             if not once and attempt > policy.max_retries + 1:
                 event = facts.abandoned(entry.key, RETRIES_EXHAUSTED, attempts=attempt - 1)
                 return self._end(entry, event)

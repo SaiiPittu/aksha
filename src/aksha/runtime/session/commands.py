@@ -119,10 +119,11 @@ def _receipt_event(
 
 def _duplicate(stored: Event, command: Command, args_hash: str) -> CommandReceipt:
     p = stored.payload
-    if (p.get("name"), p.get("args_hash")) != (command.name, args_hash):
+    recorded = (p.get("name"), p.get("args_hash"), p.get("answers"))
+    if recorded != (command.name, args_hash, command.answers):
         raise CommandIdReused(
             message=f"{p.get('command_id')} already names a {p.get('name')} command "
-            "with other arguments"
+            "with other arguments or another item answered"
         )
     return _receipt(stored, duplicate=True)
 
