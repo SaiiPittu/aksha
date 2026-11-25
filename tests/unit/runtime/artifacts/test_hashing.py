@@ -33,6 +33,15 @@ def test_canonical_form_reduces_refs_and_cites() -> None:
     assert canonical_hash(KIND, c) != canonical_hash(KIND, a) != canonical_hash(KIND, d)
 
 
+def test_canonical_form_reduces_a_span_cite_to_its_quote() -> None:
+    """ADR-P13: a re-minted span with the same words is the same claim."""
+    a = {"price": {"value": 279, "cite": {"span": "EX-0001", "quote": "279 EUR per sensor"}}}
+    b = {"price": {"value": 279, "cite": {"span": "EX-0042", "quote": "279 EUR per sensor"}}}
+    c = {"price": {"value": 279, "cite": {"span": "EX-0001", "quote": "300 EUR per sensor"}}}
+    assert canonical_hash(KIND, a) == canonical_hash(KIND, b) != canonical_hash(KIND, c)
+    assert content_hash(a) != content_hash(b)
+
+
 def test_canonical_form_drops_excluded_pointers_and_sorts_keyed_lists() -> None:
     kind = ArtifactKind(
         "matrix", {"type": "object"}, canon_exclude=("/fetched_at", "/rows/0/note"),

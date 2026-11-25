@@ -10,7 +10,8 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
 1. The kind is declared (``kind_unknown``) and the Task writes it (``rights``); a keyed
    kind has a key and an unkeyed one has none (``key_required``, ``key_not_allowed``).
 2. The content is in the chain's encoding (``not_canonical_content``) and matches the
-   kind's schema (``schema``).
+   kind's schema (``schema``). The schema half runs after check 5, so a bare ``0`` in a
+   cited field is refused ``ungrounded_value``, which says what to do, not ``schema``.
 3. Lineage inputs: every read the instance recorded, never a subset (D6). Every primary
    input and every relation end and evidence source must be one of them
    (``read_not_seen``).
@@ -19,15 +20,23 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    ADR-P05 D1), or, for a path-scoped read (S3), the current version's entry at that path
    must hash the same. A read of another agent's version is
    pinned (D11) and stays current; only invalidation (ADR-P05) can make it stale.
-5. Relations: never ``derived_from`` or ``supersedes`` (``provenance_relation_forbidden``),
+5. Grounding (ADR-P13 D2, D4, D5): every citation in the content verified, and every field
+   a kind's ``CitePolicy`` names cited or, where allowed, an explicit unknown, with the
+   verifier's code (``unknown_span``, ``span_not_seen``, ``stale_source``,
+   ``quote_not_verbatim``, ``quote_too_short``, ``form_not_allowed``,
+   ``ungrounded_value``, ...) and the pointer under ``/content``. No kind or extension can
+   switch it off; each verified citation commits a ``citation.bound``.
+6. Relations: never ``derived_from`` or ``supersedes`` (``provenance_relation_forbidden``),
    a declared kind (``relation_undeclared``), a declared label (``relation_label_invalid``),
    ends of the declared kinds that exist (``relation_end_invalid``), and evidence: at
    least one excerpt, one per end for ``cites="per_end"`` (``citation_missing``), each
-   quote found where it points in an artifact source (``citation_invalid``).
-6. One writer per slot (D4): another writer is refused ``foreign_writer``, unless its
+   quote found where it points in an artifact source (``citation_invalid``), and any other
+   source's quote verified against the span it names, which must be over that source
+   (``span_not_of_source``; no span is ``unknown_span``, so a search hit cannot be cited).
+7. One writer per slot (D4): another writer is refused ``foreign_writer``, unless its
    content equals the latest version, which it adopts as a read. A ``writers="chain"`` kind
    lets every instance of one declared Task write the slot in turn (S4).
-7. Idempotency against the slot's latest version only (D8): equal content, reads and
+8. Idempotency against the slot's latest version only (D8): equal content, reads and
    relations return it and commit nothing. A reverted change is a new version.
 
 Phrase rules, validators (S1), derived kinds (D9), lifecycle and choice bindings are not
@@ -75,6 +84,10 @@ from aksha.runtime.artifacts.types import (
 )
 from aksha.runtime.canonical import NotCanonical, nul_path
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.grounding.facts import citation_bound
+from aksha.runtime.grounding.facts import evidence as save_evidence
+from aksha.runtime.grounding.types import CiteError, SpanCite, Verified
+from aksha.runtime.grounding.verify import Evidence, verify_citation, verify_content
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.storage.rows import ArtifactRow
 
@@ -197,7 +210,7 @@ class ArtifactStore:
         pending_reads: Iterable[InputRef] = (),
         origin: Origin = "task",
     ) -> Saved:
-        """Check ``request`` and return the facts that save it (module doc, checks 1 to 7).
+        """Check ``request`` and return the facts that save it (module doc, checks 1 to 8).
 
         ``view`` is the owner's log as the step sees it; ``writes`` are the full kind
         names the Task may write; ``pending_reads`` are reads recorded in this same step
@@ -216,7 +229,6 @@ class ArtifactStore:
             raise SaveRefused("key_not_allowed", "/key", f"{kind_name} is not keyed")
         content = request.content
         hashed = _content_hash(content)
-        _check_schema(kind, content)
         reads = frozenset(_lineage.recorded_reads(view, run, instance)) | frozenset(pending_reads)
         for i, primary in enumerate(request.primary_inputs):
             if primary not in reads:
@@ -224,11 +236,16 @@ class ArtifactStore:
                     "read_not_seen", f"/primary_inputs/{i}", f"{primary} was never read here"
                 )
         self._check_current(view, reads, writer)
+        ev = save_evidence(
+            view, run=run, instance=instance, reads=reads, artifact=lambda r: self._content(view, r)
+        )
+        bound = _grounded(verify_content(content, kind.cites, ev))
+        _check_schema(kind, content)
         prior = self.latest(view, kind_name, request.key)
         number = 1 if prior is None else prior.ref.version + 1
         ref = ArtifactRef(kind_name, request.key, number)
         checked = tuple(
-            self._check_relation(view, i, rr, writer, reads, ref)
+            self._check_relation(view, i, rr, writer, reads, ref, ev)
             for i, rr in enumerate(request.relations)
         )
         lineage = sorted_inputs(reads)
@@ -244,9 +261,13 @@ class ArtifactStore:
         if prior is not None and self._equal(view, prior, hashed, lineage, checked):
             return Saved(prior, replayed=True)
         return self._new(
-            view, kind, ref, content, hashed, lineage, checked, request, writer,
+            view, kind, ref, content, hashed, lineage, checked, bound, request, writer,
             origin=origin, run=run, instance=instance, step=step,
         )  # fmt: skip
+
+    def _content(self, view: LogView, ref: ArtifactRef) -> Mapping[str, Any] | None:
+        found = self.version(view, ref)
+        return None if found is None else found.content
 
     def _adopt(
         self, view: LogView, prior: ArtifactVersion, *, run: str, instance: str, step: str
@@ -284,6 +305,7 @@ class ArtifactStore:
         hashed: str,
         lineage: tuple[InputRef, ...],
         checked: tuple[_Resolved, ...],
+        bound: tuple[Verified, ...],
         request: SaveRequest,
         writer: WriterId,
         *,
@@ -314,6 +336,8 @@ class ArtifactStore:
             events.append(
                 _relations.relation_saved(rkind, label, src, dst, evidence, ref, n, **envelope)
             )
+        for n, verified in enumerate(bound):
+            events.append(citation_bound(verified, carrier=str(ref), n=n, **envelope))
         row = ArtifactRow(str(ref), ref.kind, ref.key, ref.version, content, hashed, canonical)
         version = ArtifactVersion(
             owner=view.owner, ref=ref, content=content, content_hash=hashed,
@@ -354,8 +378,9 @@ class ArtifactStore:
         writer: WriterId,
         reads: frozenset[InputRef],
         carrier: ArtifactRef,
+        ev: Evidence,
     ) -> _Resolved:
-        """Check 5 for the ``i``-th requested relation; its full kind, label, ends, evidence."""
+        """Check 6 for the ``i``-th requested relation; its full kind, label, ends, evidence."""
         at = f"/relations/{i}"
         if rr.kind.rsplit(".", 1)[-1] in PROVENANCE_RELATIONS:
             raise SaveRefused(
@@ -385,7 +410,7 @@ class ArtifactStore:
                         "citation_missing", f"{at}/evidence", f"no excerpt from the {side} end"
                     )
         for j, excerpt in enumerate(rr.evidence):
-            self._check_excerpt(view, excerpt, reads, f"{at}/evidence/{j}")
+            self._check_excerpt(view, excerpt, reads, f"{at}/evidence/{j}", ev)
         return (name, rr.label, src, dst, tuple(rr.evidence))
 
     def _end(
@@ -423,7 +448,7 @@ class ArtifactStore:
         return _whole(end)
 
     def _check_excerpt(
-        self, view: LogView, excerpt: Excerpt, reads: frozenset[InputRef], at: str
+        self, view: LogView, excerpt: Excerpt, reads: frozenset[InputRef], at: str, ev: Evidence
     ) -> None:
         source = _whole(excerpt.source)
         if source not in {_whole(r) for r in reads}:
@@ -431,7 +456,8 @@ class ArtifactStore:
         if not excerpt.quote.strip():
             raise SaveRefused("citation_invalid", f"{at}/quote", "an excerpt quotes something")
         if source.kind != "artifact":
-            return  # a record's quote is checked by grounding (ADR-P13)
+            _check_span_excerpt(excerpt, source, ev, at)
+            return
         cited = self.version(view, ArtifactRef.from_input(source))
         try:
             found, value = resolve(cited.content, excerpt.pointer) if cited else (False, None)
@@ -446,6 +472,34 @@ class ArtifactStore:
                 "citation_invalid", f"{at}/quote",
                 f"the quote is not in {source} at {excerpt.pointer or '/'}",
             )  # fmt: skip
+
+
+def _grounded(results: Iterable[Verified | CiteError]) -> tuple[Verified, ...]:
+    """Check 5 (grounding): the verified citations, or ``SaveRefused`` for the first failure."""
+    out: list[Verified] = []
+    for result in results:
+        if isinstance(result, CiteError):
+            raise SaveRefused(result.code, "/content" + result.pointer, result.message)
+        out.append(result)
+    return tuple(out)
+
+
+def _check_span_excerpt(excerpt: Excerpt, source: InputRef, ev: Evidence, at: str) -> None:
+    """A non-artifact excerpt's quote, verified against the span minted over its source."""
+    if excerpt.span is None:
+        raise SaveRefused(
+            "unknown_span", f"{at}/span",
+            f"a quote from {source} cites the span a tool minted over its text",
+        )  # fmt: skip
+    span = ev.spans.get(excerpt.span)
+    if span is not None and (span.record_id, span.version) != (source.id, source.version):
+        raise SaveRefused(
+            "span_not_of_source", f"{at}/span",
+            f"{excerpt.span} is over {span.record_id}@{span.version}, not {source}",
+        )  # fmt: skip
+    result = verify_citation(SpanCite(excerpt.span, excerpt.quote), ev, pointer=at)
+    if isinstance(result, CiteError):
+        raise SaveRefused(result.code, result.pointer, result.message)
 
 
 def _may_write(kind: ArtifactKind, owner: WriterId, writer: WriterId) -> bool:
@@ -468,7 +522,7 @@ def _relation_key(
     def end(x: InputRef) -> tuple[str, ...]:
         return ("self",) if x == carrier else x.sort_key()
 
-    proof = tuple(sorted((x.source.sort_key(), x.quote, x.pointer) for x in evidence))
+    proof = tuple(sorted((x.source.sort_key(), x.quote, x.pointer, x.span or "") for x in evidence))
     return (kind, label or "", end(src), end(dst), proof)
 
 

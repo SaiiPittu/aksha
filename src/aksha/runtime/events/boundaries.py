@@ -40,8 +40,9 @@ _ALL = (
         "U2",
         "step_result",
         "execution",
-        "step.completed with the result's facts: read.recorded, artifact rows and "
-        "artifact.saved, relation.saved, an interrupt.raised or an approval request; for an "
+        "step.completed with the result's facts: read.recorded, excerpts.minted, "
+        "excerpts.shown, artifact rows and artifact.saved, relation.saved, citation.bound, "
+        "an interrupt.raised or an approval request; for an "
         "effectful tool call, the outbox.completed or outbox.abandoned it ends with",
     ),
     Boundary(
@@ -55,7 +56,8 @@ _ALL = (
         "U4",
         "resolution",
         "session",
-        "command.accepted or command.refused, interrupt.resolved, approvals, budget.granted, "
+        "command.accepted or command.refused, interrupt.resolved, the answer's "
+        "excerpts.minted, approvals, budget.granted, "
         "review outcomes, run.stop_requested, "
         "an outbox.enqueued the decision wants",
     ),

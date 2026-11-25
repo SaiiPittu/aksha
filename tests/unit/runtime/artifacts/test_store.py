@@ -216,7 +216,7 @@ def test_relation_needs_citation(world: World) -> None:
     world.read("gather", page(1), page(2))
     e = _refused("citation_missing", world.save, "merge", "m1", {}, relations=(_same_as(),))
     assert e.path == "/relations/0/evidence"
-    ok = _same_as(Excerpt(page(1), "Acme Sensors GmbH"))
+    ok = _same_as(world.cite("gather", page(1), "Acme Sensors GmbH"))
     saved = world.save("merge", "m1", {}, relations=(ok,))
     rels = world.artifacts.relations(world.view(), kind="notes.same_as")
     assert [(r.src, r.dst, r.carrier) for r in rels] == [(page(1), page(2), saved.version.ref)]
@@ -296,7 +296,7 @@ def test_per_end_needs_evidence_from_each_end_and_self_is_the_carrier(world: Wor
 
 def test_a_new_carrier_version_retracts_its_old_relations(world: World) -> None:
     world.read("gather", page(1), page(2))
-    world.save("merge", "m1", {}, relations=(_same_as(Excerpt(page(1), "Acme")),))
+    world.save("merge", "m1", {}, relations=(_same_as(world.cite("gather", page(1), "Acme")),))
     world.save("merge", "m1", {"undone": True})
     view = world.view()
     assert world.artifacts.relations(view, kind="notes.same_as") == ()
@@ -305,10 +305,12 @@ def test_a_new_carrier_version_retracts_its_old_relations(world: World) -> None:
 
 def test_equal_content_with_other_relations_is_a_new_version(world: World) -> None:
     world.read("gather", page(1), page(2))
-    world.save("merge", "m1", {}, relations=(_same_as(Excerpt(page(1), "Acme")),))
-    same = world.save("merge", "m1", {}, relations=(_same_as(Excerpt(page(1), "Acme")),))
+    acme = world.cite("gather", page(1), "Acme")
+    world.save("merge", "m1", {}, relations=(_same_as(acme),))
+    same = world.save("merge", "m1", {}, relations=(_same_as(acme),))
     assert same.replayed
-    other = world.save("merge", "m1", {}, relations=(_same_as(Excerpt(page(2), "Acme GmbH")),))
+    gmbh = world.cite("gather", page(2), "Acme GmbH")
+    other = world.save("merge", "m1", {}, relations=(_same_as(gmbh),))
     assert other.version.ref.version == 2
 
 

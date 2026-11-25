@@ -23,7 +23,10 @@ What an agent or extension declares, grouped by the primitive that owns it:
 7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``.
 8. Limits and context (P14, P08): ``Budget``, ``Limits``, ``Backoff``, ``ContextPolicy``,
    ``SummaryPolicy``.
-9. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
+9. Grounding (P13): ``SpanDraft`` (what a read tool's ``Ok`` asks the runtime to mint),
+   ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
+   ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one).
+10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
    ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26).
 """
 
@@ -46,6 +49,7 @@ from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
+from aksha.runtime.grounding.types import CitePolicy, SpanDraft, Unknown, maybe_unknown
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.types import ModelAdapterSpec, ModelAlias, ModelClass
@@ -95,6 +99,7 @@ __all__ = [
     "Budget",
     "Check",
     "CheckResult",
+    "CitePolicy",
     "ContextPolicy",
     "DeclaredInterrupt",
     "EffectClass",
@@ -129,6 +134,7 @@ __all__ = [
     "SandboxNeeds",
     "SandboxPolicy",
     "SaveRequest",
+    "SpanDraft",
     "StopPolicyOptIn",
     "SummaryPolicy",
     "SystemOfRecordSpec",
@@ -140,8 +146,10 @@ __all__ = [
     "ToolOutcome",
     "ToolSpec",
     "ToolUse",
+    "Unknown",
     "VersionedSourceSpec",
     "artifact_keys",
     "from_field",
+    "maybe_unknown",
     "source_keys",
 ]

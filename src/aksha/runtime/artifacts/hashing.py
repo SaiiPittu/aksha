@@ -12,9 +12,10 @@ The canonical form, in order:
 2. Each pointer in ``canon_exclude`` removed.
 3. Each array named in ``list_keys`` sorted by its items' key field.
 4. Every string that is a whole artifact ref (``kind/key@vN``) reduced to its slot
-   (``kind/key``), and every excerpt (an object holding ``source`` and ``quote``) reduced
-   to the source's kind and id and the quote: a moved record or a new ref version with
-   the same words is the same claim.
+   (``kind/key``), every excerpt (an object holding ``source`` and ``quote``) reduced
+   to the source's kind and id and the quote, and every span cite (``{span, quote}``,
+   ADR-P13) reduced to its quote: a moved record, a re-minted span or a new ref version
+   with the same words is the same claim.
 5. The result encoded like the chain (RFC 8785 subset) and hashed.
 """
 
@@ -113,6 +114,8 @@ def _reduce(value: Any) -> Any:
         except ValueError:
             return value
     if isinstance(value, dict):
+        if set(value) == {"span", "quote"} and isinstance(value["span"], str):
+            return {"quote": value["quote"]}
         if _is_excerpt(value):
             src = value["source"]
             return {"source": {"kind": src.get("kind"), "id": src["id"]}, "quote": value["quote"]}

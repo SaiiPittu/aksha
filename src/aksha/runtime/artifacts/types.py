@@ -4,8 +4,8 @@ ADR-P04. An agent declares ``ArtifactKind`` and ``RelationKind``; a tool returns
 ``SaveRequest`` (with ``RelationRequest`` values, each carrying ``Excerpt`` evidence); the
 store answers with an ``ArtifactVersion`` and the facts to commit (``Saved``). A version
 is named by its ``ArtifactRef`` (``notes.line/n1@v2``); a lineage input is an
-``InputRef``. ``ArtifactKind``'s ``validate``, ``cites`` and ``choice`` fields wait for
-their value types (ADR-P04 S1, ADR-P13).
+``InputRef``. ``ArtifactKind.cites`` holds the kind's per-field cite policies (ADR-P13 D4);
+its ``validate`` and ``choice`` fields wait for their value types (ADR-P04 S1).
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from typing import Any, Literal
 
 from aksha.runtime.canonical import freeze
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.grounding.types import CitePolicy
 from aksha.runtime.storage.rows import ArtifactRow
 from aksha.runtime.tasks.types import Check
 
@@ -43,7 +44,9 @@ class ArtifactKind:
     a JSON Schema mapping or a dataclass. ``derived`` is a pure function over other kinds.
     ``canon_exclude`` lists JSON pointers left out of the canonical form, ``list_keys``
     maps an array's pointer to the field its items are sorted by, and ``canonicalize`` is
-    a pure function applied before both (ADR-P04 D5).
+    a pure function applied before both (ADR-P04 D5). ``cites`` lists the cite policies of
+    its grounded fields (ADR-P13 D4): each matched field cites its evidence or, where the
+    policy allows, holds an explicit unknown.
     """
 
     name: str
@@ -59,6 +62,7 @@ class ArtifactKind:
     canonicalize: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None
     save: Literal["any", "tool_only"] = "any"
     summary: str | None = None
+    cites: tuple[CitePolicy, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -208,22 +212,32 @@ class Excerpt:
     """Evidence for a relation: a quote from one input, at a JSON pointer in it.
 
     For an artifact source the store checks the quote is in the string at ``pointer``
-    (anywhere in the content when ``pointer`` is ``""``). For a record the quote is kept
-    and checked by grounding (ADR-P13) when citation spans are built.
+    (anywhere in the content when ``pointer`` is ``""``). Any other source is cited through
+    ``span``, a citation span minted over that input's text, and the quote is verified
+    against it like any citation (ADR-P13 D2, decision 9).
     """
 
     source: InputRef
     quote: str
     pointer: str = ""
+    span: str | None = None
 
     def as_json(self) -> dict[str, Any]:
-        """The excerpt as ``relation.saved`` records it."""
-        return {"source": self.source.as_json(), "quote": self.quote, "pointer": self.pointer}
+        """The excerpt as ``relation.saved`` records it; ``span`` only when set."""
+        out = {"source": self.source.as_json(), "quote": self.quote, "pointer": self.pointer}
+        if self.span is not None:
+            out["span"] = self.span
+        return out
 
     @classmethod
     def from_json(cls, value: Mapping[str, Any]) -> Excerpt:
         """Read :meth:`as_json`'s form back."""
-        return cls(InputRef.from_json(value["source"]), value["quote"], value.get("pointer", ""))
+        return cls(
+            InputRef.from_json(value["source"]),
+            value["quote"],
+            value.get("pointer", ""),
+            value.get("span"),
+        )
 
 
 SELF: Literal["self"] = "self"

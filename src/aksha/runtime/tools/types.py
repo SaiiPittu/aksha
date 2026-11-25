@@ -12,7 +12,8 @@ has no store, model or adapter handle, so a body cannot write the event store.
 ``ToolCall`` is one call the model asked for, the policy gate's only model-written input
 (ADR-P11 D4). ``ToolView`` is what the model is shown for one tool; ``ToolResultView`` is the capped
 model view of one result. ``ToolContext`` gains its readers, deadline and clock with the
-durable step executor (ADR-P02), and ``Ok`` its excerpt drafts with grounding (ADR-P13).
+durable step executor (ADR-P02). ``Ok.spans`` holds the span drafts a read or fetch tool asks
+the runtime to mint (ADR-P13 D1).
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from aksha.runtime.artifacts.types import SaveRequest
+from aksha.runtime.grounding.types import SpanDraft
 from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.outbox.types import EffectSpec
 from aksha.runtime.sandbox.types import SandboxNeeds
@@ -88,9 +90,14 @@ class ToolContext:
 
 @dataclass(frozen=True)
 class Ok:
-    """A successful result. ``data`` is what the model reads, as data, never as instructions."""
+    """A successful result. ``data`` is what the model reads, as data, never as instructions.
+
+    ``spans`` are span drafts over texts the runtime's reader returned; only a tool that
+    declares ``mints_citation_spans`` may return them, and the runtime mints them (ADR-P13).
+    """
 
     data: Mapping[str, Any]
+    spans: tuple[SpanDraft, ...] = ()
 
 
 @dataclass(frozen=True)

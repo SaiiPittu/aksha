@@ -198,6 +198,8 @@ _EXCERPT = {
         "source": INPUT_REF_SCHEMA,
         "quote": {"type": "string", "minLength": 1},
         "pointer": {"type": "string"},
+        # ADR-P13: the span a record's quote is verified against.
+        "span": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
     },
     "required": ["source", "quote", "pointer"],
     "additionalProperties": False,
@@ -221,6 +223,74 @@ RELATION_SAVED = EventTypeSpec(
     writer="artifacts",
     boundaries=frozenset({"U2", "U10"}),
     dedup_key="rel:{carrier}#{n}",
+)
+# --- P13 grounding (``grounding/spans.py``, ``grounding/facts.py``) -----------------------
+
+_SPAN = {
+    "type": "object",
+    "properties": {
+        "span_id": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
+        "source": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 1},
+        "text": {"type": "string", "minLength": 1},
+        "tool": {"type": "string", "minLength": 1},
+        "supersedes": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
+    },
+    "required": ["span_id", "source", "record_id", "version", "start", "end", "text", "tool"],
+    "additionalProperties": False,
+}
+_SPAN_IDS = {"type": "array", "items": {"type": "string", "pattern": "^EX-[0-9]{4,}$"}}
+EXCERPTS_MINTED = EventTypeSpec(
+    name="excerpts.minted",
+    schema={
+        "type": "object",
+        "properties": {
+            "tool": {"type": "string", "minLength": 1},
+            # D8: each span carries its full text, so an old quote can be re-verified.
+            "spans": {"type": "array", "items": _SPAN},
+            # S1: the spans whose text was inside the view shown to the envelope's instance.
+            "shown": _SPAN_IDS,
+        },
+        "required": ["tool", "spans", "shown"],
+        "additionalProperties": False,
+    },
+    writer="grounding",
+    boundaries=frozenset({"U2", "U4"}),
+)
+EXCERPTS_SHOWN = EventTypeSpec(
+    name="excerpts.shown",
+    schema={
+        "type": "object",
+        "properties": {"spans": {**_SPAN_IDS, "minItems": 1}, "via": {"enum": ["context"]}},
+        "required": ["spans", "via"],
+        "additionalProperties": False,
+    },
+    writer="grounding",
+    boundaries=frozenset({"U2"}),
+)
+CITATION_BOUND = EventTypeSpec(
+    name="citation.bound",
+    schema={
+        "type": "object",
+        "properties": {
+            "carrier": {"type": "string", "minLength": 1},
+            "n": {"type": "integer", "minimum": 0},
+            "pointer": {"type": "string"},
+            "form": {"enum": ["span", "statement", "artifact"]},
+            "target": {"type": "string", "minLength": 1},
+            "quote": {"type": "string", "minLength": 1},
+            "occurrence": {"type": "integer", "minimum": 0},
+            "path": {"type": "string"},
+        },
+        "required": ["carrier", "n", "pointer", "form", "target"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2", "U10"}),
+    dedup_key="cite:{carrier}#{n}",
 )
 RECOVERY_COMPLETED = EventTypeSpec(
     name="recovery.completed",
@@ -788,6 +858,9 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     ARTIFACT_SAVED,
     READ_RECORDED,
     RELATION_SAVED,
+    EXCERPTS_MINTED,
+    EXCERPTS_SHOWN,
+    CITATION_BOUND,
     RECOVERY_COMPLETED,
     STEP_STARTED,
     STEP_DISPATCHED,

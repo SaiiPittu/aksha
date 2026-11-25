@@ -18,14 +18,18 @@ from aksha.runtime.artifacts.lineage import reads_to_record
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import (
     ArtifactKind,
+    Excerpt,
     InputRef,
     RelationKind,
     Saved,
     SaveRequest,
     WriterId,
 )
+from aksha.runtime.grounding.spans import mint_spans, span_index
+from aksha.runtime.grounding.types import ReturnedText, SpanDraft
 from aksha.runtime.projections.view import LogView, load_view
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tools.types import ToolSpec
 from tests.support.events import START, probe_catalogue
 
 OWNER = "o1"
@@ -64,6 +68,18 @@ COMPARE = WriterId("notes", "compare", None)
 OTHER = WriterId("other", "find", None)
 
 
+FETCH = ToolSpec(
+    name="fetch_page",
+    owner="notes",
+    effect="read",
+    description="Fetch one page.",
+    schema={"type": "object"},
+    collections=frozenset({"pages"}),
+    mints_citation_spans=True,
+)
+"""A read tool that mints citation spans over the pages it returns."""
+
+
 def page(n: int, version: str = "1") -> InputRef:
     """Source record ``pages/P-000n`` at ``version``."""
     return InputRef("record", f"pages/P-{n:04d}", version)
@@ -90,6 +106,36 @@ class World:
         events = reads_to_record(self.view(), inputs, run=run, instance=instance)
         if events:
             self.store.append(OWNER, "U2", events)
+
+    def fetch(
+        self,
+        instance: str,
+        record: InputRef,
+        text: str,
+        *,
+        run: str = RUN,
+        source: str = "fixtures",
+    ) -> str:
+        """Record ``instance`` reading ``record`` and mint one span over all of ``text``.
+
+        What a fetch tool's step commits: the read and ``excerpts.minted``. The span ID.
+        """
+        self._steps += 1
+        step = f"{run}/{instance}/t01/c{self._steps:02d}"
+        view = self.view()
+        minted = mint_spans(
+            (SpanDraft(source, record.id, record.version, 0, len(text)),),
+            (ReturnedText(source, record.id, record.version, text),),
+            spec=FETCH, index=span_index(view), run=run, instance=instance, step=step,
+        )  # fmt: skip
+        events = reads_to_record(view, (record,), run=run, instance=instance, step=step)
+        if events or minted.events:
+            self.store.append(OWNER, "U2", (*events, *minted.events))
+        return minted.spans[0].span_id
+
+    def cite(self, instance: str, record: InputRef, quote: str, *, run: str = RUN) -> Excerpt:
+        """Fetch ``record`` with ``quote`` as its text and return a relation excerpt of it."""
+        return Excerpt(record, quote, span=self.fetch(instance, record, quote, run=run))
 
     def save(
         self,

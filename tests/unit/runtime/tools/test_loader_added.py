@@ -40,7 +40,7 @@ def test_save_artifact_reads_primary_inputs_and_relations_from_json() -> None:
         "primary_inputs": [page],
         "relations": [
             {"kind": "same_as", "src": "self", "dst": page, "label": None,
-             "evidence": [{"source": page, "quote": "Acme"}]},
+             "evidence": [{"source": page, "quote": "Acme", "span": "EX-0001"}]},
         ],
     }  # fmt: skip
     decl = LOADER_ADDED_DECLS["save_artifact"]
@@ -51,4 +51,5 @@ def test_save_artifact_reads_primary_inputs_and_relations_from_json() -> None:
     (req,) = decl.body(CTX, args).saves
     record = InputRef("record", "pages/P-0001", "1")
     assert req.primary_inputs == (record,)
-    assert req.relations == (RelationRequest("same_as", SELF, record, (Excerpt(record, "Acme"),)),)
+    evidence = (Excerpt(record, "Acme", span="EX-0001"),)
+    assert req.relations == (RelationRequest("same_as", SELF, record, evidence),)

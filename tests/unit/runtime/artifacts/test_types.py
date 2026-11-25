@@ -67,7 +67,9 @@ def test_writers_and_excerpts_round_trip() -> None:
     w = WriterId("notes", "compare", "C1")
     assert WriterId.from_json(w.as_json()) == w
     x = Excerpt(InputRef("record", "pages/P-0001", "1"), "a quote", "/body")
-    assert Excerpt.from_json(x.as_json()) == x
+    assert Excerpt.from_json(x.as_json()) == x and "span" not in x.as_json()
+    spanned = Excerpt(InputRef("record", "pages/P-0001", "1"), "a quote", span="EX-0001")
+    assert Excerpt.from_json(spanned.as_json()) == spanned
 
 
 def test_save_request_carries_primary_inputs_and_relations_by_default_empty() -> None:

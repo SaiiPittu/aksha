@@ -16,7 +16,11 @@ class SaveRefused(AkshaError):
     ``not_canonical_content``, ``read_not_seen``, ``read_invalidated``,
     ``provenance_relation_forbidden``, ``relation_undeclared``, ``relation_label_invalid``,
     ``relation_end_invalid``, ``citation_missing``, ``citation_invalid``,
-    ``foreign_writer``.
+    ``foreign_writer``, and grounding's codes (ADR-P13): ``unknown_span``,
+    ``span_not_seen``, ``stale_source``, ``quote_not_verbatim``, ``quote_too_short``,
+    ``form_not_allowed``, ``superseded_statement``, ``stale_artifact_cite``,
+    ``ungrounded_value``, ``cite_invalid``, ``span_not_of_source``, ``value_not_in_quote``,
+    ``unknown_not_allowed``, ``unknown_invalid``.
     """
 
     default_code = "save_refused"

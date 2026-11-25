@@ -132,6 +132,7 @@ _SAVE_ARTIFACT = ToolSpec(
                                     "source": INPUT_REF_SCHEMA,
                                     "quote": {"type": "string", "minLength": 1},
                                     "pointer": {"type": "string"},
+                                    "span": {"type": "string", "minLength": 1},
                                 },
                                 "required": ["source", "quote"],
                                 "additionalProperties": False,
