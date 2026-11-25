@@ -10,7 +10,9 @@ from aksha.runtime.storage.errors import StoreError
 
 def test_storage_config_reads_the_environment() -> None:
     assert StorageConfig.from_env({}) == StorageConfig()
-    assert StorageConfig().backend == "postgres"  # the production backend is the default
+    # SQLite is the default, so a run needs no setup (decision 34); PostgreSQL is opt-in.
+    assert StorageConfig().backend == "sqlite"
+    assert StorageConfig.from_env({}).backend == "sqlite"
     cfg = StorageConfig.from_env(
         {"AKSHA_STORE": "postgres", "AKSHA_POSTGRES_DSN": "dbname=x", "AKSHA_SQLITE_PATH": "a.db"}
     )
@@ -33,10 +35,22 @@ def test_open_event_store_opens_sqlite_when_chosen(tmp_path: Path, clock: FakeCl
         store.close()
 
 
+def test_open_event_store_opens_sqlite_by_default(
+    tmp_path: Path, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    store = open_event_store(StorageConfig.from_env({}), clock, writer=True)
+    try:
+        assert isinstance(store, SQLiteEventStore)
+        assert (tmp_path / "var" / "aksha.sqlite").exists()
+    finally:
+        store.close()
+
+
 def test_open_event_store_needs_a_dsn_for_postgres(clock: FakeClock) -> None:
     with pytest.raises(StoreError) as e:
-        open_event_store(StorageConfig(), clock, writer=True)
-    assert e.value.code == "dsn_required" and "AKSHA_STORE=sqlite" in str(e.value)
+        open_event_store(StorageConfig.from_env({"AKSHA_STORE": "postgres"}), clock, writer=True)
+    assert e.value.code == "dsn_required" and "AKSHA_POSTGRES_DSN" in str(e.value)
 
 
 def test_open_event_store_opens_postgres(postgres_dsn: str, clock: FakeClock) -> None:

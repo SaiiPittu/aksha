@@ -9,16 +9,16 @@ Storage configuration, from the environment:
 =====================  =====================================  =====================
 Variable               Meaning                                Default
 =====================  =====================================  =====================
-``AKSHA_STORE``        ``postgres`` or ``sqlite``             ``postgres``
-``AKSHA_POSTGRES_DSN`` a libpq connection string              none (required)
+``AKSHA_STORE``        ``sqlite`` or ``postgres``             ``sqlite``
+``AKSHA_POSTGRES_DSN`` libpq DSN, needed for ``postgres``     none
 ``AKSHA_SQLITE_PATH``  the SQLite file                        ``var/aksha.sqlite``
 =====================  =====================================  =====================
 
-PostgreSQL is the default because it is the production backend (ADR-P01 D1, amended 25
-Nov 2026). SQLite is the zero-setup backend for local and offline runs and the tests:
-choose it with ``AKSHA_STORE=sqlite``. Both pass one contract suite. The PostgreSQL driver
-is the optional extra ``aksha[postgres]``, imported only when PostgreSQL is chosen, so the
-runtime itself stays standard library plus ``jsonschema``.
+SQLite is the default so a run needs no setup: one file, no server (decision 34, 26 Nov
+2026). PostgreSQL is the production backend (ADR-P01 D1): choose it with
+``AKSHA_STORE=postgres`` and ``AKSHA_POSTGRES_DSN``. Both pass one contract suite. The
+PostgreSQL driver is the optional extra ``aksha[postgres]``, imported only when PostgreSQL
+is chosen, so the runtime itself stays standard library plus ``jsonschema``.
 """
 
 from __future__ import annotations
@@ -41,16 +41,16 @@ Backend = Literal["sqlite", "postgres"]
 class StorageConfig:
     """Which event store backend to open, and where."""
 
-    backend: Backend = "postgres"
+    backend: Backend = "sqlite"
     postgres_dsn: str | None = None
     sqlite_path: Path = Path("var/aksha.sqlite")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> StorageConfig:
         """Read the configuration from environment variables (see the module docstring)."""
-        backend = env.get("AKSHA_STORE", "postgres")
+        backend = env.get("AKSHA_STORE", "sqlite")
         if backend not in ("sqlite", "postgres"):
-            raise StoreError("unknown_backend", f"AKSHA_STORE={backend!r}: use postgres or sqlite")
+            raise StoreError("unknown_backend", f"AKSHA_STORE={backend!r}: use sqlite or postgres")
         return cls(
             backend=cast(Backend, backend),
             sqlite_path=Path(env.get("AKSHA_SQLITE_PATH", "var/aksha.sqlite")),
@@ -71,8 +71,8 @@ def open_event_store(
     if not config.postgres_dsn:
         raise StoreError(
             "dsn_required",
-            "the event store is PostgreSQL by default: set AKSHA_POSTGRES_DSN, "
-            "or AKSHA_STORE=sqlite for a local file",
+            "AKSHA_STORE=postgres needs AKSHA_POSTGRES_DSN, a libpq connection string; "
+            "leave AKSHA_STORE unset for the local SQLite file",
         )
     from aksha.adapters.storage import postgres
 

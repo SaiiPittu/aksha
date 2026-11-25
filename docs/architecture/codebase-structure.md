@@ -1,6 +1,6 @@
 # Aksha codebase structure
 
-*Status on 25 Nov 2026: four primitives are built and tested. The event store and projections (ADR-P01): `runtime/events/`, `runtime/storage/` (hash-chained since 25 Nov 2026, Amendment H), `runtime/projections/`, both storage adapters (PostgreSQL, the default, and SQLite), the file anchor sink and the storage wiring in `app.py`. The agent definition and the core of the extension API (ADR-P20): `runtime/definitions/` and `runtime/api.py`. The tool registry (ADR-P10): `runtime/tools/`. The policy gate (ADR-P11): `runtime/policy/`. Every other primitive holds only the values the built ones need, in its `types.py`; the tree lists only modules that exist, and "Built and planned" lists the rest. The guards in `tests/architecture/` are built and pass. The architecture decision records (ADRs) it follows are in `scratch-pad/design/primitives/adr/`; their "Amendments from the build" sections record where the code differs from the first text.*
+*Status on 25 Nov 2026: four primitives are built and tested. The event store and projections (ADR-P01): `runtime/events/`, `runtime/storage/` (hash-chained since 25 Nov 2026, Amendment H), `runtime/projections/`, both storage adapters (SQLite, the default, and PostgreSQL), the file anchor sink and the storage wiring in `app.py`. The agent definition and the core of the extension API (ADR-P20): `runtime/definitions/` and `runtime/api.py`. The tool registry (ADR-P10): `runtime/tools/`. The policy gate (ADR-P11): `runtime/policy/`. Every other primitive holds only the values the built ones need, in its `types.py`; the tree lists only modules that exist, and "Built and planned" lists the rest. The guards in `tests/architecture/` are built and pass. The architecture decision records (ADRs) it follows are in `docs/design/adr/`; their "Amendments from the build" sections record where the code differs from the first text.*
 
 
 A reader who opens the repository should be able to answer three questions in a minute: where does a concept live, what may it import, and where does its test go. Without a fixed answer, the event store's rules end up split between a SQLite file and the code that calls it, a model driver gets imported by the core, and swapping SQLite for PostgreSQL means editing every primitive. This page fixes the answers. It uses ports and adapters (hexagonal architecture): the runtime is the domain in the middle, it states what it needs from the outside world as `typing.Protocol` classes (the ports), and concrete backends (the adapters) implement those Protocols from outside.
@@ -57,7 +57,7 @@ Imports under `if TYPE_CHECKING:` count, because they are still a dependency a r
 ```text
 src/aksha/
 ├── __init__.py                              package version
-├── app.py                                   composition root: picks adapters (PostgreSQL by default)
+├── app.py                                   composition root: picks adapters (SQLite by default)
 ├── runtime/                                 THE DOMAIN: agent-neutral core, stdlib + jsonschema only
 │   ├── __init__.py                          the one layout rule and the three import rules
 │   ├── api.py                               P20 public runtime API; agents and extensions import only this
@@ -281,7 +281,7 @@ Changing `src/aksha/runtime/api.py` changes the extension API: bump `API_VERSION
 
 ## PostgreSQL and SQLite
 
-On 25 Nov 2026 the maintainer chose PostgreSQL over SQLite, which may not hold up at scale. ADR-P01 decision 1 is amended to match: PostgreSQL is the production backend and the default in `src/aksha/app.py` (`StorageConfig.backend = "postgres"`, which needs `AKSHA_POSTGRES_DSN`); SQLite is the zero-setup backend for local and offline runs and the tests (`AKSHA_STORE=sqlite`). Both are built behind the one `EventStore` port and pass one contract suite (`tests/contract/storage/`), so the choice is configuration, not a rewrite. The driver, psycopg, stays in the optional extra `aksha[postgres]`, so the runtime is still the standard library plus `jsonschema`.
+On 25 Nov 2026 the maintainer chose PostgreSQL over SQLite, which may not hold up at scale. ADR-P01 decision 1 is amended to match: PostgreSQL is the production backend, chosen with `AKSHA_STORE=postgres` and `AKSHA_POSTGRES_DSN`. On 26 Nov 2026 decision 34 made SQLite the default in `src/aksha/app.py` (`StorageConfig.backend = "sqlite"`, the file `var/aksha.sqlite`), so a local or offline run and the tests need no setup. Both are built behind the one `EventStore` port and pass one contract suite (`tests/contract/storage/`), so the choice is configuration, not a rewrite. The driver, psycopg, stays in the optional extra `aksha[postgres]`, so the runtime is still the standard library plus `jsonschema`.
 
 | Rule (ADR-P01) | PostgreSQL adapter | SQLite adapter |
 |---|---|---|
@@ -317,7 +317,7 @@ Each event's `hash` covers its own envelope and the previous event's `hash`, the
 ## Sources
 
 1. `scratch-pad/design/primitives/00-index.md` and `00-primitives-catalogue.md`, 25 Nov 2026: the primitive list, IDs and build order.
-2. ADR-P01, P02, P03, P04, P10, P11, P15, P16, P17 and P20 in `scratch-pad/design/primitives/adr/`, Interface and Decision sections, read on 25 Nov 2026.
+2. ADR-P01, P02, P03, P04, P10, P11, P15, P16, P17 and P20 in `docs/design/adr/`, Interface and Decision sections, read on 25 Nov 2026.
 3. ADR-P20 decisions 1, 2, 3 and 8: the three layers, the one public runtime API, contributions as declared data, and guards shown to fail.
 4. The maintainer's direction of 25 Nov 2026: PostgreSQL over SQLite, and a readable codebase with proper interfaces and structures.
 5. The review of the four built primitives, 25 Nov 2026 (22 issues and a mutation run), which this layout and the ADR amendments answer.
