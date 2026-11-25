@@ -8,7 +8,8 @@
 | 11 to 16 | Names, the primitives-first method and the rule of three |
 | 17 to 21 | Storage, code layout, future directions, the hash chain and telemetry |
 | 22 to 24 | How the runtime is run, headless mode and the order the docs and code land in |
-| 26 to 27 | Headless permissions and the durable executor |
+| 25 to 27 | The blob store, headless permissions and the durable executor |
+| 29 to 35 | The three tiers, rebuild and resume, context as a rendering, recovery order, the remaining leans, and how the repository is reviewed |
 
 ## 25 Nov 2026: stop ownership and the agent model
 
@@ -52,7 +53,28 @@
 23. **Headless mode runs in full bypass**. A headless run raises no approval prompts and asks for no permissions, and it is expected to run inside a sandbox, as headless agents usually do. This decision postdates ADR-P11 (a policy gate with no mode that skips it) and ADR-P17 (interrupts and approvals); as of 26 Nov 2026 neither ADR yet says how a bypassed run meets the gate. Amended by decision 26: a headless run never asks, but deny rules are not bypassed.
 24. **Design docs land before the first code merges.** A docs pull request (product overview, architecture, primitives catalogue, ADRs) is merged first, and the first code pull request (#40) is rebased onto it.
 
-## 26 Nov 2026: headless permissions and the durable executor
+## 26 Nov 2026: the blob store, headless permissions and the durable executor
+
+25. **A blob store behind a `BlobStore` port, content-addressed by SHA-256.** A filesystem adapter is the default for a laptop, offline runs and the tests, with a contract suite; an S3-compatible adapter comes later for the software factory and also holds the write-once anchor of the hash chain. A payload over 64 KiB goes to the blob store, and its event keeps only a reference (`{blob: "sha256:...", bytes, type}`). The anchor has an interface and a file sink now, and a write-once sink later.
 
 26. **Headless runs never ask, and deny rules always hold** (amends decision 23). In a headless run every ask becomes an allow, so nothing waits for a person, but every explicit deny rule still refuses, and the run executes inside a sandbox. The headless setting is an ordinary allow rule that a higher tier can still deny, not a bypass that skips the deny rules. [ADR-P11](adr/ADR-P11-policy-gate-and-permissions.md) carries it as its decision 12.
 27. **ADR-P02 is accepted: an own durable executor behind an executor port.** Temporal is supported later in two ways: as an executor adapter, where an Aksha run executes as a Temporal workflow and its steps as activities, and as an integration, where a business's own Temporal workflow invokes an Aksha run as an activity. Step semantics are named `at_least_once`, `reconcile` and `at_most_once` on the tool specification. A person's durable stop is part of recovery (`stop_requested`). A replay check, which verifies that a re-run matches the recorded history, is designed now and built later. A run suspended while one of its inputs changes gets one chance to re-check on resume (`suspended_with_rebuilds`), in the first milestone.
+
+## 26 Nov 2026: the three tiers, rebuild and resume, and the remaining leans
+
+Number 28 is a personal note with no bearing on the design and is omitted.
+
+29. **Three tiers: state, runtime and execution.** Tier 1, state, is the event store, the blob store and the outbox. Tier 2, the runtime, is the session API, the agent loop, Tasks, stop policies, the policy gate and the durable step executor. Tier 3, execution, is the sandbox workers, which hold no credentials and no state. Only tier 2 writes tier 1. Described in [architecture, section 3](02-architecture.md#3-three-tiers-state-runtime-and-execution), and [ADR-P12](adr/ADR-P12-sandbox-and-execution-environment.md) places the sandbox in tier 3.
+30. **Resume after a rebuild is under evaluation.** When invalidation rebuilds work, the runtime could resume the original Task instance with its own history and a change notice the runtime writes, instead of starting the instance afresh, and pass such notices along lineage to the supervising Task. It is tested against the research, patent and coding agents before it is adopted.
+31. **A resumed context supersedes stale tool results, and the event store is never edited.** The resumed context is a projection of the event store, so a stale tool result can be replaced or masked in the view while the recorded history stays untouched. The change notice names the agent's own earlier conclusions that relied on stale reads, found through lineage. The cost is that a provider's prompt cache breaks from the first changed position, which is an input to the compaction policy (ADR-P08). Refined by decision 32.
+32. **Supersede by masking, not by swapping** (refines 31). In a resumed context the stale tool result's body is replaced by a short placeholder, for example `[superseded: comparison/C1 changed; the current version is in the change notice below]`. The updated content is not written into the old position; it appears once, at the end, with the change notice. An updated value sitting in an old turn could mislead the agent about when it learned what. This is the first use of principle P-5, the context window is a rendering, not a ledger ([problem and goals, section 9](01-product/01-problem-and-goals.md#p-5-the-context-window-is-a-rendering-not-a-ledger); [ADR-P08](adr/ADR-P08-context-assembly-and-compaction.md) A2).
+33. **Recovery checks a person's stop first.** Recovery classifies a run as `stop_requested` before it checks `definition_changed`. A stopped run stays stopped, and its definition no longer matters, because human state comes before every automatic outcome. [ADR-P02](adr/ADR-P02-durable-execution.md) D6 and D7 now match ADR-P18 D3 and the code.
+34. **The remaining leans are accepted.**
+    1. The remaining primitives are accepted at the leans their ADRs state.
+    2. The hold is narrowed to the held work (ADR-P16 S1).
+    3. Partial results (ADR-P24) and the request router (ADR-P23) are built.
+    4. Erasure in an append-only store (ADR-P30) is stated as a known limitation.
+    5. After a rebuild, the first milestone starts a fresh context with a rebuild summary; resume with masking is the next step ([future directions](05-future-directions.md#next-step-resume-a-task-instance-after-a-rebuild)). A writer is not held "not done" by a pending human review of its output.
+    6. SQLite is the default store for the offline run.
+    7. **Compaction (ADR-P08) is a must-have core feature** of the runtime, not an interface only.
+35. **Reviews and merges for this repository are delegated to a coding agent.** The maintainer delegates pull-request review and squash-merge to an AI coding agent working under stated conditions (every check green, a self-review against the repository's rules). The repository carries a self-review skill and review context for third-party review bots, so automated reviewers read the same rules.

@@ -1,6 +1,6 @@
 # What I would build next
 
-*Intermediate design as of 26 Nov 2026, first written 25 Nov 2026. Recorded as decisions 19 to 21 in the [decisions log](04-decisions-log.md). X-1 to X-7 are designed only, and nothing in them has been built or run. X-8, the hash chain, is in the first code pull request, which is not yet merged as of 26 Nov 2026. P-numbers refer to the [primitives catalogue](03-primitives.md).*
+*Intermediate design as of 26 Nov 2026, first written 25 Nov 2026. Recorded as decisions 19 to 21 in the [decisions log](04-decisions-log.md); the next step on resuming a Task instance after a rebuild follows decisions 30 to 32 and 34. X-1 to X-7 are designed only, and nothing in them has been built or run. X-8, the hash chain, is in the first code pull request, which is not yet merged as of 26 Nov 2026. P-numbers refer to the [primitives catalogue](03-primitives.md).*
 
 Aksha has to work in two settings with the same code: one person running it on a laptop, and an unattended software factory where many runs go on with nobody watching. The first release is shaped for the laptop. The eight items below are what the factory setting needs on top of it. Each one extends a primitive that already exists rather than adding a new subsystem, which is the test I hold every addition to.
 
@@ -87,6 +87,21 @@ Scope. The chain covers the event store, which is the agent-run record and its t
 
 Extends: the event store and projections (P01). Status: in the first code pull request, not yet merged as of 26 Nov 2026 ([ADR-P01](adr/ADR-P01-event-store-and-projections.md), amendment H).
 
+## Next step: resume a Task instance after a rebuild
+
+Status: the first milestone ships the fresh form; resume with masking is designed and waits for a measurement (decisions 30 to 32 and 34).
+
+When a source changes, invalidation (P05) re-enters only the writers whose outputs went out of date. The question is what a re-entered Task instance sees first. There are two answers, and the first milestone takes the simpler one.
+
+1. **First milestone: a fresh context with a rebuild summary.** The instance starts a new context, as it does today, built from its declared reads plus a rebuild summary and a change notice the runtime writes from the event store: which inputs changed, their old and new versions, and which of the instance's earlier outputs read them. Every re-entry ends at the same save check and the same early cutoff, so an output that comes out unchanged stops the rebuild there.
+2. **Next: resume with masking.** The instance continues its own recorded session instead. Because the context is a rendering of the event store and not a ledger (principle P-5), the runtime can mask each stale tool result in place with a short placeholder and put the current content once, at the end, in the change notice, which also names the instance's own earlier conclusions that relied on stale reads (decision 32, ADR-P08 A2 and A3). Nothing in the event store is edited. A pure rule recorded on the instance's entry would pick resume or fresh, and would choose fresh whenever the old session cannot be trusted or does not fit: too few turns, a changed Task definition, a session that ended blocked or overflowed, a flagged instruction in a result, a changed premise, a rejected review, or stale results hiding most of the session.
+
+Why resume waits for a measurement. The saving is conditional: on paper resume reliably saves turns, but saves input characters only when the fresh path would need several turns to rebuild its understanding (estimate, not measured). Masking stale results inside a resumed session is not something I have seen established practice for. And the main quality risk, an agent anchoring on its own earlier conclusion when that conclusion is what the change overturned, cannot be judged on paper. The deciding evidence is one live-model experiment: the same research and patent changes run as fresh, as resume, and as a fork at the point before the first stale turn, scored against an answer key on correctness, turns, characters and how often early cutoff fires. Resume becomes an opt-in per Task, and later perhaps the default, only if it wins on correctness and cost.
+
+Where it lives: wholly in the runtime over the event store (tiers 2 and 1). A box in tier 3 never holds a session or a transcript, so a box's files that were not saved as artifacts are gone after the step, and the change notice names the workspace tree version instead. A masked position costs the provider's prompt cache from that point on, which is an input to the compaction policy (P08).
+
+Extends: invalidation (P05), context assembly and compaction (P08), Tasks and the scheduler (P15) and stop-policy evaluation (P16).
+
 ## Considered and rejected
 
 1. Agents rewriting their own harness. Suh's list imagines a self-improving harness that writes its own extensions or hooks on the fly. I rejected it because agents in Aksha are Python modules, guarded by the loader, the tests and a human approval (decision 2). A harness that an agent can rewrite at run time removes the one place where a person reviews what the agent is allowed to do, and the version hash on every action (X-4) would stop meaning anything. An agent may still draft a change to an agent module; it lands only through the same loader, tests and approval.
@@ -98,5 +113,5 @@ Extends: the event store and projections (P01). Status: in the first code pull r
 - Katelyn Lesse, [Secure Agents: Architecture and Sandboxing](https://www.katelynlesse.com/blog/secure-agents-architecture-and-sandboxing), blog post, 13 Sep 2026. Read 25 Nov 2026.
 - swyx, [quote post on Lesse's article](https://x.com/swyx/status/2125371136943022423), 25 Nov 2026, and its self-reply relaying John Suh's list.
 - John Suh, [Agent platform of 2027](https://x.com/john_ssuh/status/2124336124172935336), X post with four images, 22 Nov 2026, as relayed by swyx and read 25 Nov 2026.
-- Decisions 2, 14 and 17 to 21: [decisions log](04-decisions-log.md).
+- Decisions 2, 14, 17 to 21 and 29 to 34: [decisions log](04-decisions-log.md).
 - Primitive ADRs P01, P03 to P05, P08 to P12, P14, P16 to P20, P25, P26, P29 and P30: [adr/](adr/).

@@ -4,7 +4,7 @@
 
 ## Status
 
-Proposed, 25 Nov 2026. No decisions log entry settles compaction (CP-1 is open). Two of the maintainer's recorded calls shape it: item 8 (each fan-out Task instance has its own model context, which bounds every context by construction) and pattern P-2 (store facts, derive interpretations; a model's context is an interpretation). Everything else is my lean. Nothing was built as of 25 Nov 2026. Amended 25 Nov 2026 after the three-agent stress test: S1 to S4 below are new and Proposed.
+Proposed, 25 Nov 2026. On that date no decisions log entry settled compaction (CP-1 was open). Two of the maintainer's recorded calls shape it: item 8 (each fan-out Task instance has its own model context, which bounds every context by construction) and pattern P-2 (store facts, derive interpretations; a model's context is an interpretation). Everything else is my lean. Nothing was built as of 25 Nov 2026. Amended 25 Nov 2026 after the three-agent stress test: S1 to S4 below are new and Proposed. Amended 26 Nov 2026: decision 34 makes compaction a must-have core feature of the runtime, not an interface only, and decision 32 sets the masking rule for superseded tool results; both are Accepted and are written up as A1 to A3 below.
 
 ## Terms
 
@@ -65,6 +65,16 @@ Masking order: The three earlier reads of `parser.py` go first, as superseded by
 2. S2, masking stubs the arguments of superseded store calls. Masking keeps each call and its arguments, so about 15 `write_file` calls of about 6,000 characters stay in every request and a coding instance overflows the 100,000-character limit by about turn 20 with masking on (estimate). When a store call's saved version has been superseded, masking replaces its arguments with a stub naming the version it saved. The call-and-result pairing rule is unchanged.
 3. S3, compaction limits are agent-declared. `max_per_instance=2` for summary compaction is a default the agent's `context_policy` (ADR-P20 S1) may raise for a multi-hour instance.
 4. S4, steering input renders here. Unconsumed `steer` inputs (ADR-P27) render as a user-statement block before the instance's next model call, never in the middle of a tool call.
+
+### Amendments of 26 Nov 2026 (decisions 32 and 34, Accepted)
+
+These follow pattern P-5, the context window is a rendering, not a ledger: the event store keeps every fact, including superseded ones, and the context is a view built from it for one model call, so changing what the model sees never means editing history.
+
+1. A1, compaction is a must-have (decision 34). Truncation, observation masking and the recorded summary step are all in the first build, not cut rows. The interface above stands, and summary compaction is built as the recorded generation step of decision 7, with the limits of S3. Which of them an agent's default context policy turns on is still Proposed.
+2. A2, a superseded result is masked, never swapped (decision 32). When a Task instance's history is rendered again after one of its inputs changed, the stale tool result's body is replaced by a short placeholder that names the change, for example `[superseded: comparison/C1 changed; the current version is in the change notice below]`, with `Masked.reason = "superseded"`. The new content is not written into the old position. It appears once, at the end of the context, inside a change notice the runtime generates, after the instance's turns and before the tools. Writing an updated value into an old turn would mislead the model about when it learned what, so the old position only ever says that something changed and where to look.
+3. A3, the change notice names the conclusions at risk. The notice lists the changed inputs with their old and new versions, and, from lineage, the instance's own earlier saves and turns that read a stale input, so the model knows which of its conclusions to recheck. The notice is a pure function of the event store, so a rebuilt context after a restart hashes the same. The rule applies wherever a context is re-rendered after a change; its first consumer is resume with masking, which [future directions](../05-future-directions.md#next-step-resume-a-task-instance-after-a-rebuild) lists as a next step.
+
+The cost: masking a position in the middle of a context changes every byte after it, so a provider's prefix cache is lost from the first masked point onward. Because a result once masked stays masked (decision 5), the loss is paid once per change, not on every turn. The compaction policy takes it as an input. My lean, Proposed: when the savings are close, mask later positions first, and group masking into one turn rather than spreading it across several.
 
 ## Alternatives considered
 

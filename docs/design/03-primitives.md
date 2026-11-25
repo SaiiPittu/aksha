@@ -18,8 +18,9 @@ This is the **rule of three** (decision 16): no abstraction is accepted until th
 2. **First milestone** is the scope for the 27 Nov 2026 cut. "Build now" is in the cut. "Stub" means the interface or a minimal form ships and the rest is written down. "Later" means designed only and named as a limit.
 3. **IDs.** P01 to P22 came from the first catalogue (written there as PR-01 to PR-22). P23 to P30 are primitives the stress test found missing.
 4. Names follow the industry terms the design settled on (decisions 11 and 14): event store, projection built by a reducer, transactional outbox, idempotency key, interrupt, suspension, stop policy, completion check, lineage, invalidation, model routing by class.
+5. **Tier** is where the primitive runs in the three-tier split (decision 29, described in the [architecture](02-architecture.md#3-three-tiers-state-runtime-and-execution)): 1 is state (the event store, the blob store and the outbox), 2 is the runtime, and 3 is execution (sandbox workers that hold no credentials and no state). "1 and 2" means the stored facts sit in tier 1 and the logic that reads and writes them in tier 2.
 
-## Four patterns every ADR applies
+## Five patterns every ADR applies
 
 | Pattern | Rule | The question it asks of each primitive |
 |---|---|---|
@@ -27,6 +28,7 @@ This is the **rule of three** (decision 16): no abstraction is accepted until th
 | P-2 | Store facts, derive interpretations | Is every stored row a fact that happened, and every interpretation a projection built by a reducer over the event store? |
 | P-3 | Data for what the harness reasons about, code for what it only runs | Is the structure the harness inspects declared as data, and the behaviour it only calls written as plain Python? |
 | P-4 | Humans see diffs, machines regenerate | Does a changed machine-only output rebuild silently, while a changed reviewed output goes back to a person as a diff? |
+| P-5 | The context window is a rendering, not a ledger | Does the primitive change what the model is shown only by building a new view from the event store, never by editing the recorded history? |
 
 ## The primitives, by family
 
@@ -34,60 +36,60 @@ The five families split the work by the question their ADRs answer. Each row lin
 
 ### A. Durable state: what is true, and what is out of date, after any crash?
 
-| ID | Primitive | Decision in one line | Status | First milestone |
-|---|---|---|---|---|
-| P01 | [Event store and projections](adr/ADR-P01-event-store-and-projections.md) | One append-only, hash-chained event store (PostgreSQL in production, SQLite locally, behind one port) is the only authority; every view is a projection built by a pure reducer | Proposed; the hash chain itself is Accepted (decision 20) | Build now |
-| P02 | [Durable execution: resume and replay](adr/ADR-P02-durable-execution.md) | Deterministic step IDs, an injected clock and declared step semantics, with one recovery sequence on startup | Proposed | Build now |
-| P03 | [Transactional outbox and idempotency keys](adr/ADR-P03-transactional-outbox-and-idempotency-keys.md) | Every external effect is an outbox entry committed before the call, keyed by meaning and reconciled after a crash; every command carries a command ID with an idempotent receipt | Proposed | Build now (command deduplication is a stub) |
-| P04 | [Artifact store and lineage](adr/ADR-P04-artifact-store-and-lineage.md) | Typed, immutable artifact versions record what they read; agents declare typed relations, each with its excerpt as evidence | Accepted in part (D1 to D3) | Build now (path-scoped reads later) |
-| P05 | [Invalidation](adr/ADR-P05-invalidation.md) | A change invalidates exactly the work whose lineage reaches it, with early cutoff; machines rebuild, people review a diff | Accepted in part (D1, D2) | Build now (rebase mode later) |
-| P25 | [Durable timers and recorded time](adr/ADR-P25-durable-timers-and-recorded-time.md) | A timer is a fact on the injected clock, firing is an automatic start behind the hold predicate, and a read of the date is a lineage input | Proposed | Later |
-| P29 | [External record state](adr/ADR-P29-external-record-state.md) | A projection over outbox completions tracks each outside record an effect created and the freshness of the version it was written from | Proposed | Stub |
-| P30 | [Erasure in an append-only store](adr/ADR-P30-erasure-in-an-append-only-store.md) | The options for erasing personal data are listed; no shape is proposed | Open | Later (the limit is stated) |
+| ID | Primitive | Decision in one line | Status | First milestone | Tier |
+|---|---|---|---|---|---|
+| P01 | [Event store and projections](adr/ADR-P01-event-store-and-projections.md) | One append-only, hash-chained event store (PostgreSQL in production, SQLite locally, behind one port) is the only authority; every view is a projection built by a pure reducer | Proposed; the hash chain itself is Accepted (decision 20) | Build now | 1 and 2 |
+| P02 | [Durable execution: resume and replay](adr/ADR-P02-durable-execution.md) | Deterministic step IDs, an injected clock and declared step semantics, with one recovery sequence on startup that checks a person's stop first | Accepted (decisions 27 and 33); stress-test amendments Proposed | Build now | 2 |
+| P03 | [Transactional outbox and idempotency keys](adr/ADR-P03-transactional-outbox-and-idempotency-keys.md) | Every external effect is an outbox entry committed before the call, keyed by meaning and reconciled after a crash; every command carries a command ID with an idempotent receipt | Proposed | Build now (command deduplication is a stub) | 1 and 2 |
+| P04 | [Artifact store and lineage](adr/ADR-P04-artifact-store-and-lineage.md) | Typed, immutable artifact versions record what they read; agents declare typed relations, each with its excerpt as evidence | Accepted in part (D1 to D3) | Build now (path-scoped reads later) | 1 and 2 |
+| P05 | [Invalidation](adr/ADR-P05-invalidation.md) | A change invalidates exactly the work whose lineage reaches it, with early cutoff; machines rebuild, people review a diff | Accepted in part (D1, D2) | Build now (rebase mode later) | 2 |
+| P25 | [Durable timers and recorded time](adr/ADR-P25-durable-timers-and-recorded-time.md) | A timer is a fact on the injected clock, firing is an automatic start behind the hold predicate, and a read of the date is a lineage input | Proposed | Later | 2 |
+| P29 | [External record state](adr/ADR-P29-external-record-state.md) | A projection over outbox completions tracks each outside record an effect created and the freshness of the version it was written from | Proposed | Stub | 2 |
+| P30 | [Erasure in an append-only store](adr/ADR-P30-erasure-in-an-append-only-store.md) | The options for erasing personal data are listed; no shape is proposed | Open | Later (the limit is stated) | 1 |
 
 ### B. Thinking: what does the model see, which model answers, and what carries across sessions?
 
-| ID | Primitive | Decision in one line | Status | First milestone |
-|---|---|---|---|---|
-| P06 | [Agent loop and turn](adr/ADR-P06-agent-loop-and-turn.md) | The loop runs one turn of one Task instance, keeps nothing between turns, and hands every turn end to stop-policy evaluation | Proposed; one part Accepted | Build now |
-| P07 | [Model interface and model routing by class](adr/ADR-P07-model-interface-and-routing.md) | Three owned contracts (extraction, classification, generation) bound to adapters through model aliases, with confidence thresholds and an abstention band | Proposed | Stub (fake generation model) |
-| P08 | [Context assembly and compaction](adr/ADR-P08-context-assembly-and-compaction.md) | The model's context is a pure projection of the event store; compaction is truncation, then observation masking, then a recorded summary | Proposed | Stub (truncation only) |
-| P09 | [Memory](adr/ADR-P09-memory.md) | An extension built on artifacts, citations and one recall tool, so lineage answers "which outputs used this preference?" | Proposed | Later |
+| ID | Primitive | Decision in one line | Status | First milestone | Tier |
+|---|---|---|---|---|---|
+| P06 | [Agent loop and turn](adr/ADR-P06-agent-loop-and-turn.md) | The loop runs one turn of one Task instance, keeps nothing between turns, and hands every turn end to stop-policy evaluation | Proposed; one part Accepted | Build now | 2 |
+| P07 | [Model interface and model routing by class](adr/ADR-P07-model-interface-and-routing.md) | Three owned contracts (extraction, classification, generation) bound to adapters through model aliases, with confidence thresholds and an abstention band | Proposed | Stub (fake generation model) | 2 |
+| P08 | [Context assembly and compaction](adr/ADR-P08-context-assembly-and-compaction.md) | The model's context is a pure projection of the event store, a rendering and not a ledger (P-5); compaction is truncation, then observation masking, then a recorded summary | Proposed; compaction as a core feature is Accepted (decision 34) | Build now (compaction is a must-have) | 2 |
+| P09 | [Memory](adr/ADR-P09-memory.md) | An extension built on artifacts, citations and one recall tool, so lineage answers "which outputs used this preference?" | Proposed | Later | 2 |
 
 ### C. Acting safely: what may the agent do, where, for how long, and with what evidence?
 
-| ID | Primitive | Decision in one line | Status | First milestone |
-|---|---|---|---|---|
-| P10 | [Tool registry and schemas](adr/ADR-P10-tool-registry-and-schemas.md) | Every tool is declared data with one effect class, and the schema the model sees is the schema the gate checks | Proposed | Build now |
-| P11 | [Policy gate and permissions](adr/ADR-P11-policy-gate-and-permissions.md) | Deny by default, one checker in code, and nothing the model writes is an input to the decision | Proposed | Build now |
-| P12 | [Sandbox and execution environment](adr/ADR-P12-sandbox-and-execution-environment.md) | The gate decides whether a program runs, the sandbox decides what it can reach, and a workspace is an artifact version | Proposed | Later (a refusing backend only) |
-| P13 | [Grounding and citations](adr/ADR-P13-grounding-and-citations.md) | Tools mint citation spans, the runtime verifies every quote at save, and a claim it cannot ground becomes an explicit unknown | Proposed; one part Accepted | Build now |
-| P14 | [Budgets, limits, timeouts and retries](adr/ADR-P14-budgets-limits-timeouts-retries.md) | Every cap is counted from the event store, so a restart never resets it | Proposed | Build now |
-| P26 | [Egress policy](adr/ADR-P26-egress-policy.md) | Declared destination rules, enforced by the runtime's HTTP client after DNS resolution and on every redirect | Proposed | Later |
-| P28 | [Execution environment image](adr/ADR-P28-execution-environment-image.md) | A read-only, content-addressed layer of interpreter and dependencies, built once per lock-file hash and mounted at `/env` | Proposed | Later |
+| ID | Primitive | Decision in one line | Status | First milestone | Tier |
+|---|---|---|---|---|---|
+| P10 | [Tool registry and schemas](adr/ADR-P10-tool-registry-and-schemas.md) | Every tool is declared data with one effect class, and the schema the model sees is the schema the gate checks | Proposed | Build now | 2 |
+| P11 | [Policy gate and permissions](adr/ADR-P11-policy-gate-and-permissions.md) | Deny by default, one checker in code, and nothing the model writes is an input to the decision | Proposed | Build now | 2 |
+| P12 | [Sandbox and execution environment](adr/ADR-P12-sandbox-and-execution-environment.md) | The gate decides whether a program runs, the sandbox decides what it can reach, and a workspace is an artifact version | Proposed | Later (a refusing backend only) | 3; interface in 2 |
+| P13 | [Grounding and citations](adr/ADR-P13-grounding-and-citations.md) | Tools mint citation spans, the runtime verifies every quote at save, and a claim it cannot ground becomes an explicit unknown | Proposed; one part Accepted | Build now | 2 |
+| P14 | [Budgets, limits, timeouts and retries](adr/ADR-P14-budgets-limits-timeouts-retries.md) | Every cap is counted from the event store, so a restart never resets it | Proposed | Build now | 2 |
+| P26 | [Egress policy](adr/ADR-P26-egress-policy.md) | Declared destination rules, enforced by the runtime's HTTP client after DNS resolution and on every redirect | Proposed | Later | 2 |
+| P28 | [Execution environment image](adr/ADR-P28-execution-environment-image.md) | A read-only, content-addressed layer of interpreter and dependencies, built once per lock-file hash and mounted at `/env` | Proposed | Later | 1 and 3 |
 
 ### D. Control: who starts work, who decides it is finished, and who may stop or pause it?
 
-| ID | Primitive | Decision in one line | Status | First milestone |
-|---|---|---|---|---|
-| P15 | [Task model and scheduler](adr/ADR-P15-task-model-and-scheduler.md) | A declared Task tree with pure completion checks; fan-out creates tracked Task instances, and only the scheduler starts work | Accepted in part | Build now (supervisor Task later) |
-| P16 | [Stop policy and stop-policy evaluation](adr/ADR-P16-stop-policy-and-evaluation.md) | A stack of pure stop policies, one recorded stop decision per stop candidate, and one hold predicate that puts human state ahead of every automatic start | Accepted in part | Build now (Run, Task and interrupt policies; opt-in policies later) |
-| P17 | [Interrupts and approvals](adr/ADR-P17-interrupts-and-approvals.md) | A run suspends on a durable interrupt and resumes on a recorded answer; an approval authorises one exact action by signature | Proposed | Build now |
-| P18 | [Cancellation](adr/ADR-P18-cancellation.md) | A person's stop is a durable stop request honoured at the next stop candidate, including after a crash | Proposed | Stub |
-| P24 | [Partial results and finalization](adr/ADR-P24-partial-results-and-finalization.md) | A fan-out parent declares whether a blocked child blocks it, a budget interrupt can be answered "finalize", and both end the run `partial` with every unknown listed | Proposed | Build now (finalize may stub) |
-| P27 | [Steering and follow-up input](adr/ADR-P27-steering-and-follow-up-input.md) | A message to an open run is a durable fact in a named lane (steer, follow-up or amend), and the interface must name the lane | Proposed | Stub (the refusal and `amend`) |
+| ID | Primitive | Decision in one line | Status | First milestone | Tier |
+|---|---|---|---|---|---|
+| P15 | [Task model and scheduler](adr/ADR-P15-task-model-and-scheduler.md) | A declared Task tree with pure completion checks; fan-out creates tracked Task instances, and only the scheduler starts work | Accepted in part | Build now (supervisor Task later) | 2 |
+| P16 | [Stop policy and stop-policy evaluation](adr/ADR-P16-stop-policy-and-evaluation.md) | A stack of pure stop policies, one recorded stop decision per stop candidate, and one hold predicate that puts human state ahead of every automatic start | Accepted in part | Build now (Run, Task and interrupt policies; opt-in policies later) | 2 |
+| P17 | [Interrupts and approvals](adr/ADR-P17-interrupts-and-approvals.md) | A run suspends on a durable interrupt and resumes on a recorded answer; an approval authorises one exact action by signature | Proposed | Build now | 2 |
+| P18 | [Cancellation](adr/ADR-P18-cancellation.md) | A person's stop is a durable stop request honoured at the next stop candidate, including after a crash | Proposed | Stub | 2 and 3 |
+| P24 | [Partial results and finalization](adr/ADR-P24-partial-results-and-finalization.md) | A fan-out parent declares whether a blocked child blocks it, a budget interrupt can be answered "finalize", and both end the run `partial` with every unknown listed | Proposed | Build now (finalize may stub) | 2 |
+| P27 | [Steering and follow-up input](adr/ADR-P27-steering-and-follow-up-input.md) | A message to an open run is a durable fact in a named lane (steer, follow-up or amend), and the interface must name the lane | Proposed | Stub (the refusal and `amend`) | 2 |
 
 ### E. Interfaces and proof: how does a third author add an agent, a front end watch it, and a test prove it?
 
-| ID | Primitive | Decision in one line | Status | First milestone |
-|---|---|---|---|---|
-| P19 | [Session API](adr/ADR-P19-session-api.md) | One write entry point with idempotent receipts, event streams with a cursor and a catch-up marker, and one capability record per runtime | Proposed | Build now (CLI); stub (web) |
-| P20 | [Extension API and agent definition](adr/ADR-P20-extension-api-and-agent-definition.md) | A small runtime, extensions that contribute declared data, and agent definitions loaded, checked and version-hashed by one loader | Proposed; three parts Accepted | Build now |
-| P21 | [Tracing and observability](adr/ADR-P21-tracing-and-observability.md) | The agent-run trace is a projection of the event store in OpenTelemetry GenAI terms; the harness's own telemetry is a separate, live plane | Proposed | Stub (`aksha inspect` ships) |
-| P22 | [Evals, fake models and replay models](adr/ADR-P22-evals-fake-and-replay-models.md) | A fake for every model class, replay read from the recorded store, and eval cases as data with a kind and a source | Proposed | Build now (fakes and replay); eval runner later |
-| P23 | [Request router](adr/ADR-P23-request-router.md) | A runtime classification alias over the loaded agents' purpose text, recorded as a durable step, with a session-scoped `route` interrupt when it abstains | Proposed | Build now (fake classifier) |
+| ID | Primitive | Decision in one line | Status | First milestone | Tier |
+|---|---|---|---|---|---|
+| P19 | [Session API](adr/ADR-P19-session-api.md) | One write entry point with idempotent receipts, event streams with a cursor and a catch-up marker, and one capability record per runtime | Proposed | Build now (CLI); stub (web) | 2 |
+| P20 | [Extension API and agent definition](adr/ADR-P20-extension-api-and-agent-definition.md) | A small runtime, extensions that contribute declared data, and agent definitions loaded, checked and version-hashed by one loader | Proposed; three parts Accepted | Build now | 2 |
+| P21 | [Tracing and observability](adr/ADR-P21-tracing-and-observability.md) | The agent-run trace is a projection of the event store in OpenTelemetry GenAI terms; the harness's own telemetry is a separate, live plane | Proposed | Stub (`aksha inspect` ships) | 2 |
+| P22 | [Evals, fake models and replay models](adr/ADR-P22-evals-fake-and-replay-models.md) | A fake for every model class, replay read from the recorded store, and eval cases as data with a kind and a source | Proposed | Build now (fakes and replay); eval runner later | 2 |
+| P23 | [Request router](adr/ADR-P23-request-router.md) | A runtime classification alias over the loaded agents' purpose text, recorded as a durable step, with a session-scoped `route` interrupt when it abstains | Proposed | Build now (fake classifier) | 2 |
 
-Takeaway: 24 of the 30 primitives are built or stubbed in the first milestone, and the six marked "Later" each have a design and a named limit.
+Takeaway: 24 of the 30 primitives are built or stubbed in the first milestone, and the six marked "Later" each have a design and a named limit. 23 of the 30 live wholly in tier 2, the runtime; every tier 3 entry is the sandbox, its kill boundary, or something mounted read-only into a box.
 
 ## Build order
 
@@ -107,7 +109,7 @@ flowchart LR
   P01 --> P07["P07 Model interface<br/>(fake)"]
   P07 --> P06["P06 Agent loop"]
   P11 --> P06
-  P06 --> P08["P08 Context, truncation"]
+  P06 --> P08["P08 Context and compaction"]
   P06 --> P15["P15 Tasks and scheduler"]
   P04 --> P17["P17 Interrupts<br/>and approvals"]
   P15 --> P16["P16 Stop policy<br/>and hold predicate"]
@@ -139,7 +141,7 @@ On 25 Nov 2026 three design reviews walked each agent through every ADR. Nothing
 Each cell is the agent's worst verdict for the ADR as it stood before its amendments.
 
 | ADR | Research | Patent | Coding | Amendments that answer it |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | P01 | Fits | Fits | Fits | S1 one name per concept, S2 incremental reducer by measurement |
 | P02 | Fits | Core change | Agent code | S1 `suspended_with_rebuilds`, S2 shared source writer |
 | P03 | Fits | Agent code | Core change | S1 `lookup(key, request)`, S2 `record_fields`, `receipt_kind` |
@@ -166,7 +168,7 @@ Each cell is the agent's worst verdict for the ADR as it stood before its amendm
 Totals before the amendments, counted from the table above:
 
 | Agent | Fits | Agent code | Core change | Missing |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | Research | 11 | 2 | 7 | 2 (egress under P11, the router under P19) |
 | Patent | 10 | 3 | 9 | 0, plus three gaps no ADR touched: external record state, time, erasure |
 | Coding | 6 | 5 | 9 | 2 (the environment image under P12, steering under P19) |

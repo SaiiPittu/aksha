@@ -16,7 +16,7 @@ Read the product chain first, because every later document answers a requirement
 | 4 | [01-product/04-user-stories.md](01-product/04-user-stories.md) | 31 user stories grouped by persona, each with numbered acceptance criteria and its scenarios | are writing or reviewing a test |
 | 5 | [01-product/05-features.md](01-product/05-features.md) | 41 features by runtime area, each with its first-milestone priority and the stories it serves | want to know what is in the first milestone |
 | 6 | [01-product/06-requirements.md](01-product/06-requirements.md) | 48 functional and 21 non-functional requirements, and the traceability table from persona to scenario | need the exact requirement behind a feature |
-| 7 | [02-architecture.md](02-architecture.md) | How the runtime, the agents, the interfaces and the storage fit together | want the system shape before the details |
+| 7 | [02-architecture.md](02-architecture.md) | How the runtime, the agents, the interfaces and the storage fit together, and the three tiers (state, runtime, execution) on a laptop and in a software factory | want the system shape before the details |
 | 8 | [03-primitives.md](03-primitives.md) | The 30 harness primitives, each in one line, with its status, its dependencies and the build order | want to know what exists and what comes next |
 | 9 | [adr/](adr/) | One ADR per primitive: the options considered, the decision, its cost, and how three different agents stress-tested it | are reviewing or changing one primitive |
 | 10 | [04-decisions-log.md](04-decisions-log.md) | The maintainer's numbered decisions, which the ADRs cite | need to know whether something is decided |
@@ -70,7 +70,7 @@ The documents use the industry name for each concept, one name per concept:
 
 ## Sources
 
-1. The maintainer's decision log, entries 1 to 24, 25 and 26 Nov 2026.
+1. The maintainer's decision log, entries 1 to 35, 25 and 26 Nov 2026.
 2. The primitives index and the 30 primitive ADRs, ADR-P01 to ADR-P30, 25 Nov 2026.
 3. The glossary that maps older working names to these industry names, 25 Nov 2026.
 4. The product problem-and-users and features-and-requirements documents, version 2, 25 Nov 2026, from which the product chain is drawn.

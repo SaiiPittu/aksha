@@ -193,7 +193,7 @@ The rule that holds them together: every interface reaches the runtime through o
 
 ## 9. Principles
 
-Four principles apply to every design decision.
+Five principles apply to every design decision.
 
 ### P-1. Minimise agent-specific code in the core nouns
 
@@ -211,20 +211,26 @@ Structure the runtime must inspect (Tasks, reads and writes, tools, relations, s
 
 An invalidated machine-only artifact rebuilds silently. An invalidated human-reviewed artifact gets a new version beside the old one with a redline, and only the person's accept approves it again.
 
+### P-5. The context window is a rendering, not a ledger
+
+The event store is the ledger. It keeps every fact, including the ones a later change has superseded, because audit, replay and the hash chain all need them. The context window is something else: a view the runtime builds from the ledger for one model call. Because it is a view, the runtime can show the model a cleaner picture without rewriting any history. A harness that treats its chat transcript as the record of truth can only append corrections to it; a harness that treats the transcript as a rendering can decide precisely what the model sees at each call.
+
+The masking rule (decision 32) is the first use of this principle. When a Task instance is shown its history again after one of its inputs changed, the stale tool result is not edited and not swapped for the new value in its old position. It is masked: its body is replaced by a short placeholder, for example `[superseded: comparison/C1 changed; the current version is in the change notice below]`. The updated content appears once, at the end of the context, inside a change notice the runtime writes, and that notice also names the agent's own earlier conclusions that relied on the stale input, which the runtime finds through lineage. The new value never sits in an old turn, because an updated value in an old position would mislead the model about when it learned what. The cost is that a provider's prompt cache breaks from the first masked point onward, which is an input to the compaction policy ([ADR-P08](../adr/ADR-P08-context-assembly-and-compaction.md)).
+
 Two decisions follow from these and shape the rest of the design. The event store is hash-chained, so the record of an unattended run can be checked rather than trusted (decision 20). Telemetry has two planes: the agent-run trace is a projection of the event store, while the harness's own operational telemetry is live OpenTelemetry instrumentation kept out of the event store, both exported over OTLP (the OpenTelemetry Protocol) and correlated by trace and span IDs (decision 21).
 
 ## Where this design stops
 
 1. Nothing beyond the four built primitives has run. Every count above is designed, and every verdict in section 7 is a reading of interfaces.
 2. Decision 26 settles how headless meets the gate: every check holds, and only asks become allows, so a declared tool list and every deny rule survive. The non-goal that only a person's approval gates an external effect therefore holds for watched runs; in a headless run the recipients source, the argument rules and the sandbox gate it instead. What a headless run does on an `input` or `choice` interrupt is open.
-3. Storage is PostgreSQL in production and SQLite locally and offline, behind one port with a shared contract suite (decision 17). Which one an offline run uses by default awaits a confirm.
+3. Storage is PostgreSQL in production and SQLite locally and offline, behind one port with a shared contract suite (decision 17). Decision 34 settles the default for the offline run: SQLite.
 4. Erasure of personal data in an append-only, hash-chained store (P30) is Open, with no shape proposed.
 5. The name of the stop policy that owns a whole agent run ("run stop policy" is the working name) is still to be picked (decision 14).
 
 ## Sources
 
-1. The maintainer's [decisions log](../04-decisions-log.md), entries 1 to 24, 25 and 26 Nov 2026.
-2. The design patterns, P-1 to P-4, 25 Nov 2026, as restated in the [primitives catalogue](../03-primitives.md).
+1. The maintainer's [decisions log](../04-decisions-log.md), entries 1 to 35, 25 and 26 Nov 2026.
+2. The design patterns, P-1 to P-4, 25 Nov 2026, and P-5, 26 Nov 2026, as restated in the [primitives catalogue](../03-primitives.md).
 3. The primitives index, its verdict matrix and the 30 primitive ADRs, P01 to P30, 25 Nov 2026.
 4. The three stress reports (research agent, patent-disclosure agent, contrast coding agent), 25 Nov 2026.
 5. The product problem-and-users and features-and-requirements documents, version 2, 25 Nov 2026.

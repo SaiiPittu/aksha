@@ -196,7 +196,7 @@ Reverse checks, done by hand on 26 Nov 2026:
 ## Where this stops
 
 1. Every requirement is designed; none has a passing test except the parts of FR-01 to FR-07, FR-22 and FR-23 on the branch in review.
-2. FR-39 records decisions 23 and 26: a headless run keeps every policy-gate check, and only asks become allows. What it does on an `input` interrupt, and whether it may start outside a sandbox, are open (see [architecture](../02-architecture.md), section 10).
+2. FR-39 records decisions 23 and 26: a headless run keeps every policy-gate check, and only asks become allows. What it does on an `input` interrupt, and whether it may start outside a sandbox, are open (see [architecture](../02-architecture.md), section 11).
 3. NFR-17's line budget waits for the maintainer's number. The design estimates available on 25 Nov 2026 already put the core near 2,000 lines before several optional packages; all such figures are estimates.
 4. The traceability table was checked by hand, not by a script.
 

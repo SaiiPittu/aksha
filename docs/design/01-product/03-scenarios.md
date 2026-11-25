@@ -328,5 +328,5 @@ What a test checks: with and without the injection fixture, the tool lists, appr
 
 1. The product problem-and-users document, version 2, 25 Nov 2026, section 6 (scenarios S1 to S15).
 2. ADRs P02, P03, P05, P07, P15, P17, P18, P21 and P24, 25 Nov 2026, for the mechanisms and the traced stop sequence.
-3. The [architecture](../02-architecture.md), sections 4 to 7, for recovery, interrupts, invalidation, headless mode and the two telemetry planes.
+3. The [architecture](../02-architecture.md), sections 5 to 8, for recovery, interrupts, invalidation, headless mode and the two telemetry planes.
 4. The maintainer's [decisions log](../04-decisions-log.md), entries 5, 8, 13, 15, 20, 21 and 23.
