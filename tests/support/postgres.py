@@ -1,8 +1,9 @@
 """An ephemeral PostgreSQL server for the contract suite: one labelled docker container.
 
-The container is named ``aksha-pg-test`` and labelled ``aksha.test=contract``. It is started
-on a free local port and removed when the test session ends. Nothing here touches another
-container: a container with the same name but without the label makes the suite skip. The
+The container is named ``aksha-pg-test-<8 hex digits>``, unique to the test session, and
+labelled ``aksha.test=contract``. It is started on a free local port and removed when the
+test session ends. Nothing here touches another container, so two suites running at once
+(in two worktrees, or by two agents) each keep their own server until they finish. The
 image is never pulled (``--pull=never``), so the suite needs no network; set
 ``AKSHA_PG_IMAGE`` to use another local image, or ``AKSHA_TEST_POSTGRES_DSN`` to use a
 server you already run instead of docker.
@@ -22,7 +23,8 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-CONTAINER = "aksha-pg-test"
+CONTAINER = f"aksha-pg-test-{uuid.uuid4().hex[:8]}"
+"""This session's container name: removing it never ends another session's server."""
 LABEL = "aksha.test=contract"
 IMAGE = os.environ.get("AKSHA_PG_IMAGE", "postgres:16")
 READY_TIMEOUT_S = 60.0
@@ -111,9 +113,7 @@ def start_server() -> PostgresServer | str:
         return f"PostgreSQL adapter not tested: image {IMAGE} is not present locally (no pull)"
     found = _docker("ps", "-a", "--filter", f"name=^{CONTAINER}$", "--format", "{{.Labels}}")
     if found.stdout.strip():
-        if LABEL not in found.stdout:
-            return f"PostgreSQL adapter not tested: a container named {CONTAINER} is not ours"
-        _docker("rm", "-f", CONTAINER)  # a leftover of an interrupted run of this suite
+        return f"PostgreSQL adapter not tested: a container named {CONTAINER} already exists"
     port = _free_port()
     run = _docker(
         "run", "-d", "--rm", "--pull=never", "--name", CONTAINER, "--label", LABEL,

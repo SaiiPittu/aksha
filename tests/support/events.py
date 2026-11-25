@@ -38,21 +38,6 @@ PROBE_FREE = EventTypeSpec(
     writer="tests",
     boundaries=frozenset({"U2", "U3"}),
 )
-STOP_DECIDED = EventTypeSpec(
-    name="stop.decided",
-    schema={
-        "type": "object",
-        "properties": {
-            "walk": {"type": "integer", "minimum": 0},
-            "verdict": {"enum": ["continue", "hold", "stop"]},
-        },
-        "required": ["walk", "verdict"],
-        "additionalProperties": False,
-    },
-    writer="tests",
-    boundaries=frozenset({"U3"}),
-    dedup_key="stop:{run}/w{walk:03d}",
-)
 MEMORY_RECALLED = EventTypeSpec(
     name="memory.recalled",
     schema={"type": "object", "properties": {"n": {"type": "integer"}}},
@@ -61,7 +46,7 @@ MEMORY_RECALLED = EventTypeSpec(
 )
 """An extension's event type: registered through ``register_extension``, never core."""
 
-TEST_TYPES = (PROBE_NOTED, PROBE_FREE, STOP_DECIDED)
+TEST_TYPES = (PROBE_NOTED, PROBE_FREE)
 
 START = datetime(2026, 11, 27, 9, 0, 0, tzinfo=UTC)
 

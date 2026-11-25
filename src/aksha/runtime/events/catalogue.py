@@ -9,8 +9,8 @@ How the catalogue grows:
 1. A core primitive adds its event types to ``CORE_EVENT_TYPES`` when it is built, in a
    section headed by its ADR, using the D8 names (``stop.decided``, ``interrupt.raised``,
    ``outbox.enqueued``, ``task.entered``). P01 itself declares only the four types the
-   event store and recovery need; ``step.started`` and ``step.completed`` (P02's) are
-   declared in the shapes the policy gate records, ahead of the step executor.
+   event store and recovery need; P02 declares the five step facts, which the policy
+   gate's records (P11) also use.
 2. An extension declares namespaced types (``memory.recalled``) in
    ``Extension.event_types``; the agent loader registers them through
    :meth:`Catalogue.register_extension`. The name carries the extension's namespace, the
@@ -94,6 +94,15 @@ RUN_STARTED = EventTypeSpec(
             "api_version": {"type": "string", "pattern": "^[0-9]+[.][0-9]+$"},
             "runtime_commit": {"type": "string"},
             "dirty": {"type": "boolean"},
+            # ADR-P14 D2: the run's budget; a dimension left out is not capped.
+            "budget": {
+                "type": "object",
+                "properties": {
+                    d: {"type": "integer", "minimum": 0}
+                    for d in ("model_turns", "tool_calls", "active_ms", "tokens", "cost_micro_usd")
+                },
+                "additionalProperties": False,
+            },
         },
         "required": ["agent", "cause"],
     },
@@ -106,7 +115,8 @@ RUN_ENDED = EventTypeSpec(
     schema={
         "type": "object",
         "properties": {
-            "outcome": {"enum": ["complete", "partial", "failed"]},
+            # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``.
+            "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
             "reason": {"type": "string"},
         },
         "required": ["outcome", "reason"],
@@ -143,10 +153,12 @@ RECOVERY_COMPLETED = EventTypeSpec(
     boundaries=frozenset({"U7"}),
 )
 
-# --- P02 step facts, in the shapes the policy gate (P11) records ------------------------
+# --- P02 step facts: the durable step executor (``execution/facts.py`` builds them) ------
 # P11 D9: an allow is the ``step.started`` that follows; a refusal is one
-# ``step.completed{outcome: refused, code, layer}``. The durable step executor (P02) owns
-# both types and adds its own fields (semantics, results) when it is built.
+# ``step.completed{outcome: refused, code, layer}``. The executor adds the step's name,
+# semantics and recorded value, the dispatch marker of an at-most-once step, and the two
+# attempt facts. ``duration_ms`` is read on the injected clock (a timed-out attempt records
+# its timeout), never the real monotonic one, so two fake runs write the same bytes.
 
 _REFUSED = {
     "if": {"properties": {"outcome": {"const": "refused"}}, "required": ["outcome"]},
@@ -162,17 +174,27 @@ _REFUSED = {
     },
 }
 
+STEP_OUTCOMES = ("ok", "error", "refused", "interrupted", "skipped", "cancelled", "effects_unknown")
+"""How a step ends; the last three are a person's stop (ADR-P18 D5, D6)."""
+STEP_OUTCOMES_WITH_CODE = ("error", "interrupted", "skipped", "cancelled", "effects_unknown")
+"""The step outcomes that must name a ``code``."""
+
 STEP_STARTED = EventTypeSpec(
     name="step.started",
     schema={
         "type": "object",
         "properties": {
-            "kind": {"enum": ["tool", "model"]},
+            "kind": {"enum": ["tool", "model", "check"]},
+            "name": {"type": "string", "minLength": 1},
             "tool": {"type": "string", "minLength": 1},
             "args_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "semantics": {"enum": ["at_least_once", "reconcile", "at_most_once"]},
+            "on_unknown": {"enum": ["tell_model", "interrupt"]},
             "position": {"type": "integer", "minimum": 0},
             "route": {"enum": ["dispatch", "outbox", "approval", "model", "reserved"]},
             "counted": {"type": "boolean"},
+            # ADR-P03 D1: the idempotency key of the entry an effectful call enqueued.
+            "outbox_key": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
         },
         "required": ["kind", "counted"],
     },
@@ -185,15 +207,342 @@ STEP_COMPLETED = EventTypeSpec(
     schema={
         "type": "object",
         "properties": {
-            "outcome": {"enum": ["ok", "error", "refused", "interrupted", "outcome_unknown"]},
+            # ADR-P18 D5, D6: ``skipped`` is a call a stop kept from starting; ``cancelled``
+            # and ``effects_unknown`` are a call the kill boundary ended.
+            "outcome": {"enum": list(STEP_OUTCOMES)},
+            "kind": {"enum": ["tool", "model", "check"]},
             "tool": {"type": "string", "minLength": 1},
+            "name": {"type": "string", "minLength": 1},
+            "code": {"type": "string", "minLength": 1},
+            "value": {"type": "object"},
+            "attempts": {"type": "integer", "minimum": 0},
+            "on_unknown": {"enum": ["tell_model", "interrupt"]},
+            "reconciled": {"type": "boolean"},
+            "duration_ms": {"type": "integer", "minimum": 0},
+            # ADR-P18 D6: whether the unit settled on request or was terminated.
+            "kill": {"enum": ["settled", "killed"]},
+            # ADR-P14 D9: what a model step reported spending.
+            "usage": {
+                "type": "object",
+                "properties": {
+                    "input_tokens": {"type": "integer", "minimum": 0},
+                    "output_tokens": {"type": "integer", "minimum": 0},
+                    "cost_micro_usd": {"type": "integer", "minimum": 0},
+                },
+                "additionalProperties": False,
+            },
         },
         "required": ["outcome"],
-        "allOf": [_REFUSED],
+        "allOf": [
+            _REFUSED,
+            {
+                "if": {"properties": {"outcome": {"enum": list(STEP_OUTCOMES_WITH_CODE)}}},
+                "then": {"required": ["code"]},
+            },
+        ],
     },
     writer="execution",
     boundaries=frozenset({"U2"}),
     dedup_key="sdone:{step}",
+)
+STEP_DISPATCHED = EventTypeSpec(
+    name="step.dispatched",
+    schema={
+        "type": "object",
+        "properties": {"attempt": {"type": "integer", "minimum": 1}},
+        "required": ["attempt"],
+        "additionalProperties": False,
+    },
+    writer="execution",
+    boundaries=frozenset({"U2b"}),
+    dedup_key="sdisp:{step}",
+)
+STEP_FAILED = EventTypeSpec(
+    name="step.failed",
+    schema={
+        "type": "object",
+        "properties": {
+            "attempt": {"type": "integer", "minimum": 1},
+            "code": {"type": "string", "minLength": 1},
+            "retried": {"type": "boolean"},
+            "backoff_ms": {"type": "integer", "minimum": 0},
+            "duration_ms": {"type": "integer", "minimum": 0},
+        },
+        "required": ["attempt", "code", "retried", "backoff_ms"],
+        "additionalProperties": False,
+    },
+    writer="execution",
+    boundaries=frozenset({"U2c"}),
+    dedup_key="sfail:{step}/a{attempt}",
+)
+ATTEMPT_DISCARDED = EventTypeSpec(
+    name="attempt.discarded",
+    schema={
+        "type": "object",
+        "properties": {
+            "attempt": {"type": "integer", "minimum": 1},
+            "result_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        },
+        "required": ["attempt", "result_hash"],
+        "additionalProperties": False,
+    },
+    writer="execution",
+    boundaries=frozenset({"U2c"}),
+    dedup_key="sdisc:{step}/a{attempt}",
+)
+
+# --- P14 budgets, and the part of P16's stop decision record P02 and P14 read ----------
+# ``stop.decided`` is declared with the fields the budget and limit reducers read
+# (``budgets/records.py``): a CONTINUE charges a turn, a ``cause: resume`` record is a
+# resume record (recovery writes it, ADR-P02 D7), a ``candidate: finish`` CONTINUE is a
+# veto. ADR-P16 widens the schema when it is built. ``budget.reached`` commits with the
+# budget interrupt in the stop decision; ``budget.granted`` is a person's command.
+
+_DIMENSION = {"enum": ["model_turns", "tool_calls", "active_ms", "tokens", "cost_micro_usd"]}
+
+STOP_DECIDED = EventTypeSpec(
+    name="stop.decided",
+    schema={
+        "type": "object",
+        "properties": {
+            "walk": {"type": "integer", "minimum": 0},
+            "verdict": {"enum": ["continue", "hold", "stop"]},
+            "cause": {"type": "string", "pattern": "^[a-z][a-z0-9_:]*$"},
+            "candidate": {"type": "string", "minLength": 1},
+            "turn": {"type": "integer", "minimum": 1},
+            "resumes_turn": {"type": "boolean"},
+            "reason": {"type": "string"},
+            "limit": {"type": "string"},
+            "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+        },
+        "required": ["walk", "verdict"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+    dedup_key="stop:{run}/w{walk:03d}",
+)
+BUDGET_REACHED = EventTypeSpec(
+    name="budget.reached",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt_id": {"type": "string", "minLength": 1},
+            "limit": _DIMENSION,
+            "used": {"type": "integer", "minimum": 0},
+            "allowed": {"type": "integer", "minimum": 0},
+            "partial": {"type": "boolean"},
+        },
+        "required": ["interrupt_id", "limit", "used", "allowed", "partial"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+    dedup_key="breach:{run}/{interrupt_id}",
+)
+BUDGET_GRANTED = EventTypeSpec(
+    name="budget.granted",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt_id": {"type": "string", "minLength": 1},
+            "by": {"type": "string", "minLength": 1},
+            "extra": {
+                "type": "object",
+                "propertyNames": _DIMENSION,
+                "additionalProperties": {"type": "integer", "minimum": 1},
+                "minProperties": 1,
+            },
+        },
+        "required": ["interrupt_id", "by", "extra"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="bgrant:{run}/{interrupt_id}",
+)
+
+# --- P03 the transactional outbox and command receipts (``outbox/facts.py``, ----------
+# ``session/commands.py``). An outbox entry is ``outbox.enqueued``, committed in the
+# transaction of the command that decided it. The worker's facts (claim, failed attempt,
+# completion, abandonment) are each one U6 transaction, except that an effectful tool
+# step's entry commits with its ``step.started`` (U2a) and ends with its ``step.completed``
+# (U2), so the step's result and the entry's end commit together. ``done-outbox:`` is shared by the
+# completion and the abandonment, so an entry ends once. ``cmd:`` is shared by
+# ``command.accepted`` and ``command.refused``, so a command ID has one receipt.
+
+_KEY = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+_SNAKE = {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+_COMMAND_BOUNDARIES = frozenset({"U1", "U4", "U5"})
+
+OUTBOX_ENQUEUED = EventTypeSpec(
+    name="outbox.enqueued",
+    schema={
+        "type": "object",
+        "properties": {
+            "key": _KEY,
+            "tool": {"type": "string", "minLength": 1},
+            "system": {"type": ["string", "null"]},
+            "semantics": {"enum": ["at_least_once", "reconcile", "at_most_once"]},
+            "on_unknown": {"enum": ["tell_model", "interrupt"]},
+            "request": {"type": "object"},
+            "request_hash": _KEY,
+            "approval_id": {"type": "string", "minLength": 1},
+            "command_id": {"type": "string", "minLength": 1},
+        },
+        "required": [
+            "key",
+            "tool",
+            "system",
+            "semantics",
+            "on_unknown",
+            "request",
+            "request_hash",
+        ],
+        "additionalProperties": False,
+    },
+    writer="outbox",
+    boundaries=frozenset({"U2a", "U4", "U5"}),
+    dedup_key="outbox:{key}",
+)
+OUTBOX_CLAIMED = EventTypeSpec(
+    name="outbox.claimed",
+    schema={
+        "type": "object",
+        "properties": {"key": _KEY, "attempt": {"type": "integer", "minimum": 1}},
+        "required": ["key", "attempt"],
+        "additionalProperties": False,
+    },
+    writer="outbox",
+    boundaries=frozenset({"U6"}),
+    dedup_key="oclaim:{key}/a{attempt}",
+)
+OUTBOX_FAILED = EventTypeSpec(
+    name="outbox.failed",
+    schema={
+        "type": "object",
+        "properties": {
+            "key": _KEY,
+            "attempt": {"type": "integer", "minimum": 1},
+            "code": _SNAKE,
+            "retried": {"type": "boolean"},
+            "backoff_ms": {"type": "integer", "minimum": 0},
+        },
+        "required": ["key", "attempt", "code", "retried", "backoff_ms"],
+        "additionalProperties": False,
+    },
+    writer="outbox",
+    boundaries=frozenset({"U6"}),
+    dedup_key="ofail:{key}/a{attempt}",
+)
+OUTBOX_COMPLETED = EventTypeSpec(
+    name="outbox.completed",
+    schema={
+        "type": "object",
+        "properties": {
+            "key": _KEY,
+            "ledger_id": {"type": "string", "minLength": 1},
+            "receipt": {"type": "object"},
+            "attempts": {"type": "integer", "minimum": 0},
+            "reconciled": {"type": "boolean"},
+        },
+        "required": ["key", "ledger_id", "receipt", "attempts"],
+        "additionalProperties": False,
+    },
+    writer="outbox",
+    boundaries=frozenset({"U2", "U6"}),
+    dedup_key="done-outbox:{key}",
+)
+OUTBOX_ABANDONED = EventTypeSpec(
+    name="outbox.abandoned",
+    schema={
+        "type": "object",
+        "properties": {
+            "key": _KEY,
+            "reason": _SNAKE,
+            "attempts": {"type": "integer", "minimum": 0},
+            "on_unknown": {"enum": ["tell_model", "interrupt"]},
+        },
+        "required": ["key", "reason", "attempts"],
+        "additionalProperties": False,
+    },
+    writer="outbox",
+    boundaries=frozenset({"U2", "U6"}),
+    dedup_key="done-outbox:{key}",
+)
+COMMAND_ACCEPTED = EventTypeSpec(
+    name="command.accepted",
+    schema={
+        "type": "object",
+        "properties": {
+            "command_id": {"type": "string", "minLength": 1},
+            "name": _SNAKE,
+            "args_hash": _KEY,
+            "answers": {"type": "string", "minLength": 1},
+        },
+        "required": ["command_id", "name", "args_hash"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=_COMMAND_BOUNDARIES,
+    dedup_key="cmd:{owner}/{command_id}",
+)
+COMMAND_REFUSED = EventTypeSpec(
+    name="command.refused",
+    schema={
+        "type": "object",
+        "properties": {
+            "command_id": {"type": "string", "minLength": 1},
+            "name": _SNAKE,
+            "args_hash": _KEY,
+            "answers": {"type": "string", "minLength": 1},
+            "code": _SNAKE,
+            "message": {"type": "string"},
+        },
+        "required": ["command_id", "name", "args_hash", "code"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=_COMMAND_BOUNDARIES,
+    dedup_key="cmd:{owner}/{command_id}",
+)
+
+# --- P18 cancellation ------------------------------------------------------------------
+# A person's stop is a fact the ``stop`` command commits with its receipt (U4); the stop
+# ending voids the run's open interrupts in the stop decision (U3). ``interrupt.voided``
+# is ADR-P17's event; cancellation is its first writer, and P17 widens its boundaries.
+
+RUN_STOP_REQUESTED = EventTypeSpec(
+    name="run.stop_requested",
+    schema={
+        "type": "object",
+        "properties": {
+            "scope": {"enum": ["run", "turn"]},
+            "reason": {"type": "string", "minLength": 1},
+            "by": {"type": "string", "minLength": 1},
+            "command_id": {"type": "string", "minLength": 1},
+        },
+        "required": ["scope", "reason", "by", "command_id"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="rstop:{run}/{command_id}",
+)
+INTERRUPT_VOIDED = EventTypeSpec(
+    name="interrupt.voided",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            "reason": _SNAKE,
+        },
+        "required": ["interrupt", "reason"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+    dedup_key="ivoid:{run}/{interrupt}",
 )
 
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
@@ -202,7 +551,22 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     ARTIFACT_SAVED,
     RECOVERY_COMPLETED,
     STEP_STARTED,
+    STEP_DISPATCHED,
+    STEP_FAILED,
+    ATTEMPT_DISCARDED,
     STEP_COMPLETED,
+    OUTBOX_ENQUEUED,
+    OUTBOX_CLAIMED,
+    OUTBOX_FAILED,
+    OUTBOX_COMPLETED,
+    OUTBOX_ABANDONED,
+    COMMAND_ACCEPTED,
+    COMMAND_REFUSED,
+    STOP_DECIDED,
+    BUDGET_REACHED,
+    BUDGET_GRANTED,
+    RUN_STOP_REQUESTED,
+    INTERRUPT_VOIDED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 
