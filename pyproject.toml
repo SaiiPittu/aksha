@@ -47,6 +47,11 @@ target-version = "py312"
 src = ["src", ".", "tests"]
 extend-exclude = ["scratch-pad", "web"]
 
+[tool.ruff.format]
+# ruff 0.17+ also formats Python code blocks inside Markdown. The design docs hold sketches
+# (signatures with aligned comments, elided bodies), not code to reformat.
+exclude = ["*.md"]
+
 [tool.ruff.lint]
 select = [
     "E", "W",  # pycodestyle
