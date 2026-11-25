@@ -193,8 +193,8 @@ One row per primitive. "Built" exists and is tested. "Planned" is the modules ea
 | P06 agent loop | none | `runtime/loop/` (one turn of one Task instance) |
 | P07 model interface | `models/types.py` | `models/ports.py`, `routing.py`; `adapters/models/fake.py`, `replay.py` |
 | P08 context assembly | `context/types.py` | `context/assembly.py` |
-| P10 tool registry | `tools/` | none for Friday |
-| P11 policy gate | `policy/` | none for Friday |
+| P10 tool registry | `tools/` | none for the first milestone |
+| P11 policy gate | `policy/` | none for the first milestone |
 | P12 sandbox | `sandbox/types.py` | `sandbox/ports.py` (`SandboxBackend`); `adapters/sandbox/refusing.py`, `bwrap.py` |
 | P13 grounding | none | `runtime/grounding/` (citation spans, quote checks) |
 | P14 budgets | `budgets/types.py` | `budgets/meter.py` (budget accounting reducer, `Meter`) |
@@ -203,7 +203,7 @@ One row per primitive. "Built" exists and is tested. "Planned" is the modules ea
 | P17 interrupts | `interrupts/types.py` | `interrupts/reducers.py`, `approvals.py` |
 | P18 cancellation | none | `runtime/cancellation/` |
 | P19 session API | none | `runtime/session/` (`commands.py`, `resolutions.py`, `streams.py`, `capabilities.py`); `interfaces/cli/`, `interfaces/http/` |
-| P20 agent definition and extension API | `definitions/`, `api.py` | none for Friday |
+| P20 agent definition and extension API | `definitions/`, `api.py` | none for the first milestone |
 | P21 tracing | none | `runtime/tracing/` (`ports.py`, `spans.py`, `inspection.py`); `adapters/exporters/otel.py` |
 | P23 request router | none | `runtime/router/` |
 | P24 partial results | none | `runtime/finalization/` |

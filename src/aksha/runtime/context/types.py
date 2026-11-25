@@ -1,8 +1,8 @@
 """Context assembly and compaction (ADR-P08): the model's context as a pure projection.
 
 Built so far: the declared policy, ``ContextPolicy`` and ``SummaryPolicy``, and
-``CONTEXT_POLICY_VERSION``. Friday ships truncation only; observation masking and a
-recorded summary are designed.
+``CONTEXT_POLICY_VERSION``. Truncation, observation masking and a recorded summary are
+designed; decision 34 makes compaction a must-have of the first milestone.
 """
 
 from __future__ import annotations
