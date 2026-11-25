@@ -1,0 +1,171 @@
+{
+  "world": "stillroom",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths, URLs, publish dates. No answers (no family IDs, no duplicate links).",
+  "records": [
+    {
+      "path": "competitors/comp01-kelvra.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://kelvra.example/product",
+      "published": "2026-10-14"
+    },
+    {
+      "path": "competitors/comp02-veyra.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://veyra.example/product",
+      "published": "2026-09-30"
+    },
+    {
+      "path": "competitors/comp03-tallyway.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://tallyway.example/product",
+      "published": "2026-08-21"
+    },
+    {
+      "path": "competitors/comp04-noctra.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://noctra.example/product",
+      "published": "2026-07-08"
+    },
+    {
+      "path": "competitors/comp05-brightfield.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://brightfield.example/product",
+      "published": "2026-04-02"
+    },
+    {
+      "path": "competitors/comp06-corvane.html",
+      "collection": "competitors",
+      "synthetic": true,
+      "url": "https://corvane.example/product",
+      "published": "2026-09-15"
+    },
+    {
+      "path": "contributors/records.csv",
+      "collection": "contributors",
+      "synthetic": true
+    },
+    {
+      "path": "disclosures/2026-03-10-trade-show-demo.md",
+      "collection": "disclosures",
+      "synthetic": true
+    },
+    {
+      "path": "disclosures/consultant-email.eml.txt",
+      "collection": "disclosures",
+      "synthetic": true
+    },
+    {
+      "path": "disclosures/history.csv",
+      "collection": "disclosures",
+      "synthetic": true
+    },
+    {
+      "path": "notes/C1-self-calibration.md",
+      "collection": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "notes/C2-sensor-placement.md",
+      "collection": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "notes/C3-privacy-preserving-coordination.md",
+      "collection": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "notes/C4-battery-saving-sampling.md",
+      "collection": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "priorities/business-priorities.md",
+      "collection": "priorities",
+      "synthetic": true
+    },
+    {
+      "path": "publications/SYN-PUB-0001.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0001"
+    },
+    {
+      "path": "publications/SYN-PUB-0002.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0002"
+    },
+    {
+      "path": "publications/SYN-PUB-0003.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0003"
+    },
+    {
+      "path": "publications/SYN-PUB-0004.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0004"
+    },
+    {
+      "path": "publications/SYN-PUB-0005.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0005"
+    },
+    {
+      "path": "publications/SYN-PUB-0006.pdf.txt",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0006"
+    },
+    {
+      "path": "publications/SYN-PUB-0007.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0007"
+    },
+    {
+      "path": "publications/SYN-PUB-0008.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0008"
+    },
+    {
+      "path": "publications/SYN-PUB-0009.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0009"
+    },
+    {
+      "path": "publications/SYN-PUB-0010.json",
+      "collection": "publications",
+      "synthetic": true,
+      "url": "https://patents.synthetic.example/SYN-PUB-0010"
+    },
+    {
+      "path": "reviews/reviews.json",
+      "collection": "reviews",
+      "synthetic": true
+    },
+    {
+      "path": "templates/filing-information-worksheet.md",
+      "collection": "templates",
+      "synthetic": true
+    },
+    {
+      "path": "templates/invention-disclosure-form.md",
+      "collection": "templates",
+      "synthetic": true
+    }
+  ]
+}

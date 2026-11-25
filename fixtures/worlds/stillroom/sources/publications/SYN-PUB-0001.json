@@ -1,0 +1,42 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0001",
+  "office": "SYN-Office-1",
+  "kind_code": "A1",
+  "title": "Thermal array occupancy sensing with background subtraction",
+  "applicant": "Thermosight Corp.",
+  "dates": {
+    "priority": "2021-04-12",
+    "filing": "2022-04-11",
+    "publication": "2022-10-13"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2021-0412",
+      "date": "2021-04-12"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0001",
+  "status_observations": [
+    {
+      "wording": "Published application",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-10-01"
+    }
+  ],
+  "abstract": "A thermal array occupancy sensor subtracts a stored background frame and adapts it during low activity.",
+  "description": "A ceiling thermal array sensor stores a background frame at installation. During periods of low activity, the background frame is updated as a running average of recent frames. A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel."
+    },
+    {
+      "number": 2,
+      "depends_on": 1,
+      "text": "The method of claim 1, wherein low activity is determined from the variance of recent frames."
+    }
+  ]
+}

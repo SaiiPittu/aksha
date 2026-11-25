@@ -1,0 +1,311 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: stillroom-v2
+synthetic: true
+notice: Author-side truth for a synthetic world. No tool reads this file.
+frozen_today: '2026-11-26'
+date_convention: ISO 8601 in data; day-first in prose (14 Jan 2026)
+identifier_schemes:
+  publication: SYN-PUB-\d{4}
+  priority: SYN-PRI-YYYY-MMDD
+  application: SYN-APP-YYYY-MMDD
+  office: SYN-Office-\d
+venture:
+  name: Hushframe
+  domain: hushframe.example
+  product: Hushframe H1
+  summary: 'Camera-free, battery-powered ceiling occupancy sensor for offices: 8 x 8 thermopile array plus PIR, reads the
+    room''s door contact over a local radio link; outputs counts, never images.'
+  segment: facilities and workplace teams in 200 to 2,000 person offices
+  geography: EU first
+people:
+- id: P-01
+  name: Nadia Petrov
+  employer: Hushframe
+  role: firmware lead
+- id: P-02
+  name: Joel Andersen
+  employer: Hushframe
+  role: embedded engineer
+- id: P-03
+  name: Priya Natarajan
+  employer: Hushframe
+  role: hardware engineer
+- id: P-04
+  name: Kenji Mori
+  employer: Hushframe
+  role: data engineer
+- id: P-05
+  name: Dr. Elena Varga
+  employer: Easterly Institute of Technology
+  role: outside consultant
+  agreement: CA-2025-11, effective 2025-12-01, document not in the world
+- id: P-06
+  name: Theo Whitlock
+  employer: contractor
+  role: contract technician
+- id: P-07
+  name: Ines Duarte
+  employer: Hushframe
+  role: founder and CEO
+candidates:
+  C1:
+    name: self-calibration
+    note: notes/C1-self-calibration.md
+    conceived: '2026-01-14'
+    status: built and bench tested
+    mechanism_steps:
+    - Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed
+    - Record each pixel's mean and standard deviation during the window
+    - Update the baseline as an exponential moving average with weight 0.01 per minute
+    - Freeze learning in pixels with a detection in the last 10 minutes
+    - Per-pixel threshold = baseline + 4 x standard deviation
+    features:
+      F1: per-pixel thermopile empty-room baseline
+      F2: baseline update only after a PIR quiet window
+      F3: baseline update also gated on the door contact reporting closed
+      F4: slow EMA update with per-pixel freeze after detection
+      F5: per-pixel threshold from that pixel's noise
+    deliberate_gap: rationale for the 20 minute window is not in any source
+  C2:
+    name: sensor placement
+    note: notes/C2-sensor-placement.md
+    conceived: '2026-02-03'
+    status: whiteboard only
+    features:
+      P1: footprint at seated head height from field of view
+      P2: layout score over seat coverage, overlap, heat-source and doorway exposure
+      P3: post-install walk test against the plan
+    deliberate_gap: placement-trial-02.csv is referenced but not in the world; minimum vent distance not decided
+  C3:
+    name: privacy-preserving coordination
+    note: notes/C3-privacy-preserving-coordination.md
+    conceived: '2026-02-20'
+    status: running in a pilot under NDA
+    features:
+      Q1: on-device processing, counts only
+      Q2: overlap zone marked in each unit's pixel coordinates at install
+      Q3: each unit reports total and overlap counts
+      Q4: room = A + B - min(overlap_A, overlap_B)
+      Q5: single-occupant rooms grouped in roll-ups
+  C4:
+    name: battery-saving sampling
+    note: notes/C4-battery-saving-sampling.md
+    conceived: '2026-01-28'
+    status: prototype, power not measured
+    features:
+      B1: PIR wakes the thermopile for a 60 s window at 1 Hz
+      B2: fall back to 10 s sampling then PIR-only
+      B3: report on change plus 15 min heartbeat
+      B4: estimated 0.2 mA average (estimate, not measured)
+competitors:
+  K1:
+    company: Thermyx
+    product: Thermyx Grid 32
+    modality: thermal array, PoE
+    pages:
+    - competitors/comp01-thermyx.html
+  K2:
+    company: Radiant Loop
+    product: Radiant Loop Orbit
+    modality: mmWave radar, mains
+    pages:
+    - competitors/comp02-radiantloop.html
+  K3:
+    company: Gatecount
+    product: Gatecount Arc
+    modality: ToF doorway counter, battery
+    pages:
+    - competitors/comp03-gatecount.html
+  K4:
+    company: Airwise
+    product: Airwise Room
+    modality: PIR plus CO2, battery
+    pages:
+    - competitors/comp04-airwise.html
+  K5:
+    company: Lumenstat
+    product: SeatSense
+    modality: thermal plus PIR, battery
+    pages:
+    - competitors/comp05-lumenstat.html
+    - competitors/comp06-orrin.html
+    aliases:
+    - Orrin Holdings
+    - Orrin Presence One
+    relationship: acquired by Orrin Holdings on 2026-05-12, product renamed
+families:
+  A:
+    priority: SYN-PRI-2021-0412
+    members:
+    - SYN-PUB-0001
+    - SYN-PUB-0002
+    applicant: Calorix Imaging Inc.
+  B:
+    priority: SYN-PRI-2020-0907
+    members:
+    - SYN-PUB-0003
+    - SYN-PUB-0004
+    applicant: Metro Mesh Systems
+  C:
+    priority: SYN-PRI-2022-0118
+    members:
+    - SYN-PUB-0005
+    - SYN-PUB-0006
+    applicant: Solace Buildings GmbH
+  D:
+    priority: SYN-PRI-2021-1103
+    members:
+    - SYN-PUB-0007
+    - SYN-PUB-0008
+    applicant: Lowdraw Devices Inc.
+  F:
+    priority: SYN-PRI-2019-0630
+    members:
+    - SYN-PUB-0009
+    - SYN-PUB-0010
+    applicant: Roofplan Ltd.
+  E:
+    priority: SYN-PRI-2023-0215
+    members:
+    - SYN-PUB-0011
+    applicant: Portal Sense BV
+    added_in: stillroom-v2
+disclosure_events:
+- DISC-01 trade-show demo 2026-03-10 (C1, public)
+- DISC-02 pilot 2026-04-15 (C3, NDA)
+- DISC-03 blog post 2026-06-02 (C4, public)
+- DISC-04 investor email, undated (C4)
+- DISC-05 consultant email 2025-11-21 (C1, private)
+reviews:
+  rows: 42
+  unique: 40
+  cross_posted:
+  - - R-041
+    - R-009
+  - - R-042
+    - R-016
+variant_of: stillroom
+changed_inputs:
+- New publication family E (SYN-PUB-0011) discloses C1's door-closed gate (F3) and PIR-quiet gate (F2)
+- 'Consultant email dated 2025-11-21 instead of 2026-01-05: before the consulting agreement''s effective date 2025-12-01'
+rename_map:
+  venture:
+  - Stillroom
+  - Hushframe
+  domain:
+  - stillroom.example
+  - hushframe.example
+  device:
+  - Stillroom S1
+  - Hushframe H1
+  p01:
+  - Asha Rao
+  - Nadia Petrov
+  p02:
+  - Ravi Menon
+  - Joel Andersen
+  p03:
+  - Lena Fischer
+  - Priya Natarajan
+  p04:
+  - Tomas Ibarra
+  - Kenji Mori
+  p05:
+  - Dr. Wei Lin
+  - Dr. Elena Varga
+  p05_short:
+  - Dr. Lin
+  - Dr. Varga
+  p05_first:
+  - Wei
+  - Elena
+  p05_email:
+  - w.lin@northgate-uni.example
+  - e.varga@easterly-tech.example
+  p06:
+  - Mira Okafor
+  - Theo Whitlock
+  p07:
+  - Daniel Sato
+  - Ines Duarte
+  uni:
+  - Northgate University
+  - Easterly Institute of Technology
+  expo:
+  - Smart Workplace Expo 2026
+  - Future Office Fair 2026
+  expo_city:
+  - Rotterdam
+  - Lyon
+  c1_co:
+  - Kelvra Systems
+  - Thermyx
+  c1_prod:
+  - Kelvra TS-32
+  - Thermyx Grid 32
+  c1_dom:
+  - kelvra.example
+  - thermyx.example
+  c2_co:
+  - Veyra Labs
+  - Radiant Loop
+  c2_prod:
+  - Veyra Halo
+  - Radiant Loop Orbit
+  c2_dom:
+  - veyra.example
+  - radiantloop.example
+  c3_co:
+  - Tallyway
+  - Gatecount
+  c3_prod:
+  - Tallyway Beam
+  - Gatecount Arc
+  c3_dom:
+  - tallyway.example
+  - gatecount.example
+  c4_co:
+  - Noctra
+  - Airwise
+  c4_prod:
+  - Noctra Air
+  - Airwise Room
+  c4_dom:
+  - noctra.example
+  - airwise.example
+  c5_co:
+  - Brightfield Analytics
+  - Lumenstat
+  c5_prod:
+  - OccuPoint
+  - SeatSense
+  c5_dom:
+  - brightfield.example
+  - lumenstat.example
+  c5_new_co:
+  - Corvane Group
+  - Orrin Holdings
+  c5_new_prod:
+  - Corvane Presence P1
+  - Orrin Presence One
+  c5_new_dom:
+  - corvane.example
+  - orrin.example
+  a_A:
+  - Thermosight Corp.
+  - Calorix Imaging Inc.
+  a_B:
+  - Urban Fabric Systems
+  - Metro Mesh Systems
+  a_C:
+  - Helio Buildings AG
+  - Solace Buildings GmbH
+  a_D:
+  - Pellucid Devices Inc.
+  - Lowdraw Devices Inc.
+  a_F:
+  - Ceilmap Ltd.
+  - Roofplan Ltd.
+  a_E:
+  - Doorline Controls BV
+  - Portal Sense BV

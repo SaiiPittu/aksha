@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0003",
+  "office": "SYN-Office-1",
+  "kind_code": "A1",
+  "title": "Merging overlapping thermal sensor views for room counting",
+  "applicant": "Metro Mesh Systems",
+  "dates": {
+    "priority": "2020-09-07",
+    "filing": "2021-09-06",
+    "publication": "2022-03-17"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2020-0907",
+      "date": "2020-09-07"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0003",
+  "status_observations": [
+    {
+      "wording": "Pending",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-09-15"
+    }
+  ],
+  "abstract": "Frames from overlapping thermal sensors are merged on a server into one room image before counting.",
+  "description": "Two or more thermal sensors with overlapping fields of view stream their frames to a building server. The server registers the frames to a common floor grid, merges them into one thermal image of the room, and counts people in the merged image so that a person in the overlap is counted once.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image."
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0011",
+  "office": "SYN-Office-2",
+  "kind_code": "A1",
+  "title": "Door-state gated background learning for thermal occupancy sensors",
+  "applicant": "Portal Sense BV",
+  "dates": {
+    "priority": "2023-02-15",
+    "filing": "2024-02-14",
+    "publication": "2024-08-29"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2023-0215",
+      "date": "2023-02-15"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0011",
+  "status_observations": [
+    {
+      "wording": "Pending",
+      "source": "SYN-Office-2 register",
+      "as_of": "2026-11-20"
+    }
+  ],
+  "abstract": "Background learning runs only when the door is closed and no motion has been seen for a quiet period.",
+  "description": "A ceiling thermal sensor in a room fitted with a door state sensor maintains a background estimate. The background update is suspended unless the door state sensor reports the door closed and the motion detector has reported no motion for a quiet period of between 10 and 30 minutes, so that a stationary occupant is not absorbed into the background.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A method of maintaining a background estimate for a thermal occupancy sensor in a room having a door state sensor, comprising: updating the background estimate only when the door state sensor reports the door closed and a motion detector has reported no motion for a quiet period."
+    },
+    {
+      "number": 2,
+      "depends_on": 1,
+      "text": "The method of claim 1, wherein the quiet period is between 10 and 30 minutes."
+    }
+  ]
+}

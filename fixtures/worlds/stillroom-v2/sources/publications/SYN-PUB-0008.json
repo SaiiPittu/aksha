@@ -1,0 +1,42 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0008",
+  "office": "SYN-Office-1",
+  "kind_code": "A1",
+  "title": "Low-power occupancy sensor with event-driven reporting",
+  "applicant": "Lowdraw Devices Inc.",
+  "dates": {
+    "priority": "2021-11-03",
+    "filing": "2024-12-09",
+    "publication": "2025-06-19"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2021-1103",
+      "date": "2021-11-03"
+    },
+    {
+      "number": "SYN-APP-2022-1102",
+      "date": "2022-11-02",
+      "relation": "continuation of"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0008",
+  "status_observations": [
+    {
+      "wording": "Pending",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-10-01"
+    }
+  ],
+  "abstract": "The sensor transmits only on a change of count, with a periodic heartbeat.",
+  "description": "A battery-powered occupancy sensor keeps its high-power sensing element off. A passive infrared detector wakes the high-power element for a fixed observation window when motion is detected, and the element is switched off again if no occupant is classified within the window. The sensor transmits a message only when the occupant count changes, and transmits a heartbeat message at a fixed interval so that a silent sensor is distinguishable from a failed one.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A battery-powered occupancy sensor configured to transmit a message only when an occupant count changes, and to transmit a heartbeat message at a fixed interval when the count has not changed."
+    }
+  ]
+}

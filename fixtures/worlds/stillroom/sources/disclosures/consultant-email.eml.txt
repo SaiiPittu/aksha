@@ -1,0 +1,19 @@
+X-Synthetic: true
+From: Dr. Wei Lin <w.lin@northgate-uni.example>
+To: Asha Rao <asha@stillroom.example>
+Date: Mon, 05 Jan 2026 16:42:10 +0100
+Subject: thermal drift idea
+
+SYNTHETIC FIXTURE. Invented for testing; not a real email or person.
+
+Hi Asha,
+
+Following our call about the drifting empty-room readings: the PIR alone will not tell you
+the room is empty, because people sit still. You already have a door contact on most
+meeting rooms. Why not use the door contact as a room-sealed signal, and only relearn the
+baseline when the room is sealed and the PIR has been quiet for a while?
+
+I have not tried it on hardware. Happy to look at your noise numbers when you have them.
+
+Wei
+Northgate University
