@@ -9,10 +9,11 @@ transaction (U3) writes, in order:
 3. ``stop.decided{verdict: stop, reason: stop_requested}``, last, naming the candidate.
 
 Approvals keep their own lifecycle: a pending approval stays decidable (ADR-P17 D8).
-:func:`stop_ending` is the pure decision; :func:`honour_stop` commits it. The candidates
-built so far are recovery's resume candidate (``resume``, D3) and the end of a turn a
-resumed driver returns from (``turn_end``); ADR-P16's evaluation calls it first at every
-other candidate once it is built.
+:func:`stop_ending` is the pure decision; :func:`honour_stop` commits it. Their callers are
+recovery's resume candidate (``resume``, D3) and the end of a turn a resumed driver returns
+from (``turn_end``). ADR-P16's evaluation answers every other candidate with the Run
+policy's STOP ``stopped`` before any policy judges, and commits :func:`ending_facts` with
+its own, fuller record.
 """
 
 from __future__ import annotations
@@ -31,15 +32,23 @@ STOP_DECISION = "U3"
 """The boundary of the stop ending (a stop decision)."""
 
 
-def stop_ending(view: LogView, run: str, candidate: str) -> tuple[NewEvent, ...]:
-    """The events that end ``run`` at ``candidate`` for its pending stop, or () if none. Pure."""
-    if pending_stop(view, run) is None:
-        return ()
+def ending_facts(view: LogView, run: str) -> tuple[NewEvent, ...]:
+    """Items 1 and 2 of the module doc: the voided interrupts and ``run.ended{stopped}``.
+
+    Stop-policy evaluation (ADR-P16) commits these before its own, fuller record.
+    """
     voided = tuple(
         NewEvent(INTERRUPT_VOIDED, {"interrupt": i, "reason": RUN_STOPPED}, run=run)
         for i in pending_interrupts(view, run)
     )
     ended = NewEvent("run.ended", {"outcome": STOPPED, "reason": STOP_REQUESTED}, run=run)
+    return (*voided, ended)
+
+
+def stop_ending(view: LogView, run: str, candidate: str) -> tuple[NewEvent, ...]:
+    """The events that end ``run`` at ``candidate`` for its pending stop, or () if none. Pure."""
+    if pending_stop(view, run) is None:
+        return ()
     walk = 1 + sum(1 for e in view.events if e.run == run and e.type == STOP_DECIDED)
     decided = NewEvent(
         STOP_DECIDED,
@@ -47,7 +56,7 @@ def stop_ending(view: LogView, run: str, candidate: str) -> tuple[NewEvent, ...]
          "reason": STOP_REQUESTED},
         run=run,
     )  # fmt: skip
-    return (*voided, ended, decided)
+    return (*ending_facts(view, run), decided)
 
 
 def honour_stop(store: EventStore, owner: str, run: str, candidate: str) -> bool:

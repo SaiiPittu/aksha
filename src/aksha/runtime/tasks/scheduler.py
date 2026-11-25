@@ -132,6 +132,12 @@ def _same_source(a: KeySource | None, b: KeySource | None) -> bool:
     return a is not None and b is not None and a == b
 
 
+def runnable_below(state: RunState, ref: InstanceRef) -> tuple[InstanceRef, ...]:
+    """The runnable instances under parent ``ref``, in pick order (what a supervisor reads)."""
+    node = state.tree.node(ref.task_path)
+    return tuple(_Pick(state).walk(node.children, ref.key, True))
+
+
 def runnable_in(state: RunState) -> tuple[InstanceRef, ...]:
     """:func:`runnable` over an indexed run state."""
     return tuple(_Pick(state).walk(state.tree.roots, None, False))

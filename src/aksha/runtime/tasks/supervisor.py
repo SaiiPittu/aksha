@@ -25,7 +25,7 @@ from collections.abc import Sequence
 
 from aksha.runtime.budgets.records import charged_turn
 from aksha.runtime.tasks.completion import evaluate_in
-from aksha.runtime.tasks.status import STOP_DECIDED, TASK_ENTERED, RunState
+from aksha.runtime.tasks.status import STOP_DECIDED, TASK_ENTERED, RunState, popped
 from aksha.runtime.tasks.types import InstanceRef, SupervisorMove, Task
 
 ACTIVATION_LIMIT = 20
@@ -52,9 +52,12 @@ def _progress_seq(state: RunState, ref: InstanceRef) -> int:
     below = f"{ref.instance}/"
     last = 0
     for e in state.view.events:
-        if e.run != ref.run or not (e.instance or "").startswith(below):
+        if e.run != ref.run:
             continue
-        if e.type == "artifact.saved" or (e.type == STOP_DECIDED and e.payload.get("pop")):
+        if e.type == STOP_DECIDED:
+            if any(instance.startswith(below) for instance, _ in popped(e)):
+                last = e.seq
+        elif e.type == "artifact.saved" and (e.instance or "").startswith(below):
             last = e.seq
     return last
 

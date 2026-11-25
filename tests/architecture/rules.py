@@ -317,6 +317,46 @@ def impure_gate(root: Path) -> list[Violation]:
     return out
 
 
+# --- ADR-P16 D1: stop policies are pure ------------------------------------------------
+
+STOP_POLICY_WRITER = "commit.py"
+"""The one stop-policy module that holds a store; every other one decides and is pure."""
+
+PURE_STOP_CALLS = frozenset(
+    {"open", "print", "input", "now", "utcnow", "today", "sleep", "mono_ms", "getenv"}
+)  # fmt: skip
+"""Calls a deciding stop-policy module may not make: the clock and I/O."""
+
+
+def impure_stop_policies(root: Path) -> list[Violation]:
+    """Every clock, randomness, I/O or store use in the deciding stop-policy modules.
+
+    A stop policy reads only the ``StopView`` and the candidate (ADR-P16 D1), so two runs
+    over the same log decide the same; only ``commit.py`` reaches the event store.
+    """
+    out: list[Violation] = []
+    files = sorted((root / "aksha").rglob("*.py"))
+    modules = frozenset(module_name(root, f) for f in files)
+    for f in sorted((root / "aksha" / "runtime" / "stop_policy").rglob("*.py")):
+        if f.name == STOP_POLICY_WRITER:
+            continue
+        me = module_name(root, f)
+        for target in imports_of(root, f, modules):
+            if target.split(".")[0] in IMPURE_MODULES:
+                out.append(Violation(me, target, "a stop policy imports no clock or I/O"))
+            elif _within(target, "aksha.runtime.storage") and not target.endswith(".rows"):
+                out.append(Violation(me, target, "only commit.py reaches the event store"))
+            elif _within(target, "aksha.adapters"):
+                out.append(Violation(me, target, "a stop policy imports no adapter"))
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"), filename=str(f))):
+            if isinstance(node, ast.Call):
+                fn = node.func
+                called = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", None)
+                if called in PURE_STOP_CALLS:
+                    out.append(Violation(me, str(called), "a stop policy calls no clock or I/O"))
+    return out
+
+
 def bypass_paths(root: Path) -> list[Violation]:
     """Every runtime function that runs a tool body without an ``Allow`` from ``check`` first.
 

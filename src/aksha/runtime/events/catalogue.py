@@ -123,6 +123,8 @@ RUN_ENDED = EventTypeSpec(
             # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``.
             "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
             "reason": {"type": "string"},
+            # ADR-P16 D3: the blocked instances a ``partial`` run ends with, for readers.
+            "blockers": {"type": "array", "items": {"type": "string"}},
         },
         "required": ["outcome", "reason"],
     },
@@ -441,14 +443,26 @@ ATTEMPT_DISCARDED = EventTypeSpec(
     dedup_key="sdisc:{step}/a{attempt}",
 )
 
-# --- P14 budgets, and the part of P16's stop decision record P02 and P14 read ----------
-# ``stop.decided`` is declared with the fields the budget and limit reducers read
-# (``budgets/records.py``): a CONTINUE charges a turn, a ``cause: resume`` record is a
-# resume record (recovery writes it, ADR-P02 D7), a ``candidate: finish`` CONTINUE is a
-# veto. ADR-P16 widens the schema when it is built. ``budget.reached`` commits with the
-# budget interrupt in the stop decision; ``budget.granted`` is a person's command.
+# --- P14 budgets and P16 stop policy: the stop decision record --------------------------
+# ``stop.decided`` is the one record of a stop-policy evaluation (ADR-P16 D3). The budget
+# and limit reducers read ``verdict``, ``cause``, ``candidate``, ``candidate_instance``,
+# ``turn`` and ``resumes_turn`` (``budgets/records.py``): a CONTINUE charges a turn, a
+# ``cause: resume`` record is a resume record (recovery writes it, ADR-P02 D7), a
+# ``candidate: finish`` CONTINUE of the finishing instance is a veto. ``pops`` (and the
+# older single ``pop``) are the instances the evaluation popped DONE or FAIL, which the
+# Task status projection reads (ADR-P15 D6). The rest is the trail ``inspect`` and replay
+# read: the stack as derived, each policy's verdict in order, who decided, which limit
+# replaced a CONTINUE and the counts behind it. ``budget.reached`` commits with the budget
+# interrupt in the stop decision; ``budget.granted`` is a person's command.
 
 _DIMENSION = {"enum": ["model_turns", "tool_calls", "active_ms", "tokens", "cost_micro_usd"]}
+_VERDICT_KIND = {"enum": ["pass", "continue", "push", "hold", "done", "fail", "stop"]}
+_POLICY_VERDICT = {
+    "type": "array",
+    "prefixItems": [{"type": "string", "minLength": 1}, _VERDICT_KIND],
+    "minItems": 2,
+    "maxItems": 2,
+}
 
 STOP_DECIDED = EventTypeSpec(
     name="stop.decided",
@@ -459,6 +473,9 @@ STOP_DECIDED = EventTypeSpec(
             "verdict": {"enum": ["continue", "hold", "stop"]},
             "cause": {"type": "string", "pattern": "^[a-z][a-z0-9_:]*$"},
             "candidate": {"type": "string", "minLength": 1},
+            "candidate_instance": {"type": "string", "minLength": 1},
+            "after_turn": {"type": "integer", "minimum": 0},
+            "seq_read": {"type": "integer", "minimum": 0},
             "turn": {"type": "integer", "minimum": 1},
             "resumes_turn": {"type": "boolean"},
             "reason": {"type": "string"},
@@ -466,6 +483,21 @@ STOP_DECIDED = EventTypeSpec(
             "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
             # ADR-P15 D6: the decision popped its instance DONE or FAIL (``blocked``).
             "pop": {"enum": ["done", "fail"]},
+            "pops": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "prefixItems": [{"type": "string", "minLength": 1}, {"enum": ["done", "fail"]}],
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+            },
+            "stack": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "trail": {"type": "array", "items": _POLICY_VERDICT},
+            "decided_by": {"type": "string", "minLength": 1},
+            "replaced": _POLICY_VERDICT,
+            "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
+            "interrupt": {"type": "string", "minLength": 1},
         },
         "required": ["walk", "verdict"],
         "additionalProperties": False,
@@ -783,7 +815,8 @@ INTERRUPT_RAISED = EventTypeSpec(
         "type": "object",
         "properties": {
             "interrupt": {"type": "string", "minLength": 1},
-            "kind": {"enum": ["input", "choice", "approval", "review"]},
+            # ADR-P16 D3: ``budget`` is the budget interrupt a stop decision raises (U3).
+            "kind": {"enum": ["input", "choice", "approval", "review", "budget"]},
             # ADR-P05: a diff review's card, and the choice a rejected review raises (S4).
             "old": _REF_TEXT,
             "revision": _REF_TEXT,
@@ -803,7 +836,8 @@ INTERRUPT_RAISED = EventTypeSpec(
         ],
     },
     writer="interrupts",
-    boundaries=frozenset({"U2", "U4"}),
+    # U3: the budget interrupt, raised in the stop decision that a budget limit bit.
+    boundaries=frozenset({"U2", "U3", "U4"}),
 )
 INTERRUPT_RESOLVED = EventTypeSpec(
     name="interrupt.resolved",

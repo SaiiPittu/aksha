@@ -14,8 +14,10 @@ own boundary (U9). An agent with an open run regenerates its work in place inste
    agent per source change. Amendment from the build: a ``run.started`` has one dedup
    template (``rstart:{run}``), so the key is a payload field and the single writer
    checks it before appending, rather than a second store-enforced key.
-5. Never while the agent is held by a person's stop (TC-4, ``inv.no_auto_start_while_held``)
-   or has an open run, whose open interrupt then holds it too.
+5. Never for held work (TC-4, ``inv.no_auto_start_while_held``, narrowed by ADR-P16 S1):
+   each entry asks ``stop_policy.hold.rebuild_blocked``, which holds it while the agent
+   is held by a person's stop or the writer's own instance is held. An agent with an open
+   run is not opened again; its run regenerates the work in place.
 
 Decision 34 chose a fresh context with a rebuild brief for the first milestone;
 :func:`rebuild_brief` is that brief. Resume with masking (decision 36) comes next.
@@ -27,7 +29,6 @@ from collections.abc import Mapping
 
 from aksha.runtime.artifacts.types import ArtifactRef, InputRef
 from aksha.runtime.artifacts.versions import version
-from aksha.runtime.cancellation.hold import stop_hold
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
@@ -36,6 +37,7 @@ from aksha.runtime.invalidation.view import InvalidationView, invalidation_view
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
 from aksha.runtime.projections.view import LogView, load_view
+from aksha.runtime.stop_policy.hold import rebuild_blocked
 from aksha.runtime.storage.ports import EventStore
 
 REBUILD_BOUNDARY = "U9"
@@ -55,7 +57,7 @@ def rebuild_starts(
     Allocates run IDs from ``ids``; appends nothing.
     """
     iv = invalidation_view(view)
-    entries = runnable(rebuild_plan(iv))
+    entries = tuple(e for e in runnable(rebuild_plan(iv)) if rebuild_blocked(view, e) is None)
     if not entries:
         return ()
     runs = rebuild(RUNS, view)
@@ -71,7 +73,7 @@ def rebuild_starts(
     out: list[NewEvent] = []
     for agent, mine in by_agent.items():
         key = rebuild_key(view.owner, agent, iv.sources.source_version)
-        if agent in busy or key in keys or stop_hold(view, agent=agent) is not None:
+        if agent in busy or key in keys:
             continue
         for_runs = sorted({r for e in mine for r in iv.state(e.invalidated).line})
         payload: dict[str, object] = {

@@ -10,11 +10,12 @@ Two holds come from a person's stop:
    (``command.accepted`` with ``answers``). A view is one owner's log, so the owner is the
    view's.
 
-Every automatic start path asks :func:`stop_hold` before it writes. ADR-P16's
-``hold_reason`` adds ``interrupt_open`` and calls this for the rest; until it is built,
-recovery calls this directly. :func:`held_auto_starts` is the audit
+Every automatic start path asks :func:`stop_hold` before it writes: ADR-P16's
+``stop_policy.hold.hold_reason`` adds ``interrupt_open`` and calls this for the rest, and
+recovery calls this directly. :func:`held_auto_starts` is the stop half of the audit
 ``inv.no_auto_start_while_held``: it walks a whole log and returns every automatic start
-recorded while its scope was held by a stop, so a path that forgot the call is caught.
+recorded while its scope was held by a stop, so a path that forgot the call is caught;
+``stop_policy.hold.held_auto_starts`` joins it with the interrupt half.
 """
 
 from __future__ import annotations

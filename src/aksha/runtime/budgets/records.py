@@ -11,8 +11,8 @@ Fact                            Counts as
                                 true; distinct by (instance, ``turn``) when it names one
 ``stop.decided{cause: resume}``  a resume record (the restart limit; an automatic start)
 ``stop.decided`` with           a stop veto: a completion check refused a finish
-``candidate: finish`` and
-``verdict: continue``
+``candidate: finish`` and       of the deciding instance (``candidate_instance``, when
+``verdict: continue``           present, names it)
 ``task.entered``,               the start of an instance entry (the veto count restarts)
 ``completion_check.reset``
 ``step.started{kind: tool}``    a tool call when ``counted`` is true (a retry adds none)
@@ -72,12 +72,18 @@ def charged_turn(e: Event) -> tuple[str, ...] | None:
 
 
 def is_veto(e: Event) -> bool:
-    """A completion check refused a proposed finish, so the instance took another turn."""
-    return (
-        e.type == STOP_DECIDED
-        and e.payload.get("candidate") == "finish"
-        and _verdict(e) == "continue"
-    )
+    """A completion check refused a proposed finish, so the instance took another turn.
+
+    The finish must be the deciding instance's own: when one evaluation pops the finishing
+    instance and continues another (``candidate_instance`` names the first), the second
+    instance's CONTINUE is its first turn, not a veto (ADR-P16 D3).
+    """
+    if e.type != STOP_DECIDED or e.payload.get("candidate") != "finish":
+        return False
+    if _verdict(e) != "continue":
+        return False
+    of = e.payload.get("candidate_instance")
+    return of is None or of == e.instance
 
 
 def is_progress(e: Event) -> bool:

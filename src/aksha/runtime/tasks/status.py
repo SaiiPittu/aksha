@@ -8,6 +8,7 @@ Fact (envelope ``run`` and ``instance``)  Moves the instance to
 ``task.entered``                        ``running`` (entry or re-entry by writer key)
 ``stop.decided{pop: done}``             ``done`` (the stop decision popped it DONE)
 ``stop.decided{pop: fail}``             ``blocked`` (stop-veto limit, ``check_raised``)
+``stop.decided{pops: [[i, done]]}``     the same, for each instance one evaluation popped
 ``completion_check.reset``              ``running`` again after a block
 ``task.withdrawn``                      ``withdrawn``; ``new`` once its key returns (S3)
 ``interrupt.raised`` (open)             ``suspended`` while the instance is running
@@ -25,6 +26,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
+from aksha.runtime.events.envelope import Event
 from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import run_check
@@ -40,6 +42,27 @@ STOP_DECIDED = "stop.decided"
 
 LIFECYCLE = frozenset({TASK_ENTERED, TASK_WITHDRAWN, CHECK_RESET})
 """The Task facts that move a status; with ``stop.decided`` carrying ``pop``."""
+
+
+def popped(e: Event) -> tuple[tuple[str, str], ...]:
+    """The ``(instance, done | fail)`` pops a ``stop.decided`` records, in order.
+
+    Two forms: ``pops`` lists every instance one evaluation popped (ADR-P16 D3, where a
+    DONE pops and re-offers the candidate to the parent, which may push and pop again);
+    the older single ``pop`` names the envelope's instance.
+    """
+    if e.type != STOP_DECIDED:
+        return ()
+    out: list[tuple[str, str]] = []
+    pops = e.payload.get("pops")
+    if isinstance(pops, list | tuple):
+        for item in pops:
+            if isinstance(item, list | tuple) and len(item) == 2 and item[1] in ("done", "fail"):
+                out.append((str(item[0]), str(item[1])))
+    pop = e.payload.get("pop")
+    if pop in ("done", "fail") and e.instance is not None:
+        out.append((e.instance, str(pop)))
+    return tuple(out)
 
 
 def lifecycle_mark(event_type: str, pop: object) -> str | None:
@@ -120,19 +143,22 @@ def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
         if e.type in CLOSING:  # a person's answer names the interrupt, not the instance
             closed.add(str(e.payload.get("interrupt", e.step or "")))
             continue
-        if e.instance is None:
+        if e.type == STOP_DECIDED:
+            marks = popped(e)
+        elif e.instance is None:
             continue
-        if e.type == INTERRUPT_RAISED:
+        elif e.type == INTERRUPT_RAISED:
             raised[str(e.payload.get("interrupt", e.step or ""))] = e.instance
             continue
-        mark = lifecycle_mark(e.type, e.payload.get("pop"))
-        if mark is None:
-            continue
-        last[e.instance] = mark
-        last_seq[e.instance] = e.seq
-        ref = InstanceRef.parse(run, e.instance)
-        if ref.key is not None:
-            seen.setdefault(ref.task_path.split("/", 1)[0], set()).add(ref.key)
+        else:
+            mark = lifecycle_mark(e.type, None)
+            marks = () if mark is None else ((e.instance, mark),)
+        for instance, mark in marks:
+            last[instance] = mark
+            last_seq[instance] = e.seq
+            ref = InstanceRef.parse(run, instance)
+            if ref.key is not None:
+                seen.setdefault(ref.task_path.split("/", 1)[0], set()).add(ref.key)
     open_by: dict[str, list[str]] = {}
     for ident, instance in raised.items():
         if ident not in closed:
