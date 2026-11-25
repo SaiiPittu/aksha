@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aksha"
+version = "0.0.0"
+description = "A small, offline, pluggable agent harness."
+readme = "README.md"
+requires-python = ">=3.12"
+# The runtime package uses the standard library plus jsonschema, nothing else.
+dependencies = ["jsonschema>=4.19"]
+
+[project.optional-dependencies]
+# Storage adapters are optional extras; the runtime core never imports them.
+# `make venv` installs dev only; `make venv-postgres` adds the PostgreSQL driver.
+postgres = ["psycopg[binary]>=3.2"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-jsonschema",
+]
+
+[tool.setuptools.packages.find]
+# src layout (Python Packaging User Guide): the package lives at ./src/aksha, so tests
+# import the installed package, never the working tree by accident. Only it is packaged;
+# web/ and scratch-pad/ never are.
+where = ["src"]
+include = ["aksha*"]
+
+[tool.setuptools.package-data]
+aksha = ["py.typed"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+# "." makes the tests package importable; aksha itself comes from the editable install.
+pythonpath = ["."]
+addopts = ["-ra", "--strict-markers", "--strict-config", "--import-mode=importlib"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", ".", "tests"]
+extend-exclude = ["scratch-pad", "web"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # import order
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "RUF",     # ruff-specific
+    "D",       # docstrings: every public module, class and function is documented
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Test names say what they check; docstrings are optional there.
+"tests/**" = ["D"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+mypy_path = "src"
+files = ["src/aksha", "tests"]
+exclude = ["^scratch-pad/", "^web/"]
+
+[[tool.mypy.overrides]]
+# The PostgreSQL driver is an optional extra. Without it installed, its types are Any; with
+# it installed (pip install 'aksha[postgres]'), mypy checks the adapter against them.
+module = ["psycopg", "psycopg.*"]
+ignore_missing_imports = true

@@ -1,0 +1,14 @@
+# Words that belong to an agent and must never appear in src/aksha/runtime (ADR-P20 D8).
+# One per line, matched as whole words, case-insensitive.
+research
+competitor
+patent
+prior_art
+needs_scope
+vendor
+toy
+digest
+# Version control folders are a coding agent's (or a sandbox extension's) concern.
+git
+hg
+svn

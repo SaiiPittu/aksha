@@ -618,7 +618,7 @@ Both backends implement the one `EventStore` port and pass one shared contract s
 | Payloads | `JSONB` | Canonical JSON text |
 | Hash chain | `prev_hash` and `hash`, both unique, plus a one-row store metadata table with the genesis | The same |
 
-Decision 34 (26 Nov 2026) settles the default for the offline run: SQLite. As of 26 Nov 2026 the composition root still defaults to PostgreSQL, until the code follows the decision.
+Decision 34 (26 Nov 2026) settles the default for the offline run: SQLite. Since 26 Nov 2026 the composition root (`src/aksha/app.py`) defaults to SQLite; `AKSHA_STORE=postgres` with `AKSHA_POSTGRES_DSN` picks PostgreSQL.
 
 ## 10. Codebase layout and the dependency rule
 
@@ -653,7 +653,7 @@ A test enforces this rule on every module, and it plants one violation of each r
 The open points in this design as of 26 Nov 2026:
 
 1. Headless mode and interrupts. Decision 26 settles the gate: every layer holds and only asks become allows (section 7). Still undecided: what a headless run does when a Task declares an `input` or `choice` interrupt, which no allow rule can answer. Refusing a headless start outside a sandbox is ADR-P11's proposal, not yet a decision.
-2. The default backend for a local run (section 9). Decision 34 makes SQLite the default for the offline run; the composition root still defaults to PostgreSQL until the code follows.
+2. The default backend for a local run (section 9). Decision 34 makes SQLite the default for the offline run, and the composition root follows it since 26 Nov 2026.
 3. Event type renames such as `walk.decided` to `stop.decided` and `pause.*` to `interrupt.*` (ADR-P01 D8) are Proposed. This page uses the proposed names.
 4. Erasure in a hash-chained, append-only store (ADR-P30) is Open. Two of its options keep the hashed bytes unchanged and so keep the chain valid; any option that rewrites payloads breaks the chain by design.
 5. The three tiers (section 3) are designed only. The remote microVM backend, the worker host and its authentication are not designed past section 3.3, and the tiers do not protect against a compromised runtime or a hostile agent module.
