@@ -1,0 +1,137 @@
+# Continuous integration: lint, type check, and the tests on SQLite and on PostgreSQL.
+#
+# Third-party actions are pinned to full commit SHAs (the version is in the comment). Each SHA
+# was checked against its release tag on 26 Nov 2026.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  UV_NO_PROGRESS: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  FORCE_COLOR: "1"
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: make venv PY=3.12
+      - run: make lint
+
+  typecheck:
+    # The psycopg override in pyproject.toml behaves differently with and without the driver
+    # installed, so mypy runs both ways.
+    name: Type check (mypy, ${{ matrix.variant }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [core, postgres]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install (core)
+        if: matrix.variant == 'core'
+        run: make venv PY=3.12
+      - name: Install (with the PostgreSQL driver)
+        if: matrix.variant == 'postgres'
+        run: make venv-postgres PY=3.12
+      - run: make typecheck
+
+  test-sqlite:
+    # SQLite is the default backend. Without psycopg installed, the PostgreSQL tests skip and
+    # say why; the test-postgres job is the one that proves them.
+    name: Tests, SQLite (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install
+        env:
+          PY: ${{ matrix.python }}
+        run: make venv PY="$PY"
+      - run: make test
+
+  test-postgres:
+    # AKSHA_REQUIRE_POSTGRES=1 turns every PostgreSQL skip into a failure, so the job cannot pass
+    # by not running the tests. With AKSHA_TEST_POSTGRES_DSN set, tests/support/postgres.py uses
+    # the service container below and never starts docker itself.
+    name: Tests, PostgreSQL 16 (Python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # A libpq keyword DSN: the test support appends " dbname=<name>" for each test database.
+      # The password belongs to a throwaway service container that exists only for this job.
+      AKSHA_TEST_POSTGRES_DSN: "host=localhost port=5432 user=postgres password=postgres"
+      AKSHA_REQUIRE_POSTGRES: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - name: Install with the PostgreSQL driver
+        env:
+          PY: ${{ matrix.python }}
+        run: make venv-postgres PY="$PY"
+      - name: PostgreSQL tests, required
+        run: make test-postgres
+
+  # One check to require on main, so adding or renaming a job above never needs a settings change.
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [lint, typecheck, test-sqlite, test-postgres]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then echo "::error::a required job ended in $r"; exit 1; fi
+          done
