@@ -271,6 +271,13 @@ class RunScope:
 
 
 @dataclass(frozen=True)
+class SessionScope:
+    """A session's intake, held by an open ``route`` question (ADR-P17 S5, ADR-P23)."""
+
+    session: str
+
+
+@dataclass(frozen=True)
 class AgentScope:
     """An (owner, agent) pair; the owner is the view's. Held only by a person's stop."""
 

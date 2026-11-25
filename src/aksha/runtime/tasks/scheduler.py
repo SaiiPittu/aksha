@@ -31,6 +31,7 @@ from typing import Literal
 from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.artifacts.versions import unaccepted_revisions
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.interrupts.approvals import APPROVAL_VOIDED, approvals
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.completion import (
     evaluate_in,
@@ -206,9 +207,12 @@ def withdrawals(view: LogView, tree: CompiledTree, run: str) -> tuple[NewEvent, 
     """``task.withdrawn`` and ``interrupt.voided{key_withdrawn}`` for keys that left (D3).
 
     An instance is withdrawn once: an instance whose last fact is already a withdrawal
-    gets nothing new. Its open interrupts are voided, so a withdrawn key asks no one.
+    gets nothing new. Its open interrupts are voided, so a withdrawn key asks no one, and
+    its live approvals (requested or granted) are voided with them (ADR-P17 S3).
     """
     state = run_state(view, tree, run)
+    live = [a for a in approvals(view).values()
+            if a.run == run and a.state in ("requested", "granted")]  # fmt: skip
     out: list[NewEvent] = []
     for ref in all_instances(state):
         mark = state.last.get(ref.instance)
@@ -219,6 +223,10 @@ def withdrawals(view: LogView, tree: CompiledTree, run: str) -> tuple[NewEvent, 
         for ident in state.open_interrupts.get(ref.instance, ()):
             voided = {"interrupt": ident, "reason": KEY_WITHDRAWN}
             out.append(NewEvent(INTERRUPT_VOIDED, voided, run=run, instance=ref.instance))
+        for a in live:
+            if a.instance == ref.instance:
+                payload = {"approval": a.approval_id, "reason": KEY_WITHDRAWN}
+                out.append(NewEvent(APPROVAL_VOIDED, payload, run=run, instance=ref.instance))
     return tuple(out)
 
 

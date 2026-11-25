@@ -95,6 +95,8 @@ RUN_STARTED = EventTypeSpec(
             "api_version": {"type": "string", "pattern": "^[0-9]+[.][0-9]+$"},
             "runtime_commit": {"type": "string"},
             "dirty": {"type": "boolean"},
+            # ADR-P11 D12 (decision 26): a headless run never asks; every deny still holds.
+            "headless": {"type": "boolean"},
             # ADR-P05 S1, D8: a rebuild run names the runs whose invalidated work it
             # regenerates, and its key (one rebuild run per agent and source version).
             "for_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
@@ -736,9 +738,36 @@ INTERRUPT_VOIDED = EventTypeSpec(
 # saves and the revocations; every invalidation set is a projection over them (D3).
 # ``interrupt.raised``, ``interrupt.resolved`` and ``approval.requested`` are ADR-P17's
 # types; invalidation is their first core writer (a diff review and the fresh approval
-# request an acceptance makes), and P17 tightens their schemas when it is built.
+# request an acceptance makes). P17 gave them their full schemas: an approval request
+# carries its action body and signature, and ``route`` is the one session-scoped kind.
 
 _REF_TEXT = {"type": "string", "minLength": 1}
+_SIGNATURE = {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"}
+_ACTION_BODY = {
+    "type": "object",
+    "properties": {
+        "tool": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1},
+        "canonical_args": {"type": "string"},
+        "targets": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+        },
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "definition_hash": {"type": "string", "minLength": 1},
+        "facts": {"type": "object", "additionalProperties": {"type": "string"}},
+    },
+    "required": [
+        "tool",
+        "owner",
+        "canonical_args",
+        "targets",
+        "idempotency_key",
+        "definition_hash",
+        "facts",
+    ],
+    "additionalProperties": False,
+}
 _HUNK = {
     "type": "object",
     "properties": {"path": {"type": "string"}, "old": {}, "new": {}},
@@ -816,7 +845,29 @@ INTERRUPT_RAISED = EventTypeSpec(
         "properties": {
             "interrupt": {"type": "string", "minLength": 1},
             # ADR-P16 D3: ``budget`` is the budget interrupt a stop decision raises (U3).
-            "kind": {"enum": ["input", "choice", "approval", "review", "budget"]},
+            "kind": {"enum": ["input", "choice", "approval", "review", "budget", "route"]},
+            # ADR-P17: what an interrupt shows. ``questions`` (S2, one answer each),
+            # ``options`` (a choice; the agents a route lists), the agent's ``label``, and an
+            # approval's ID, signature, tool, facts and targets (its body is on the request).
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["id", "text"],
+                    "additionalProperties": False,
+                },
+            },
+            "options": {"type": "array", "items": {"type": "string"}},
+            "label": {"type": "string"},
+            "approval": {"type": "string", "minLength": 1},
+            "signature": {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"},
+            "tool": {"type": "string", "minLength": 1},
+            "facts": {"type": "object", "additionalProperties": {"type": "string"}},
+            "targets": {"type": "array", "items": {"type": "string"}},
             # ADR-P05: a diff review's card, and the choice a rejected review raises (S4).
             "old": _REF_TEXT,
             "revision": _REF_TEXT,
@@ -832,7 +883,11 @@ INTERRUPT_RAISED = EventTypeSpec(
             {
                 "if": {"properties": {"kind": {"const": "review"}}, "required": ["kind"]},
                 "then": {"required": ["old", "revision", "card_hash", "hunks"]},
-            }
+            },
+            {
+                "if": {"properties": {"kind": {"const": "approval"}}, "required": ["kind"]},
+                "then": {"required": ["approval", "signature"]},
+            },
         ],
     },
     writer="interrupts",
@@ -843,10 +898,19 @@ INTERRUPT_RESOLVED = EventTypeSpec(
     name="interrupt.resolved",
     schema={
         "type": "object",
-        "properties": {"interrupt": {"type": "string", "minLength": 1}},
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            # ADR-P17 D4: who answered, the answer per question ID (S2), or the decision.
+            "by": {"type": "string", "minLength": 1},
+            "answers": {"type": "object", "additionalProperties": {"type": "string"}},
+            "decision": {"enum": ["granted", "rejected"]},
+        },
         "required": ["interrupt"],
     },
     writer="session",
+    # No dedup key: a budget interrupt's ID is unique only within its run. The answer
+    # command refuses a closed interrupt ``already_decided``, and every kind-specific
+    # decision fact carries its own key (``decide:``, ``review:``, ``bgrant:``).
     boundaries=frozenset({"U4"}),
 )
 REVIEW_ACCEPTED = EventTypeSpec(
@@ -881,11 +945,69 @@ APPROVAL_REQUESTED = EventTypeSpec(
             "approval": {"type": "string", "minLength": 1},
             "targets": {"type": "array", "items": _REF_TEXT},
             "replaces": {"type": "string", "minLength": 1},
+            # ADR-P17 D5, D6: the generic action body and its approval signature.
+            "body": _ACTION_BODY,
+            "signature": _SIGNATURE,
         },
-        "required": ["approval"],
+        "required": ["approval", "body", "signature"],
     },
     writer="interrupts",
     boundaries=frozenset({"U2", "U4"}),
+)
+
+# --- P17 interrupts and approvals (``interrupts/``) --------------------------------------
+# A person's decision on an approval commits with its command (U4) under ``decide:``, so a
+# second decision is ``already_decided``. ``approval.voided`` is the runtime's: an edit
+# (U4) or a withdrawn key (U3, S3). ``approval.revoked`` is invalidation's (above).
+
+APPROVAL_GRANTED = EventTypeSpec(
+    name="approval.granted",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "signature": _SIGNATURE,
+            "by": {"type": "string", "minLength": 1},
+            "targets": {"type": "array", "items": _REF_TEXT},
+        },
+        "required": ["approval", "signature", "by", "targets"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="decide:{approval}",
+)
+APPROVAL_REJECTED = EventTypeSpec(
+    name="approval.rejected",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "signature": _SIGNATURE,
+            "by": {"type": "string", "minLength": 1},
+            "note": {"type": "string"},
+        },
+        "required": ["approval", "signature", "by"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="decide:{approval}",
+)
+APPROVAL_VOIDED = EventTypeSpec(
+    name="approval.voided",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "reason": {"enum": ["replaced_by_edit", "key_withdrawn", "superseded"]},
+        },
+        "required": ["approval", "reason"],
+        "additionalProperties": False,
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U3", "U4"}),
+    dedup_key="avoid:{approval}",
 )
 
 # --- P15 Task model and scheduler (``tasks/``) ------------------------------------------
@@ -1045,6 +1167,9 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     REVIEW_ACCEPTED,
     REVIEW_REJECTED,
     APPROVAL_REQUESTED,
+    APPROVAL_GRANTED,
+    APPROVAL_REJECTED,
+    APPROVAL_VOIDED,
     TASK_ENTERED,
     TASK_WITHDRAWN,
     COMPLETION_CHECK_EVALUATED,

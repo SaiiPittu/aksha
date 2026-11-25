@@ -25,13 +25,13 @@ from tests.support.events import START
 from tests.support.steps import types
 
 DECIDED = EventTypeSpec(
-    name="approval.granted",
+    name="decision.recorded",
     schema={"type": "object", "properties": {"approval": {"type": "string"}}},
     writer="tests",
     boundaries=frozenset({"U4"}),
     dedup_key="decide:{approval}",
 )
-"""Stands in for ADR-P17's decision event: one decision per pending item (D6)."""
+"""A probe decision event with a decide: key: one decision per pending item (D6)."""
 
 NOTED = EventTypeSpec(
     name="message.noted",
@@ -62,7 +62,7 @@ class Counting:
     def approve(self, command: Command, view: LogView) -> CommandAccepted | CommandRefused:
         self.calls += 1
         approval = str(command.args["approval"])
-        return CommandAccepted((NewEvent("approval.granted", {"approval": approval}),))
+        return CommandAccepted((NewEvent("decision.recorded", {"approval": approval}),))
 
     def refuse(self, command: Command, view: LogView) -> CommandAccepted | CommandRefused:
         self.calls += 1
@@ -144,7 +144,7 @@ def test_two_front_ends_one_decision(store: EventStore) -> None:
     second = dispatch(store, cli, spec)
     assert first.accepted and first.refused is None
     assert (second.accepted, second.refused, second.duplicate) == (False, "already_decided", False)
-    assert types(store) == ["command.accepted", "approval.granted", "command.refused"]
+    assert types(store) == ["command.accepted", "decision.recorded", "command.refused"]
     refused = list(store.read("o"))[-1]
     assert (refused.dedup_key, refused.payload["code"]) == ("cmd:o/cli-1", "already_decided")
     assert dispatch(store, cli, spec).duplicate  # the refusal is the receipt of cli-1

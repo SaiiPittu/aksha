@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from aksha.runtime.artifacts.types import WriterId
+from aksha.runtime.interrupts.approvals import approvals
 from aksha.runtime.tasks.errors import TaskUnknown
 from aksha.runtime.tasks.keys import keys_listed_fact
 from aksha.runtime.tasks.scheduler import (
@@ -25,6 +26,7 @@ from aksha.runtime.tasks.scheduler import (
 from aksha.runtime.tasks.status import instance_status
 from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.tasks.types import InstanceRef, Read, Task, source_keys
+from tests.support.approvals import requested
 from tests.support.tasks import (
     AGENT,
     TaskLog,
@@ -221,6 +223,25 @@ def test_key_withdrawn_voids_pending() -> None:
     assert "C1" not in "".join(ids(runnable(log.view(), tree, RUN)))
     log.select("C1", "C2")  # S3: the key returns, and the instance is new again
     assert instance_status(log.view(), tree, ref("extract", "C1")) == "new"
+
+
+def test_key_withdrawn_voids_its_approvals() -> None:
+    """ADR-P17 S3: a withdrawn key's requested approval is voided in the same transaction."""
+    tree, log = demo_tree(), TaskLog()
+    log.pop("scope")
+    log.select("C1", "C2")
+    log.commit(schedule(log.view(), tree, RUN).facts)
+    for fact in requested("A-0001", RUN, instance="extract[C1]"):
+        log.add(fact.type, fact.payload, run=fact.run, instance=fact.instance)
+    log.select("C2")
+    facts = withdrawals(log.view(), tree, RUN)
+    assert [(f.type, f.payload["reason"]) for f in facts] == [
+        ("task.withdrawn", "key_withdrawn"),
+        ("interrupt.voided", "key_withdrawn"),
+        ("approval.voided", "key_withdrawn"),
+    ]
+    log.commit(facts)
+    assert approvals(log.view())["A-0001"].state == "voided"
 
 
 def test_reentry_by_writer_key_resets_a_blocked_instance() -> None:

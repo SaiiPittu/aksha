@@ -14,11 +14,12 @@ an ``InstanceRef``  its run's hold, or an open interrupt raised by that instance
 ``RunScope``        a pending stop request, or an open run-scoped interrupt (the
                     budget interrupt); never one instance's interrupt
 ``AgentScope``      a person's standing stop (``stopped_by_person``) only
+``SessionScope``    an open session-scoped interrupt (the request router's
+                    ``route`` question, ADR-P17 S5): no run opens for the message
 ==================  ===========================================================
 
 So an approval pending on one instance parks that instance; the run's other instances,
-and writers upstream of it, go on. A session scope (the request router's ``route``
-interrupt, ADR-P23) is not built.
+and writers upstream of it, go on.
 
 ``held_auto_starts`` is ``inv.no_auto_start_while_held``: it walks a whole log and returns
 every automatic start recorded while its scope was held, by a stop (``cancellation``) or by
@@ -42,10 +43,10 @@ from aksha.runtime.invalidation.types import RebuildEntry
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
 from aksha.runtime.projections.view import LogView
-from aksha.runtime.stop_policy.types import AgentScope, Hold, RunScope
+from aksha.runtime.stop_policy.types import AgentScope, Hold, RunScope, SessionScope
 from aksha.runtime.tasks.types import InstanceRef
 
-HoldScope = InstanceRef | RunScope | AgentScope
+HoldScope = InstanceRef | RunScope | AgentScope | SessionScope
 """What may be held (S1)."""
 
 INTERRUPT_OPEN: Final = "interrupt_open"
@@ -56,13 +57,21 @@ class _Open:
     """Open interrupts while walking a log once: (run, instance or None) to (id, seq)."""
 
     raised: dict[str, tuple[str, str | None, int]] = field(default_factory=dict)
+    sessions: dict[str, tuple[str, int]] = field(default_factory=dict)
 
     def apply(self, e: Event) -> None:
+        ident = str(e.payload.get("interrupt", e.step or ""))
         if e.type == INTERRUPT_RAISED and e.run is not None:
-            ident = str(e.payload.get("interrupt", e.step or ""))
             self.raised[ident] = (e.run, e.instance, e.seq)
+        elif e.type == INTERRUPT_RAISED and e.session is not None:
+            self.sessions[ident] = (e.session, e.seq)
         elif e.type in CLOSING:
-            self.raised.pop(str(e.payload.get("interrupt", e.step or "")), None)
+            self.raised.pop(ident, None)
+            self.sessions.pop(ident, None)
+
+    def in_session(self, session: str) -> int | None:
+        found = [seq for s, seq in self.sessions.values() if s == session]
+        return min(found) if found else None
 
     def first(self, run: str, instance: str | None) -> tuple[str, int] | None:
         found = [(seq, i) for i, (r, at, seq) in self.raised.items() if (r, at) == (run, instance)]
@@ -92,6 +101,9 @@ def hold_reason(view: LogView, scope: HoldScope) -> Hold | None:
     if isinstance(scope, AgentScope):
         held = stop_hold(view, agent=scope.agent)
         return None if held is None else Hold(held.reason, held.by, scope.agent)
+    if isinstance(scope, SessionScope):
+        seq = _open_interrupts(view).in_session(scope.session)
+        return None if seq is None else Hold(INTERRUPT_OPEN, seq, scope.session)
     run = scope.run
     pending = pending_stop(view, run)
     if pending is not None:

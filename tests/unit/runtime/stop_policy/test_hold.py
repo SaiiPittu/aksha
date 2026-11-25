@@ -8,7 +8,13 @@ from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.invalidation.types import RebuildEntry
 from aksha.runtime.stop_policy import hold as holds
 from aksha.runtime.stop_policy.hold import held_auto_starts, hold_reason, rebuild_blocked
-from aksha.runtime.stop_policy.types import AgentScope, Hold, RunScope, StopCandidate
+from aksha.runtime.stop_policy.types import (
+    AgentScope,
+    Hold,
+    RunScope,
+    SessionScope,
+    StopCandidate,
+)
 from aksha.runtime.tasks.types import InstanceRef
 from tests.support.budgets import RUN
 from tests.support.stop import decide, drive_stop, obedient_stop
@@ -40,6 +46,20 @@ def test_an_instance_is_held_by_its_own_open_interrupt() -> None:
     assert hold_reason(view, ref("extract", "B")) is None
     log.resolve("I-0001")
     assert hold_reason(log.view(), ref("extract", "A")) is None
+
+
+def test_a_route_question_holds_only_its_session() -> None:
+    """ADR-P17 S5: an open ``route`` holds the session's intake; no run or agent is held."""
+    log = _log()
+    raised = {"interrupt": "I-0009", "kind": "route", "options": ["a", "b"]}
+    seq = log.add("interrupt.raised", raised, run=None, session="S-1").seq
+    view = log.view()
+    assert hold_reason(view, SessionScope("S-1")) == Hold("interrupt_open", seq, "S-1")
+    assert hold_reason(view, SessionScope("S-2")) is None
+    assert hold_reason(view, RunScope(RUN)) is None
+    assert hold_reason(view, AgentScope("a")) is None
+    log.add("interrupt.resolved", {"interrupt": "I-0009", "by": "p"}, run=None, session="S-1")
+    assert hold_reason(log.view(), SessionScope("S-1")) is None
 
 
 def test_s1_one_instance_interrupt_holds_neither_the_run_nor_the_agent() -> None:

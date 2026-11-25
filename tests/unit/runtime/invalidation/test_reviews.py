@@ -128,8 +128,19 @@ def test_accept_requests_never_grants(stale: Bench) -> None:
     before = stale.types().count("approval.granted")
     assert accept_review(stale.store, OWNER, "I-0001", card, stale.ids).accepted
     assert stale.types().count("approval.granted") == before
-    (req,) = [e for e in stale.events() if e.type == "approval.requested"]
+    (req,) = [
+        e for e in stale.events() if e.type == "approval.requested" and "replaces" in e.payload
+    ]
     assert req.payload["targets"] == ("p.packet/C1@v2",) and req.payload["replaces"] == "A-0001"
+    # ADR-P17 D7: the fresh request is a whole approval: a body, a new signature, its interrupt.
+    from aksha.runtime.interrupts.approvals import approvals as approval_views
+    from aksha.runtime.interrupts.reducers import interrupts
+
+    views = approval_views(stale.view())
+    fresh = views[str(req.payload["approval"])]
+    assert fresh.state == "requested" and fresh.signature != views["A-0001"].signature
+    assert fresh.body.targets[0][0] == "p.packet/C1@v2"
+    assert interrupts(stale.view())[fresh.approval_id].kind == "approval"
     again = accept_review(stale.store, OWNER, "I-0001", card, stale.ids, command_id="other")
     assert again.refused == REVIEW_NOT_OPEN  # one decision per review
 

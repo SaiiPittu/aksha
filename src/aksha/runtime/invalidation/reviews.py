@@ -10,7 +10,7 @@ invalidation reads ``approval.granted`` by name (its targets are artifact refs) 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -105,10 +105,15 @@ class ApprovalRecord:
     targets: tuple[str, ...]
     seq: int
     revoked: bool = False
+    used: bool = False
 
 
 def approvals(view: LogView) -> tuple[ApprovalRecord, ...]:
-    """Every granted approval, in grant order, with its revocation."""
+    """Every granted approval, in grant order, with its revocation and use.
+
+    An approval is used once an outbox entry names it (``outbox.enqueued{approval_id}``);
+    a used approval is never revoked (ADR-P17 D7).
+    """
     granted: dict[str, ApprovalRecord] = {}
     for e in view.events:
         p = e.payload
@@ -117,7 +122,10 @@ def approvals(view: LogView) -> tuple[ApprovalRecord, ...]:
             granted[ident] = ApprovalRecord(ident, _targets(p), e.seq)
         elif e.type == "approval.revoked" and str(p["approval"]) in granted:
             r = granted[str(p["approval"])]
-            granted[r.approval] = ApprovalRecord(r.approval, r.targets, r.seq, revoked=True)
+            granted[r.approval] = replace(r, revoked=True)
+        elif e.type == "outbox.enqueued" and str(p.get("approval_id")) in granted:
+            r = granted[str(p["approval_id"])]
+            granted[r.approval] = replace(r, used=True)
     return tuple(granted.values())
 
 

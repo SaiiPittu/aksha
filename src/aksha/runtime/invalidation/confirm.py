@@ -73,10 +73,10 @@ def confirmations(
 
 
 def revocations(view: LogView, iv: InvalidationView) -> tuple[NewEvent, ...]:
-    """``approval.revoked`` for each live approval with an invalidated target."""
+    """``approval.revoked`` for each live approval with an invalidated target; never a used one."""
     out: list[NewEvent] = []
     for a in approvals(view):
-        if a.revoked:
+        if a.revoked or a.used:
             continue
         for target in a.targets:
             state = iv.versions.get(target)

@@ -10,9 +10,11 @@ retry returns the first receipt.
    applied the change set to its source adapter (a fixture world's per-owner overlay); the
    command reads the adapters and records the facts. Nothing moved: the receipt alone.
 2. ``accept_review`` (U4) records ``review.accepted`` and ``interrupt.resolved``. Where
-   invalidation revoked an approval of the old version, it records ``approval.requested``
-   for the revision, replacing it; it never records ``approval.granted``, which only the
-   person's separate approve does. Refusals: ``review_not_open`` (never raised, or
+   invalidation revoked an approval of the old version, it records a fresh
+   ``approval.requested`` (with its ``interrupt.raised{approval}``) for the revision,
+   replacing it: the revoked body with that target moved to the revision and its content
+   hash, so a new signature (ADR-P17 D7). It never records ``approval.granted``, which only
+   the person's separate approve does. Refusals: ``review_not_open`` (never raised, or
    already closed: decided, or voided because the revision went stale),
    ``card_hash_mismatch`` (the person saw another card), ``revision_invalidated``.
 3. ``reject_review`` (U4) records ``review.rejected`` and ``interrupt.resolved``; the old
@@ -31,6 +33,8 @@ from collections.abc import Iterable
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
+from aksha.runtime.interrupts.approvals import approvals as approval_views
+from aksha.runtime.interrupts.approvals import request_events, retarget
 from aksha.runtime.invalidation.confirm import confirmations
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
 from aksha.runtime.invalidation.reviews import ReviewRecord, approvals, reviews
@@ -157,11 +161,15 @@ def accept_spec(ids: IdSource) -> CommandSpec:
             return review
         events = list(_decision("review.accepted", review))
         old = str(review.old)
+        bodies = approval_views(view)
+        revision = version(view, review.revision)
         for a in approvals(view):
-            if a.revoked and old in a.targets:
-                payload = {"approval": ids.next(view.owner, "A"),
-                           "targets": [str(review.revision)], "replaces": a.approval}  # fmt: skip
-                events.append(NewEvent("approval.requested", payload, run=review.run))
+            held = bodies.get(a.approval)
+            if not a.revoked or old not in a.targets or held is None or revision is None:
+                continue
+            body = retarget(held.body, old, str(review.revision), revision.content_hash)
+            events.extend(request_events(ids.next(view.owner, "A"), body, run=held.run,
+                                         instance=held.instance, replaces=a.approval))  # fmt: skip
         return CommandAccepted((*events, *confirmations(view, events)))
 
     return CommandSpec("accept_review", DECISION_BOUNDARY, decide)

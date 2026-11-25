@@ -28,9 +28,13 @@ from aksha.runtime.artifacts.types import (
     SaveRequest,
     WriterId,
 )
-from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue, EventTypeSpec
+from aksha.runtime.artifacts.versions import version
+from aksha.runtime.canonical import canonical_json
+from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.ids import LogIdSource
+from aksha.runtime.interrupts.approvals import approval_signature, request_events
+from aksha.runtime.interrupts.types import ActionBody
 from aksha.runtime.invalidation.confirm import confirmations
 from aksha.runtime.invalidation.revision import diff_review, review_raised
 from aksha.runtime.invalidation.types import DiffReview
@@ -42,23 +46,10 @@ from tests.support.events import START, TEST_TYPES
 OWNER = "o1"
 OBJECT: Mapping[str, Any] = {"type": "object"}
 
-APPROVAL_GRANTED = EventTypeSpec(
-    name="approval.granted",
-    schema={
-        "type": "object",
-        "properties": {"approval": {"type": "string"}, "targets": {"type": "array"}},
-        "required": ["approval", "targets"],
-    },
-    writer="tests",
-    boundaries=frozenset({"U4"}),
-    dedup_key="decide:{approval}",
-)
-"""Stands in for ADR-P17's decision: a person approved an action on ``targets``."""
-
 
 def catalogue() -> Catalogue:
-    """The core catalogue, the probe types and the approval stand-in."""
-    return Catalogue((*CORE_EVENT_TYPES, *TEST_TYPES, APPROVAL_GRANTED))
+    """The core catalogue and the probe types."""
+    return Catalogue((*CORE_EVENT_TYPES, *TEST_TYPES))
 
 
 def kind(name: str, **kw: Any) -> ArtifactKind:
@@ -229,9 +220,28 @@ class Bench:
             run=run, instance=instance,
         )  # fmt: skip
 
-    def approve(self, approval: str, *targets: str) -> None:
-        body = {"approval": approval, "targets": list(targets)}
-        self.store.append(self.owner, "U4", (NewEvent("approval.granted", body),))
+    def approve(self, approval: str, *targets: str, run: str = "R-0001") -> None:
+        """Request and grant ``approval`` for a send acting on ``targets`` (ADR-P17 facts)."""
+        view = self.view()
+        hashes = []
+        for t in targets:
+            found = version(view, ArtifactRef.parse(t))
+            assert found is not None, t
+            hashes.append((t, found.content_hash))
+        body = ActionBody(
+            tool="send",
+            owner=self.owner,
+            canonical_args=canonical_json({"targets": list(targets)}),
+            targets=tuple(hashes),
+            idempotency_key=f"send:{approval}",
+            definition_hash="sha256:" + "0" * 64,
+            facts={},
+        )
+        requested = request_events(approval, body, run=run, instance=None)
+        self.store.append(self.owner, "U4", requested)
+        granted = {"approval": approval, "signature": approval_signature(body), "by": "person",
+                   "targets": list(targets)}  # fmt: skip
+        self.store.append(self.owner, "U4", (NewEvent("approval.granted", granted, run=run),))
 
     def latest(self, slot: str) -> ArtifactVersion | None:
         kind_name, _, key = slot.partition("/")
@@ -275,5 +285,5 @@ def build_demo(b: Bench, run: str = "R-0001") -> None:
         inputs = [ref("p.selection@v1").as_input(), ref(f"p.extract/{c}@v1").as_input()]
         b.save(run, f"p.form/{c}", {"names": ["a"]}, reads=inputs)
         b.save(run, f"p.packet/{c}", {"forms": [c]}, reads=[ref(f"p.form/{c}@v1").as_input()])
-    b.approve("A-0001", "p.packet/C1@v1")
+    b.approve("A-0001", "p.packet/C1@v1", run=run)
     b.end(run)

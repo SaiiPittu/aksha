@@ -96,9 +96,23 @@ _ASK = ToolSpec(
         "type": "object",
         "properties": {
             "question": {"type": "string", "minLength": 1},
+            # ADR-P17 S2: several questions, each answered (and cited) on its own.
+            "questions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "text": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["id", "text"],
+                    "additionalProperties": False,
+                },
+            },
             "options": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["question"],
+        "anyOf": [{"required": ["question"]}, {"required": ["questions"]}],
         "additionalProperties": False,
     },
 )

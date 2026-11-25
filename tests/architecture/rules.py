@@ -605,3 +605,37 @@ def counter_fields(root: Path) -> list[Violation]:
             if held is not None:
                 out.append(Violation(me, held, "a cap is counted from the event store (P14 D1)"))
     return out
+
+
+def headless_reads(root: Path) -> list[Violation]:
+    """Every read of a ``headless`` attribute in the runtime outside ``check``'s call of
+    ``resolve_ask`` (ADR-P11 D12, ``test_no_bypass_path_headless``).
+
+    The flag may be declared (a dataclass field) and passed on; it may be *read* only in
+    ``aksha.runtime.policy.gate.check``, as an argument of ``resolve_ask``.
+    """
+    import ast
+
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime").rglob("*.py")):
+        module = module_name(root, f)
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        allowed: set[int] = set()
+        if module == "aksha.runtime.policy.gate":
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "resolve_ask"
+                ):
+                    allowed.update(id(a) for a in node.args)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "headless"
+                and id(node) not in allowed
+            ):
+                out.append(
+                    Violation(module, f"line {node.lineno}", "headless read outside resolve_ask")
+                )
+    return out

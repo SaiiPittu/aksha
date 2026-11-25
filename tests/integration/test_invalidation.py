@@ -147,14 +147,17 @@ def test_s6_change_and_recovery(bench: Bench) -> None:
            reads=[ref("p.form/C1@v2").as_input()], review="I-0002")  # fmt: skip
     (card,) = open_reviews(b.view()).values()
     assert accept_review(b.store, OWNER, "I-0002", card.card_hash, b.ids).accepted
-    requested = [e for e in b.events() if e.type == "approval.requested"]
+    requested = [
+        e for e in b.events() if e.type == "approval.requested" and "replaces" in e.payload
+    ]
     assert [(e.payload["targets"], e.payload["replaces"]) for e in requested] == [
         (("p.packet/C1@v2",), "A-0001")
     ]
     types = b.types()
     assert "approval.granted" not in types[types.index("source.changed") :]
     assert not [t for t in types if t.startswith("outbox.")]  # zero sends
-    raised = [e.payload["old"] for e in b.events() if e.type == "interrupt.raised"]
+    raised = [e.payload["old"] for e in b.events()
+              if e.type == "interrupt.raised" and e.payload.get("kind") == "review"]  # fmt: skip
     assert raised == ["p.selection@v1", "p.packet/C1@v1"]  # selection card before packet card
     iv = b.iv()
     assert iv.refs("invalidated") == () and iv.refs("dirty") == ()

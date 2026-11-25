@@ -33,12 +33,13 @@ class Log:
         run: str | None = RUN,
         instance: str | None = None,
         step: str | None = None,
+        session: str | None = None,
         at_s: float | None = None,
     ) -> Event:
         seq = len(self.events) + 1
         moment = START + timedelta(seconds=seq if at_s is None else at_s)
         event = Event(
-            type_, dict(payload or {}), run=run, instance=instance, step=step,
+            type_, dict(payload or {}), run=run, instance=instance, step=step, session=session,
             seq=seq, owner=self.owner, at=iso_utc(moment), boot=1, schema_version=1,
         )  # fmt: skip
         self.events.append(event)
