@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from jsonschema import Draft202012Validator, SchemaError
 
+from aksha.runtime.artifacts.types import PROVENANCE_RELATIONS
 from aksha.runtime.definitions.errors import LoadRefusal, Refusals
 from aksha.runtime.definitions.names import is_local_name, qualify, resolve_kind
 from aksha.runtime.definitions.tree_checks import (
@@ -127,6 +128,9 @@ def _relations(agent: Agent, out: Refusals, known: set[str]) -> None:
     out.items += name_refusals(out.module, "relations", [r.name for r in agent.relations])
     local = {agent.name, *agent.extensions}
     for rel in agent.relations:
+        if rel.name in PROVENANCE_RELATIONS:
+            message = f"relation {rel.name!r} is lineage, which only the runtime records"
+            out.add("relations", "provenance_relation_forbidden", message)
         for end in (*rel.src, *rel.dst):
             full = resolve_kind(end, agent.name)
             if full.startswith("record:"):

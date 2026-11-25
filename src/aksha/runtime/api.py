@@ -12,7 +12,8 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``Extension.event_types``; the loader registers them, so there is no register call.
 3. Tasks (P15): ``Task``, ``Read``, ``KeySource``, ``source_keys``, ``artifact_keys``,
    ``FromField``, ``from_field``, ``Check``, ``CheckResult``.
-4. Artifacts (P04): ``ArtifactKind``, ``RelationKind``, ``SaveRequest``.
+4. Artifacts (P04): ``ArtifactKind``, ``RelationKind``, ``SaveRequest``, and what a save
+   names: ``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``, ``SELF``.
 5. Tools (P10): ``ToolSpec``, ``ToolDecl``, ``ToolUse``, ``ToolBody``, ``RetryPolicy``,
    ``EffectClass``; what a body sees and returns: ``ToolContext``, ``ToolOutcome``, ``Ok``,
    ``Err``. A tool spec's parts owned elsewhere: ``EffectSpec`` (P03), ``ApprovalRule``
@@ -28,7 +29,16 @@ What an agent or extension declares, grouped by the primitive that owns it:
 
 from __future__ import annotations
 
-from aksha.runtime.artifacts.types import ArtifactKind, RelationKind, SaveRequest
+from aksha.runtime.artifacts.types import (
+    SELF,
+    ArtifactKind,
+    ArtifactRef,
+    Excerpt,
+    InputRef,
+    RelationKind,
+    RelationRequest,
+    SaveRequest,
+)
 from aksha.runtime.budgets.types import Backoff, Budget, Limits
 from aksha.runtime.context.types import ContextPolicy, SummaryPolicy
 from aksha.runtime.definitions.types import Agent, Extension, Projection
@@ -75,9 +85,11 @@ from aksha.runtime.tools.types import (
 
 __all__ = [
     "API_VERSION",
+    "SELF",
     "Agent",
     "ApprovalRule",
     "ArtifactKind",
+    "ArtifactRef",
     "ArtifactsView",
     "Backoff",
     "Budget",
@@ -92,10 +104,12 @@ __all__ = [
     "Err",
     "Event",
     "EventTypeSpec",
+    "Excerpt",
     "Extension",
     "ForcedTool",
     "FromField",
     "Goal",
+    "InputRef",
     "KeySource",
     "Limits",
     "LogView",
@@ -109,6 +123,7 @@ __all__ = [
     "Read",
     "Reducer",
     "RelationKind",
+    "RelationRequest",
     "RetryPolicy",
     "SandboxBackendSpec",
     "SandboxNeeds",

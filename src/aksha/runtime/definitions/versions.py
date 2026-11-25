@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "1.1"
+API_VERSION = "1.2"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
-``LogView.complete`` (both trailing fields with defaults).
+``LogView.complete`` (both trailing fields with defaults). 1.2 added the artifact store's
+names a save uses (``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``,
+``SELF``) and ``SaveRequest.primary_inputs`` and ``SaveRequest.relations`` (ADR-P04).
 """
 
 Version = tuple[int, int]

@@ -112,6 +112,14 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         "relations",
         lambda a: replace(a, relations=(RelationKind("r", src=("line",), dst=("record:other",)),)),
     ),
+    (
+        "provenance_relation_forbidden",
+        None,
+        "relations",
+        lambda a: replace(
+            a, relations=(RelationKind("derived_from", src=("line",), dst=("line",)),)
+        ),
+    ),
     ("unknown_tool", None, "tools", lambda a: replace(a, tools=(*a.tools, ToolUse("nope")))),
     (
         "duplicate_tool",

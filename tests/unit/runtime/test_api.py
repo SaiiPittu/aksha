@@ -13,4 +13,9 @@ def test_api_keeps_the_event_store_names() -> None:
 
 
 def test_api_version_is_major_minor() -> None:
-    assert parse_version(api.API_VERSION) == (1, 1)
+    assert parse_version(api.API_VERSION) == (1, 2)
+
+
+def test_api_exports_what_a_save_names() -> None:
+    for name in ("ArtifactRef", "InputRef", "RelationRequest", "Excerpt", "SELF", "SaveRequest"):
+        assert name in api.__all__

@@ -70,6 +70,8 @@ from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any
 
+from aksha.runtime.artifacts.blobs import inflate, offload_events
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.budgets.limits import ATTEMPT_TYPES, next_attempt
 from aksha.runtime.cancellation.kill import kill_boundary
 from aksha.runtime.cancellation.ports import KillableUnit
@@ -136,12 +138,16 @@ class StepExecutor:
         kill: KillPolicy = DEFAULT_KILL,
         stop_poll_ms: int = 50,
         outbox: OutboxWorker | None = None,
+        blobs: BlobStore | None = None,
     ) -> None:
         """Record ``owner``'s steps in ``store`` (a writer), timing them on ``clock``.
 
         ``kill`` bounds the kill boundary; ``stop_poll_ms`` is how often a running step
         with a unit reads the stop requests; ``outbox`` is the owner's outbox worker,
-        which :meth:`effect_step` needs.
+        which :meth:`effect_step` needs. With ``blobs``, a step result whose payloads are
+        over the 64 KiB cap has its largest values moved to the blob store (decision 25),
+        and a recorded value is read back whole; without it such a result is refused
+        ``payload_too_large``.
         """
         if stop_poll_ms <= 0:
             raise ValueError("stop_poll_ms is positive")
@@ -153,6 +159,7 @@ class StepExecutor:
         if outbox is not None and outbox.owner != owner:
             raise ValueError(f"the outbox worker runs {outbox.owner}'s entries, not {owner}'s")
         self._outbox = outbox
+        self._blobs = blobs
         self._late: queue.SimpleQueue[_Attempt] = queue.SimpleQueue()
 
     def step(
@@ -183,7 +190,7 @@ class StepExecutor:
             _check_same(started, sid, kind, name, args_hash)
         done = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         if done is not None:
-            return _recorded(step_id, done)
+            return self._recorded(step_id, done)
         stopped = self._stop_pending(step_id.run)
         if started is None:
             if stopped:
@@ -230,7 +237,7 @@ class StepExecutor:
             _check_same(started, sid, "tool", name, hashed)
         done = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         if done is not None:
-            return _recorded(step_id, done)
+            return self._recorded(step_id, done)
         if started is not None:
             key = started.payload.get("outbox_key")
             if not isinstance(key, str):  # refused before its entry: the refusal is re-judged
@@ -255,7 +262,7 @@ class StepExecutor:
         entry = worker.finish(key)
         done = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         if done is not None:
-            return _recorded(step_id, done, replayed=False)
+            return self._recorded(step_id, done, replayed=False)
         if entry is None or entry.state in ("enqueued", "dispatched"):
             raise EffectNeedsOutbox(message=f"{step_id}: entry {key} is held by another worker")
         # The entry is another step's or a command's (an equal request): end with its outcome.
@@ -263,7 +270,7 @@ class StepExecutor:
             self._append(facts.STEP_RESULT, ended_step_result(entry, step_id))
         stored = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         assert stored is not None
-        return _recorded(step_id, stored, replayed=False)
+        return self._recorded(step_id, stored, replayed=False)
 
     def drain_late(self) -> int:
         """Record ``attempt.discarded`` for every abandoned attempt that has since returned."""
@@ -305,7 +312,7 @@ class StepExecutor:
                     attempts=int(dispatched.payload["attempt"]),
                 )  # fmt: skip
                 (stored,) = self._append(facts.STEP_RESULT, facts.unknown_completion(dangling))
-                return _recorded(step_id, stored, replayed=False)
+                return self._recorded(step_id, stored, replayed=False)
             if not stopped:
                 return None  # the body never started: running it is its first run
             outcome = SKIPPED  # the body never started, and now it never will
@@ -316,7 +323,7 @@ class StepExecutor:
         closed = facts.step_completed(step_id, kind, name, outcome, attempts=attempt - 1,
                                       code=RUN_STOPPED)  # fmt: skip
         (stored,) = self._append(facts.STEP_RESULT, closed)
-        return _recorded(step_id, stored, replayed=False)
+        return self._recorded(step_id, stored, replayed=False)
 
     def _refused_effect(
         self,
@@ -345,7 +352,7 @@ class StepExecutor:
     def _error(self, step_id: StepId, name: str, code: str) -> StepResult:
         event = facts.step_completed(step_id, "tool", name, "error", attempts=0, code=code)
         (stored,) = self._append(facts.STEP_RESULT, event)
-        return _recorded(step_id, stored, replayed=False)
+        return self._recorded(step_id, stored, replayed=False)
 
     def _run(
         self,
@@ -373,7 +380,7 @@ class StepExecutor:
                     on_unknown=policy.on_unknown if effects else None,
                 )  # fmt: skip
                 (stored,) = self._append(facts.STEP_RESULT, event)
-                return _recorded(step_id, stored, replayed=False)
+                return self._recorded(step_id, stored, replayed=False)
             if kill is not None:  # an exec timeout: the unit was ended, never retried
                 failed = facts.step_failed(
                     step_id, attempt, code, retried=False, backoff_ms=0, duration_ms=spent
@@ -389,7 +396,7 @@ class StepExecutor:
                     event = facts.step_completed(step_id, kind, name, "error", attempts=attempt,
                                                  code=code, duration_ms=0, kill=kill)  # fmt: skip
                 (stored,) = self._append(facts.STEP_RESULT, event)
-                return _recorded(step_id, stored, replayed=False)
+                return self._recorded(step_id, stored, replayed=False)
             if output is not None:
                 return self._complete(step_id, kind, name, output, attempt, duration_ms=spent)
             if once and code == TIMEOUT:
@@ -398,7 +405,7 @@ class StepExecutor:
                     code=OUTCOME_UNKNOWN, on_unknown=policy.on_unknown, duration_ms=spent,
                 )  # fmt: skip
                 (stored,) = self._append(facts.STEP_RESULT, event)
-                return _recorded(step_id, stored, replayed=False)
+                return self._recorded(step_id, stored, replayed=False)
             retryable = not once and unit is None and code in policy.retry_on
             retried = retryable and attempt <= policy.max_retries
             backoff = policy.delay_ms(attempt) if retried else 0
@@ -411,7 +418,7 @@ class StepExecutor:
                     step_id, kind, name, "error", attempts=attempt, code=code, duration_ms=0
                 )
                 (stored,) = self._append(facts.STEP_RESULT, event)
-                return _recorded(step_id, stored, replayed=False)
+                return self._recorded(step_id, stored, replayed=False)
             self._clock.sleep(backoff / 1000)
             attempt += 1
 
@@ -511,7 +518,7 @@ class StepExecutor:
         """Record a step a pending stop keeps from starting (ADR-P18 D5)."""
         event = facts.step_completed(step_id, kind, name, SKIPPED, attempts=0, code=RUN_STOPPED)
         (stored,) = self._append(facts.STEP_RESULT, event)
-        return _recorded(step_id, stored, replayed=False)
+        return self._recorded(step_id, stored, replayed=False)
 
     def _complete(
         self,
@@ -529,15 +536,22 @@ class StepExecutor:
             code=output.code, reconciled=reconciled, duration_ms=duration_ms,
             usage=output.usage,
         )  # fmt: skip
-        stored = self._store.append(
-            self._owner, facts.STEP_RESULT, (*output.events, event), output.artifacts
-        )
-        return _recorded(step_id, stored[-1], replayed=False)
+        events = (*output.events, event)
+        if self._blobs is not None:
+            events = offload_events(self._store.catalogue, self._blobs, events)
+        stored = self._store.append(self._owner, facts.STEP_RESULT, events, output.artifacts)
+        return self._recorded(step_id, stored[-1], replayed=False)
 
     def _next_attempt(self, step_id: StepId) -> int:
         """One more than the highest attempt recorded for the step (failed or discarded)."""
         events = self._store.read(self._owner, run=step_id.run, types=ATTEMPT_TYPES)
         return next_attempt(events, str(step_id))
+
+    def _recorded(self, step_id: StepId, event: Event, *, replayed: bool = True) -> StepResult:
+        """The result ``event`` records, its value read back whole from any blob stub."""
+        if self._blobs is not None:
+            event = replace(event, payload=inflate(event.payload, self._blobs))
+        return _recorded(step_id, event, replayed=replayed)
 
     def _append(self, boundary: str, event: Any) -> tuple[Event, ...]:
         return self._store.append(self._owner, boundary, (event,))

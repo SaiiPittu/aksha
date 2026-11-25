@@ -40,9 +40,9 @@ _ALL = (
         "U2",
         "step_result",
         "execution",
-        "step.completed with the result's facts: artifact rows and artifact.saved, "
-        "relations, an interrupt.raised or an approval request; for an effectful tool "
-        "call, the outbox.completed or outbox.abandoned it ends with",
+        "step.completed with the result's facts: read.recorded, artifact rows and "
+        "artifact.saved, relation.saved, an interrupt.raised or an approval request; for an "
+        "effectful tool call, the outbox.completed or outbox.abandoned it ends with",
     ),
     Boundary(
         "U3",

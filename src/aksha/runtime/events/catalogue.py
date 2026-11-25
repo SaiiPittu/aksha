@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError
+from jsonschema.exceptions import SchemaError, ValidationError
 
 from aksha.runtime.canonical import NotCanonical, canonical_bytes, canonical_json, nul_path
 from aksha.runtime.errors import AkshaError
@@ -40,6 +40,7 @@ from aksha.runtime.events.errors import (
     PayloadTooLarge,
     UnknownEventType,
 )
+from aksha.runtime.events.stubs import Path, stub_paths, under
 
 PAYLOAD_CAP_BYTES = 64 * 1024
 """The largest payload, in bytes of canonical JSON (ADR-P01 D7; a placeholder to measure)."""
@@ -125,6 +126,22 @@ RUN_ENDED = EventTypeSpec(
     boundaries=frozenset({"U3"}),
     dedup_key="rend:{run}",
 )
+_HASH = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+
+# ADR-P04: one lineage input, as ``aksha.runtime.artifacts.types.InputRef.as_json`` writes it.
+INPUT_REF_SCHEMA: Mapping[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {"enum": ["record", "query", "statement", "artifact", "blob"]},
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "path": {"type": "string"},
+        "entry_hash": _HASH,
+    },
+    "required": ["kind", "id", "version"],
+    "additionalProperties": False,
+}
+
 ARTIFACT_SAVED = EventTypeSpec(
     name="artifact.saved",
     schema={
@@ -134,13 +151,72 @@ ARTIFACT_SAVED = EventTypeSpec(
             "kind": {"type": "string"},
             "key": {"type": ["string", "null"]},
             "version": {"type": "integer", "minimum": 1},
-            "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "content_hash": _HASH,
+            # ADR-P04 D5, D6: written by the artifact store's save path on every save.
+            "canonical_hash": _HASH,
+            "reads": {"type": "array", "items": INPUT_REF_SCHEMA},
+            "reads_hash": _HASH,
+            "primary_inputs": {"type": "array", "items": INPUT_REF_SCHEMA},
+            "writer": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "task_path": {"type": "string", "minLength": 1},
+                    "key": {"type": ["string", "null"]},
+                },
+                "required": ["agent", "task_path", "key"],
+                "additionalProperties": False,
+            },
+            "origin": {"enum": ["task", "derived", "choice", "copy_choice"]},
         },
         "required": ["ref", "kind", "key", "version", "content_hash"],
     },
     writer="artifacts",
     boundaries=frozenset({"U2", "U10"}),
     dedup_key="save:{ref}",
+)
+# --- P04 lineage inputs and typed relations (``artifacts/lineage.py``, ``relations.py``) --
+
+READ_RECORDED = EventTypeSpec(
+    name="read.recorded",
+    schema={
+        "type": "object",
+        "properties": {"input": INPUT_REF_SCHEMA, "via": {"enum": ["context", "tool"]}},
+        "required": ["input", "via"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2"}),
+)
+_EXCERPT = {
+    "type": "object",
+    "properties": {
+        "source": INPUT_REF_SCHEMA,
+        "quote": {"type": "string", "minLength": 1},
+        "pointer": {"type": "string"},
+    },
+    "required": ["source", "quote", "pointer"],
+    "additionalProperties": False,
+}
+RELATION_SAVED = EventTypeSpec(
+    name="relation.saved",
+    schema={
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "minLength": 1},
+            "label": {"type": ["string", "null"]},
+            "src": INPUT_REF_SCHEMA,
+            "dst": INPUT_REF_SCHEMA,
+            "evidence": {"type": "array", "items": _EXCERPT, "minItems": 1},
+            "carrier": {"type": "string", "minLength": 1},
+            "n": {"type": "integer", "minimum": 0},
+        },
+        "required": ["kind", "label", "src", "dst", "evidence", "carrier", "n"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2", "U10"}),
+    dedup_key="rel:{carrier}#{n}",
 )
 RECOVERY_COMPLETED = EventTypeSpec(
     name="recovery.completed",
@@ -549,6 +625,8 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
     ARTIFACT_SAVED,
+    READ_RECORDED,
+    RELATION_SAVED,
     RECOVERY_COMPLETED,
     STEP_STARTED,
     STEP_DISPATCHED,
@@ -690,14 +768,19 @@ class Catalogue:
         if boundary_id not in self.get(name).boundaries:
             raise BoundaryNotAllowed(message=f"{name} may not be appended in {boundary_id}")
 
-    def validate_payload(self, name: str, payload: Mapping[str, Any]) -> str:
+    def validate_payload(
+        self, name: str, payload: Mapping[str, Any], *, cap: int | None = PAYLOAD_CAP_BYTES
+    ) -> str:
         """Check ``payload`` against the cap and the schema of ``name``; return its canonical JSON.
 
-        Raises :class:`PayloadTooLarge` over :data:`PAYLOAD_CAP_BYTES`, and
+        Raises :class:`PayloadTooLarge` over ``cap`` (:data:`PAYLOAD_CAP_BYTES`; None checks
+        no size, which only the blob offload uses before it moves values out), and
         :class:`PayloadInvalid` naming the failing JSON path otherwise, including a string
         that holds NUL, which PostgreSQL cannot store (so both backends refuse it alike),
         and a value outside the hash chain's encoding (a float, an integer beyond plus or
         minus 2**53), which the chain could not hash the same way everywhere (ADR-P01 H3).
+        A blob stub (:mod:`aksha.runtime.events.stubs`) stands for a value checked before
+        it was moved to the blob store, so no schema error at or inside a stub counts.
         """
         self.get(name)
         try:
@@ -712,12 +795,19 @@ class Catalogue:
         except NotCanonical as e:
             raise PayloadInvalid(name, e.path, e.reason) from None
         size = len(text.encode("utf-8"))
-        if size > PAYLOAD_CAP_BYTES:
-            raise PayloadTooLarge(name, size, PAYLOAD_CAP_BYTES)
-        error = next(iter(self._validators[name].iter_errors(payload)), None)
+        if cap is not None and size > cap:
+            raise PayloadTooLarge(name, size, cap)
+        stubs = stub_paths(payload)
+        errors = self._validators[name].iter_errors(payload)
+        error = next((e for e in errors if not _at_stub(e, stubs)), None)
         if error is not None:
             raise PayloadInvalid(name, _json_path(error.absolute_path), error.message)
         return text
+
+    def dedup_fields(self, name: str) -> frozenset[str]:
+        """The fields the dedup-key template of ``name`` reads (empty without a template)."""
+        template = self.get(name).dedup_key
+        return frozenset(_template_fields(template)) if template else frozenset()
 
     def render_dedup_key(
         self, name: str, envelope: Mapping[str, Any], payload: Mapping[str, Any]
@@ -737,3 +827,16 @@ class Catalogue:
                     "dedup_key_field_missing", f"{name}: dedup key needs {field!r} ({template})"
                 )
         return template.format_map(values)
+
+
+def _at_stub(error: ValidationError, stubs: tuple[Path, ...]) -> bool:
+    """Whether ``error`` is only about values a blob stub stands for.
+
+    An error at or inside a stub is; so is a combinator's error (``anyOf``, ``oneOf``)
+    whose every branch failed only at stubs.
+    """
+    if not stubs:
+        return False
+    if under(tuple(error.absolute_path), stubs):
+        return True
+    return bool(error.context) and all(_at_stub(e, stubs) for e in error.context)
