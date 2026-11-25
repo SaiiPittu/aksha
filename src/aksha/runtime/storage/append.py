@@ -192,7 +192,8 @@ def prepare_append(
     Refuses an empty owner or boundary, the system owner outside recovery (and recovery
     outside the system owner), every catalogue refusal, a dedup key repeated within the
     boundary, an artifact row with no ``artifact.saved`` event for its ref or one that
-    event does not describe (:func:`_check_artifact`), NUL in any stored string
+    event does not describe (:func:`_check_artifact`), an ``artifact.saved`` event with
+    no artifact row for its ref (``artifact_row_missing``, H6), NUL in any stored string
     (``nul_in_field``, ``nul_in_content``) and a lone surrogate in the owner or an
     envelope string (``not_canonical_field``), so both backends refuse alike, and before
     either opens a transaction.
@@ -221,4 +222,10 @@ def prepare_append(
             raise ArtifactWithoutEvent(row.ref)
         _check_artifact(row, prepared[saved_at[row.ref]])
         paired.append((saved_at[row.ref], row))
+    rowless = sorted(set(saved_at) - {row.ref for row in artifacts})
+    if rowless:
+        raise StoreError(
+            "artifact_row_missing",
+            f"artifact.saved for {rowless[0]!r} has no artifact row in its boundary",
+        )
     return PreparedBatch(owner, boundary, prepared, tuple(paired))

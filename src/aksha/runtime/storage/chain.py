@@ -212,7 +212,8 @@ def verify_chain(
     the stored one (``hash_mismatch``; ``not_canonical`` if the payload cannot be
     encoded). Then every artifact row saved by that event must match the event's
     ``ref``, ``kind``, ``key``, ``version`` and ``content_hash``, and its content must
-    hash to that ``content_hash`` (``artifact_mismatch``, H6). Then each anchor, oldest
+    hash to that ``content_hash``, and an ``artifact.saved`` event with no row is a break
+    too (``artifact_mismatch``, H6). Then each anchor, oldest
     first: an anchored seq past the head is ``truncated``, and a stored hash that differs
     is ``anchor_mismatch``. Without anchors a truncated tail, or a tail re-hashed by
     someone with write access, still verifies. An anchor of another store, or with a
@@ -240,10 +241,19 @@ def verify_chain(
         if found is not None:
             return _earliest(found, saved_by)
         assert isinstance(link, ChainLink)  # an unreadable link is always a break
-        for artifact in saved_by.pop(link.event.seq, ()):
+        rows = saved_by.pop(link.event.seq, ())
+        for artifact in rows:
             found = _artifact_break(link.event, artifact)
             if found is not None:
                 return found
+        if not rows and link.event.type == "artifact.saved":
+            want = link.event.payload.get("content_hash")
+            return ChainBreak(
+                link.event.seq,
+                "artifact_mismatch",
+                None if want is None else str(want),
+                "no artifact row for this event",
+            )
         seq, prev = link.event.seq, link.hash
         if seq in anchored:
             hashes[seq] = prev

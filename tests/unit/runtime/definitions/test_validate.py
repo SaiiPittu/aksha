@@ -137,6 +137,20 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
             ),
         ),
     ),
+    (
+        "duplicate_name",
+        None,
+        "model_aliases",
+        lambda a: replace(a, model_aliases=(*a.model_aliases, *a.model_aliases)),
+    ),
+    (
+        "duplicate_name",
+        None,
+        "model_aliases",
+        lambda a: replace(
+            a, model_aliases=(*a.model_aliases, ModelAlias("classify.tone", "generation"))
+        ),
+    ),
     ("check_not_callable", None, "completion", lambda a: replace(a, completion=("x",))),  # type: ignore[arg-type]
     ("duplicate_task", None, "tasks", lambda a: replace(a, tasks=(*a.tasks, a.tasks[1]))),
     (

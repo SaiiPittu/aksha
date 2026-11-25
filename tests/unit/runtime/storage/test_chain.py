@@ -263,11 +263,20 @@ def test_an_artifact_row_must_match_its_saved_event() -> None:
 
 def test_an_artifact_row_with_no_event_is_reported_at_its_seq() -> None:
     links, stored = _saved_chain()
-    found = verify_chain(IDENTITY, links, artifacts=[replace(stored, event_seq=5)])
+    found = verify_chain(IDENTITY, links, artifacts=[stored, replace(stored, event_seq=5)])
     assert found == ChainBreak(5, "artifact_mismatch", None, "no event at this seq")
     gap = [links[0], replace(links[1], event=replace(links[1].event, seq=3))]
     found = verify_chain(IDENTITY, gap, artifacts=[stored])
     assert found == ChainBreak(2, "artifact_mismatch", None, "no event at this seq")
+
+
+def test_a_saved_event_with_no_artifact_row_is_a_mismatch() -> None:
+    """H6: a deleted artifact row breaks the chain at its ``artifact.saved`` event."""
+    links, stored = _saved_chain()
+    found = verify_chain(IDENTITY, links, artifacts=[])
+    assert found == ChainBreak(
+        2, "artifact_mismatch", stored.row.content_hash, "no artifact row for this event"
+    )
 
 
 def test_content_hash_uses_the_chain_encoding() -> None:

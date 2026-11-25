@@ -58,6 +58,13 @@ def test_prepare_pairs_every_artifact_row_with_its_saved_event(catalogue: Catalo
     assert e.value.code == "artifact_without_event"
 
 
+def test_prepare_refuses_a_saved_event_with_no_artifact_row(catalogue: Catalogue) -> None:
+    """H6: an ``artifact.saved`` commits with its row; one without a row is refused."""
+    with pytest.raises(StoreError) as e:
+        prepare_append(catalogue, "o1", "U2", [probe(1), saved()], ())
+    assert e.value.code == "artifact_row_missing"
+
+
 def test_system_owner_only_for_recovery(catalogue: Catalogue) -> None:
     with pytest.raises(StoreError) as e:
         prepare_append(catalogue, SYSTEM_OWNER, "U2", [probe(1)], ())

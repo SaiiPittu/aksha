@@ -8,12 +8,13 @@ Small refusals use ``StoreError`` with a code: ``owner_required``, ``empty_bound
 ``system_owner_reserved``, ``store_closed``, ``store_missing``, ``store_unreachable``,
 ``driver_missing``, ``schema_mismatch`` (``storage/schema.py``), ``nul_in_field`` and
 ``nul_in_content``, ``not_canonical_field``, ``not_canonical_content``,
-``content_hash_invalid`` and ``content_hash_mismatch`` (``storage/append.py``),
-``constraint_violated``, ``backend_error``, ``encoding_unsupported`` (the PostgreSQL
-adapter), and for the hash chain ``chain_head_moved``, ``store_id_mismatch``,
-``store_id_invalid``, ``chain_version_unsupported``, ``anchor_store_mismatch``,
-``anchor_invalid`` (``storage/chain.py``), ``anchor_conflict`` and
-``anchor_file_invalid`` (the file anchor sink).
+``content_hash_invalid``, ``content_hash_mismatch`` and ``artifact_row_missing``
+(``storage/append.py``), ``constraint_violated``, ``backend_error``,
+``encoding_unsupported`` (the PostgreSQL adapter), and for the hash chain
+``chain_head_moved``, ``store_id_mismatch``, ``store_id_invalid``,
+``chain_version_unsupported``, ``anchor_store_mismatch``, ``anchor_invalid``
+(``storage/chain.py``), ``anchor_conflict`` and ``anchor_file_invalid`` (the file
+anchor sink).
 """
 
 from __future__ import annotations

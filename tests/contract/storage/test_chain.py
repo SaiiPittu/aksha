@@ -249,6 +249,19 @@ def test_artifact_row_edit_detected(store: EventStore, backend: Backend, edit: s
     assert found.expected == content_hash({"body": "hello"})
 
 
+def test_deleted_artifact_row_detected(store: EventStore, backend: Backend) -> None:
+    """H6: deleting the row an ``artifact.saved`` event committed with breaks verify()."""
+    store.append("o1", "U2", [probe(99)])
+    (event,) = store.append("o1", "U2", [saved()], artifacts=[artifact_row()])
+    _fill(store, 2)
+    assert store.verify() is None
+    backend.tamper("DELETE FROM artifacts")
+    assert store.verify() == ChainBreak(
+        event.seq, "artifact_mismatch", content_hash({"body": "hello"}),
+        "no artifact row for this event",
+    )  # fmt: skip
+
+
 def test_a_store_of_another_chain_version_is_refused(
     backend: Backend, clock: FakeClock, catalogue: Catalogue
 ) -> None:

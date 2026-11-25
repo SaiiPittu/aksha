@@ -184,3 +184,20 @@ def test_core_catalogue_holds_the_step_facts_the_gate_records() -> None:
     assert core.render_dedup_key("step.completed", NewEvent("x", {}, step="s1").context(), {}) == (
         "sdone:s1"
     )
+
+
+def test_catalogue_copies_the_schema_it_registers() -> None:
+    """Mutating the caller's nested schema after registration changes nothing held."""
+    schema: dict[str, object] = {
+        "type": "object",
+        "properties": {"n": {"type": "integer"}},
+        "required": ["n"],
+        "additionalProperties": False,
+    }
+    spec = EventTypeSpec("probe.copied", schema, writer="t", boundaries=frozenset({"U2"}))
+    held = Catalogue([spec])
+    schema["properties"]["n"]["type"] = "string"  # type: ignore[index]
+    schema["required"].append("x")  # type: ignore[attr-defined]
+    assert held.validate_payload("probe.copied", {"n": 1}) == '{"n":1}'
+    with pytest.raises(PayloadInvalid):
+        held.validate_payload("probe.copied", {"n": "1"})

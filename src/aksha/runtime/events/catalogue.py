@@ -20,6 +20,7 @@ How the catalogue grows:
 
 from __future__ import annotations
 
+import copy
 import string
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -238,12 +239,13 @@ class Catalogue:
         prefix = spec.dedup_prefix
         if prefix is not None and (not prefix.endswith(":") or prefix == ":"):
             raise CatalogueError(message=f"{spec.name}: a dedup key starts with a prefix like 'x:'")
+        schema = copy.deepcopy(dict(spec.schema))  # the caller's nested dicts stay theirs
         try:
-            Draft202012Validator.check_schema(dict(spec.schema))
+            Draft202012Validator.check_schema(schema)
         except SchemaError as e:
             raise CatalogueError(message=f"{spec.name}: invalid schema: {e.message}") from None
         self._specs[spec.name] = spec
-        self._validators[spec.name] = Draft202012Validator(dict(spec.schema))
+        self._validators[spec.name] = Draft202012Validator(schema)
 
     def __contains__(self, name: object) -> bool:
         """Whether an event type of this name is held."""

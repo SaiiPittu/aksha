@@ -185,7 +185,8 @@ def _override_refusals(use: ToolUse, out: Refusals) -> None:
 
 def _aliases(agent: Agent, out: Refusals) -> None:
     aliases = {a.name: a for a in agent.model_aliases}
-    out.items += name_refusals(out.module, "model_aliases", list(aliases), local=False)
+    names = [a.name for a in agent.model_aliases]
+    out.items += name_refusals(out.module, "model_aliases", names, local=False)
     for alias in agent.model_aliases:
         if alias.model_class not in MODEL_CLASSES:
             message = f"{alias.name!r}: no model class {alias.model_class!r}"
