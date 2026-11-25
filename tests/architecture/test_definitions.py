@@ -2,21 +2,35 @@
 
 1. ``test_permission_matrix_matches_definitions`` (ADR-P10): the committed matrix of the
    conformance agent is generated from its definition, never hand-edited.
-2. ``test_resume_under_changed_definition_ends_definition_changed`` (ADR-P20): tracked as a
-   strict expected failure until the durable step executor's recovery (ADR-P02) exists.
+2. ``test_resume_under_changed_definition_ends_definition_changed`` (ADR-P20 D7, ADR-P02
+   D6): a run crashed under one definition and restarted under an edited one is ended
+   ``failed, definition_changed`` by recovery on startup, and never driven again.
 """
 
 from __future__ import annotations
 
-import importlib
 import os
 from pathlib import Path
 
 import pytest
 
-from aksha.runtime.definitions.loader import load_agents
+from aksha.adapters.clock.fake import FakeClock
+from aksha.adapters.storage.sqlite import open_store
+from aksha.runtime.definitions.hashing import run_started_fields
+from aksha.runtime.definitions.loader import LoadedDefinition, load_agents
+from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.execution.executor import StepExecutor
+from aksha.runtime.execution.ids import LogIdSource
+from aksha.runtime.execution.ports import DurableStepExecutor
+from aksha.runtime.execution.recovery import recover_on_startup, resume_owner
+from aksha.runtime.execution.types import StepId, StepPolicy
 from aksha.runtime.policy.matrix import matrix
-from tests.support.agents import FIXTURES
+from aksha.runtime.projections.project import rebuild
+from aksha.runtime.projections.runs import RUNS, RunSummary
+from aksha.runtime.projections.view import load_view
+from aksha.runtime.storage.ports import EventStore
+from tests.support.agents import FIXTURES, copy_plugins
+from tests.support.steps import HASH, Crash, Script
 
 MATRIX = Path(__file__).with_name("permission_matrix.md")
 """The conformance agent's permission matrix, as ``matrix(...).markdown()`` prints it."""
@@ -46,11 +60,60 @@ def test_matrix_guard_catches_a_hand_edit() -> None:
     assert edited != _generated()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="needs recovery on startup from the durable step executor (ADR-P02), not built yet",
-)
-def test_resume_under_changed_definition_ends_definition_changed() -> None:
-    """Crash a run, edit a prompt, restart: the run ends ``definition_changed`` (ADR-P20 D7)."""
-    recovery = importlib.import_module("aksha.runtime.execution.recovery")
-    assert callable(recovery.resume_owner)
+def _start(store: EventStore, loaded: LoadedDefinition) -> str:
+    run = LogIdSource(store).next("o", "R")
+    fields = run_started_fields(loaded, runtime_commit="test", dirty=False)
+    payload = {"agent": loaded.agent.name, "cause": "request", **fields}
+    store.append("o", "U1", (NewEvent("run.started", payload, run=run),))
+    return run
+
+
+def _drive(steps: DurableStepExecutor, run: str, script: Script, crash_at: int | None) -> None:
+    for n in (1, 2):
+        work = script.crash(str(n)) if n == crash_at else script.ok(str(n))
+        sid = StepId(run, "collect[N1]", turn=1, call=n)
+        steps.step(sid, "tool", "echo.lookup", HASH, work, StepPolicy())
+
+
+@pytest.mark.parametrize("edit", [True, False])
+def test_resume_under_changed_definition_ends_definition_changed(
+    tmp_path: Path, clock: FakeClock, edit: bool
+) -> None:
+    """Crash a run, edit a prompt, restart: the run ends ``definition_changed`` (ADR-P20 D7).
+
+    Without the edit, the same restart resumes the run where it stopped.
+    """
+    plugins = copy_plugins(tmp_path)
+    (before,) = load_agents([plugins.toy], [plugins.extensions])
+    path = tmp_path / "aksha.sqlite"
+    store = open_store(path, clock, writer=True)
+    run = _start(store, before)
+    with pytest.raises(Crash):
+        _drive(StepExecutor(store, "o", clock), run, Script(), crash_at=2)
+    store.close()  # the process dies
+
+    if edit:
+        plugins.edit("agents/toy/prompts/instructions.md", "one line", "one short line")
+    (after,) = load_agents([plugins.toy], [plugins.extensions])
+    assert (after.definition_hash != before.definition_hash) is edit
+    store = open_store(path, clock, writer=True)
+    try:
+        loaded = {after.agent.name: after.definition_hash}
+        report = recover_on_startup(store, loaded)
+        script = Script()
+
+        def driver(summary: RunSummary, steps: DurableStepExecutor) -> None:
+            _drive(steps, summary.run, script, crash_at=None)
+
+        driven = resume_owner(store, "o", driver, clock=clock, loaded=loaded)
+        runs = rebuild(RUNS, load_view(store, "o"))
+        if edit:
+            assert report.ended == (("o", run, "definition_changed"),)
+            assert runs[run].outcome == "failed"
+            assert driven == () and script.calls == []
+        else:
+            assert report.ended == () and report.in_flight == {"o": (run,)}
+            assert driven == (run,) and script.calls == ["2"]
+            assert runs[run].outcome is None
+    finally:
+        store.close()

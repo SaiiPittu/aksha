@@ -64,14 +64,15 @@ def decision_event(
     return NewEvent("step.completed", payload, run=run, instance=instance, step=step)
 
 
+def is_counted_tool_call(e: Event) -> bool:
+    """Whether ``e`` uses one tool call: a counted tool start or a counted refusal."""
+    if not bool(e.payload.get("counted")):
+        return False
+    if e.type == "step.started":
+        return e.payload.get("kind") == "tool"
+    return e.type == "step.completed" and e.payload.get("outcome") == "refused"
+
+
 def tool_calls_used(events: Iterable[Event]) -> int:
     """How many tool calls count against the budget: counted starts plus counted refusals."""
-    return sum(
-        1
-        for e in events
-        if bool(e.payload.get("counted"))
-        and (
-            (e.type == "step.started" and e.payload.get("kind") == "tool")
-            or (e.type == "step.completed" and e.payload.get("outcome") == "refused")
-        )
-    )
+    return sum(1 for e in events if is_counted_tool_call(e))

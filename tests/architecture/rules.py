@@ -472,3 +472,96 @@ def model_text_in(cls: type, forbidden: frozenset[type], namespace: dict[str, ob
 
     walk(cls, cls.__name__)
     return found
+
+
+# --- ADR-P02 D3: the injected clock and IDs ----------------------------------------------
+
+AMBIENT_MODULES = frozenset({"random", "uuid", "secrets"})
+"""Random sources the runtime core may not import: IDs come from ``IdSource`` instead."""
+
+AMBIENT_CALLS = frozenset(
+    {"datetime.now", "datetime.utcnow", "datetime.today", "date.today", "time.time",
+     "time.time_ns", "time.sleep", "time.monotonic", "time.monotonic_ns", "time.perf_counter",
+     "time.perf_counter_ns", "time.localtime", "time.gmtime"}
+)  # fmt: skip
+"""Clock reads the runtime core may not make: time comes from the injected ``Clock``."""
+
+AMBIENT_ALLOWED = {
+    ("aksha.runtime.storage.chain", "secrets"): (
+        "new_store_id: a store's identity, written once when the store is created, is not a "
+        "fact of any run, and must differ between two stores (ADR-P01 H4)"
+    ),
+}
+"""The one exemption, with its reason. A run's log never holds a value from it."""
+
+
+def ambient_clock_or_randomness(root: Path) -> list[Violation]:
+    """Every clock read or random source in ``aksha/runtime`` outside the injected ones.
+
+    Catches ``import random`` and ``from uuid import uuid4``, ``datetime.now()`` and
+    ``time.sleep()`` called through their modules, and ``from time import sleep``.
+    """
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime").rglob("*.py")):
+        me = module_name(root, f)
+        tree = ast.parse(f.read_text(encoding="utf-8"), filename=str(f))
+        for node in ast.walk(tree):
+            found: list[str] = []
+            if isinstance(node, ast.Import):
+                found = [a.name for a in node.names if a.name.split(".")[0] in AMBIENT_MODULES]
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                top = node.module.split(".")[0]
+                names = [f"{node.module}.{a.name}" for a in node.names]
+                found = (
+                    [top] if top in AMBIENT_MODULES else [n for n in names if n in AMBIENT_CALLS]
+                )
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                held = node.func.value
+                owner = held.attr if isinstance(held, ast.Attribute) else getattr(held, "id", "")
+                if f"{owner}.{node.func.attr}" in AMBIENT_CALLS:
+                    found = [f"{owner}.{node.func.attr}"]
+            for target_name in found:
+                if (me, target_name) not in AMBIENT_ALLOWED:
+                    rule = "the runtime reads time and randomness only through Clock and IdSource"
+                    out.append(Violation(me, target_name, rule))
+    return out
+
+
+# --- ADR-P14 D1: no counter field for any cap ---------------------------------------------
+
+
+def _held_target(node: ast.expr) -> str | None:
+    """``self.n`` or ``self.counts[k]``: state an object keeps between calls."""
+    while isinstance(node, ast.Subscript):
+        node = node.value
+    root = node
+    while isinstance(root, ast.Attribute):
+        root = root.value
+    if isinstance(node, ast.Attribute) and isinstance(root, ast.Name) and root.id == "self":
+        return ast.unparse(node)
+    return None
+
+
+def counter_fields(root: Path) -> list[Violation]:
+    """Every attribute of a runtime object that is counted up or down in place.
+
+    A cap kept as ``self.used += 1`` resets when the process does (ADR-P14 D1): every count
+    is a reducer over the event store instead. Catches ``self.n += 1``,
+    ``self.counts[k] -= 1`` and ``self.n = self.n + 1``; a local variable is not state.
+    """
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime").rglob("*.py")):
+        me = module_name(root, f)
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"), filename=str(f))):
+            held: str | None = None
+            if isinstance(node, ast.AugAssign) and isinstance(node.op, ast.Add | ast.Sub):
+                held = _held_target(node.target)
+            elif isinstance(node, ast.Assign) and isinstance(node.value, ast.BinOp):
+                for target in node.targets:
+                    name = _held_target(target)
+                    operands = {ast.unparse(node.value.left), ast.unparse(node.value.right)}
+                    if name is not None and name in operands:
+                        held = name
+            if held is not None:
+                out.append(Violation(me, held, "a cap is counted from the event store (P14 D1)"))
+    return out

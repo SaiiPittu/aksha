@@ -54,8 +54,21 @@ def test_is_function_and_opt_in_helpers() -> None:
 
 def test_check_tree_accepts_a_sound_tree_and_bounds_depth() -> None:
     assert check_tree(TREE, _ctx()) == []
-    deep = Task("t1", children=(Task("t2", children=(Task("t3", children=(
-        Task("t4", children=(Task("t5", done=_ok),)),)),)),))  # fmt: skip
+    deep = Task("n1", children=(Task("n2", children=(Task("n3", children=(
+        Task("n4", children=(Task("n5", done=_ok),)),)),)),))  # fmt: skip
     (refusal,) = check_tree((deep,), _ctx())
-    assert refusal.code == "tree_too_deep" and refusal.task == "t1/t2/t3/t4/t5"
+    assert refusal.code == "tree_too_deep" and refusal.task == "n1/n2/n3/n4/n5"
     assert MAX_TASK_DEPTH == 4
+
+
+def test_a_task_named_like_a_step_id_segment_is_refused() -> None:
+    tree = (
+        Task("t03", done=_ok),
+        Task("a", children=(Task("end", done=_ok),)),
+        Task("tool", done=_ok),
+    )
+    refusals = check_tree(tree, _ctx())
+    assert [(r.code, r.task, r.field) for r in refusals] == [
+        ("task_id_reserved", "t03", "id"),
+        ("task_id_reserved", "a/end", "id"),
+    ]

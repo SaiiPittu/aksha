@@ -25,8 +25,15 @@ class Boundary:
 
 
 _ALL = (
-    Boundary("U1", "start", "session", "user.message, run.started"),
-    Boundary("U2a", "step_intent", "execution", "step.started"),
+    Boundary(
+        "U1", "start", "session", "command.accepted or command.refused, user.message, run.started"
+    ),
+    Boundary(
+        "U2a",
+        "step_intent",
+        "execution",
+        "step.started, and the outbox.enqueued of an effectful tool call",
+    ),
     Boundary("U2b", "dispatch", "execution", "step.dispatched (at_most_once tools only)"),
     Boundary("U2c", "attempt_failed", "execution", "step.failed or attempt.discarded"),
     Boundary(
@@ -34,18 +41,33 @@ _ALL = (
         "step_result",
         "execution",
         "step.completed with the result's facts: artifact rows and artifact.saved, "
-        "relations, an interrupt.raised or an approval request",
+        "relations, an interrupt.raised or an approval request; for an effectful tool "
+        "call, the outbox.completed or outbox.abandoned it ends with",
     ),
     Boundary(
         "U3",
         "stop_decision",
         "stop_policy",
-        "completion_check.evaluated, task.entered, budget facts, run.ended, "
+        "completion_check.evaluated, task.entered, budget facts, interrupt.voided, run.ended, "
         "agent.reply, stop.decided last",
     ),
-    Boundary("U4", "resolution", "session", "interrupt.resolved, approvals, review outcomes"),
-    Boundary("U5", "outbox_enqueue", "outbox", "outbox.enqueued"),
-    Boundary("U6", "outbox_complete", "outbox", "outbox.completed or outbox.abandoned"),
+    Boundary(
+        "U4",
+        "resolution",
+        "session",
+        "command.accepted or command.refused, interrupt.resolved, approvals, budget.granted, "
+        "review outcomes, run.stop_requested, "
+        "an outbox.enqueued the decision wants",
+    ),
+    Boundary(
+        "U5", "outbox_enqueue", "outbox", "command.accepted or command.refused, outbox.enqueued"
+    ),
+    Boundary(
+        "U6",
+        "outbox_complete",
+        "outbox",
+        "one worker fact: outbox.claimed, outbox.failed, outbox.completed or outbox.abandoned",
+    ),
     Boundary("U7", "recovery", "execution", "recovery.completed (the system owner)"),
     Boundary("U8", "source_change", "invalidation", "source.changed, query.reexecuted"),
     Boundary("U9", "rebuild_start", "invalidation", "run.started with cause rebuild"),

@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from aksha.runtime.definitions.errors import LoadRefusal, Refusals
 from aksha.runtime.definitions.names import resolve_kind
+from aksha.runtime.execution.types import is_reserved_segment
 from aksha.runtime.models.types import IMPLICIT_GENERATION_ALIAS
 from aksha.runtime.stop_policy.types import BUILTIN_STOP_POLICIES, StopPolicyOptIn
 from aksha.runtime.tasks.types import FromField, KeySource, Read, Task
@@ -85,6 +86,9 @@ def _siblings(
     _needs(tasks, out, prefix)
     for task in tasks:
         path = f"{prefix}/{task.id}" if prefix else task.id
+        if is_reserved_segment(task.id):
+            message = f"{task.id!r} is a reserved step-ID segment (t03, c02, k01, w043, end, ...)"
+            out.add("id", "task_id_reserved", message, path)
         if depth > MAX_TASK_DEPTH:
             out.add("children", "tree_too_deep", f"Tasks nest at most {MAX_TASK_DEPTH} deep", path)
             continue

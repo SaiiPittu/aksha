@@ -5,6 +5,7 @@ import pytest
 from aksha.runtime.events.catalogue import (
     CORE_EVENT_TYPES,
     PAYLOAD_CAP_BYTES,
+    STOP_DECIDED,
     Catalogue,
     EventTypeSpec,
 )
@@ -106,7 +107,7 @@ def test_render_dedup_key_over_envelope_and_payload(catalogue: Catalogue) -> Non
 
 
 def test_register_extension_adds_a_type() -> None:
-    cat = Catalogue(TEST_TYPES)
+    cat = Catalogue((*TEST_TYPES, STOP_DECIDED))
     cat.register_extension(MEMORY_RECALLED, extension="memory")
     assert cat.get("memory.recalled") is MEMORY_RECALLED
     assert cat.is_extension("memory.recalled")
@@ -120,7 +121,7 @@ def test_register_extension_adds_a_type() -> None:
 
 
 def test_register_extension_needs_the_extensions_namespace_and_writer() -> None:
-    cat = Catalogue(TEST_TYPES)
+    cat = Catalogue((*TEST_TYPES, STOP_DECIDED))
     with pytest.raises(CatalogueError, match="named other"):
         cat.register_extension(replace(MEMORY_RECALLED, writer="other"), extension="other")
     with pytest.raises(CatalogueError, match="writer"):
@@ -129,7 +130,7 @@ def test_register_extension_needs_the_extensions_namespace_and_writer() -> None:
 
 
 def test_register_extension_refuses_core_names_and_prefixes() -> None:
-    cat = Catalogue(TEST_TYPES)
+    cat = Catalogue((*TEST_TYPES, STOP_DECIDED))
     core_ns = EventTypeSpec("probe.sneaky", {"type": "object"}, "probe", frozenset({"U2"}))
     with pytest.raises(CatalogueError, match="core namespace"):
         cat.register_extension(core_ns, extension="probe")
@@ -142,7 +143,7 @@ def test_register_extension_refuses_core_names_and_prefixes() -> None:
 
 
 def test_extension_refusal_is_pure() -> None:
-    cat = Catalogue(TEST_TYPES)
+    cat = Catalogue((*TEST_TYPES, STOP_DECIDED))
     bad = replace(MEMORY_RECALLED, boundaries=frozenset({"U99"}))
     assert cat.extension_refusal(MEMORY_RECALLED, extension="memory") is None
     assert "U99" in str(cat.extension_refusal(bad, extension="memory"))
