@@ -8,6 +8,7 @@
 | 11 to 16 | Names, the primitives-first method and the rule of three |
 | 17 to 21 | Storage, code layout, future directions, the hash chain and telemetry |
 | 22 to 24 | How the runtime is run, headless mode and the order the docs and code land in |
+| 26 to 27 | Headless permissions and the durable executor |
 
 ## 25 Nov 2026: stop ownership and the agent model
 
@@ -48,5 +49,10 @@
 ## 26 Nov 2026: running the runtime
 
 22. **Server plus embedded mode.** `aksha serve` is the backend: it hosts the session API and is the single writer. The CLI and the web app are clients. With no server running, `aksha run` starts the runtime in-process for that one command.
-23. **Headless mode runs in full bypass**, following Decode. A headless run raises no approval prompts and asks for no permissions, and it is expected to run inside a sandbox, as headless agents usually do. This decision postdates ADR-P11 (a policy gate with no mode that skips it) and ADR-P17 (interrupts and approvals); as of 26 Nov 2026 neither ADR yet says how a bypassed run meets the gate.
+23. **Headless mode runs in full bypass**, following Decode. A headless run raises no approval prompts and asks for no permissions, and it is expected to run inside a sandbox, as headless agents usually do. This decision postdates ADR-P11 (a policy gate with no mode that skips it) and ADR-P17 (interrupts and approvals); as of 26 Nov 2026 neither ADR yet says how a bypassed run meets the gate. Amended by decision 26: a headless run never asks, but deny rules are not bypassed.
 24. **Design docs land before the first code merges.** A docs pull request (product overview, architecture, primitives catalogue, ADRs) is merged first, and the first code pull request (#40) is rebased onto it.
+
+## 26 Nov 2026: headless permissions and the durable executor
+
+26. **Headless runs never ask, and deny rules always hold** (amends decision 23). In a headless run every ask becomes an allow, so nothing waits for a person, but every explicit deny rule still refuses, and the run executes inside a sandbox. This follows Gemini CLI, which treats "yolo" as an ordinary allow rule that a higher tier can still deny, not Decode's bypass, which skips the deny rules. [ADR-P11](adr/ADR-P11-policy-gate-and-permissions.md) carries it as its decision 12.
+27. **ADR-P02 is accepted: an own durable executor behind an executor port.** Temporal is supported later in two ways: as an executor adapter, where an Aksha run executes as a Temporal workflow and its steps as activities, and as an integration, where a business's own Temporal workflow invokes an Aksha run as an activity. Step semantics are named `at_least_once`, `reconcile` and `at_most_once` on the tool specification. A person's durable stop is part of recovery (`stop_requested`). A replay check, which verifies that a re-run matches the recorded history, is designed now and built later. A run suspended while one of its inputs changes gets one chance to re-check on resume (`suspended_with_rebuilds`), in the first milestone.

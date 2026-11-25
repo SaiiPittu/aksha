@@ -66,7 +66,7 @@ The documents use the industry name for each concept, one name per concept:
 | Suspension | The run is durably parked with no process attached, for any reason |
 | Transactional outbox | Every external effect is recorded before it is attempted, under an idempotency key, so a retry never sends twice |
 | Model routing by class | Each model job goes to the kind of model its answer needs: extraction or classification (System 1, fast) or generation (System 2, slow) |
-| Headless mode | A run with nobody watching, in full bypass of approval prompts and permission asks, expected to run inside a sandbox |
+| Headless mode | A run with nobody watching. It never asks (every ask becomes an allow), but every deny rule still holds, and it runs inside a sandbox (decision 26) |
 
 ## Sources
 

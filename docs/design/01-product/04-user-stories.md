@@ -162,10 +162,10 @@ Scenarios: 9.
 
 As an operator, I want to start runs with nobody watching inside a sandbox, so that the same harness serves an unattended factory as well as a laptop.
 
-1. A headless run raises no approval interrupt and asks for no permission.
+1. A headless run raises no approval interrupt and asks for no permission, and every deny rule still refuses exactly as in a watched run.
 2. The run records its mode and the sandbox capability record at start.
 3. Every tool call in a headless run is recorded exactly as in a watched run, and every external effect still goes through the outbox with an idempotency key.
-4. The open points (which gate checks hold in bypass, what an `input` interrupt does headless, whether a run outside a sandbox is refused) are listed in the design, not settled silently.
+4. The open points (what an `input` interrupt does headless, whether a run outside a sandbox is refused) are listed in the design, not settled silently.
 
 Scenarios: 5.
 

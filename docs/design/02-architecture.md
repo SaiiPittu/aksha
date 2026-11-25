@@ -372,15 +372,17 @@ Caption: both modes run the same runtime behind the same session API, so the onl
 
 While a server holds the lock, a mutating CLI command run in embedded mode is refused, and read-only commands still work. The single writer admits commands between turns, not only between runs, so an answer or a stop typed during a long run is taken within one turn (ADR-P19, Proposed).
 
-## 6. Headless mode runs in full bypass
+## 6. Headless mode never asks, and deny rules still hold
 
-A headless run has no person watching it, so it cannot wait for one. Decision 23 (Accepted, 26 Nov 2026) settles what happens: a headless run raises no approval prompts and no permission asks. It runs in full bypass, and it is expected to run inside a sandbox, as headless agents usually do.
+A headless run has no person watching it, so it cannot wait for one. Decision 26 (Accepted, 26 Nov 2026, amending decision 23) settles what happens: a headless run never asks, because every ask becomes an allow, but every explicit deny rule still holds, and the run executes inside a sandbox. In one line: headless never asks, but it never ignores a deny. This is Gemini CLI's treatment of "yolo" as an ordinary allow rule that a higher tier can still deny, not Decode's bypass, whose headless mode never reaches the deny rules.
 
-This decision is newer than ADR-P11, whose second decision says no mode, flag or setting skips the gate. ADR-P11 is Proposed and has not yet been amended for decision 23, so this page records the conflict rather than resolving it. The parts that follow from decision 23 alone:
+ADR-P11 carries it as its decision 12 (the decision is Accepted; the interface is Proposed):
 
-1. A headless run never suspends on an approval interrupt or a permission ask.
-2. The sandbox, not a person, is the wall around what a headless run can reach. A run is expected to start inside one.
-3. The event store records every tool call in headless mode exactly as in any other mode, so the record of what a bypassed run did is as complete and as verifiable as any other.
+1. The run carries a `headless` flag, fixed when the run starts and recorded on `run.started`.
+2. The policy gate runs every layer unchanged, so a tool outside the agent's list, a narrowed tool, a failing argument rule, a recipient outside the recipients source and a missing sandbox all refuse headless exactly as they do in a watched run. There is still no path that skips the check.
+3. Only an allow routed to `approval` changes, and in one place: it takes the route the tool would take without approval (the outbox for an external effect), and no approval interrupt is raised, so a headless run never suspends on one.
+4. The sandbox, not a person, is the wall around what a headless run can reach. ADR-P11 proposes that a headless start with no available sandbox backend is refused.
+5. The event store records every tool call in headless mode exactly as in any other mode, so the record of what a headless run did is as complete and as verifiable as any other.
 
 What is not yet written down is listed in section 10.
 
@@ -456,7 +458,7 @@ A test enforces this rule on every module, and it plants one violation of each r
 
 The open points in this design as of 26 Nov 2026:
 
-1. Headless mode and the gate. Decision 23 says headless runs skip approval prompts and permission asks; ADR-P11 says no mode skips the gate. ADR-P11 still has to say which of its layers a headless run keeps. The allow lists, schema checks and argument rules ask no one anything, so keeping them is compatible with "no prompts", but that reading is mine and not decided. Also undecided: what a headless run does when a Task declares an `input` or `choice` interrupt, and whether the runtime refuses to start a headless run outside a sandbox or only expects one.
+1. Headless mode and interrupts. Decision 26 settles the gate: every layer holds and only asks become allows (section 6). Still undecided: what a headless run does when a Task declares an `input` or `choice` interrupt, which no allow rule can answer. Refusing a headless start outside a sandbox is ADR-P11's proposal, not yet a decision.
 2. The default backend for a local run (section 8).
 3. Event type renames such as `walk.decided` to `stop.decided` and `pause.*` to `interrupt.*` (ADR-P01 D8) are Proposed. This page uses the proposed names.
 4. Erasure in a hash-chained, append-only store (ADR-P30) is Open. Two of its options keep the hashed bytes unchanged and so keep the chain valid; any option that rewrites payloads breaks the chain by design.

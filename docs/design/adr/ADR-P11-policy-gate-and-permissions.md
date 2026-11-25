@@ -4,7 +4,7 @@
 
 ## Status
 
-Proposed, 25 Nov 2026. Nothing here was built as of 25 Nov 2026. The decisions log records no call of the maintainer's on the gate itself; decision 1 and the design patterns note P-1 (Accepted through ADR-015) require that the gate hold no agent-specific code, and decision 10 says agents opt into built-in stop policies by configuration, which is where tool narrowing comes from. Everything below is my proposal. Amended 25 Nov 2026 after the three-agent stress test: S1 below is new and Proposed.
+Proposed, 25 Nov 2026. Nothing here was built as of 25 Nov 2026. The decisions log records no call of the maintainer's on the gate itself; decision 1 and the design patterns note P-1 (Accepted through ADR-015) require that the gate hold no agent-specific code, and decision 10 says agents opt into built-in stop policies by configuration, which is where tool narrowing comes from. Everything below is my proposal. Amended 25 Nov 2026 after the three-agent stress test: S1 below is new and Proposed. Amended 26 Nov 2026 by the maintainer's decision 26 in the [decisions log](../04-decisions-log.md) (Accepted; it replaces decision 23, which had headless runs in full bypass): headless runs never ask, every deny rule still holds, and headless runs inside a sandbox. Decision 12 below carries it.
 
 ## Terms
 
@@ -31,7 +31,7 @@ What breaks without one gate, for each agent: The Research Agent could fetch wit
 ## Decision
 
 1. **One pure function decides every call.** `check(GateInput) -> Allow | Refuse` runs for every tool call from every path: The agent loop, a supervisor Task's children, the router, a resumed run. It is pure: given the same inputs it gives the same answer, and it reads no clock, no store and no network.
-2. **Deny by default, fail closed.** An agent with no tool list may call nothing but the implicit tools. Any exception inside `check` is `Refuse("gate_error")`. There is no mode, flag, environment variable or sub-agent setting that skips `check`; the only way to allow more is a changed agent definition, which changes the definition hash.
+2. **Deny by default, fail closed.** An agent with no tool list may call nothing but the implicit tools. Any exception inside `check` is `Refuse("gate_error")`. There is no mode, flag, environment variable or sub-agent setting that skips `check`; the only way to allow more is a changed agent definition, which changes the definition hash. The headless flag (decision 12) is not an exception: it changes what an ask becomes after `check` has run every layer, and it never skips a layer or a deny.
 3. **The order is fixed**, extending 05c section 5.5 with one new layer (6, argument rules):
 
    | Layer | Check | Refusal code | Counted against the tool-call budget? |
@@ -48,12 +48,13 @@ What breaks without one gate, for each agent: The Research Agent could fetch wit
    Counting refused calls (layers 1 to 7) means a model that loops on refusals still runs out of budget (v1 RL-2 lean A).
 4. **The gate's inputs contain nothing the model can write.** `GateInput` holds the call's name and arguments, the agent definition, the Task, the stop-policy narrowing (a projection over stop decision records), the budget accounting (a projection), the recipients source at its current version and the sandbox probe. It never holds a tool result, a document, memory text, an artifact's content or a model's free text. That is why a fetched document asking to change permissions has no effect: there is no input through which it could.
 5. **Narrowing only removes.** A Task's list is a subset of its parent's (loader refusal), the stop policy's narrowing is a subset of the Task's, and an argument rule can only refuse. No layer adds a tool.
-6. **"Ask" means an approval interrupt, never a silent allow or a silent deny.** A tool with `needs_approval` is routed to `approval`: no body runs, the runtime builds the pending action and its approval signature, and the run suspends durably (PR-17). Because a suspension survives restarts, an unattended run waits rather than denying, which differs from opencode's choice to turn an unanswered `ask` into a deny when nobody is present (`opencode:packages/core/src/permission.ts:184-212`). Eval runs answer interrupts from fixtures.
+6. **"Ask" means an approval interrupt, never a silent allow or a silent deny.** A tool with `needs_approval` is routed to `approval`: no body runs, the runtime builds the pending action and its approval signature, and the run suspends durably (PR-17). Because a suspension survives restarts, an unattended run waits rather than denying, which differs from opencode's choice to turn an unanswered `ask` into a deny when nobody is present (`opencode:packages/core/src/permission.ts:184-212`). Eval runs answer interrupts from fixtures. A headless run is the one exception, and it is decision 12: there an ask becomes an allow, so nothing waits for a person.
 7. **Argument rules are declared data with a closed set of matchers.** A rule names a tool, an argument path and one matcher from a closed set: `path_under`, `path_not_under`, `enum`, `id_in_source`, `max_length`. Lambdas are not allowed, so the permission matrix can be generated and printed, and a rule cannot read anything outside the call. The recipient check that v2 already has becomes the first `id_in_source` rule.
 8. **A model never allows.** No model class (extraction, classification, generation) may turn a refusal into an allow. The 2026 trend of a second model approving "safe" actions (Claude Code `auto`, Codex's model reviewer, Goose's permission judge, landscape note section 4) is rejected for Aksha's core. A classification model may add a refusal later, as an argument rule of kind `model_refuses`, which matches FR-MK-08's rule that a fast answer may only refuse what code allowed. Later, not the first milestone.
 9. **Every decision is recorded once.** An allow is visible as the `step.started` that follows; a refusal is one `step.completed{outcome: refused, code, layer}` returned to the model as an error result. There is no separate refusal event (v1 05c 2.4), so the event catalogue stays small and a refusal is still a fact in the event store.
 10. **Data rights are enforced at the point the data is known**, not in the gate: The source and artifact readers in `ToolContext` refuse collections and kinds outside the tool's declared rights, and the save path refuses writes outside them (PR-04). The gate decides whether a call may run; the readers and the save path decide what it may touch.
 11. **Person-granted widening is designed, not built.** A person may later widen a run's permissions only by a recorded command (`permission.granted`, scoped to one run and one tool or rule). A deny written in the agent definition beats every grant, as opencode checks a configured deny before saved approvals merge (`opencode:packages/core/src/permission.ts` at `ff4a652`). The first milestone has no grants.
+12. **Headless runs never ask, and deny rules always hold** (the maintainer's decision 26, 26 Nov 2026, Accepted). A run started headless carries `headless=True`, fixed on `run.started`. `check` runs layers 0 to 7 unchanged, so every deny holds: a tool outside the list, a narrowed tool, a failing argument rule such as `path_not_under(".git")`, a recipient not in the recipients source and a missing sandbox all refuse headless exactly as they do attended. Only an allow whose route is `approval` changes, and it changes in one place (`resolve_ask`, the last step of `check`): the route becomes the one the tool would take without approval, `outbox` for a tool with an external effect and `dispatch` otherwise, and no approval interrupt is raised. A headless run starts only when a sandbox backend is available; without one the run is refused at start (`sandbox_required`). This is Gemini CLI's treatment of "yolo" as an ordinary allow rule that a higher tier can still deny (landscape note section 4), not Decode's `BYPASS`, which never reaches the deny rules. It changes permission asks only; the reserved `ask` tool, a question the model puts to a person, belongs to the stop policy (PR-16) and is not changed here.
 
 ### Amendments from the stress test (25 Nov 2026, Proposed)
 
@@ -75,10 +76,11 @@ Agent-side, no core change: The coding agent's "tests pass" completion check can
 | Option | What it is | Prior art | For | Against | Verdict |
 |---|---|---|---|---|---|
 | A. Check inside each tool body | Each tool asserts permission for the resources it touches | opencode's `Permission.assert` in each tool leaf (`opencode:packages/core/src/permission.ts:184-212`) | Checks the exact resource, known only after arguments resolve | A new tool that forgets the assert runs unchecked; nothing generates a matrix | Rejected for the call decision; kept for data rights through the readers (decision 10) |
-| B. Modes (default, plan, accept-edits, bypass) | A session-wide switch changes which checks run | Decode (`decode:permissions/gate.py:66-89`); Codex's approval policies `untrusted`, `on-request`, `never` (`codex:protocol/src/protocol.rs:1167-1190`); Goose's `auto` default approves every call (`goose:goose-provider-types/src/goose_mode.rs:22-31`); Claude Agent SDK modes (`cas:types.py:25-27`) | Familiar to users of coding agents | A bypass mode is a skipped check, and Decode shows deny rules lost in it | Rejected; plan mode survives as a stop-policy narrowing that only removes tools |
+| B. Modes (default, plan, accept-edits, bypass) | A session-wide switch changes which checks run | Decode (`decode:permissions/gate.py:66-89`); Codex's approval policies `untrusted`, `on-request`, `never` (`codex:protocol/src/protocol.rs:1167-1190`); Goose's `auto` default approves every call (`goose:goose-provider-types/src/goose_mode.rs:22-31`); Claude Agent SDK modes (`cas:types.py:25-27`) | Familiar to users of coding agents | A bypass mode is a skipped check, and Decode shows deny rules lost in it | Rejected as Decode does it (a bypass that skips deny rules); plan mode survives as a stop-policy narrowing that only removes tools, and unattended runs get F instead |
 | C. A callback the host supplies | The host's function allows, rewrites or denies each call | Claude Agent SDK `can_use_tool`, with deny plus `interrupt=True` aborting the turn (`src/claude_agent_sdk/_internal/query.py:640-693` at `6fc539e0`); `PreToolUse` hooks | Flexible | Arbitrary code: may read model output, may rewrite input, cannot be printed as a matrix | Rejected for the core; an extension may add refusals through argument rules only |
 | D. Per-tool approval flag only | A tool marked `needs_approval` ends the run with a pending request | OpenAI Agents SDK, Pydantic AI deferred tools, Vercel AI SDK, ADK (landscape note section 4) | Simple, durable | Covers approval, not allow lists or narrowing | Kept as layer 7's `approval` route, not the whole gate |
 | E. One pure layered checker, deny by default, no bypass (my lean) | Decision 1 to 11 | Saltzer and Schroeder (1975); Exo's `AlwaysAllow` and `AlwaysAsk` with approvals as log facts (`crates/executor/src/permissions.rs:69-92` at `e1e5669`); Gemini CLI treats "yolo" as an ordinary allow rule a higher tier can still deny (landscape note section 4) | Testable cell by cell; one place to audit | Argument rules are less expressive than code | Chosen |
+| F. Headless = asks become allows, denies hold | A run-level `headless` flag turns the `approval` route into the route the tool would take without approval, after every layer of E has run; the run needs a sandbox | Gemini CLI's "yolo" as an allow rule a higher tier can still deny (landscape note section 4); contrast Decode's headless `BYPASS` (`decode:runtime/headless.py:104`) | Unattended runs never block on a person; one rule to state: "headless never asks, but it never ignores a deny" | A headless run sends without a person's approval, so the recipients source and the sandbox carry the whole safeguard for those calls | Chosen (decision 26), as a setting of E |
 
 ## Interface
 
@@ -114,6 +116,7 @@ class GateInput:
     meter: "Meter"                                   # ADR-P14
     sources: "SourceVersions"                        # e.g. The recipients source at its current version
     sandbox: "Availability | None"                   # the chosen backend's probe (ADR-P12)
+    headless: bool = False                           # fixed on run.started (decision 12); read only by resolve_ask
 
 Route = Literal["dispatch", "outbox", "approval", "model", "reserved"]
 
@@ -132,14 +135,32 @@ class Refuse:
     detail: tuple[str, ...] = ()                     # failing schema paths, the rule, the stop policy
 
 def check(g: GateInput, registry: "ToolRegistry") -> Allow | Refuse: ...   # pure; never raises
+    # runs layers 0 to 7, then returns resolve_ask(allow, g.headless, tool) for an allow
+
+def resolve_ask(a: Allow, headless: bool, tool: "ToolSpec") -> Allow: ...
+    # the one place headless is read: route "approval" becomes "outbox" (external effect)
+    # or "dispatch" when headless; every other allow, and every refusal, is unchanged
 
 def matrix(agents: Sequence["AgentDefinition"], registry: "ToolRegistry") -> "PermissionMatrix": ...
     # one row per (agent, Task, tool): allowed, or the refusal code and layer
 ```
 
+The headless flag is set by whoever starts the run (the session API's start command, or `--headless` on the CLI), recorded on `run.started` with the run ceiling, and never changed during the run. A start with `headless=True` and no available sandbox backend is refused with `sandbox_required` before `run.started` is written.
+
 Events it writes: none directly. The step executor records the outcome: `step.completed{outcome: refused, code, layer}` for a refusal, `step.started{counted}` then the route's own events for an allow (`outbox.enqueued` for the outbox route, `approval.requested` and the interrupt-raised record for the approval route). Event names are v2's until the event-store ADR.
 
 Projections it reads: The budget accounting (ADR-P14), the stop-policy narrowing (PR-16) and the current version of each named source. All three are rebuilt by reducers from the event store, so a restarted run's gate sees the same inputs as before the crash.
+
+## Tests for headless runs (decision 12)
+
+| Test | What it proves |
+|---|---|
+| `test_headless_never_raises_approval_interrupt` | With `headless=True`, every `needs_approval` tool in the matrix is allowed with route `outbox` or `dispatch`, and the event store holds no `approval.requested` and no interrupt-raised record |
+| `test_headless_deny_still_refuses` | Each deny cell of the matrix (`not_allowed`, `not_in_task`, `narrowed`, `argument_rule`, `recipient_not_listed`, `sandbox_unavailable`) refuses identically with `headless=True` and `headless=False`, with zero body calls |
+| `test_no_bypass_path_headless` | `test_no_bypass_path` passes again with the headless flag set: every dispatch still goes through `check`, and `headless` is read nowhere but `resolve_ask` |
+| `test_headless_requires_sandbox` | Starting a headless run with no available sandbox backend is refused with `sandbox_required` and writes no `run.started` |
+
+A headless run sends without approval. What keeps it safe is the deny side: the recipients source, the argument rules and the sandbox. An agent whose sends must always have a person's approval should not be run headless; a per-tool "approval even when headless" marker is not designed, and would be a new deny, not a new mode.
 
 ## Stress test (25 Nov 2026)
 

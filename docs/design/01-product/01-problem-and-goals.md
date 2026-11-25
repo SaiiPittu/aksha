@@ -164,7 +164,7 @@ Its change-and-recovery scenario ([scenario 4](03-scenarios.md#scenario-4-a-chan
 
 ### The contrast coding agent is a stress test, not a product
 
-The contrast coding agent edits a Git repository in a sandbox for hours, runs tests and pushes a branch after approval. It is not built. It exists to break abstractions that happen to suit document work: long sandboxed sessions, path-scoped reads, steering messages to a running agent, and an execution environment image. Headless runs in full bypass ([scenario 5](03-scenarios.md#scenario-5-a-headless-job-runs-in-a-sandbox-with-full-bypass)) are its natural setting.
+The contrast coding agent edits a Git repository in a sandbox for hours, runs tests and pushes a branch after approval. It is not built. It exists to break abstractions that happen to suit document work: long sandboxed sessions, path-scoped reads, steering messages to a running agent, and an execution environment image. Headless runs that never ask but still honour deny rules ([scenario 5](03-scenarios.md#scenario-5-a-headless-job-runs-in-a-sandbox-and-never-asks)) are its natural setting.
 
 ## 7. The rule of three
 
@@ -186,7 +186,7 @@ The catch: the coding agent is a design on paper, not a running agent, so its ve
 |---|---|---|---|
 | Server | `aksha serve` runs the runtime as the backend: it owns the session API and is the single writer to the event store | Decision 22 | Accepted; the session API in P19 is Proposed |
 | Embedded CLI | The CLI is a client of the server; with no server running, `aksha run` starts the runtime in-process for that one command | Decision 22 | Accepted |
-| Headless mode | A run with nobody watching: no approval prompts and no permission asks, in full bypass, expected to run inside a sandbox, as headless agents usually do | Decision 23 | Accepted |
+| Headless mode | A run with nobody watching: it never asks (every ask becomes an allow), every deny rule still holds, and it runs inside a sandbox | Decisions 23 and 26 | Accepted |
 | Web app | A React client of the same session API that renders approval requests, evidence grids, redlines and the Task tree from runtime events | P19 | Proposed; a scaffold runs against a mock server, with no real backend yet |
 
 The rule that holds them together: every interface reaches the runtime through one `dispatch(command)` entry point with idempotent receipts, so the same scenario driven through the CLI and the web app produces the same events apart from request IDs.
@@ -216,7 +216,7 @@ Two decisions follow from these and shape the rest of the design. The event stor
 ## Where this design stops
 
 1. Nothing beyond the four built primitives has run. Every count above is designed, and every verdict in section 7 is a reading of interfaces.
-2. Headless full bypass (Accepted) conflicts with two Proposed designs: P11 says the policy gate has no skip mode, and the non-goals say only a person's approval gates an external effect. Which checks still hold in a headless run, for example whether a declared tool list or a deny rule survives bypass, is open.
+2. Decision 26 settles how headless meets the gate: every check holds, and only asks become allows, so a declared tool list and every deny rule survive. The non-goal that only a person's approval gates an external effect therefore holds for watched runs; in a headless run the recipients source, the argument rules and the sandbox gate it instead. What a headless run does on an `input` or `choice` interrupt is open.
 3. Storage is PostgreSQL in production and SQLite locally and offline, behind one port with a shared contract suite (decision 17). Which one an offline run uses by default awaits a confirm.
 4. Erasure of personal data in an append-only, hash-chained store (P30) is Open, with no shape proposed.
 5. The name of the stop policy that owns a whole agent run ("run stop policy" is the working name) is still to be picked (decision 14).

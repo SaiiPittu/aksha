@@ -102,7 +102,7 @@ Caption: read left to right for why a requirement exists, and right to left for 
 | FR-36 | Every interface reaches the runtime through one `dispatch(command)` entry point with idempotent receipts, and reads through event streams with a cursor and a catch-up marker. One capability record per runtime says what it can do | OPS-08 | F-27 | P19 | Must |
 | FR-37 | A request router, a classification model alias over the loaded agents' purpose text, picks the agent for free text, records the choice as a durable step, raises a session-scoped `route` interrupt when it abstains, and has no tool access | FND-01, DEV-01 | F-31 | P23 | Must |
 | FR-38 | `aksha serve` runs the runtime as the server that owns the session API and is the single writer. With no server running, `aksha run` starts the runtime in-process for that one command | OPS-08 | F-32 | P19 | Must |
-| FR-39 | A headless run raises no approval interrupt and asks for no permission; it records its mode and the sandbox capability record at start, records every tool call as any run does, and still sends every external effect through the outbox | OPS-05 | F-33 | P11, P17, P03 | Should |
+| FR-39 | A headless run raises no approval interrupt and asks for no permission, while every deny rule of the policy gate still refuses; it records its mode and the sandbox capability record at start, records every tool call as any run does, and still sends every external effect through the outbox | OPS-05 | F-33 | P11, P17, P03 | Should |
 | FR-40 | `aksha inspect` shows, for any run, its agent, Tasks, model turns, tool calls, refusals, input versions, approvals, artifact saves, stop decisions and errors | OPS-07, DEV-07 | F-35 | P21 | Must |
 | FR-41 | The agent-run trace is built by a pure function over the event store, named by the OpenTelemetry GenAI semantic conventions, with IDs derived from the store, and exported over OTLP on explicit request. Operational telemetry is live OpenTelemetry instrumentation, never written to the event store. Both planes share trace and span IDs | OPS-06 | F-29 | P21 | Should |
 | FR-42 | The runtime provides a fake for every model class, a replay model that reads answers from a recorded event store, and eval cases as data with a kind and a source | DEV-07 | F-30 | P22 | Must |
@@ -196,7 +196,7 @@ Reverse checks, done by hand on 26 Nov 2026:
 ## Where this stops
 
 1. Every requirement is designed; none has a passing test except the parts of FR-01 to FR-07, FR-22 and FR-23 on the branch in review.
-2. FR-39 records decision 23 as it stands. Which policy-gate checks a headless run keeps, what it does on an `input` interrupt, and whether it may start outside a sandbox are open (see [architecture](../02-architecture.md), section 10).
+2. FR-39 records decisions 23 and 26: a headless run keeps every policy-gate check, and only asks become allows. What it does on an `input` interrupt, and whether it may start outside a sandbox, are open (see [architecture](../02-architecture.md), section 10).
 3. NFR-17's line budget waits for the maintainer's number. The design estimates available on 25 Nov 2026 already put the core near 2,000 lines before several optional packages; all such figures are estimates.
 4. The traceability table was checked by hand, not by a script.
 

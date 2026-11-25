@@ -12,7 +12,7 @@ These twelve walkthroughs are the product's acceptance tests in story form. Each
 | 2 | Patent packet with approval | Patent-disclosure | Founder, engineer-inventor, counsel | Fan-out, choice interrupt, approval by signature, outbox send | P03, P15, P16, P17 | Must |
 | 3 | Restart mid-approval and mid-send | Patent-disclosure | Founder, operator | Suspension survives a crash; a send happens once | P01, P02, P03, P17 | Must |
 | 4 | A changed input invalidates exactly the affected work | Patent-disclosure | Founder, counsel | Invalidation, early cutoff, diff review, approval revoked and asked again | P04, P05, P16, P17 | Must |
-| 5 | A headless job runs in a sandbox with full bypass | Contrast coding | Operator | Headless mode, sandbox as the wall, a complete record without a person | P12, P11, P03, P01 | Later (designed) |
+| 5 | A headless job runs in a sandbox and never asks | Contrast coding | Operator | Headless mode, deny rules that hold, sandbox as the wall, a complete record without a person | P12, P11, P03, P01 | Later (designed) |
 | 6 | A supervisor Task runs a portfolio of many candidates | Patent-disclosure | Operator, founder | Work board, review by job, scale by triage | P15, P16, P05 | Later (designed) |
 | 7 | System 1 abstains and System 2 decides | Patent-disclosure | Agent developer | Model routing by class, abstention, no silent swap | P07, P13, P22 | Should |
 | 8 | A third agent declared without runtime changes | Contract renewal (test only) | Agent developer | The rule of three's first proof: load, route, refuse, hash unchanged | P20, P10, P11, P23 | Must |
@@ -147,22 +147,22 @@ Early cutoff is the other half of the rule. If a rebuilt artifact comes out with
 
 What a test checks: a real process restart between steps 1 and 3; handoff refused from step 4 on; the three lists (rebuilt, reviewed, untouched); two diff reviews in order; one approval revoked only after the packet was confirmed out of date; one fresh approval requested and none granted without the founder's approval; zero sends.
 
-## Scenario 5. A headless job runs in a sandbox with full bypass
+## Scenario 5. A headless job runs in a sandbox and never asks
 
 A coding job runs overnight with nobody watching, asks no one anything, and leaves a record as complete as a watched run's.
 
 Starting state: the contrast coding agent, which is not built; this scenario exists to test the design. A software factory starts a job when a test fails on the main branch: fix the failing test and push a branch. The job runs `aksha run --headless` inside a container that the factory provides as the sandbox.
 
-1. The run starts in headless mode ([decision 23](../04-decisions-log.md)). The runtime records the mode and the sandbox capability record at run start, so the record says how the run was confined.
+1. The run starts in headless mode ([decisions 23 and 26](../04-decisions-log.md)). The runtime records the mode and the sandbox capability record at run start, so the record says how the run was confined.
 2. The agent reads the repository through path-scoped reads ([P04](../adr/ADR-P04-artifact-store-and-lineage.md) S3) and edits two files. Each edit is an artifact version with recorded reads.
 3. The agent runs the test suite through a tool that executes a program in the sandbox ([P12](../adr/ADR-P12-sandbox-and-execution-environment.md)). The workspace is built from artifact versions; network access is off; outputs come back as artifacts.
 4. The Task's completion check is "the test command exits 0", a pure function over the recorded test result. The first attempt fails; the check vetoes the finish and the agent edits again. The second attempt passes.
-5. The push is an external effect. In headless mode no approval interrupt is raised and no permission is asked. The push still goes through the outbox with an idempotency key, so a crash during the push is reconciled, not repeated. The push runs in the runtime, not inside the sandbox, which keeps the sandbox's network off.
-6. Every tool call, the bypassed approval point and the push are in the hash-chained event store exactly as in a watched run. The next morning the operator runs `aksha inspect` and `aksha verify` on the run.
+5. The push is an external effect. In headless mode no approval interrupt is raised and no permission is asked: the policy gate runs every layer, and the approval route becomes the outbox route. A deny still refuses: had the agent tried to write `.git/hooks/pre-commit`, the argument rule would refuse it headless exactly as in a watched run. The push still goes through the outbox with an idempotency key, so a crash during the push is reconciled, not repeated. The push runs in the runtime, not inside the sandbox, which keeps the sandbox's network off.
+6. Every tool call, the approval point that became an allow and the push are in the hash-chained event store exactly as in a watched run. The next morning the operator runs `aksha inspect` and `aksha verify` on the run.
 
-What a test checks: zero interrupts raised; one outbox entry and one push per idempotency key across a crash during the push; every tool call recorded; the chain verifies.
+What a test checks: zero interrupts raised; the planted deny refused; one outbox entry and one push per idempotency key across a crash during the push; every tool call recorded; the chain verifies.
 
-The catch, and it is open: headless full bypass (Accepted) meets a policy gate designed with no mode that skips it ([P11](../adr/ADR-P11-policy-gate-and-permissions.md), Proposed). Three questions are not decided as of 26 Nov 2026: whether a declared tool list and deny rules still hold in bypass (they ask no one anything, so keeping them is compatible with "no prompts", but that is my reading); what a headless run does when a Task declares an `input` or `choice` interrupt; and whether the runtime refuses to start a headless run outside a sandbox or only expects one.
+How it meets the gate is settled by decision 26 and carried in [P11](../adr/ADR-P11-policy-gate-and-permissions.md) decision 12: headless never asks, but it never ignores a deny. Still open as of 26 Nov 2026: what a headless run does when a Task declares an `input` or `choice` interrupt. Refusing a headless start outside a sandbox is P11's proposal, not yet a decision.
 
 ## Scenario 6. A supervisor Task runs a portfolio of many candidates
 

@@ -66,7 +66,7 @@ The person responsible for many runs at once, across agents, owners and items: a
 |---|---|
 | Goals | See every run and every item in one table, derived from the event store rather than reported by a model. Batch the human work, one sitting per kind of judgement. Keep spend bounded. Know which capabilities a machine has (sandbox backends, model aliases bound to fakes, thresholds not yet fitted) before a run starts. Send traces to whatever OTLP backend the team already runs |
 | Pains | One agent, or one review card, per item. A run that crashes on every resume and is resumed forever. Not knowing whether an out-of-date row means "rebuilding" or "waiting for you". A restart that quietly resumes a run someone had stopped |
-| Must trust | The work board is a pure function of the event store, so a full rebuild and the live view agree. Budgets and the restart limit are counted from the event store, so a restart never resets them. A person's stop holds across every restart. A headless run in full bypass is confined by its sandbox, and its record is as complete and as verifiable as any other run's |
+| Must trust | The work board is a pure function of the event store, so a full rebuild and the live view agree. Budgets and the restart limit are counted from the event store, so a restart never resets them. A person's stop holds across every restart. A headless run never asks but still honours every deny rule, is confined by its sandbox, and its record is as complete and as verifiable as any other run's |
 | How they use Aksha | Run `aksha serve`; start runs from the CLI or the web app; start headless jobs inside a sandbox; watch the work board and the review inbox; `aksha stop` a run; `aksha trace` a run to an OTLP backend; `aksha verify` the hash chain |
 
 An operator sees only their own owner's runs in the first milestone. A view of status and counts across owners, never content, belongs to the general design.
@@ -130,7 +130,7 @@ Some actors are threats, and the design treats them as such:
 
 1. The personas come from design reading and the example agents' needs, not from interviews with real founders, operators or counsel.
 2. The operator's cross-owner view and any role model beyond "the authorised client may approve" are not designed for the first milestone.
-3. In a headless run nobody fills the reviewer role. Which checks replace the person there is open (see [scenario 5](03-scenarios.md#scenario-5-a-headless-job-runs-in-a-sandbox-with-full-bypass)).
+3. In a headless run nobody fills the reviewer role. The policy gate's deny rules, the recipients source and the sandbox replace the person for approvals (decision 26); what replaces the person for an `input` or `choice` interrupt is open (see [scenario 5](03-scenarios.md#scenario-5-a-headless-job-runs-in-a-sandbox-and-never-asks)).
 
 ## Sources
 

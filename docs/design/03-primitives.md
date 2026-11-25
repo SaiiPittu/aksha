@@ -193,5 +193,5 @@ After the amendments every row fits on paper for all three agents, except P30, w
 1. As of 26 Nov 2026 the verdicts are design reviews. The amendments were written into the ADRs on 25 Nov 2026, and the three reviews were not re-run against the amended text, so the "after" verdicts are my reading.
 2. Sizes and counts inside the ADRs are estimates unless they name a source.
 3. P30 (erasure) is open on purpose: the choice depends on where Aksha runs and under which data-protection law.
-4. Decision 23 (26 Nov 2026: headless runs in full bypass, with no approval prompts) postdates P11 and P17, and neither ADR yet says how a bypassed run meets the gate.
+4. Decision 26 (26 Nov 2026, amending decision 23): a headless run never asks, but every deny rule holds. P11 carries it as its decision 12; how P17's `input` and `choice` interrupts behave headless is still open.
 5. Future work that extends these primitives is in [future directions](05-future-directions.md).

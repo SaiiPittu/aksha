@@ -86,7 +86,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | ID | Feature | Priority | Primitives | Stories | Notes |
 |---|---|---|---|---|---|
 | F-13 | Tool registry with declared schemas and effect classes | Must | P10 | DEV-01, DEV-02 | Partly built |
-| F-14 | Policy gate: deny by default, one checker | Must | P11 | FND-06, DEV-01, OPS-05 | Partly built; how it meets headless bypass is open |
+| F-14 | Policy gate: deny by default, one checker | Must | P11 | FND-06, DEV-01, OPS-05 | Partly built; headless asks become allows, denies hold (decision 26) |
 | F-15 | Sandbox and execution environment | Later | P12 | DEV-08, OPS-05 | The first milestone ships a backend that refuses every call |
 | F-16 | Grounding and citations | Must | P13 | FND-02, CNS-01 | Tools mint citation spans; the runtime verifies every quote at save |
 | F-17 | Budgets, limits, timeouts and retries | Must | P14 | OPS-03 | Counted from the event store |
@@ -120,7 +120,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | ID | Feature | Priority | Primitives and decisions | Stories | Notes |
 |---|---|---|---|---|---|
 | F-32 | Server and embedded modes | Must | P19; decision 22 | OPS-08 | `aksha serve` and `aksha run` share one runtime |
-| F-33 | Headless mode in full bypass | Should | P11, P12, P17; decision 23 | OPS-05 | The mode and its record are Should; running it inside a real sandbox needs F-15, which is Later |
+| F-33 | Headless mode: never asks, denies hold | Should | P11, P12, P17; decisions 23 and 26 | OPS-05 | The mode and its record are Should; running it inside a real sandbox needs F-15, which is Later |
 | F-34 | Web app over the session API | Should | P19 | OPS-08, REV-05 | A scaffold runs against a mock server; it adds no runtime behaviour |
 | F-35 | Run inspector and chain verification | Must | P01, P21 | OPS-07 | `aksha inspect` and `aksha verify` |
 
