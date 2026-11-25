@@ -15,8 +15,9 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    input and every relation end and evidence source must be one of them
    (``read_not_seen``).
 4. Every read current (``read_invalidated``): an artifact read of a version this agent
-   wrote must be its slot's latest version, or, for a path-scoped read (S3), the latest
-   version's entry at that path must hash the same. A read of another agent's version is
+   wrote must be its slot's current version (the latest that is not a pending revision,
+   ADR-P05 D1), or, for a path-scoped read (S3), the current version's entry at that path
+   must hash the same. A read of another agent's version is
    pinned (D11) and stays current; only invalidation (ADR-P05) can make it stale.
 5. Relations: never ``derived_from`` or ``supersedes`` (``provenance_relation_forbidden``),
    a declared kind (``relation_undeclared``), a declared label (``relation_label_invalid``),
@@ -332,7 +333,7 @@ class ArtifactStore:
                 raise SaveRefused("read_invalidated", "", f"{read} is not in the store")
             if seen.writer.agent != writer.agent:
                 continue  # pinned: another agent's version (D11)
-            newest = self.latest(view, *ref.slot())
+            newest = self.current(view, *ref.slot())
             if newest is None or newest.ref == ref:
                 continue
             if read.path is not None and read.entry_hash is not None:

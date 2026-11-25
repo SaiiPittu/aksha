@@ -6,7 +6,10 @@ open run (and every owner the caller names), in ADR-P02 D5's fixed order:
 1. Reconcile the outbox entries that landed (ADR-P03 D7, ``OutboxWorker.reconcile
    ("landed")``): each claimed ``reconcile`` entry's system is asked by key, and a receipt
    it holds is recorded, never applied again.
-2. The source check (ADR-P05) goes here once it is built.
+2. The source check (ADR-P05 S2): a ``SourceCheck`` the composition root passes
+   (``invalidation.commands.check_sources`` over the owner's source adapters) records
+   what moved while the process was down, cause ``recovery``, through the one writer of
+   ``source.changed``, with the revocations it confirms. Without one, nothing is checked.
 3. Reconcile the entries that did not land (``reconcile("unlanded")``): a claimed
    ``at_most_once`` entry is closed ``outcome_unknown``; every other entry, claimed or
    only enqueued (a crash right after the deciding commit), is finished under its key if
@@ -53,8 +56,9 @@ returns, the end of its turn is a stop candidate: a stop it reached is honoured 
 
 Not built yet (slice-2 cuts):
 
-1. ``RecoveryReport.prior_exit``, ``reexecuted`` (ADR-P05) and ``rebuild_runs``; rebuild
-   runs themselves; ``recovery.completed`` (U7); ``replay_check`` (D11).
+1. ``RecoveryReport.prior_exit`` and ``rebuild_runs`` (rebuild runs are opened by
+   ``invalidation.rebuild.open_rebuild_runs`` after recovery); ``recovery.completed``
+   (U7); ``replay_check`` (D11).
 2. Taking the lock and checking the schema version is the storage adapter's open, not a
    step here.
 3. The rest of the stop-policy evaluation a resume record can hand over to (ADR-P16), and
@@ -228,6 +232,11 @@ class OwnerRecovery:
     held: tuple[str, ...] = ()
     reconciled: tuple[str, ...] = ()
     effects_unknown: tuple[str, ...] = ()
+    sources_moved: tuple[str, ...] = ()
+
+
+SourceCheck = Callable[[EventStore, str], tuple[str, ...]]
+"""Recovery's source check for one owner (ADR-P05 S2): records what moved, returns the sources."""
 
 
 @dataclass(frozen=True)
@@ -268,15 +277,16 @@ def recover_owner(
     loaded: Mapping[str, str],
     *,
     outbox: OutboxWorker | None = None,
+    source_check: SourceCheck | None = None,
 ) -> OwnerRecovery:
     """Steps 1 to 6 of the module docstring for one owner. ``loaded``: agent to hash.
 
     ``outbox`` is the owner's outbox worker; it may be None only when the owner has no
-    outbox entry left to finish.
+    outbox entry left to finish. ``source_check`` is step 2.
     """
     if not store.is_writer:
         raise NotRecoveryWriter(message="recovery needs the writer's store handle")
-    reconciled = _reconcile_outbox(store, owner, outbox)
+    reconciled, moved = _reconcile_outbox(store, owner, outbox, source_check)
     view = load_view(store, owner)
     runs = rebuild(RUNS, view)
     still_open = open_runs(runs)
@@ -312,16 +322,16 @@ def recover_owner(
     unknown = effects_unknown_steps(view, open_runs(rebuild(RUNS, load_view(store, owner))))
     return OwnerRecovery(
         owner, tuple(closed), tuple(ended), tuple(suspended), tuple(in_flight), tuple(held),
-        reconciled, unknown,
+        reconciled, unknown, moved,
     )  # fmt: skip
 
 
 def _reconcile_outbox(
-    store: EventStore, owner: str, outbox: OutboxWorker | None
-) -> tuple[str, ...]:
-    """Steps 1 to 3: the landed phase, the source check (P05, not built), the unlanded phase."""
+    store: EventStore, owner: str, outbox: OutboxWorker | None, source_check: SourceCheck | None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Steps 1 to 3: the landed phase, the source check (ADR-P05 S2), the unlanded phase."""
     if not pending_outbox(load_view(store, owner)):
-        return ()
+        return (), () if source_check is None else source_check(store, owner)
     if outbox is None:
         raise EffectNeedsOutbox(
             message=f"{owner} has outbox entries to finish and recovery was given no worker"
@@ -329,9 +339,9 @@ def _reconcile_outbox(
     if outbox.owner != owner:
         raise ValueError(f"the outbox worker runs {outbox.owner}'s entries, not {owner}'s")
     landed = outbox.reconcile("landed")
-    # ADR-P05's source check runs here, between the two phases, once it is built.
+    moved = () if source_check is None else source_check(store, owner)
     unlanded = outbox.reconcile("unlanded")
-    return tuple(e.key for e in (*landed, *unlanded))
+    return tuple(e.key for e in (*landed, *unlanded)), moved
 
 
 OutboxFor = Callable[[str], OutboxWorker]
@@ -344,18 +354,25 @@ def recover_on_startup(
     *,
     outbox: OutboxFor | None = None,
     owners: Iterable[str] = (),
+    source_check: SourceCheck | None = None,
 ) -> RecoveryReport:
     """Recover every owner with an open run, and ``owners``; drive nothing (D10).
 
     ``loaded`` maps an agent to its definition hash; ``outbox`` builds each owner's outbox
-    worker (needed for any owner with entries to finish).
+    worker (needed for any owner with entries to finish); ``source_check`` is step 2.
     """
     if not store.is_writer:
         raise NotRecoveryWriter(message="recovery needs the writer's store handle")
     every = dict.fromkeys((*store.owners_with_open_runs(), *owners))
     return RecoveryReport(
         tuple(
-            recover_owner(store, o, loaded, outbox=None if outbox is None else outbox(o))
+            recover_owner(
+                store,
+                o,
+                loaded,
+                outbox=None if outbox is None else outbox(o),
+                source_check=source_check,
+            )
             for o in every
         )
     )

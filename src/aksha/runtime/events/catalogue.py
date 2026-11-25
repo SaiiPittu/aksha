@@ -95,6 +95,10 @@ RUN_STARTED = EventTypeSpec(
             "api_version": {"type": "string", "pattern": "^[0-9]+[.][0-9]+$"},
             "runtime_commit": {"type": "string"},
             "dirty": {"type": "boolean"},
+            # ADR-P05 S1, D8: a rebuild run names the runs whose invalidated work it
+            # regenerates, and its key (one rebuild run per agent and source version).
+            "for_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "rebuild_key": {"type": "string", "pattern": "^rebuild:"},
             # ADR-P14 D2: the run's budget; a dimension left out is not capped.
             "budget": {
                 "type": "object",
@@ -449,7 +453,7 @@ BUDGET_GRANTED = EventTypeSpec(
 
 _KEY = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
 _SNAKE = {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
-_COMMAND_BOUNDARIES = frozenset({"U1", "U4", "U5"})
+_COMMAND_BOUNDARIES = frozenset({"U1", "U4", "U5", "U8"})
 
 OUTBOX_ENQUEUED = EventTypeSpec(
     name="outbox.enqueued",
@@ -617,8 +621,165 @@ INTERRUPT_VOIDED = EventTypeSpec(
         "additionalProperties": False,
     },
     writer="stop_policy",
-    boundaries=frozenset({"U3"}),
+    # U3: the stop ending; U2, U4, U8: invalidation voids a diff review whose revision went
+    # stale in the transaction that confirmed it (ADR-P05 D9).
+    boundaries=frozenset({"U2", "U3", "U4", "U8"}),
     dedup_key="ivoid:{run}/{interrupt}",
+)
+
+# --- P05 invalidation (``invalidation/``) ------------------------------------------------
+# The stored facts of invalidation are the source change, the query re-executions, the
+# saves and the revocations; every invalidation set is a projection over them (D3).
+# ``interrupt.raised``, ``interrupt.resolved`` and ``approval.requested`` are ADR-P17's
+# types; invalidation is their first core writer (a diff review and the fresh approval
+# request an acceptance makes), and P17 tightens their schemas when it is built.
+
+_REF_TEXT = {"type": "string", "minLength": 1}
+_HUNK = {
+    "type": "object",
+    "properties": {"path": {"type": "string"}, "old": {}, "new": {}},
+    "required": ["path"],
+    "additionalProperties": False,
+}
+_READ_STATUS = {
+    "type": "object",
+    "properties": {
+        "input": INPUT_REF_SCHEMA,
+        "state": {"enum": ["same", "equivalent", "moved", "unsettled", "gone"]},
+        "now": {"type": ["string", "null"]},
+    },
+    "required": ["input", "state", "now"],
+    "additionalProperties": False,
+}
+
+SOURCE_CHANGED = EventTypeSpec(
+    name="source.changed",
+    schema={
+        "type": "object",
+        "properties": {
+            "source_version": {"type": "integer", "minimum": 1},
+            "cause": {"enum": ["command", "recovery", "clock"]},
+            "change_set": {"type": "string"},
+            "sources": {"type": "object", "additionalProperties": {"type": "string"}},
+            "records": {
+                "type": "object",
+                "additionalProperties": {"type": ["string", "null"]},
+            },
+        },
+        "required": ["source_version", "cause", "sources", "records"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+QUERY_REEXECUTED = EventTypeSpec(
+    name="query.reexecuted",
+    schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "minLength": 1},
+            "source_version": {"type": "integer", "minimum": 1},
+            "previous": {"type": "string", "minLength": 1},
+            "hash": {"type": "string", "minLength": 1},
+            "changed": {"type": "boolean"},
+        },
+        "required": ["query", "source_version", "previous", "hash", "changed"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+APPROVAL_REVOKED = EventTypeSpec(
+    name="approval.revoked",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "target": _REF_TEXT,
+            "moved": {"type": "array", "items": INPUT_REF_SCHEMA},
+        },
+        "required": ["approval", "target", "moved"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U2", "U4", "U8"}),
+    dedup_key="revoke:{approval}",
+)
+INTERRUPT_RAISED = EventTypeSpec(
+    name="interrupt.raised",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            "kind": {"enum": ["input", "choice", "approval", "review"]},
+            # ADR-P05: a diff review's card, and the choice a rejected review raises (S4).
+            "old": _REF_TEXT,
+            "revision": _REF_TEXT,
+            "card_hash": _HASH,
+            "changed_reads": {"type": "array", "items": _READ_STATUS},
+            "via": {"type": "array", "items": {"type": "string"}},
+            "hunks": {"type": "array", "items": _HUNK},
+            "writer": {"type": "object"},
+            "reason": _SNAKE,
+        },
+        "required": ["interrupt"],
+        "allOf": [
+            {
+                "if": {"properties": {"kind": {"const": "review"}}, "required": ["kind"]},
+                "then": {"required": ["old", "revision", "card_hash", "hunks"]},
+            }
+        ],
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U2", "U4"}),
+)
+INTERRUPT_RESOLVED = EventTypeSpec(
+    name="interrupt.resolved",
+    schema={
+        "type": "object",
+        "properties": {"interrupt": {"type": "string", "minLength": 1}},
+        "required": ["interrupt"],
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+)
+REVIEW_ACCEPTED = EventTypeSpec(
+    name="review.accepted",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            "old": _REF_TEXT,
+            "revision": _REF_TEXT,
+            "card_hash": _HASH,
+        },
+        "required": ["interrupt", "old", "revision", "card_hash"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="review:{interrupt}",
+)
+REVIEW_REJECTED = EventTypeSpec(
+    name="review.rejected",
+    schema=REVIEW_ACCEPTED.schema,
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="review:{interrupt}",
+)
+APPROVAL_REQUESTED = EventTypeSpec(
+    name="approval.requested",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "targets": {"type": "array", "items": _REF_TEXT},
+            "replaces": {"type": "string", "minLength": 1},
+        },
+        "required": ["approval"],
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U2", "U4"}),
 )
 
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
@@ -645,6 +806,14 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     BUDGET_GRANTED,
     RUN_STOP_REQUESTED,
     INTERRUPT_VOIDED,
+    SOURCE_CHANGED,
+    QUERY_REEXECUTED,
+    APPROVAL_REVOKED,
+    INTERRUPT_RAISED,
+    INTERRUPT_RESOLVED,
+    REVIEW_ACCEPTED,
+    REVIEW_REJECTED,
+    APPROVAL_REQUESTED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

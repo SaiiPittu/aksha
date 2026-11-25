@@ -73,15 +73,34 @@ def latest(
     return found[-1] if found else None
 
 
+def unaccepted_revisions(view: LogView) -> frozenset[str]:
+    """The refs of pending revisions no person has accepted (ADR-P05 D1).
+
+    A diff review (``interrupt.raised{kind: review}``) proposes a revision; only a
+    ``review.accepted`` naming it makes it current. A revision whose review was rejected or
+    voided stays unaccepted for good, and the writer saves a new one. Read by name: the
+    invalidation primitive writes these facts.
+    """
+    proposed: set[str] = set()
+    accepted: set[str] = set()
+    for e in view.events:
+        if e.type == "interrupt.raised" and e.payload.get("kind") == "review":
+            proposed.add(str(e.payload["revision"]))
+        elif e.type == "review.accepted":
+            accepted.add(str(e.payload["revision"]))
+    return frozenset(proposed - accepted)
+
+
 def current(
     view: LogView, kind: str, key: str | None, *, blobs: BlobStore | None = None
 ) -> ArtifactVersion | None:
     """The latest version that is not an unaccepted pending revision.
 
-    No pending revision exists until diff review (ADR-P05) is built, so this is
-    :func:`latest`; callers that mean "current" say so, and keep their meaning when it is.
+    Readers see the old version while its diff review is open (ADR-P05 D1).
     """
-    return latest(view, kind, key, blobs=blobs)
+    pending = unaccepted_revisions(view)
+    found = [v for v in versions(view, kind, key, blobs=blobs) if str(v.ref) not in pending]
+    return found[-1] if found else None
 
 
 def version(
