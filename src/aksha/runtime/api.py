@@ -21,7 +21,14 @@ What an agent or extension declares, grouped by the primitive that owns it:
    (P17), ``SandboxNeeds`` and ``SandboxPolicy`` (P12).
 6. Stop policies (P16): ``StopPolicyOptIn``, ``Goal``, ``Plan``, ``ForcedTool``,
    ``TodoReminder``. Interrupts (P17): ``DeclaredInterrupt``.
-7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``.
+7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``; what an alias
+   declares: ``FieldSpec``, ``QuestionSpec``, ``ConfidenceThresholds``; what a rule-based
+   fake adapter reads and returns: ``ModelCapabilities``, ``ExtractionRequest``,
+   ``ExtractionResult``, ``FieldAnswer``, ``SpanRef``, ``ClassificationRequest``,
+   ``ClassificationResult``, ``ClassAnswer``, ``GenerationRequest``, ``GenerationResult``,
+   ``Message``, ``ToolCall``, ``Usage``; the bases ``RuleExtractionModel``,
+   ``RuleClassificationModel``, ``RuleGenerationModel``; and the fixed-point helpers
+   ``ppm``, ``distribution_ppm``, ``decimal_string``.
 8. Limits and context (P14, P08): ``Budget``, ``Limits``, ``Backoff``, ``ContextPolicy``,
    ``SummaryPolicy``.
 9. Grounding (P13): ``SpanDraft`` (what a read tool's ``Ok`` asks the runtime to mint),
@@ -53,7 +60,33 @@ from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.grounding.types import CitePolicy, SpanDraft, Unknown, maybe_unknown
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.types import VersionedSourceSpec
-from aksha.runtime.models.types import ModelAdapterSpec, ModelAlias, ModelClass
+from aksha.runtime.models.fixed import decimal_string, distribution_ppm, ppm
+from aksha.runtime.models.rules import (
+    RuleClassificationModel,
+    RuleExtractionModel,
+    RuleGenerationModel,
+)
+from aksha.runtime.models.types import (
+    ClassAnswer,
+    ClassificationRequest,
+    ClassificationResult,
+    ConfidenceThresholds,
+    ExtractionRequest,
+    ExtractionResult,
+    FieldAnswer,
+    FieldSpec,
+    GenerationRequest,
+    GenerationResult,
+    Message,
+    ModelAdapterSpec,
+    ModelAlias,
+    ModelCapabilities,
+    ModelClass,
+    QuestionSpec,
+    SpanRef,
+    ToolCall,
+    Usage,
+)
 from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec
 from aksha.runtime.projections.ports import Reducer
 from aksha.runtime.projections.view import ArtifactsView, LogView
@@ -104,6 +137,10 @@ __all__ = [
     "Check",
     "CheckResult",
     "CitePolicy",
+    "ClassAnswer",
+    "ClassificationRequest",
+    "ClassificationResult",
+    "ConfidenceThresholds",
     "ContextPolicy",
     "DeclaredInterrupt",
     "EffectClass",
@@ -115,8 +152,14 @@ __all__ = [
     "EventTypeSpec",
     "Excerpt",
     "Extension",
+    "ExtractionRequest",
+    "ExtractionResult",
+    "FieldAnswer",
+    "FieldSpec",
     "ForcedTool",
     "FromField",
+    "GenerationRequest",
+    "GenerationResult",
     "Goal",
     "InputRef",
     "InstanceRef",
@@ -124,23 +167,30 @@ __all__ = [
     "KeySource",
     "Limits",
     "LogView",
+    "Message",
     "ModelAdapterSpec",
     "ModelAlias",
+    "ModelCapabilities",
     "ModelClass",
     "NewEvent",
     "Ok",
     "Plan",
     "Projection",
+    "QuestionSpec",
     "Read",
     "Reducer",
     "RelationKind",
     "RelationRequest",
     "RetryPolicy",
+    "RuleClassificationModel",
+    "RuleExtractionModel",
+    "RuleGenerationModel",
     "SandboxBackendSpec",
     "SandboxNeeds",
     "SandboxPolicy",
     "SaveRequest",
     "SpanDraft",
+    "SpanRef",
     "StopPolicyOptIn",
     "SummaryPolicy",
     "SystemOfRecordSpec",
@@ -148,15 +198,20 @@ __all__ = [
     "TaskView",
     "TodoReminder",
     "ToolBody",
+    "ToolCall",
     "ToolContext",
     "ToolDecl",
     "ToolOutcome",
     "ToolSpec",
     "ToolUse",
     "Unknown",
+    "Usage",
     "VersionedSourceSpec",
     "artifact_keys",
+    "decimal_string",
+    "distribution_ppm",
     "from_field",
     "maybe_unknown",
+    "ppm",
     "source_keys",
 ]

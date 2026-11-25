@@ -29,6 +29,7 @@ from aksha.runtime.definitions.tree_checks import (
 )
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION, satisfies
+from aksha.runtime.models.checks import alias_problems
 from aksha.runtime.models.types import MODEL_CLASSES
 from aksha.runtime.tasks.tree import MAX_CONCURRENCY
 from aksha.runtime.tools.checks import tool_refusals
@@ -199,6 +200,9 @@ def _aliases(agent: Agent, out: Refusals) -> None:
         if alias.model_class not in MODEL_CLASSES:
             message = f"{alias.name!r}: no model class {alias.model_class!r}"
             out.add("model_aliases", "alias_class_unknown", message)
+            continue
+        for code, message in alias_problems(alias):
+            out.add("model_aliases", code, message)
         for fb in alias.fallback:
             other = aliases.get(fb)
             if other is None or other.model_class != alias.model_class:

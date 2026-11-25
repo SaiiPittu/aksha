@@ -101,6 +101,24 @@ RUN_STARTED = EventTypeSpec(
             # regenerates, and its key (one rebuild run per agent and source version).
             "for_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
             "rebuild_key": {"type": "string", "pattern": "^rebuild:"},
+            # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
+            # class, native), with its hash; never a configuration value or a key.
+            "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},
+            "models": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "alias": {"type": "string", "minLength": 1},
+                        "model_class": {"enum": ["extraction", "classification", "generation"]},
+                        "adapter": {"type": "string", "minLength": 1},
+                        "native": {"type": "boolean"},
+                    },
+                    "required": ["alias", "model_class", "adapter", "native"],
+                    "additionalProperties": False,
+                },
+            },
+            "model_binding": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
             # ADR-P14 D2: the run's budget; a dimension left out is not capped.
             "budget": {
                 "type": "object",
@@ -349,6 +367,12 @@ STEP_STARTED = EventTypeSpec(
             "counted": {"type": "boolean"},
             # ADR-P03 D1: the idempotency key of the entry an effectful call enqueued.
             "outbox_key": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            # ADR-P07: what answered a model step, and the cascade candidate it replaces.
+            "model_class": {"enum": ["extraction", "classification", "generation"]},
+            "alias": {"type": "string", "minLength": 1},
+            "adapter": {"type": "string", "minLength": 1},
+            "native": {"type": "boolean"},
+            "replaces": {"type": "string", "minLength": 1},
         },
         "required": ["kind", "counted"],
     },
