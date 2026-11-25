@@ -1,0 +1,96 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Review context for automated reviewers. The rules live in REVIEWING.md; the
+# path instructions below point each area of the tree at the invariants it carries.
+language: en-US
+early_access: false
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  sequence_diagrams: true
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!**/*.lock"
+    - "!**/.venv/**"
+    - "!**/__pycache__/**"
+  path_instructions:
+    - path: "src/aksha/runtime/**"
+      instructions: |
+        This is the domain. Read REVIEWING.md first and check every invariant there. In particular:
+        - Dependency rule: no import of aksha.adapters, aksha.agents, aksha.extensions, aksha.interfaces
+          or aksha.app, and no third-party package except jsonschema. Imports under TYPE_CHECKING count.
+          Every typing.Protocol lives in a ports.py. A change to runtime/api.py must bump the extension API version.
+        - Store facts, derive interpretations: flag any stored status, counter, flag, retry count or
+          remaining budget. Those must be projections built by pure reducers, and caches must equal a rebuild.
+        - Single writer and hash chain: no update or delete path; dedup rules are unique indexes, not
+          Python checks; any change to canonical.py, storage/chain.py or the event envelope changes hashed
+          bytes and needs a schema version bump and a test pinned to a recorded hash.
+        - Idempotency: every external effect goes through the outbox before the call, keyed by a SHA-256 of
+          its declared key fields (never a timestamp or random value); every tool declares at_least_once,
+          reconcile or at_most_once; a dispatched at_most_once step is never retried automatically.
+        - Determinism: no datetime.now, time.time, time.sleep, uuid4, random or secrets in this tree.
+          Time comes from the Clock port, IDs from the event store.
+        - Policy gate (runtime/policy/): check() is pure, denies by default, returns Refuse("gate_error") on
+          any exception, runs layers 0 to 7 in the ADR-P11 order, and takes no model-written input. Headless
+          mode changes only the approval route in resolve_ask; every deny still holds. Flag any read of the
+          headless flag outside the gate.
+        - No agent-specific code: no agent, fixture or tool name in logic and no branch on agent identity.
+        - Check the code against the ADR the PR names in docs/design/adr/, decision by decision. A silent
+          divergence from the ADR is a blocking finding; an amendment in the same PR is acceptable.
+    - path: "src/aksha/adapters/**"
+      instructions: |
+        Adapters implement runtime ports. Read REVIEWING.md. Check:
+        - An adapter imports the runtime's ports and values, its own family and libraries only; never another
+          adapter family, agents, extensions or interfaces.
+        - Storage adapters: append-only (triggers refuse UPDATE and DELETE), one writer under a single-writer
+          lock, transaction boundaries from the runtime's closed list, dedup keys as unique indexes, every read
+          scoped by owner, and the hash chain computed from the runtime's canonical bytes, never re-implemented.
+        - SQLite and PostgreSQL must pass the same contract suite unchanged. An adapter-specific skip or branch
+          in the contract tests is a blocking finding.
+        - The genesis store ID is the one sanctioned random value and is created here, not in the runtime.
+        - No credentials, DSNs or personal paths in code or defaults.
+    - path: "src/aksha/agents/**"
+      instructions: |
+        An agent imports only aksha.runtime.api and the extensions it names. Its structure is declared data;
+        its behaviour is named pure functions. It opts into built-in stop policies by configuration and never
+        subclasses one. Every effectful tool declares its system of record and key fields, or at_most_once.
+    - path: "tests/**"
+      instructions: |
+        Judge each test by one question: would it fail if the code it covers were wrong? Flag tests that
+        mock the thing they claim to test, assert only that no exception was raised, or skip on one adapter.
+        Storage rules are tested through the shared contract suite against both adapters. Crash guarantees are
+        tested by stopping at the named crash point and restarting, then asserting the effect landed once.
+        Gate refusals assert the layer and the refusal code. Guards in tests/architecture/ must plant a
+        violation in a temporary copy and assert the guard reports it. Flag deleted tests, dropped assertions
+        and new skip or xfail markers that lack a reason and an issue link. Fixtures are synthetic.
+    - path: "docs/design/**"
+      instructions: |
+        These are the design records. Do not comment on wording, length or style. Check only:
+        - A statement does not contradict the code or another ADR.
+        - Status labels (Accepted, Proposed, Open) change only with a matching entry in
+          docs/design/04-decisions-log.md.
+        - Sources cite the design's own records, public papers, standards or public posts by their authors;
+          no external harness or product is named as the source of a design.
+        - Nothing names a private person, client or project; the repository is public.
+    - path: "fixtures/**"
+      instructions: |
+        Every fixture is synthetic and must say so in the file or in its world's manifest.json. Patent and
+        publication identifiers use the SYN- prefix; flag any real-looking patent number. Do not review the
+        fixture prose for style.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "REVIEWING.md"
+
+chat:
+  auto_reply: true
