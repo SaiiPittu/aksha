@@ -28,11 +28,11 @@ The first milestone's agent-side answer, with no core change: The Patent Agent's
 
 ## Alternatives considered
 
-| Option | Prior art | For | Against | Verdict |
-|---|---|---|---|---|
-| A. Each adapter tracks its own records | The first milestone agent-side answer | No core change | Every adapter reimplements it; the interface cannot show it uniformly | the first milestone only |
-| B. A fact graph that flags prior work as outdated | Harvey's engineering posts describe one, announced and not shown in use (notes on Harvey's engineering posts, 22 Nov 2026) | Same goal | Not shown working | Shape adopted as a projection |
-| C. A projection over outbox completions (lean) | ADR-P03's outbox | No new store; cannot disagree with the event store | Needs `record_fields` declared | Chosen |
+| Option | For | Against | Verdict |
+|---|---|---|---|
+| A. Each adapter tracks its own records | No core change | Every adapter reimplements it; the interface cannot show it uniformly | the first milestone only |
+| B. A fact graph that flags prior work as outdated | Same goal | Not shown working | Shape adopted as a projection |
+| C. A projection over outbox completions (lean) | No new store; cannot disagree with the event store | Needs `record_fields` declared | Chosen |
 
 ## Interface
 

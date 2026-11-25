@@ -54,14 +54,14 @@ Caption: people reach the runtime only through the session API, and agents reach
 
 ## 1. The harness problem: seven pieces every agent team rebuilds
 
-Most agent frameworks give a developer a model call and a tool loop, and leave the rest of a real workflow to be rebuilt for each agent. Reading other harnesses' code on 25 Nov 2026, I found seven pieces that every agent team rebuilds:
+Most agent frameworks give a developer a model call and a tool loop, and leave the rest of a real workflow to be rebuilt for each agent. Seven pieces come up in every agent team's rebuild:
 
-| Piece every team rebuilds | What I found in other harnesses | What Aksha does instead | Primitive |
+| Piece every team rebuilds | What goes wrong without it | What Aksha does instead | Primitive |
 |---|---|---|---|
-| Who decides that the agent may stop | Coding harnesses converged on a stop hook that blocks with a reason, and did not converge on how two hooks combine, how continuations are capped, or whether the counter survives a restart | One stop-policy evaluation at every turn end, recorded as one event | [P16](../adr/ADR-P16-stop-policy-and-evaluation.md) |
+| Who decides that the agent may stop | A stop hook that blocks with a reason leaves open how two hooks combine, how continuations are capped, and whether the counter survives a restart | One stop-policy evaluation at every turn end, recorded as one event | [P16](../adr/ADR-P16-stop-policy-and-evaluation.md) |
 | Durable state and resume after a crash | No defined answer for a tool whose receiver keeps no ledger, a run that crashes on every resume, or a message that arrives twice | One event store; deterministic step IDs; one recovery sequence at startup | [P01](../adr/ADR-P01-event-store-and-projections.md), [P02](../adr/ADR-P02-durable-execution.md) |
-| What a changed input makes out of date | Most harnesses have no notion of an output's inputs; a completed task stays completed until someone reopens it | Lineage on every artifact, and invalidation of exactly the work that read the change | [P04](../adr/ADR-P04-artifact-store-and-lineage.md), [P05](../adr/ADR-P05-invalidation.md) |
-| Context that only grows | Every harness I read grew compaction, because its unit of work is one conversation that only grows | One model context per Task instance, built as a projection | [P08](../adr/ADR-P08-context-assembly-and-compaction.md) |
+| What a changed input makes out of date | With no record of an output's inputs, a completed task stays completed until someone reopens it | Lineage on every artifact, and invalidation of exactly the work that read the change | [P04](../adr/ADR-P04-artifact-store-and-lineage.md), [P05](../adr/ADR-P05-invalidation.md) |
+| Context that only grows | When the unit of work is one conversation that only grows, compaction becomes unavoidable | One model context per Task instance, built as a projection | [P08](../adr/ADR-P08-context-assembly-and-compaction.md) |
 | Delegation across many items | Delegation left to the model's choice gets skipped, and model-kept status lags or runs ahead of the facts | A scheduler starts work from declarations; no model spawns work | [P15](../adr/ADR-P15-task-model-and-scheduler.md) |
 | Typed answers from models | One chat interface forces extraction and classification through chat calls, which loses spans and probabilities | Model routing by class: extraction, classification and generation each have their own contract | [P07](../adr/ADR-P07-model-interface-and-routing.md) |
 | Running programs safely | The sandbox is either long-lived state to snapshot, or throwaway with no record of what went in | A fresh sandbox workspace per run, built from artifact versions | [P12](../adr/ADR-P12-sandbox-and-execution-environment.md) |

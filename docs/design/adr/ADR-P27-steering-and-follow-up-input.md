@@ -36,12 +36,12 @@ For the product requirements' agents a run lasts seconds; for a coding session i
 
 ## Alternatives considered
 
-| Option | Prior art | For | Against | Verdict |
-|---|---|---|---|---|
-| A. Lanes by key binding in the interface only | Decode: Enter steers the next model call, Alt+Enter queues a follow-up for when the agent would stop, Esc aborts (code, `src/decode/tui/app.py:107-113` at `2ba55b5`, as the maintainer's coding-agent course notes section 5 records) | Proven lanes | In memory; lost on crash; each interface reimplements it | Adopted as the lanes, made durable |
-| B. Queue or steer a message during a run | T3 Code: a message that arrives during a run is queued or steers it, and queued messages are held after Stop (the T3 Code comparison notes, section 2.1; docs, `docs/user/composer.md:282-286` at `ca81b7b9`) | Server-owned | No amendment lane | Adopted for steer and follow-up |
-| C. A default lane | None | One less question | Each default is wrong for one agent: steer loses the Research scope change, amend reopens a coding session's plan | Rejected |
-| D. Three durable lanes, explicit choice (lean) | A and B | Survives a crash; replay sees the same inputs | One more question for the person | Chosen |
+| Option | For | Against | Verdict |
+|---|---|---|---|
+| A. Lanes by key binding in the interface only | Proven lanes | In memory; lost on crash; each interface reimplements it | Adopted as the lanes, made durable |
+| B. Queue or steer a message during a run | Server-owned | No amendment lane | Adopted for steer and follow-up |
+| C. A default lane | One less question | Each default is wrong for one agent: steer loses the Research scope change, amend reopens a coding session's plan | Rejected |
+| D. Three durable lanes, explicit choice (lean) | Survives a crash; replay sees the same inputs | One more question for the person | Chosen |
 
 ## Interface
 

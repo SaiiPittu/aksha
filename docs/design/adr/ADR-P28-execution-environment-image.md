@@ -15,7 +15,7 @@ The terms:
 
 ## Context: what breaks without it
 
-`run_tests` starts in a fresh `/work` with the network off and only interpreter paths readable, so `import fastapi` fails, and `uv sync` cannot reach a package index. The field puts dependencies in the box's image or installs them in a long-lived box: Decode's container image defaults to `ghcr.io/astral-sh/uv:python3.12-bookworm-slim` (code, `src/decode/config/settings.py:251`), installs git and the GitHub CLI per session (code, `src/decode/sandbox/docker_backend.py:290`), and keeps one box whose filesystem persists between calls (code, `executor.py:5`), all at `2ba55b5`. Aksha has no long-lived box, so dependencies need their own recorded, hashed input.
+`run_tests` starts in a fresh `/work` with the network off and only interpreter paths readable, so `import fastapi` fails, and `uv sync` cannot reach a package index. The usual answers are to put dependencies in the box's image, or to install them per session in a long-lived box whose filesystem persists between calls. Aksha has no long-lived box, so dependencies need their own recorded, hashed input.
 
 ## Decision
 
@@ -29,7 +29,7 @@ The terms:
 
 | Option | For | Against | Verdict |
 |---|---|---|---|
-| A. A long-lived box per session | Simple; what Decode does | State the event store cannot see; a crash loses it; reopens ADR-P12's fresh-box rule | Rejected |
+| A. A long-lived box per session | Simple | State the event store cannot see; a crash loses it; reopens ADR-P12's fresh-box rule | Rejected |
 | B. Network on for every exec | No new primitive | Every test run can exfiltrate | Rejected |
 | C. A content-addressed image built once per lock hash (lean) | Recorded, hashed, cached; network on in one step only | A build step to design | Chosen |
 

@@ -21,10 +21,10 @@ Terms used here, in the industry names of the design glossary:
 
 ## Context: a counter in memory turns "three tries" into "three tries per process"
 
-The product requirements require enforced tool-call limits, timeouts and bounded retries, and asks that a run that hits any of them keep its useful partial work. Two findings from the comparison shape the answer.
+The product requirements require enforced tool-call limits, timeouts and bounded retries, and asks that a run that hits any of them keep its useful partial work. Two observations shape the answer.
 
-1. **Budgets stated in prompts do not hold.** Ramp Labs' post of 21 Apr 2026 found coding agents ignore budgets stated in their prompts, so the cap must be in code.
-2. **Counters kept in memory reset on restart.** ADK's `max_llm_calls`, LangGraph's step budget and Codex's `stop_hook_active` all reset when the process does (stop-ownership 01, section 1.2; LangGraph `pregel/_loop.py:1935-1936` at `732da520`). Codex's Stop-hook path has no cap at all on a hook that ignores the flag (stop-ownership 01, section 3.1). Claude Code caps consecutive Stop-hook blocks at eight (hooks guide). T3 Code is the counter-example that does it right: at most 3 restart continuations in 5 minutes, counted by walking stored parent links, and 3 resends, counted from outbox attempts (`RestartContinuation.ts:42-43`, `:290-310`; `ProviderRuntimeRecoveryService.ts:62`, `:458-478` at `ca81b7b9`).
+1. **Budgets stated in prompts do not hold.** A budget stated only in the prompt is advice the model may ignore, so the cap must be in code.
+2. **Counters kept in memory reset on restart.** A model-call limit, a step budget or a stop-hook guard flag held in process memory resets when the process does, and a stop-hook path with no cap at all lets a hook that ignores the flag loop forever. The durable shape is a cap counted from stored records: for example, at most 3 restart continuations in 5 minutes, counted by walking stored parent links, and 3 resends, counted from outbox attempts.
 
 The contrast coding agent is where a reset counter does damage: it runs long, crashes more often than a short document run (a test suite that exhausts memory, a laptop that sleeps), and a retry loop that resets on each recovery can spin for hours. A durable harness without durable counters is not bounded.
 
@@ -41,7 +41,7 @@ The contrast coding agent is where a reset counter does damage: it runs long, cr
    | Allowed | The budget on `run.started` plus the `extra` of every `budget.granted` | A grant is a person's recorded command |
 
 3. **Retry attempts are counted from the event store too (new rule).** The attempt number of a step is one plus the number of `step.failed` events recorded under its deterministic step ID. After a crash, the durable step executor resumes the attempt count rather than starting at one, so `max_retries=2` means three attempts in total across every process that runs the step. v2 recorded attempts but did not say a restart continues the count.
-4. **Bounded retry only for failures a retry can fix.** `retry_on` defaults to `{timeout, transient}`. A raising tool body (`tool_exception`), a schema refusal, an invalid model answer and an exec timeout are never retried, because each repeats; the Vercel AI SDK makes the same split with `maxRetries` default 2 for transient provider failures and no retry for invalid answers (`packages/ai/src/extract/extract.ts:75`). Backoff is fixed (base 500 ms, factor 2, cap 4 s, no jitter) and runs on the injected clock in fake model mode, so two fake runs are identical. When attempts run out, the step records an error result, the item it served stays unverified (ADR-P13's `Unknown(reason="unverified")`), and the run continues.
+4. **Bounded retry only for failures a retry can fix.** `retry_on` defaults to `{timeout, transient}`. A raising tool body (`tool_exception`), a schema refusal, an invalid model answer and an exec timeout are never retried, because each repeats. Backoff is fixed (base 500 ms, factor 2, cap 4 s, no jitter) and runs on the injected clock in fake model mode, so two fake runs are identical. When attempts run out, the step records an error result, the item it served stays unverified (ADR-P13's `Unknown(reason="unverified")`), and the run continues.
 5. **A timeout abandons the attempt; it does not pretend to kill it.** A tool body on a worker thread cannot be killed in Python, so at the deadline the step executor records `step.failed{timeout}` and stops waiting. A late value from the abandoned attempt is recorded as `attempt.discarded` and saved nowhere; tool bodies never write the event store, which is what makes abandonment safe. An external effect started by an abandoned attempt is covered by its idempotency key and reconciliation (PR-03), as a crash would be. An exec's timeout does kill: The sandbox kills the process group at the deadline (ADR-P12).
 6. **The gate refuses; the stop policy acts.** When budget accounting shows a dimension spent, the policy gate refuses the next tool call `budget_exhausted` (not counted) and skips the turn's remaining calls; it raises nothing. At the next turn end, stop-policy evaluation replaces the proposed CONTINUE with a budget interrupt and commits `budget.reached`, the interrupt-raised record and the stop decision record in one transaction. A person then grants more (`budget.granted`) or stops; either way the artifacts already saved stay intact, which is the product requirements' "useful partial work".
 7. **Limits inside a run, each counted from the event store:**
@@ -53,7 +53,7 @@ The contrast coding agent is where a reset counter does damage: it runs long, cr
    | Restart limit (S2: ADR-P02 D8's rule) | 3 | Resume records since the run's last progress (a completed tool step or a saved artifact) | The run ends `failed, restart_limit` through a stop decision, never by boot directly |
    | Automatic-start limit (new, designed) | 3 in 5 minutes per run | Resume records, rebuild-run starts and continuation records, with their recorded timestamps (v2 dropped `run.resumed`, LC-3, so the resume record is the fact) | Further automatic starts are refused and the run is held for a person |
 
-   The automatic-start limit is T3 Code's chain cap made general: any start the runtime core makes without a person's command (recovery on startup, a rebuild run after invalidation, a supervisor re-entry) counts. Its window uses recorded timestamps, so it is still a projection; in fake model mode the injected clock keeps it deterministic. It also feeds the hold invariant of TC-4: a held run never starts automatically, and this limit is the backstop when something is not held but keeps restarting.
+   The automatic-start limit is a restart-chain cap made general: any start the runtime core makes without a person's command (recovery on startup, a rebuild run after invalidation, a supervisor re-entry) counts. Its window uses recorded timestamps, so it is still a projection; in fake model mode the injected clock keeps it deterministic. It also feeds the hold invariant of D13-4: a held run never starts automatically, and this limit is the backstop when something is not held but keeps restarting.
 8. **Budgets nest by narrowing.** An agent declares a budget; a Task may declare a smaller one for its subtree; a fanned-out Task instance may not exceed its parent's remainder. A supervisor Task's children draw from the supervisor's budget. Nothing widens a budget except a person's grant.
 9. **Tokens and money are designed, recorded first.** Model steps record usage (input and output tokens, provider-reported cost) on `step.completed`. Budget dimensions `tokens` and `cost_micro_usd` reduce over those fields once PR-07 ships them. The first milestone enforces turns, tool calls and active time, which are what the product requirements name.
 
@@ -67,14 +67,14 @@ The coding agent raises the defaults (25 turns, 40 calls, 120 seconds of active 
 
 ## Alternatives considered
 
-| Option | What it is | Prior art | For | Against | Verdict |
-|---|---|---|---|---|---|
-| A. Budget in the prompt | The model is told its limits | Ramp Labs, 21 Apr 2026, showing agents ignore them | No code | Fails the product requirements | Rejected |
-| B. In-memory counters in the loop | A field incremented per call | ADK `max_llm_calls`; LangGraph step budget (`pregel/_loop.py:1935-1936` at `732da520`); Codex `stop_hook_active` | Simple, fast | Resets on every restart; a crash loop is unbounded | Rejected |
-| C. Per-sample limits in an eval runner | Message, token, time and working-time limits per sample | Inspect AI, `src/inspect_ai/_util/working.py` at `a8b02a1` | Rich dimensions, working time separate from wall time | Scoped to one eval sample, not a durable multi-day run | Taken for the dimensions and for "active time excludes waiting" |
-| D. Caps counted from stored records | Walk stored links and attempts to count | T3 Code (`RestartContinuation.ts:290-310`; `ProviderRuntimeRecoveryService.ts:458-478` at `ca81b7b9`); Pi Durable's `restartLimit` and DBOS's `max_recovery_attempts` (durability note) | Survives restarts; auditable | Each count is a query; needs the projection cache | Chosen, generalised to every cap (decision 1) |
-| E. Kill a timed-out thread | Interrupt the worker | None safe in CPython; `concurrent.futures` cannot cancel a running call | Frees the worker | Not possible without a process boundary | Rejected; abandon and discard instead, kill only exec process groups |
-| F. Retry everything up to N | One retry rule for all failures | Decode raised its tool retry budget from 1 to 5 because the default killed real runs (landscape note section 3) | Fewer spurious failures | Retries bugs and invalid answers, spending budget on repeats | Rejected; retry only `timeout` and `transient` |
+| Option | What it is | For | Against | Verdict |
+|---|---|---|---|---|
+| A. Budget in the prompt | The model is told its limits | No code | Fails the product requirements | Rejected |
+| B. In-memory counters in the loop | A field incremented per call | Simple, fast | Resets on every restart; a crash loop is unbounded | Rejected |
+| C. Per-sample limits in an eval runner | Message, token, time and working-time limits per sample | Rich dimensions, working time separate from wall time | Scoped to one eval sample, not a durable multi-day run | Taken for the dimensions and for "active time excludes waiting" |
+| D. Caps counted from stored records | Walk stored links and attempts to count | Survives restarts; auditable | Each count is a query; needs the projection cache | Chosen, generalised to every cap (decision 1) |
+| E. Kill a timed-out thread | Interrupt the worker | Frees the worker | Not possible without a process boundary | Rejected; abandon and discard instead, kill only exec process groups |
+| F. Retry everything up to N | One retry rule for all failures | Fewer spurious failures | Retries bugs and invalid answers, spending budget on repeats | Rejected; retry only `timeout` and `transient` |
 
 ## Interface
 
@@ -141,6 +141,3 @@ Verdict after the amendments: fits for all three once S1 and S2 land. Both are f
 
 Open for the maintainer: none new.
 
-## Sources (public)
-
-1. Shaiyon Hariri, "Coding agents ignore their own budgets", Ramp Labs, 21 Apr 2026 (page).

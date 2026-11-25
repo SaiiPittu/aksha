@@ -12,7 +12,7 @@ Open, 25 Nov 2026. Decision for the maintainer; I propose no shape. Found by the
 
 ## Context
 
-Contributor names and an outside consultant's employer sit in `excerpts.minted` payloads and in every artifact that cites them, and ADR-P01's triggers refuse `DELETE`. Memory has the same problem: mem0 keeps deleted text in its history table (code, `mem0/memory/main.py:2116-2138` at `8096993`, through ADR-P09). The product requirements does not ask for erasure.
+Contributor names and an outside consultant's employer sit in `excerpts.minted` payloads and in every artifact that cites them, and ADR-P01's triggers refuse `DELETE`. Memory has the same problem: a memory store that keeps a history table still holds deleted text. The product requirements does not ask for erasure.
 
 ## Options (from ADR-P09 MEM-3, generalised to the whole store)
 
@@ -30,6 +30,3 @@ Options A and B both change ADR-P01's authority rule, and the choice depends on 
 
 Not stress-tested: there is no design to test.
 
-## Sources (public)
-
-1. mem0 at `8096993`, `mem0/memory/main.py:2116-2138`, through ADR-P09.

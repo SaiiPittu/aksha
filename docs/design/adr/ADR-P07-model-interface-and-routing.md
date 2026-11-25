@@ -32,9 +32,9 @@ Terms used here:
 
 My lean:
 
-1. Three protocols, one per model class, each with its own operation: `GenerationModel.generate`, `ExtractionModel.extract`, `ClassificationModel.classify`. The request and result types are Aksha's own frozen dataclasses. This renames v2's `Model.next`, `Extractor` and `Decider`, following the Vercel AI SDK's `LanguageModelV4`, `ExtractionModelV4` and `DecisionModelV4` split.
+1. Three protocols, one per model class, each with its own operation: `GenerationModel.generate`, `ExtractionModel.extract`, `ClassificationModel.classify`. The request and result types are Aksha's own frozen dataclasses. This renames v2's `Model.next`, `Extractor` and `Decider`.
 2. Routing is by declaration, not by request content. An agent declares model aliases with their class; a Task, a verification rule or a fast-class tool names the alias it uses; the generation alias of every Task is implicit and named `generate`. At load, the run mode binds each alias to one adapter, the loader refuses an adapter whose class differs from the alias's class (`model_class_mismatch`) and a field or question type the adapter does not support (`unsupported_type`), and the binding is hashed into the agent definition version hash, so a run cannot resume under a different binding.
-3. Every adapter carries a capability record: native or adapted, the field and question types it supports, whether it returns spans and distributions, whether it works offline. The loader and the cascade branch on these fields, never on the adapter's name or vendor. This is T3 Code's capability record (PR-19) applied to models, and oh-my-pi's rule of classifying each judge candidate by its model API rather than by who provides it (`coding-agent/src/judgment/index.ts:262-273`).
+3. Every adapter carries a capability record: native or adapted, the field and question types it supports, whether it returns spans and distributions, whether it works offline. The loader and the cascade branch on these fields, never on the adapter's name or vendor. This is the session API's capability record (PR-19) applied to models: each candidate is classified by its model API, never by who provides it.
 4. Code applies every confidence threshold; a model never does. A fast-class answer is accepted only at or above `accept_at` (and, for extraction, only with a span inside the minted citation spans it was given); otherwise it abstains. Each threshold carries `fitted_on`, `None` until a labelled set exists, and the run inspector lists every unfitted threshold, so nothing implies a calibration nobody measured.
 5. Fallback never crosses a class silently:
 
@@ -85,17 +85,17 @@ Optional, not adopted: a core `quantity` field type (amount, unit span). The Res
 
 ## Alternatives considered
 
-| Option | Prior art | Evidence | For | Against |
-|---|---|---|---|---|
-| A. Generation only, with per-purpose model settings | Codex; OpenAI Agents SDK | code, Codex `codex-rs/core/src/config/mod.rs:668`, `:677-678` (`review_model`) at `1263a383`; Agents SDK `src/agents/agent.py:364-369`, `src/agents/models/multi_provider.py:18-51` at `6c4e4a2` | One interface; every provider supports it | No typed answer and no probability; thresholds become prompt text |
-| B. A router over model groups with fallbacks by error class | LiteLLM 1.83.0 | code, `litellm/router.py:252-269` (typed fallbacks), `:293-301` (routing strategies); no decision or extraction mode in its model map | Mature routing, many providers | Routes generation calls only; a dependency in the core; vendor shapes reach the event store |
-| C. Every typed answer as a forced tool call or structured output with re-ask | Instructor | code, `instructor/v2/core/retry.py:404-405` (re-ask), the v2 design (fuzzy quote search, up to 5 edits) | No new interface | Loses distributions and spans; a fuzzy match is not a located span |
-| D. One fast interface for both extraction and classification | FS-1 option A | the fast-and-slow design note, section 12 | Fewer types | The loader cannot refuse a class mismatch between the two |
-| E. One contract per class, aliases bound by mode, capability-checked, native-only fallback (my lean) | Vercel AI SDK; pi-ai; oh-my-pi | code, Vercel `packages/provider/src/decision-model/v4/decision-model-v4.ts:6-16`, `extraction-model/v4/extraction-model-v4.ts:6-16` (types checked before any I/O), `packages/ai/src/registry/custom-provider.ts:61-62` (aliases) at `d55f3cfc`; pi-ai `packages/ai/src/types.ts:924-929` (a model's `type` decides which operation accepts it) at `d476013`; oh-my-pi `coding-agent/src/config/model-roles.ts:37-91` (16 roles), `src/judgment/index.ts:286-297` (a prompted model never stands in for a failed native judgment) at `03597e34f1` | A mismatch is a load error; fakes per class; fallback rules visible in the event store | Three protocols instead of one; thresholds are placeholders until measured |
+| Option | For | Against |
+|---|---|---|
+| A. Generation only, with per-purpose model settings | One interface; every provider supports it | No typed answer and no probability; thresholds become prompt text |
+| B. A router over model groups with fallbacks by error class | Mature routing, many providers | Routes generation calls only; a dependency in the core; vendor shapes reach the event store |
+| C. Every typed answer as a forced tool call or structured output with re-ask | No new interface | Loses distributions and spans; a fuzzy match is not a located span |
+| D. One fast interface for both extraction and classification | Fewer types | The loader cannot refuse a class mismatch between the two |
+| E. One contract per class, aliases bound by mode, capability-checked, native-only fallback (my lean) | A mismatch is a load error; fakes per class; fallback rules visible in the event store | Three protocols instead of one; thresholds are placeholders until measured |
 
-A second axis, routing by request content (LiteLLM's complexity router scores each request locally and picks a model, `router_strategy/complexity_router/complexity_router.py:1-10`), I leave out of v1: in Aksha the Task declares its alias, so the routing decision is reviewable data. An agent that wants content routing can declare a classification alias whose answer selects a Task, which keeps the decision a recorded step.
+A second axis, routing by request content (a local scorer rates each request and picks a model), I leave out of v1: in Aksha the Task declares its alias, so the routing decision is reviewable data. An agent that wants content routing can declare a classification alias whose answer selects a Task, which keeps the decision a recorded step.
 
-Takeaway: The SDKs that support non-generation models all separate them at the operation and refuse silent substitution; Aksha's addition is making the binding, the cascade and every abstention facts in the event store.
+Takeaway: non-generation models belong behind their own operation, with silent substitution refused; Aksha's addition is making the binding, the cascade and every abstention facts in the event store.
 
 ## Interface
 
@@ -248,7 +248,7 @@ Adapters per class and mode:
 
 | Class | `fake` (default) | `scripted` | `replay` (later) | `live` | Adapted |
 |---|---|---|---|---|---|
-| Generation | A rule-based policy per agent, in the agent's `fakes.py`, reading only tool results in its context | `ScriptedGenerationModel` | `ReplayGenerationModel` | `LiveGenerationModel` over an OpenAI-compatible API; `LocalGenerationModel` for a localhost server | Not applicable |
+| Generation | A rule-based policy per agent, in the agent's `fakes.py`, reading only tool results in its context | `ScriptedGenerationModel` | `ReplayGenerationModel` | `LiveGenerationModel` over a chat-completions-compatible HTTP API; `LocalGenerationModel` for a localhost server | Not applicable |
 | Extraction | `RuleExtractionModel` subclass | `ScriptedExtractionModel` | `ReplayExtractionModel` | Named per alias by `AKSHA_ALIAS_<NAME>` | None |
 | Classification | `RuleClassificationModel` subclass, with declared constant distributions | `ScriptedClassificationModel` | `ReplayClassificationModel` | Named per alias | `AdaptedClassificationModel(generation_model)`, `native=False` |
 
@@ -290,5 +290,4 @@ Open for the maintainer: whether a core `quantity` type is worth its cost (lean:
 
 ## Sources (public)
 
-1. Code read by those notes: Vercel AI SDK `d55f3cfc`; pi-mono `d476013`; oh-my-pi `03597e34f1`; Codex `1263a383`; OpenAI Agents SDK for Python `6c4e4a2`; LiteLLM 1.83.0 and Instructor 1.17.0 wheels.
 1. Daniel Kahneman, *Thinking, Fast and Slow*, 2011, for the System 1 and System 2 terms, by way of the fast-and-slow models note.

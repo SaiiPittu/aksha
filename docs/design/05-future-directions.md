@@ -21,9 +21,9 @@ Sizes are my estimates, not measurements: small is a field and a rule plus tests
 
 ## X-1: Containers and bubblewrap are not a boundary for untrusted code
 
-The problem. Lesse's blog ranks isolation levels and argues that a container shares the host kernel, so it is not a security boundary for untrusted code; she prefers a user-space kernel such as gVisor or, better, a microVM such as Firecracker. My sandbox design orders backend strength as `none < os-jail < container < vm`, where `os-jail` is bubblewrap. Both bubblewrap and Docker share the host kernel, so that ordering implies a step up in safety that she disputes.
+The problem. Lesse's blog ranks isolation levels and argues that a container shares the host kernel, so it is not a security boundary for untrusted code; she prefers a user-space kernel or, better, a microVM. My sandbox design orders backend strength as `none < os-jail < container < vm`, where `os-jail` is an unprivileged namespace jail. Both the jail and a container share the host kernel, so that ordering implies a step up in safety that she disputes.
 
-The design. I add a `user-kernel` strength (gVisor) between `container` and `vm`, and name `vm` as a microVM (Firecracker). A tool whose program text came from a model or from a fetched page declares `min_strength >= user-kernel`, and the loader refuses an agent definition that lowers it. Commands written by the project itself, such as its own test command, may keep `os-jail` or `container`. Nothing else changes: if no available backend meets the minimum, the policy gate still refuses with `sandbox_unavailable` and nothing runs, so there is never a silent fallback to a weaker box.
+The design. I add a `user-kernel` strength (a user-space kernel) between `container` and `vm`, and name `vm` as a microVM. A tool whose program text came from a model or from a fetched page declares `min_strength >= user-kernel`, and the loader refuses an agent definition that lowers it. Commands written by the project itself, such as its own test command, may keep `os-jail` or `container`. Nothing else changes: if no available backend meets the minimum, the policy gate still refuses with `sandbox_unavailable` and nothing runs, so there is never a silent fallback to a weaker box.
 
 Extends: the sandbox (P12), through its `Strength` type and the loader's check.
 

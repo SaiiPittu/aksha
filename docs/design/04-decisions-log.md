@@ -12,11 +12,11 @@
 
 ## 25 Nov 2026: stop ownership and the agent model
 
-1. **Aksha is a general harness.** The Research agent and the Patent-disclosure agent, example agents for a fictional hardware venture, are the first two proofs. For prior art, Stencil (the stop-policy design of the `omp2` branch of oh-my-pi) weighs more than Decode (a coding-agent course package), and Codex CLI and opencode are compared as well. The maintainer decides.
+1. **Aksha is a general harness.** The Research agent and the Patent-disclosure agent, example agents for a fictional hardware venture, are the first two proofs.
 2. **Agents are defined in Python code.** Structure (steps, reads and writes, tools, children) is declarative data inside the module, and checks are plain pure functions. A UI, if there is one, hands the request to a builder agent that writes the module, and the loader, the tests and a human approval guard the result. This settles v2 ADR-002 towards "Python module", pending the maintainer's confirmation.
-3. **General stop policies are built in**, not only workflow frames: goal condition, plan mode, forced tool choice and todo reminder (Stencil's set), alongside the Run root, Step and Wait. This refines option E of v2 ADR-014, which had a closed set of four.
+3. **General stop policies are built in**, not only workflow frames: goal condition, plan mode, forced tool choice and todo reminder, alongside the Run root, Step and Wait. This refines option E of v2 ADR-014, which had a closed set of four.
 4. **"State" and "milestone" become one recursive unit.** A unit can hold child units, each with its own completion check, and there is no separate milestone kind. The name was settled in decision 7. This refines v2 ADR-014.
-5. **People see diffs for changed reviewed artifacts** (from Harvey's document agent). The rebuild writes a new version beside the old one, the review shows the changed inputs and a redline, and only the person's accept creates the new approval. Machine-only artifacts regenerate silently.
+5. **People see diffs for changed reviewed artifacts**. The rebuild writes a new version beside the old one, the review shows the changed inputs and a redline, and only the person's accept creates the new approval. Machine-only artifacts regenerate silently.
 6. **Structured artifacts are the core data model.** Raw fixtures are inputs. Extraction produces typed artifacts with excerpt references, and downstream steps read artifacts, never raw files. Each agent declares its own artifact schemas. The runtime's artifact store gives versioning, a content hash, recorded reads (lineage), invalidation, citation validation and approval binding.
 7. **The recursive unit is named `Task`.** It replaces "state" and "milestone".
 8. **Fan-out (`per=`) creates tracked Task instances, each with its own model context**, a sub-agent in all but name. The runtime's scheduler runs them: sequentially in the first milestone, for deterministic replay, and under a concurrency setting later. Stop policies never spawn work; the scheduler does, from the declaration.
@@ -24,11 +24,11 @@
 10. **An agent declares its Task tree and opts into the built-in stop policies** (plan mode, goal condition, forced tool choice, todo reminder) by configuration. It does not subclass a stop policy in v1.
 11. **Industry-standard names.** The design uses: runtime, extension API, projection built by a reducer, event store, transactional outbox, idempotency key, interrupt, stop policy, completion check, lineage, invalidation, and model routing by class. A glossary maps the older Aksha words to these.
 12. **Primitives-first design.** One ADR per harness primitive, each stress-tested against the Research agent, the Patent agent and a contrast coding agent, and then built in dependency order. The result is the [primitives catalogue](03-primitives.md).
-13. **Four rules adopted from T3 Code:**
-    1. TC-1: a person's stop or cancel is a durable event, and every automatic start respects it.
-    2. TC-2: live panels get a snapshot, a cursor and a "synchronized" marker.
-    3. TC-3: eval cases are labelled by kind and origin (hand-written, real failure, planted trap).
-    4. TC-4: "human state beats every automatic start" is a runtime rule with a test.
+13. **Four rules adopted for human control and evidence:**
+    1. D13-1: a person's stop or cancel is a durable event, and every automatic start respects it.
+    2. D13-2: live panels get a snapshot, a cursor and a "synchronized" marker.
+    3. D13-3: eval cases are labelled by kind and origin (hand-written, real failure, planted trap).
+    4. D13-4: "human state beats every automatic start" is a runtime rule with a test.
 14. **Terminology confirmed.**
     1. "Runtime", one word, not runtime core, substrate or kernel.
     2. Event store; projection, built by a reducer; transactional outbox; idempotency key; completion check; artifact; lineage (provenance); model routing across model classes.
@@ -49,10 +49,10 @@
 ## 26 Nov 2026: running the runtime
 
 22. **Server plus embedded mode.** `aksha serve` is the backend: it hosts the session API and is the single writer. The CLI and the web app are clients. With no server running, `aksha run` starts the runtime in-process for that one command.
-23. **Headless mode runs in full bypass**, following Decode. A headless run raises no approval prompts and asks for no permissions, and it is expected to run inside a sandbox, as headless agents usually do. This decision postdates ADR-P11 (a policy gate with no mode that skips it) and ADR-P17 (interrupts and approvals); as of 26 Nov 2026 neither ADR yet says how a bypassed run meets the gate. Amended by decision 26: a headless run never asks, but deny rules are not bypassed.
+23. **Headless mode runs in full bypass**. A headless run raises no approval prompts and asks for no permissions, and it is expected to run inside a sandbox, as headless agents usually do. This decision postdates ADR-P11 (a policy gate with no mode that skips it) and ADR-P17 (interrupts and approvals); as of 26 Nov 2026 neither ADR yet says how a bypassed run meets the gate. Amended by decision 26: a headless run never asks, but deny rules are not bypassed.
 24. **Design docs land before the first code merges.** A docs pull request (product overview, architecture, primitives catalogue, ADRs) is merged first, and the first code pull request (#40) is rebased onto it.
 
 ## 26 Nov 2026: headless permissions and the durable executor
 
-26. **Headless runs never ask, and deny rules always hold** (amends decision 23). In a headless run every ask becomes an allow, so nothing waits for a person, but every explicit deny rule still refuses, and the run executes inside a sandbox. This follows Gemini CLI, which treats "yolo" as an ordinary allow rule that a higher tier can still deny, not Decode's bypass, which skips the deny rules. [ADR-P11](adr/ADR-P11-policy-gate-and-permissions.md) carries it as its decision 12.
+26. **Headless runs never ask, and deny rules always hold** (amends decision 23). In a headless run every ask becomes an allow, so nothing waits for a person, but every explicit deny rule still refuses, and the run executes inside a sandbox. The headless setting is an ordinary allow rule that a higher tier can still deny, not a bypass that skips the deny rules. [ADR-P11](adr/ADR-P11-policy-gate-and-permissions.md) carries it as its decision 12.
 27. **ADR-P02 is accepted: an own durable executor behind an executor port.** Temporal is supported later in two ways: as an executor adapter, where an Aksha run executes as a Temporal workflow and its steps as activities, and as an integration, where a business's own Temporal workflow invokes an Aksha run as an activity. Step semantics are named `at_least_once`, `reconcile` and `at_most_once` on the tool specification. A person's durable stop is part of recovery (`stop_requested`). A replay check, which verifies that a re-run matches the recorded history, is designed now and built later. A run suspended while one of its inputs changes gets one chance to re-check on resume (`suspended_with_rebuilds`), in the first milestone.

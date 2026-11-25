@@ -23,10 +23,10 @@ Terms used here, in the industry names of the design glossary:
 
 The product requirements are specific: search snippets alone do not support a claim; each finding links to the exact supporting excerpt; identifiers and dates are recorded exactly as the source states them; missing data stays unknown, not zero, and a failed fetch stays unverified; recommendations link to sources the tools actually returned. The check a reviewer can run on that requirement is mechanical: did a tool return this text?
 
-What the field does, from the comparison notes:
+Three observations shape the design:
 
-1. Coding harnesses have no citation type. Codex, Claude Code, opencode, Pi, omp, ADK and LangGraph leave citation to the model's prose, whose nearest form is a file path and line number nobody checks (catalogue, PR-13).
-2. Where a library does carry spans, it checks bounds but not content. The Vercel AI SDK's extraction attaches a source with text offsets per value and validates that the offsets are in range, not that the text says what the value claims (`packages/ai/src/extract/validate-extraction.ts:88-113` at `d55f3cfc`).
+1. Without a citation type, citation is left to the model's prose, whose nearest form is a file path and line number nobody checks (catalogue, PR-13).
+2. Carrying spans is not enough if only bounds are checked. An extraction can attach a source with text offsets per value and validate that the offsets are in range, without checking that the text says what the value claims.
 3. Research on attribution says why the check must be the runtime's. Rashkin and others define attribution as output checkable against an identified source that was provided; Liu, Zhang and Liang (2023) found many statements from generative search engines unsupported by their own citations (both read as abstracts, the quote sheet in the design notes).
 
 What breaks without this primitive: The Research Agent saves a price cell citing a snippet it never fetched; the Patent Agent records a publication date paraphrased from memory; the coding agent reports "all tests pass" with no test run behind it. Each looks grounded and none is.
@@ -39,7 +39,7 @@ What breaks without this primitive: The Research Agent saves a price cell citing
 4. **Three cite forms, one verifier.** A field cites a span (`{span, quote}`), a user statement (`{statement}`), or an artifact path at a pinned version (`{artifact, path}`). Which form each field may use is a per-field cite policy the agent declares on its artifact kind (a matrix cell may not cite a user statement; only the business-importance factor may cite a Research artifact). The policy is data; one function enforces it.
 5. **An explicit unknown is a core value type, not a convention.** A field declared `may_be_unknown` may hold `Unknown(question, reason, checked)` instead of a value. The schema validator accepts it only on those fields, and a save that puts `0`, `""` or `null` into a numeric or cited field that has no valid citation is refused as `ungrounded_value`. The reason is one of `not_found` (every listed record was read in full at its current version), `unverified` (a step failed or a hit was never fetched, named) or `not_checked`. Richer status sets, such as the evidence-grid statuses `conflict` and `supported` (05b section 8.3), are an extension built on top.
 6. **A claim the fast model cannot locate becomes an explicit unknown, not a refused save (designed).** When an artifact kind declares a verifier on a field, the save path asks an extraction or classification model to locate the claimed value inside the cited quote (HLD 9.5). Verbatim verification is code and always runs first; the model can only demote a claim to `Unknown(reason="not_located")` with a question, never promote one. This ships with model routing (PR-07, cut row 8).
-7. **Model-returned citations are hints, re-verified.** A provider that returns citations with character ranges, such as Anthropic's Citations API, is adapted by the model interface into span-and-quote pairs over spans the runtime already minted; they pass the same verifier. A provider citation to text no tool returned fails `unknown_span`.
+7. **Model-returned citations are hints, re-verified.** A provider that returns citations with character ranges is adapted by the model interface into span-and-quote pairs over spans the runtime already minted; they pass the same verifier. A provider citation to text no tool returned fails `unknown_span`.
 8. **Span text lives in the event store in the first milestone.** `excerpts.minted` (v2's event name, until the event-store ADR) carries the passage text, so an old quote can be re-verified and shown in a review diff. Stored input artifacts for every read result are the general design (RQ-8).
 
 ### Amendments from the stress test (25 Nov 2026, Proposed)
@@ -62,14 +62,14 @@ Agent-side, no core change: The Research Agent's `claim_status` (`fact`, `vendor
 
 ## Alternatives considered
 
-| Option | What it is | Prior art | For | Against | Verdict |
-|---|---|---|---|---|---|
-| A. Whole-passage citations by ID | Cite a passage; no quote | Coding harnesses' path-and-line in prose (catalogue, PR-13) | Simple | Cannot show which words support the claim; a long passage supports anything | Rejected |
-| B. Model-written source list, checked afterwards | The model lists sources; a checker runs after the save | Generative search engines as audited by Liu, Zhang and Liang (2023) | Least tool work | A bad artifact exists before the check; the check needs minted spans anyway | Rejected |
-| C. Offsets validated for bounds only | Each value carries offsets into the source | Vercel AI SDK, `validate-extraction.ts:88-113` at `d55f3cfc` | Cheap | In-range offsets over the wrong text pass | Rejected; offsets are kept as the position selector beside a verified quote |
-| D. Provider citations trusted as returned | Use the model's own citation blocks | Anthropic Citations API, document indexes and character ranges (docs, read 24 Nov 2026) | No minting code | Provider-specific; a fake model cannot produce them; trust moves to the provider | Rejected as the authority; adapted as hints (decision 7) |
-| E. Fuzzy re-anchoring of quotes | Re-find a quote after the source text moves | Hypothesis client, `src/annotator/anchoring/match-quote.ts` at `c2d2e73` | Survives small source edits | Fuzzy matching weakens "verbatim"; a moved quote is better treated as invalidation | Later, for display only (cut M10) |
-| F. Tool-minted spans, verbatim verification at save, explicit unknowns (my lean) | Decisions 1 to 8 | W3C Web Annotation Data Model (2017) for the selector shape; Rashkin and others for attribution | the product requirements becomes a refused save; works for any agent and any versioned source | Every read tool must mint; quotes need a minimum length; span text grows the event store | Chosen |
+| Option | What it is | For | Against | Verdict |
+|---|---|---|---|---|
+| A. Whole-passage citations by ID | Cite a passage; no quote | Simple | Cannot show which words support the claim; a long passage supports anything | Rejected |
+| B. Model-written source list, checked afterwards | The model lists sources; a checker runs after the save | Least tool work | A bad artifact exists before the check; the check needs minted spans anyway | Rejected |
+| C. Offsets validated for bounds only | Each value carries offsets into the source | Cheap | In-range offsets over the wrong text pass | Rejected; offsets are kept as the position selector beside a verified quote |
+| D. Provider citations trusted as returned | Use the model's own citation blocks | No minting code | Provider-specific; a fake model cannot produce them; trust moves to the provider | Rejected as the authority; adapted as hints (decision 7) |
+| E. Fuzzy re-anchoring of quotes | Re-find a quote after the source text moves | Survives small source edits | Fuzzy matching weakens "verbatim"; a moved quote is better treated as invalidation | Later, for display only (cut M10) |
+| F. Tool-minted spans, verbatim verification at save, explicit unknowns (my lean) | Decisions 1 to 8 | the product requirements becomes a refused save; works for any agent and any versioned source | Every read tool must mint; quotes need a minimum length; span text grows the event store | Chosen |
 
 ## Interface
 
@@ -149,4 +149,3 @@ Open for the maintainer: none new.
 
 1. The quote sheet in the design notes: Rashkin and others, "Measuring Attribution in Natural Language Generation Models", Computational Linguistics (arXiv 2021, journal 2023), abstract; Liu, Zhang and Liang, "Evaluating Verifiability in Generative Search Engines", Findings of EMNLP 2023, abstract.
 1. Robert Sanderson, Paolo Ciccarese, Benjamin Young (eds.), "Web Annotation Data Model", W3C Recommendation, 23 Feb 2017.
-1. Anthropic, "Citations", Claude API documentation, read 24 Nov 2026.

@@ -36,12 +36,12 @@ Worked example, toy numbers. Two agents are loaded. "Who else does camera-free o
 
 ## Alternatives considered
 
-| Option | What it is | Prior art | For | Against | Verdict |
-|---|---|---|---|---|---|
-| A. A router session that judges and delegates | A long-running model session routes and tracks work | The DeepSeek Super-agent's Router: "code admits, the Router judges", one long session whose authors name context length as its ceiling (the super-agent design note, section on option C and DS 3 item 8) | Flexible; can split one request | A generation model decides, so the choice is not thresholdable; a second store of tickets beside the event store | Rejected for v1; Aksha's supervisor Task (ADR-P15) covers multi-agent work |
-| B. Keyword rules in the interface | The CLI matches words to agents | None in our notes | Cheap | Each interface routes differently; nothing asks when unclear | Rejected |
-| C. Handoff tools inside each agent | Each agent's model may call `handoff_to(agent)` | General SDK practice (not traced in our notes) | No new primitive | The first agent always runs first; the decision lives in a model turn | Rejected |
-| D. A classification alias with an abstention band and a session-scoped interrupt (lean) | D1 to D7 | ADR-P07's model routing by class; v2 HLD's `route.decided` event (the v2 high-level design line 560) | Recorded, thresholdable, testable with a fake; asks exactly when uncertain | One more interrupt scope | Chosen |
+| Option | What it is | For | Against | Verdict |
+|---|---|---|---|---|
+| A. A router session that judges and delegates | A long-running model session routes and tracks work | Flexible; can split one request | A generation model decides, so the choice is not thresholdable; a second store of tickets beside the event store | Rejected for v1; Aksha's supervisor Task (ADR-P15) covers multi-agent work |
+| B. Keyword rules in the interface | The CLI matches words to agents | Cheap | Each interface routes differently; nothing asks when unclear | Rejected |
+| C. Handoff tools inside each agent | Each agent's model may call `handoff_to(agent)` | No new primitive | The first agent always runs first; the decision lives in a model turn | Rejected |
+| D. A classification alias with an abstention band and a session-scoped interrupt (lean) | D1 to D7 | Recorded, thresholdable, testable with a fake; asks exactly when uncertain | One more interrupt scope | Chosen |
 
 ## Interface
 

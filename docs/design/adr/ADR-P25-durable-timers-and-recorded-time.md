@@ -33,11 +33,11 @@ The terms:
 
 ## Alternatives considered
 
-| Option | Prior art | For | Against | Verdict |
-|---|---|---|---|---|
-| A. An outside scheduler (cron) sends commands | General practice | No new runtime code | Not replayable; a crash between cron and command loses the wake; the hold predicate is bypassed unless every caller remembers it | Rejected |
-| B. Timers as durable facts in the workflow log | Temporal's durable timers (general usage, not in our notes); T3 Code's snooze, a timed human state its restart predicate checks (code, `apps/server/src/orchestration-v2/RestartContinuation.ts:45-91` at `ca81b7b9`) | Survives restarts; one owner; testable on a fake clock | One more event family | Chosen |
-| C. Freshness by HTTP cache headers only | RFC 9111 section 4.2 | Standard | Fixture sources have no headers; agent data needs declared lifetimes | Adopted as the name, not the mechanism |
+| Option | For | Against | Verdict |
+|---|---|---|---|
+| A. An outside scheduler (cron) sends commands | No new runtime code | Not replayable; a crash between cron and command loses the wake; the hold predicate is bypassed unless every caller remembers it | Rejected |
+| B. Timers as durable facts in the workflow log | Survives restarts; one owner; testable on a fake clock | One more event family | Chosen |
+| C. Freshness by HTTP cache headers only | Standard | Fixture sources have no headers; agent data needs declared lifetimes | Adopted as the name, not the mechanism |
 
 ## Interface
 
@@ -68,5 +68,3 @@ def observe_time(ctx: "ToolContext") -> "InputRef": ...
 ## Sources (public)
 
 1. RFC 9111, HTTP Caching, section 4.2 (freshness lifetime).
-1. T3 Code at `ca81b7b9`, `RestartContinuation.ts:45-91`, through ADR-P16.
-1. Temporal durable timers (general usage, not in our notes).

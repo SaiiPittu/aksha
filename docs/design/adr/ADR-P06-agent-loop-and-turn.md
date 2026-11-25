@@ -15,7 +15,7 @@ Terms used here:
 - **Agent loop** is the code that calls the model, runs the tool calls it asked for, records the results, and repeats.
 - **Turn** is one pass of the loop for one Task instance: one model call, then every tool call that reply asked for, in order.
 - **Turn end** is the point where a turn's last result is recorded and control returns to the runtime. It carries a kind (tool results, final answer, interrupt and so on) and is the **stop candidate** that stop-policy evaluation judges.
-- **Stop-policy evaluation** (PR-16) combines every active stop policy into one recorded stop decision. Stencil's omp2 calls each such policy a Director (Stencil's term); Aksha calls them stop policies.
+- **Stop-policy evaluation** (PR-16) combines every active stop policy into one recorded stop decision.
 - **Stop decision** is one of PASS, CONTINUE, PUSH, HOLD, DONE, FAIL and STOP (PR-16 defines them). Only CONTINUE starts another turn.
 - **Durable step executor** (PR-02) runs one model or tool step at most once to completion under a deterministic step ID such as `R-0002/compare[C1]/t03`, and returns the recorded result on a restart instead of running the work again.
 - **Final answer** is a reply with text and no tool calls, or a call to the reserved `finish` tool. It is a claim that the work is done, which the Task's completion check (PR-15) accepts or refuses.
@@ -42,7 +42,7 @@ My lean, with the Accepted part marked:
 5. Within a turn, tool calls run one at a time, in the order the model listed them, through the policy gate (PR-11) and the durable step executor. A position after an interrupt request, an approval request, a `budget_exhausted` refusal or the `finish` tool is recorded `skipped`, not run, so nothing happens after the run has asked a person something.
 6. When one turn produces several outcomes, the turn end takes the first that applies, in this order: `approval`, `interrupt`, `budget`, `final_answer`, `tool_results`. A turn whose reply was cut off by the output limit is `malformed`; a context over the limit is `context_overflow`; a model unavailable after retries or a step mismatch on resume is `fault`.
 7. The model call goes through the Task's generation model alias (PR-07), the request is built by context assembly (PR-08), and its hash is the step's argument hash, so a resumed turn either returns the recorded reply or fails with `step_mismatch`. It never silently sends a different request.
-8. An agent cannot replace the loop in v1. Its extension points are its tools, its Task tree with completion checks, the stop policies it opts into, its context policy parameters and its model aliases. Exo makes the loop replaceable; I would revisit that only when a third agent needs a turn shape this one cannot express (see "Where this stops").
+8. An agent cannot replace the loop in v1. Its extension points are its tools, its Task tree with completion checks, the stop policies it opts into, its context policy parameters and its model aliases. A replaceable loop is worth revisiting only when a third agent needs a turn shape this one cannot express (see "Where this stops").
 
 ```mermaid
 sequenceDiagram
@@ -79,16 +79,16 @@ Worked example, the coding agent on a crash at turn 140 of 200 (toy numbers): tu
 
 ## Alternatives considered
 
-| Option | Prior art | Evidence | For | Against |
-|---|---|---|---|---|
-| A. An inline loop with the stop branch inside it | Codex `run_turn` | code, `core/src/session/turn.rs:736` (loop), `:857-861` (stop branch runs Stop hooks) at `1263a383` | One function, easy to read | Each new stop rule is another `if` inside the loop; the turn's state lives in local variables |
-| B. A loop owned by another process, driven over a protocol, stopped by a hook | Claude Code through the Agent SDK | code, `src/claude_agent_sdk/_internal/query.py:546-554` (turn reopen), `:695-744` (Stop hook callback) at `6fc539e0` | Reuses a mature loop | The loop is closed source; a Stop hook can block at most eight times in a row; nothing durable records why a turn continued |
-| C. Continue while local tool calls remain | opencode session runner | code, `session/runner/step.ts:330` at `2255b893`; a plugin's `experimental.idle` message continues the session, `session/runner/llm.ts:182-191` | Minimal | Any message from any plugin continues the run, so the precedence is "whoever spoke" |
-| D. A graph engine that ends when no node is triggered | LangGraph Pregel | code, `pregel/_loop.py:686-689` at `732da520`; ADK's `is_final_response` check, `flows/llm_flows/base_llm_flow.py:302` at `825a44c5` | General and composable | The stop is the absence of a trigger; nothing records why the run ended or continued |
-| E. A replaceable loop module that commits the reply before tools run | Exo's Basic executor | code, `crates/executor/src/basic.rs:195-215` at `e1e5669` (reply committed with a `tool_round` marker before any tool runs) | Durable across a crash; a team can swap the loop | The loop still decides its own end; a swapped loop can skip the record |
-| F. A stateless turn over projections whose turn end is judged by a stop-policy stack (my lean) | omp2's `DirectorStack`, plus Exo's record-before-tools rule | code, omp2 `crates/agent/src/director.rs:959-1048` at `2f92f3b5aa` | One owner of every stop; durable; a stop decision can be recomputed in a test and compared with the record | One extra recorded decision per turn end; the loop is not replaceable in v1 |
+| Option | For | Against |
+|---|---|---|
+| A. An inline loop with the stop branch inside it | One function, easy to read | Each new stop rule is another `if` inside the loop; the turn's state lives in local variables |
+| B. A loop owned by another process, driven over a protocol, stopped by a hook | Reuses a mature loop | The loop is closed source; a Stop hook can block at most eight times in a row; nothing durable records why a turn continued |
+| C. Continue while local tool calls remain | Minimal | Any message from any plugin continues the run, so the precedence is "whoever spoke" |
+| D. A graph engine that ends when no node is triggered | General and composable | The stop is the absence of a trigger; nothing records why the run ended or continued |
+| E. A replaceable loop module that commits the reply before tools run | Durable across a crash; a team can swap the loop | The loop still decides its own end; a swapped loop can skip the record |
+| F. A stateless turn over projections whose turn end is judged by a stop-policy stack (my lean) | One owner of every stop; durable; a stop decision can be recomputed in a test and compared with the record | One extra recorded decision per turn end; the loop is not replaceable in v1 |
 
-Takeaway: every compared harness has the same sample-then-tools shape; they differ only in who decides the end and whether the decision is recorded, and F is the only option where both answers are "one owner" and "yes".
+Takeaway: every option has the same sample-then-tools shape; they differ only in who decides the end and whether the decision is recorded, and F is the only option where both answers are "one owner" and "yes".
 
 ## Interface
 
@@ -185,7 +185,3 @@ Three design reviews in the three stress reviews walked the Research Agent (the 
 | Coding | Fits | Three file reads and a 90-second suite in one reply take the sum of all four | Accepted for v1; read-only positions on worker threads committed in position order stay designed |
 
 Verdict after the amendments: fits for all three. Steering input (ADR-P27) reaches the model through context assembly (ADR-P08), so the loop is unchanged.
-
-## Sources (public)
-
-1. Code read by those notes: Codex `1263a383`; Claude Agent SDK for Python `6fc539e0`; opencode `2255b893`; LangGraph `732da520`; ADK Python `825a44c5`; Exo `e1e5669`; oh-my-pi `omp2` `2f92f3b5aa`.

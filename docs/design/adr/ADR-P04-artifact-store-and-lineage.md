@@ -92,17 +92,17 @@ Takeaway: an artifact is a node that knows what it read, and a relation is a cla
 
 ## Alternatives considered
 
-| Option | Prior art (what it does, with evidence) | For | Against | Verdict |
-|---|---|---|---|---|
-| A. Opaque bytes per path with a version number | Exo stores `{artifact_id, path, version, created_at, size_bytes}` plus bytes, with no hash, schema or lineage inputs, written as two separate puts (code, `crates/exoharness/src/types.rs:764-790`; note, `basic.rs:2964-2980` at `e1e5669`) | Simple; any content | No lineage, so no invalidation; two puts can tear | Rejected |
-| B. Free-form artifacts with an input list (Aksha v1) | Aksha v1 05b | Simple | Merges, conflicts and families become fields each agent invents; the runtime cannot check them | Rejected |
-| C. Typed artifacts, captured lineage, declared typed relations with evidence (the maintainer's call, D1 to D3) | Harvey's engineering posts describe a fact graph that flags prior work as outdated when facts change, announced and not yet in use (notes on Harvey's engineering posts, 22 Nov 2026); Vercel AI SDK extraction returns a source span per value, checked for bounds but not content (code, `packages/ai/src/extract/validate-extraction.ts:88-113` at `d55f3cfc`) | Merges, conflicts and families are checkable claims; invalidation flows through one graph | Agents declare more; the save path does more | Chosen |
-| D. Lineage declared by the model | none in our notes as a design; it is what a prompt asking "list your sources" produces | No runtime work | The model can omit or invent sources | Rejected |
-| E. A whole-workspace snapshot as the only artifact | The OpenAI Agents SDK materialises a sandbox workspace from a manifest and persists and hydrates it as a whole (code, `src/agents/sandbox/session/base_sandbox_session.py:1156-1166` at `6c4e4a2`) | Fits coding agents | One coarse node: any change reopens everything | Adopted only as the sandbox extension's snapshot kind (D10) |
-| F. Full tool output stored, the model sees a preview | Exo writes every TypeScript tool result in full as an artifact and inlines the value only up to 8,000 characters (code, `exoharness/typescript/harness/tools.ts:12-15`, `:165-175` at `e1e5669`) | Keeps contexts small and outputs recoverable | Bytes only, no types | Adopted as D10's blob and preview |
-| G. A separate graph database | none in our notes | Fast graph queries at scale | A second store that must agree with the event store after a crash (P-2) | Rejected |
+| Option | For | Against | Verdict |
+|---|---|---|---|
+| A. Opaque bytes per path with a version number | Simple; any content | No lineage, so no invalidation; two puts can tear | Rejected |
+| B. Free-form artifacts with an input list (Aksha v1) | Simple | Merges, conflicts and families become fields each agent invents; the runtime cannot check them | Rejected |
+| C. Typed artifacts, captured lineage, declared typed relations with evidence (the maintainer's call, D1 to D3) | Merges, conflicts and families are checkable claims; invalidation flows through one graph | Agents declare more; the save path does more | Chosen |
+| D. Lineage declared by the model | No runtime work | The model can omit or invent sources | Rejected |
+| E. A whole-workspace snapshot as the only artifact | Fits coding agents | One coarse node: any change reopens everything | Adopted only as the sandbox extension's snapshot kind (D10) |
+| F. Full tool output stored, the model sees a preview | Keeps contexts small and outputs recoverable | Bytes only, no types | Adopted as D10's blob and preview |
+| G. A separate graph database | Fast graph queries at scale | A second store that must agree with the event store after a crash (P-2) | Rejected |
 
-Not compared in code: no compared coding harness (Codex, Claude Code, opencode, Pi, omp, ADK, LangGraph) has typed, versioned artifacts with lineage inputs (v2 HLD, "Prior art per noun"). The W3C PROV model and Git's content-addressed object store are the general-usage shapes nearest to D6 and D10; neither is in our notes.
+The W3C PROV model and a content-addressed object store are the general-usage shapes nearest to D6 and D10.
 
 ## Interface
 

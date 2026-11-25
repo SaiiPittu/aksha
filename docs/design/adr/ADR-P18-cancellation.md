@@ -4,17 +4,17 @@
 
 ## Status
 
-Proposed, 25 Nov 2026. Decision for the maintainer: TC-1 in the T3 Code comparison notes section 4, not accepted by silence. No entry in the decisions log covers cancellation; v2 has no stop command at all, so this ADR is new rather than a carry-forward. Primitive PR-18 in the primitives catalogue, cluster D (Control), the one primitive the catalogue found missing from v2. Nothing here was built as of 25 Nov 2026. Reviewed 25 Nov 2026 in the three-agent stress test: no design change; `request_id` renamed `command_id` per ADR-P01 S1.
+Proposed, 25 Nov 2026. Decision for the maintainer: D13-1 (decisions log item 13), not accepted by silence. No entry in the decisions log covers cancellation; v2 has no stop command at all, so this ADR is new rather than a carry-forward. Primitive PR-18 in the primitives catalogue, cluster D (Control), the one primitive the catalogue found missing from v2. Nothing here was built as of 25 Nov 2026. Reviewed 25 Nov 2026 in the three-agent stress test: no design change; `request_id` renamed `command_id` per ADR-P01 S1.
 
 ## Terms
 
 In Aksha's v2 design a person cannot make a run stay stopped. The session API (v2 HLD 14.1) has no stop call; in the CLI, Ctrl-C kills the process, and recovery on startup treats every killed process as a crash to recover from, so the next start resumes the run (my reading of v2 HLD 10.3). This ADR adds the missing control. The terms it defines:
 
 - **Cancellation** is a person's request that work stop, recorded as an event so it holds across a crash, honoured by the runtime at a defined point, and distinct from a crash, which the runtime recovers from.
-- A **stop request** is that event, `run.stop_requested{scope, reason, by, command_id}`. Its default reason is "Stopped by user", as in T3 Code.
+- A **stop request** is that event, `run.stop_requested{scope, reason, by, command_id}`. Its default reason is "Stopped by user".
 - A **stop scope** says what the request ends: `run` ends the whole run with outcome `stopped`; `turn` (designed only) ends the current turn and asks the person what to do next, leaving the run alive.
 - The **honouring point** is the next stop candidate (ADR-P16) for that run, which includes the resume candidate recovery writes after a crash. Between two candidates, the durable step executor checks the request before starting each new step of the turn.
-- A **kill boundary** is the line around a tool body that lets the host terminate it when it does not settle on request: ask it to settle, wait a bounded grace, then terminate the execution unit, and record the outcome as uncertain if the tool had external effects. omp2's ADR 0011 names the idea.
+- A **kill boundary** is the line around a tool body that lets the host terminate it when it does not settle on request: ask it to settle, wait a bounded grace, then terminate the execution unit, and record the outcome as uncertain if the tool had external effects.
 - A **standing hold** is the rule that, after a person's stop, nothing automatic restarts that agent's work for that owner until the person's next command for it.
 
 ## Context: what breaks without it
@@ -25,7 +25,7 @@ In Aksha's v2 design a person cannot make a run stay stopped. The session API (v
 | A stop that lives only in the process | The person presses Stop in the web UI, the server restarts, and the run continues | a stated requirement |
 | Each interface invents its own stop | The CLI kills the process, the web UI closes a socket, and neither leaves a fact `inspect` can show | a stated requirement |
 | A stop that ignores in-flight work | A 10-minute test run keeps going after the person stopped, or a push lands with no record of whether it did | a stated requirement |
-| No rule after a stop | A source change an hour later opens a rebuild run for the stopped agent, which the person did not ask for | a stated requirement, TC-4 |
+| No rule after a stop | A source change an hour later opens a rebuild run for the stopped agent, which the person did not ask for | a stated requirement, D13-4 |
 
 The three agents press on it differently:
 
@@ -35,15 +35,15 @@ The three agents press on it differently:
 
 ## Decision
 
-Seven decisions, all my proposals. D1 to D4 are TC-1 option A as the T3 Code comparison notes states it, made precise; D5 to D7 are new.
+Seven decisions, all my proposals. D1 to D4 are D13-1 option A, made precise; D5 to D7 are new.
 
 1. D1, a stop command that appends a fact. `stop(owner, run_id, scope="run", reason="Stopped by user", command_id=None)` is a session API command (ADR-P19) that appends `run.stop_requested` under an idempotency key, so a retried click is one request. Its acknowledgement means "committed", not "stopped": The client learns the run ended from the event stream. A stop on a run that has already ended is refused `run_not_open`.
 2. D2, the Run policy honours it at the next stop candidate. From the moment the request is committed, `hold_reason` (ADR-P16 D6) returns `stop_requested` for that run, so stop-policy evaluation returns STOP with outcome `stopped` at the next candidate of any kind, before any inner policy can propose a turn. The same transaction voids the run's open interrupts with `interrupt.voided{reason: run_stopped}` and writes `run.ended{outcome: stopped}`. Approvals keep their own lifecycle, as they do when a run ends any other way (v2 HLD 10.3): a pending approval stays decidable, and executing it is a separate person's command (ADR-P17 D8), which the hold invariant allows because it is not automatic.
 3. D3, a stop survives a crash. Recovery on startup gives every open run that has a stop request newer than its last stop decision one resume candidate, even when the run is held on an interrupt, and the Run policy judges it first, so it ends `stopped` with no model turn. This changes v2's rule LC-2 ("held runs get nothing") for exactly this case. A second kill and restart writes nothing, because the run has ended.
-4. D4, a standing hold after a person's stop. After `run.ended{outcome: stopped}`, `hold_reason` returns `stopped_by_person` for the (owner, agent) scope until the person's next command naming that agent (a message, an answer, a new run). The rebuild-run opener and any future scheduled wake therefore open nothing for that agent. T3 Code holds queued messages after a Stop until the person resumes (docs, `docs/user/composer.md:282-286`); this is the same rule for automatic work.
+4. D4, a standing hold after a person's stop. After `run.ended{outcome: stopped}`, `hold_reason` returns `stopped_by_person` for the (owner, agent) scope until the person's next command naming that agent (a message, an answer, a new run). The rebuild-run opener and any future scheduled wake therefore open nothing for that agent. Queued messages are likewise held after a stop until the person resumes; this is the same rule for automatic work.
 5. D5, cooperative stop between steps. Within a turn, the durable step executor reads the stop request before starting each tool call. Calls not yet started are recorded `step.completed{outcome: skipped, reason: run_stopped}`, the same shape as a budget refusal (v2 LC-6), so the turn ends at once and the next candidate honours D2. A call already running finishes: Python cannot kill a thread, which is why v2 abandons timed-out attempts rather than killing them (v2 HLD 10.4).
-6. D6, a kill boundary for subprocess tools (designed). A tool whose body runs in a sandbox process (ADR-P12) declares itself killable. On a stop, the runtime asks it to settle (SIGTERM to its process group), waits a bounded grace (a placeholder of 5 seconds, not measured), then sends SIGKILL. It records `step.completed{outcome: cancelled}` for a tool with no external effects, and `outcome: effects_unknown` for an effectful one, which recovery then reconciles through the tool's idempotency key or reports (ADR-P03). This is omp2's ADR 0011: cooperative settlement, then forced termination after a bounded grace, and forced termination after effects were authorised recorded as uncertainty, never as success (docs, `docs/adr/0011-cancellation-needs-a-kill-boundary.md:29-42` at `2f92f3b5aa`).
-7. D7, interfaces map onto the one command. The CLI gains `aksha stop RUN`. In a running CLI command, the first Ctrl-C calls `stop` and waits a bounded time for it to commit, then exits with a new exit code 6, "stopped"; a second Ctrl-C, or SIGKILL, is a crash, and recovery honours any stop that committed (D3). The web UI's Stop button posts the same command. A `turn` scope (designed only) ends the current turn as D5 and D6 do, then raises an `input` interrupt labelled `stopped_by_user` on the instance, so the person can redirect without ending the run; it is the behaviour of Codex's `interrupt_agent`, which stops a turn while the agent "remains available" (code, `codex-rs/core/src/tools/handlers/multi_agents_spec.rs:377` at `1263a383`).
+6. D6, a kill boundary for subprocess tools (designed). A tool whose body runs in a sandbox process (ADR-P12) declares itself killable. On a stop, the runtime asks it to settle (SIGTERM to its process group), waits a bounded grace (a placeholder of 5 seconds, not measured), then sends SIGKILL. It records `step.completed{outcome: cancelled}` for a tool with no external effects, and `outcome: effects_unknown` for an effectful one, which recovery then reconciles through the tool's idempotency key or reports (ADR-P03). The rule is cooperative settlement, then forced termination after a bounded grace, and forced termination after effects were authorised is recorded as uncertainty, never as success.
+7. D7, interfaces map onto the one command. The CLI gains `aksha stop RUN`. In a running CLI command, the first Ctrl-C calls `stop` and waits a bounded time for it to commit, then exits with a new exit code 6, "stopped"; a second Ctrl-C, or SIGKILL, is a crash, and recovery honours any stop that committed (D3). The web UI's Stop button posts the same command. A `turn` scope (designed only) ends the current turn as D5 and D6 do, then raises an `input` interrupt labelled `stopped_by_user` on the instance, so the person can redirect without ending the run; it stops a turn while the agent remains available.
 
 The hardest stress test, traced. The Patent Agent's `handoff_request[C1]` has asked for approval; the person then presses Stop; the process dies before the next stop candidate.
 
@@ -83,14 +83,14 @@ Takeaway: a stop is a fact that the one owner of the stop reads first, so it win
 
 ## Alternatives considered
 
-| Option | Prior art (what it does, with evidence) | For | Against | Verdict |
-|---|---|---|---|---|
-| A. Ctrl-C is a crash; the README says so | v2 today (my reading of HLD 10.3 and 14.1); TC-1 option B | Zero lines; honest for a first milestone whose fake-model runs take seconds | A person cannot make a run stay stopped; a second interface has no stop at all | the first milestone fallback only |
-| B. An in-memory abort signal | JavaScript's `AbortSignal` and Go's `context.Context`, which omp2's ADR 0011 calls "protocols, not enforcement" (docs, `docs/adr/0011-cancellation-needs-a-kill-boundary.md:12-23` at `2f92f3b5aa`) | Familiar; immediate | Lost at a crash; a tool that forgets the signal never stops | Rejected as the record; used inside D5 as the in-process check |
-| C. A hook that forces the stop | Codex's Stop hook `continue: false` ends the turn and is hidden from the model (code, `codex-rs/hooks/src/events/stop.rs:283-292` at `1263a383`); Claude Code's `continue: false` overrides a block (code, `src/claude_agent_sdk/_internal/query.py:143-159` at `6fc539e0`) | Ends a turn at the stop line | Decided by configured code, not a person; not stored; ends one turn, not the work | Rejected |
-| D. A durable stop item, honoured after a restart (lean) | T3 Code writes Stop as a durable turn item with a reason, default "Stopped by user" (code, `apps/server/src/orchestration-v2/Orchestrator.ts:13530-13570`, `RunExecutionService.ts:2413` at `ca81b7b9`); its restart path checks for a stored `run_interrupt_request`, including one on the parent that delegated a sub-agent, before continuing (code, `RestartContinuation.ts:93-136`, used at `:314`) | Survives a crash; one meaning for every interface | One more event type and one recovery rule | Chosen for the run scope, D1 to D4 |
-| E. A kill boundary | omp2: cooperative settlement, a bounded grace, then forced termination recorded as `EffectsUnknown`, never a missing result (docs, `docs/adr/0011-cancellation-needs-a-kill-boundary.md:29-42`, implementation notes at `:58-66`; code, `crates/agent/src/cancel.rs`) | A tool that ignores the request still stops | Needs tools to run in a unit the host can terminate | Chosen for subprocess tools, designed (D6) |
-| F. Stop the turn, keep the agent | Codex's `interrupt_agent` stops a turn while the agent remains available (code, `multi_agents_spec.rs:377` at `1263a383`) | The redirect a coding user wants | A second meaning of "stop" to explain | Designed as `scope="turn"` (D7) |
+| Option | For | Against | Verdict |
+|---|---|---|---|
+| A. Ctrl-C is a crash; the README says so | Zero lines; honest for a first milestone whose fake-model runs take seconds | A person cannot make a run stay stopped; a second interface has no stop at all | the first milestone fallback only |
+| B. An in-memory abort signal | Familiar; immediate | Lost at a crash; a tool that forgets the signal never stops | Rejected as the record; used inside D5 as the in-process check |
+| C. A hook that forces the stop | Ends a turn at the stop line | Decided by configured code, not a person; not stored; ends one turn, not the work | Rejected |
+| D. A durable stop item, honoured after a restart (lean) | Survives a crash; one meaning for every interface | One more event type and one recovery rule | Chosen for the run scope, D1 to D4 |
+| E. A kill boundary | A tool that ignores the request still stops | Needs tools to run in a unit the host can terminate | Chosen for subprocess tools, designed (D6) |
+| F. Stop the turn, keep the agent | The redirect a coding user wants | A second meaning of "stop" to explain | Designed as `scope="turn"` (D7) |
 
 ## Interface
 
@@ -159,4 +159,4 @@ Three design reviews in the three stress reviews walked the Research Agent (the 
 | Patent | Fits | Stop while A-0001 is pending, then the process dies | Nothing new: recovery ends the run `stopped`; A-0001 stays decidable. A demo that uses Stop must send a Patent command before the change set, or the rebuild waits for one (D4) |
 | Coding | Fits | Stop four minutes into a ten-minute suite, wanting to redirect rather than end | Nothing new: The kill boundary (D6) and `turn` scope (D7) are designed and are the first items after the sandbox; redirecting is steering (ADR-P27), not a stop |
 
-Verdict after the amendments: fits for all three. TC-1's lean stands: The durable stop in the general design, and the simple version in the first milestone if slice 2 has room.
+Verdict after the amendments: fits for all three. D13-1's lean stands: The durable stop in the general design, and the simple version in the first milestone if slice 2 has room.

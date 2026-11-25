@@ -374,7 +374,7 @@ While a server holds the lock, a mutating CLI command run in embedded mode is re
 
 ## 6. Headless mode never asks, and deny rules still hold
 
-A headless run has no person watching it, so it cannot wait for one. Decision 26 (Accepted, 26 Nov 2026, amending decision 23) settles what happens: a headless run never asks, because every ask becomes an allow, but every explicit deny rule still holds, and the run executes inside a sandbox. In one line: headless never asks, but it never ignores a deny. This is Gemini CLI's treatment of "yolo" as an ordinary allow rule that a higher tier can still deny, not Decode's bypass, whose headless mode never reaches the deny rules.
+A headless run has no person watching it, so it cannot wait for one. Decision 26 (Accepted, 26 Nov 2026, amending decision 23) settles what happens: a headless run never asks, because every ask becomes an allow, but every explicit deny rule still holds, and the run executes inside a sandbox. In one line: headless never asks, but it never ignores a deny. The headless setting is an ordinary allow rule that a higher tier can still deny, not a bypass that never reaches the deny rules.
 
 ADR-P11 carries it as its decision 12 (the decision is Accepted; the interface is Proposed):
 

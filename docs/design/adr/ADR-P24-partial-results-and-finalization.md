@@ -41,12 +41,12 @@ The budget case is the same shape: a person who declines to grant more budget co
 
 ## Alternatives considered
 
-| Option | What it is | Prior art | For | Against | Verdict |
-|---|---|---|---|---|---|
-| A. The child absorbs its own failure | Each fan-out child catches failures and saves an unknown itself | ADR-P13's existing unverified cell after retries | No new rule | A turn-limit FAIL never reaches the child's check, so the child cannot absorb it | Kept for tool failures; insufficient alone |
-| B. A tolerated failure share on the fan-out | The parent succeeds if no more than N children fail | AWS Step Functions Map state's tolerated failure count and percentage (general usage, not in our notes) | Familiar | A count says nothing about what readers see for the failed items | Adapted: D1 plus D2's explicit unknowns |
-| C. Stop and let the person rerun | Today's behaviour | None | Nothing to build | Fails the product requirements | Rejected |
-| D. Declared parent rule, finalize answer, reserved budget, one `partial` outcome (lean) | D1 to D7 | B above; ADR-P13's `Unknown` type | Every partial result is declared, explicit and reported | Agents must mark finalizers | Chosen |
+| Option | What it is | For | Against | Verdict |
+|---|---|---|---|---|
+| A. The child absorbs its own failure | Each fan-out child catches failures and saves an unknown itself | No new rule | A turn-limit FAIL never reaches the child's check, so the child cannot absorb it | Kept for tool failures; insufficient alone |
+| B. A tolerated failure share on the fan-out | The parent succeeds if no more than N children fail | Familiar | A count says nothing about what readers see for the failed items | Adapted: D1 plus D2's explicit unknowns |
+| C. Stop and let the person rerun | Today's behaviour | Nothing to build | Fails the product requirements | Rejected |
+| D. Declared parent rule, finalize answer, reserved budget, one `partial` outcome (lean) | D1 to D7 | Every partial result is declared, explicit and reported | Agents must mark finalizers | Chosen |
 
 ## Interface
 

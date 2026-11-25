@@ -4,7 +4,7 @@
 
 ## Status
 
-Proposed, 25 Nov 2026. Rewritten the same day after the maintainer asked for "a proper OTel way of tracing" so that the observability backend can be chosen later (25 Nov 2026), using the OpenTelemetry research note (25 Nov 2026). Nothing here was built as of 25 Nov 2026. P-2 ("store facts, derive interpretations") is the maintainer's call and already says every interpretation is a projection built by a reducer over the event store; this ADR applies it to traces. The maintainer has said OpenTelemetry is the layer to build on now and the backend is chosen later; no entry in the decisions log yet chooses the span tree, the convention version, the exporter packaging or the backend, so those stay Proposed. The backend is a decision for the maintainer (section "Backend shortlist").
+Proposed, 25 Nov 2026. Rewritten the same day after the maintainer asked for "a proper OTel way of tracing" so that the observability backend can be chosen later (25 Nov 2026), using a study of the OpenTelemetry GenAI conventions (25 Nov 2026). Nothing here was built as of 25 Nov 2026. P-2 ("store facts, derive interpretations") is the maintainer's call and already says every interpretation is a projection built by a reducer over the event store; this ADR applies it to traces. The maintainer has said OpenTelemetry is the layer to build on now and the backend is chosen later; no entry in the decisions log yet chooses the span tree, the convention version, the exporter packaging or the backend, so those stay Proposed. The backend is a decision for the maintainer (section "Backend shortlist").
 
 ## Terms
 
@@ -29,26 +29,26 @@ Terms used here, in the industry names of the design glossary:
 
 The product requirements ask that each run be inspectable (the selected agent, workflow state, tool calls, input versions, approvals, saved outputs and errors) and that logs hold no secrets. The maintainer's question on 25 Nov 2026 was whether emitting proper OTel lets us pick the agent and observability backends later, since almost everyone supports the format.
 
-The research answer (the OpenTelemetry research note, 25 Nov 2026) is yes, at two layers of different safety:
+The answer is yes, at two layers of different safety:
 
-1. **The wire format is safe.** All ten backends and viewers checked accept OTLP over HTTP; Langfuse and LangWatch accept only HTTP, not gRPC (research section 3, from mapper code and docs read 22 to 25 Nov 2026).
-2. **The names are not yet safe.** The GenAI conventions released v0.1.0 on 21 Nov 2026 with every span and attribute at "Development" stability, and by 24 Nov 2026 the repository held eight unreleased changelog fragments, five marked breaking (research section 1, re-counted at `43c136b` on 25 Nov 2026). Each backend maps a different subset; the subset every GenAI-aware backend types correctly is `chat` and `execute_tool`, and `invoke_agent` is typed by five of the seven (not by Braintrust or LangSmith, whose docs map no agent operation) (research section 3, point 2).
+1. **The wire format is safe.** OTLP over HTTP is the transport GenAI-aware backends and viewers accept; some accept only HTTP, not gRPC, so HTTP is the one to emit.
+2. **The names are not yet safe.** The GenAI conventions released v0.1.0 on 21 Nov 2026 with every span and attribute at "Development" stability, and by 24 Nov 2026 the repository held eight unreleased changelog fragments, five marked breaking (re-counted at `43c136b` on 25 Nov 2026). Each backend maps a different subset; the operations most reliably typed are `chat` and `execute_tool`, while `invoke_agent` is not typed everywhere.
 
 So the design must keep the wire standard and the names replaceable. What breaks otherwise:
 
-| Failure | How it happens | Prior art that shows it |
-|---|---|---|
-| A resumed run emits spans twice | Durable execution (PR-02) returns recorded results instead of re-running a step; a span emitted by the code that runs the step is emitted again on replay | Pydantic AI has a dedicated rule that replayed durable steps never emit telemetry twice (code, `pydantic_ai/_durable_replay.py` at `4ba5d7d1`) |
-| The trace and the event store disagree after a crash | Live spans sit in an in-memory buffer; a kill loses the buffer while the events committed | General usage; v2 ADR-009 option C |
-| A convention rename touches the whole codebase | `gen_ai.*` strings are spelled wherever spans are made | Inference from the churn above |
-| A span stays open for days | A run suspends on an approval overnight inside one trace; LangSmith self-hosted buffers children of an absent parent for 12 hours by default | LangSmith OTel docs, fetched 25 Nov 2026 (research section 3, point 5) |
-| Document text or secrets reach a backend | Content capture on by default, or tool arguments copied onto spans | The conventions gate content behind one switch, default off (`docs/gen-ai/gen-ai-spans.md` L556-569 at tag v0.1.0, read 25 Nov 2026) |
-| Cost comes from the wrong writer | An agent-side process reports its own model usage | Exo's design doc (docs, `exoharness/docs/design/cost-tracking.md:21-27`); its Rust loop prices the call in the runtime (code, `crates/executor/src/basic.rs:195`, Exo `e1e5669`) |
-| A backend shows nothing offline | a first-milestone user running offline has no collector or account | Requirement: The harness runs offline |
+| Failure | How it happens |
+|---|---|
+| A resumed run emits spans twice | Durable execution (PR-02) returns recorded results instead of re-running a step; a span emitted by the code that runs the step is emitted again on replay |
+| The trace and the event store disagree after a crash | Live spans sit in an in-memory buffer; a kill loses the buffer while the events committed |
+| A convention rename touches the whole codebase | `gen_ai.*` strings are spelled wherever spans are made |
+| A span stays open for days | A run suspends on an approval overnight inside one trace; a backend that buffers children of an absent parent for a fixed window (12 hours is a common default) can orphan them |
+| Document text or secrets reach a backend | Content capture on by default, or tool arguments copied onto spans |
+| Cost comes from the wrong writer | An agent-side process reports its own model usage |
+| A backend shows nothing offline | a first-milestone user running offline has no collector or account |
 
 ## Decision
 
-1. **The trace is a projection of the event store; there is no second source of truth.** `build_trace(events)` is a pure function over one run's stored events. The runtime has no tracing write path and imports no OpenTelemetry package. A replayed or resumed step writes no new event, so it cannot produce a second span: Pydantic AI's rule holds by construction.
+1. **The trace is a projection of the event store; there is no second source of truth.** `build_trace(events)` is a pure function over one run's stored events. The runtime has no tracing write path and imports no OpenTelemetry package. A replayed or resumed step writes no new event, so it cannot produce a second span: one span per logical step holds by construction.
 
 2. **The span tree is run > Task > turn > {model call, tool call, stop-policy evaluation, interrupt}.**
 
@@ -66,7 +66,7 @@ So the design must keep the wire standard and the names replaceable. What breaks
    | Stop-policy evaluation | `aksha.stop_policy.evaluate {task path}` | none | INTERNAL | the `stop.decided` transaction; zero length under the injected clock | My choice |
    | Interrupt | `aksha.interrupt {kind}` | none | INTERNAL | `interrupt.raised` to `interrupt.resolved`, `interrupt.voided` or suspension | My choice |
 
-   Three rules shape the tree. **Retries**: one model or tool span covers all attempts, with a span event `aksha.attempt` per attempt, because the convention says the span "SHOULD cover the duration of the logical operation with all retries" (the OpenTelemetry GenAI spans notes, v0.1.0); backends then count one tool call per model request. **Interrupts that suspend**: The interrupt span ends at suspension with `aksha.interrupt.state=open`, and the resuming segment carries a span event `aksha.interrupt.resolved` linked back to it, so no span is open across segments. **Segments**: a run that suspends and resumes exports one trace per execution segment; each root carries `aksha.segment`, the next root links `resumed_from` to the previous one, and all share `gen_ai.conversation.id` (the session ID), which LangWatch, Langfuse and Datadog group by (research section 5; the grouping claim is inference from their docs). Outbox effects are spans `aksha.effect {receiver}` under the turn whose tool enqueued them, or under the run span of a handoff run, linked `authorised_by` to the approval interrupt span.
+   Three rules shape the tree. **Retries**: one model or tool span covers all attempts, with a span event `aksha.attempt` per attempt, because the convention says the span "SHOULD cover the duration of the logical operation with all retries" (the OpenTelemetry GenAI spans notes, v0.1.0); backends then count one tool call per model request. **Interrupts that suspend**: The interrupt span ends at suspension with `aksha.interrupt.state=open`, and the resuming segment carries a span event `aksha.interrupt.resolved` linked back to it, so no span is open across segments. **Segments**: a run that suspends and resumes exports one trace per execution segment; each root carries `aksha.segment`, the next root links `resumed_from` to the previous one, and all share `gen_ai.conversation.id` (the session ID), which conversation-aware backends group by. Outbox effects are spans `aksha.effect {receiver}` under the turn whose tool enqueued them, or under the run span of a handoff run, linked `authorised_by` to the approval interrupt span.
 
    Facts with no duration are span events: `aksha.stop_requested` (PR-18) and `aksha.command` (ADR-P19) on the run span; `aksha.artifact.saved` on the innermost open span; `aksha.agent.loaded` and `aksha.boot` (recovery) on the first segment; `gen_ai.evaluation.result` on the span a grader judges, in eval export only (ADR-P22).
 
@@ -91,7 +91,7 @@ So the design must keep the wire standard and the names replaceable. What breaks
    | Interrupt | `aksha.interrupt.id`, `aksha.interrupt.kind`, `aksha.interrupt.state` | Aksha |
    | Effects and retries | `aksha.effect.outcome` (`sent`, `reconciled`, `abandoned`), `aksha.effect.receipt`, `aksha.retry.count`, `aksha.attempt.n`, `error.type=aksha.refused` with `aksha.policy.rule` for a refused tool call, `aksha.sandbox.backend` | Aksha |
 
-   Adapted fast-class calls are typed `chat` on purpose: four backends read token usage only from spans they type as model calls (research section 3, point 3, inference from mapper code). Usage attributes are absent on fake models, never zero; `gen_ai.provider.name=aksha.fake`.
+   Adapted fast-class calls are typed `chat` on purpose: some backends read token usage only from spans they type as model calls. Usage attributes are absent on fake models, never zero; `gen_ai.provider.name=aksha.fake`.
 
 4. **The mapping lives in one module, so a convention rename touches one file.** `aksha/extensions/otel/semconv.py` holds the pinned version, every span-name template, every operation value, every attribute key as a constant, and the mapping table (event type to span, span event or attribute) as data. No other module spells a `gen_ai.*` or `aksha.*` attribute string; a test enforces it. Beside it, `semconv_otel_genai_0_1_0.json` lists the 85 `gen_ai.*` keys and the operation values extracted from the tag, plus the general keys we use; moving to v0.2.0 means regenerating that file and editing `semconv.py`, then re-exporting old runs, which works because the trace is rebuilt from events.
 
@@ -108,7 +108,7 @@ So the design must keep the wire standard and the names replaceable. What breaks
    | OTLP JSON Lines file, `.aksha/traces/{run}/{segment}.otlp.jsonl` | `aksha[otel]`: `opentelemetry-sdk~=1.45.2`, `opentelemetry-exporter-otlp-json-file==0.66b2` (Beta, 29 Oct 2026; no protobuf or gRPC; 18 MB installed, measured 25 Nov 2026) | Default. Offline |
    | OTLP/HTTP, protobuf body, to `{endpoint}/v1/traces` | `aksha[otel-http]` adds `opentelemetry-exporter-otlp-proto-http==1.45.2` (Production/Stable, 29 Oct 2026, requires `opentelemetry-sdk~=1.45.2`, `opentelemetry-proto` and `requests`; PyPI JSON, 25 Nov 2026) | Only when `--otlp-endpoint URL` is passed, or `--otlp` with the standard `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`; headers from `OTEL_EXPORTER_OTLP_HEADERS` |
 
-   An inherited environment variable alone never turns on network export, so an offline run cannot call out by accident (my choice). HTTP, not gRPC, because Langfuse and LangWatch take only HTTP. Export runs after a segment ends, as `aksha trace RUN` or `aksha run --trace`, over a read-only store; because IDs are derived, re-exporting overwrites rather than duplicates. `make venv` installs `aksha[otel,dev]`; without the extra, `aksha trace` exits with an install hint and `aksha inspect` still works. The SDK is imported lazily inside the extension only.
+   An inherited environment variable alone never turns on network export, so an offline run cannot call out by accident (my choice). HTTP, not gRPC, because some backends take only HTTP. Export runs after a segment ends, as `aksha trace RUN` or `aksha run --trace`, over a read-only store; because IDs are derived, re-exporting overwrites rather than duplicates. `make venv` installs `aksha[otel,dev]`; without the extra, `aksha trace` exits with an install hint and `aksha inspect` still works. The SDK is imported lazily inside the extension only.
 
 9. **Every event type has a mapping row.** An event type with no row becomes a span event `aksha.unmapped {type}` and fails a test, so a new event type cannot vanish from traces.
 
@@ -264,17 +264,17 @@ def span_id_for(trace_id: str, span_key: str) -> str: ...
 
 ## Alternatives considered
 
-| Option | What it is | Prior art | For | Against | Verdict |
-|---|---|---|---|---|---|
-| A. Projection of the event store, SDK exporters in an extension (lean) | Decisions 1 to 10 | Pydantic AI's double-emit rule as the failure to avoid (code, `_durable_replay.py` at `4ba5d7d1`); probes 1 and 2 (25 Nov 2026) | One authority; any SDK exporter, so any backend; runtime stays stdlib plus `jsonschema` | Each export rescans the run's events; the file exporter is Beta | Chosen |
-| B. Projection plus a hand-written OTLP JSON writer, no SDK | The earlier version of this ADR's D7 | v2 ADR-009 | No extra install | We maintain the OTLP encoding and an HTTP client; every new exporter is our code | Rejected: probe 1 shows the SDK accepts projected spans directly |
-| C. OTel SDK in the runtime, spans emitted as code runs | Instrument the loop with a tracer | General usage | Live dashboards | A dependency in the runtime; replay emits twice unless guarded; a kill loses buffered spans | Rejected |
-| D. A live trace file beside the event store | JSON Lines written as the run goes | Codex rollout recorder (code, `codex-rs/rollout/src/recorder.rs:1782-1800` at `1263a383`) | Readable during a run | A second record that can disagree after a kill | Rejected |
-| E. OpenInference or OpenLLMetry names, or dual emit | Arize's or Traceloop's vocabularies | Research section 2 | Phoenix is native to OpenInference | Not the standard; Phoenix converts `gen_ai.*` on ingest anyway; both exist to instrument other people's libraries | Rejected |
-| F. One trace per run, spanning suspensions | The run root stays open until `run.ended` | ADR-P21 earlier version | One tree per run | A root open for days; LangSmith's 12-hour buffer can orphan late children | Rejected for segments plus links |
-| G. Stop decisions as span events | The earlier version's choice | v2 05e | Fewer spans | The requested tree puts the evaluation under the turn, where one span per turn does not bury tool spans | Replaced by the turn-level span |
-| H. One plane: operational telemetry written to the event store as events | Request timings, lock waits and queue depth stored as `ops.*` events | none in our notes | One record, one exporter | Machine noise in the record that must replay byte for byte; a hash-chained row per HTTP request; projections would have to skip it | Rejected by decision 21 |
-| I. Two planes, joined only by `aksha.run.id` attributes | Plane 2 never touches the event store, not even an ID | General usage | Strictest reading of decision 21 | No direct span link from a run to the request that started it; backends that join by link, not attribute, show two unrelated traces | Fallback if the maintainer says no to P21-T1 |
+| Option | What it is | For | Against | Verdict |
+|---|---|---|---|---|
+| A. Projection of the event store, SDK exporters in an extension (lean) | Decisions 1 to 10 | One authority; any SDK exporter, so any backend; runtime stays stdlib plus `jsonschema` | Each export rescans the run's events; the file exporter is Beta | Chosen |
+| B. Projection plus a hand-written OTLP JSON writer, no SDK | The earlier version of this ADR's D7 | No extra install | We maintain the OTLP encoding and an HTTP client; every new exporter is our code | Rejected: probe 1 shows the SDK accepts projected spans directly |
+| C. OTel SDK in the runtime, spans emitted as code runs | Instrument the loop with a tracer | Live dashboards | A dependency in the runtime; replay emits twice unless guarded; a kill loses buffered spans | Rejected |
+| D. A live trace file beside the event store | JSON Lines written as the run goes | Readable during a run | A second record that can disagree after a kill | Rejected |
+| E. A vendor attribute vocabulary, or dual emit | A vendor-specific span vocabulary instead of, or beside, `gen_ai.*` | Native to the backends that define it | Not the standard; those backends convert `gen_ai.*` on ingest anyway; such vocabularies exist to instrument other people's libraries | Rejected |
+| F. One trace per run, spanning suspensions | The run root stays open until `run.ended` | One tree per run | A root open for days; a backend's fixed buffer window can orphan late children | Rejected for segments plus links |
+| G. Stop decisions as span events | The earlier version's choice | Fewer spans | The requested tree puts the evaluation under the turn, where one span per turn does not bury tool spans | Replaced by the turn-level span |
+| H. One plane: operational telemetry written to the event store as events | Request timings, lock waits and queue depth stored as `ops.*` events | One record, one exporter | Machine noise in the record that must replay byte for byte; a hash-chained row per HTTP request; projections would have to skip it | Rejected by decision 21 |
+| I. Two planes, joined only by `aksha.run.id` attributes | Plane 2 never touches the event store, not even an ID | Strictest reading of decision 21 | No direct span link from a run to the request that started it; backends that join by link, not attribute, show two unrelated traces | Fallback if the maintainer says no to P21-T1 |
 
 ## Interface
 
@@ -395,5 +395,4 @@ Note on the rewrite (25 Nov 2026, not re-reviewed by the three agents): with a t
 
 ## Sources (public)
 
-1. Backend mapper code (Langfuse `a399726`, Phoenix `acc5937`, MLflow `4eb57f6`, LangWatch `69386bbe`, 22 Nov 2026) and vendor docs fetched 25 Nov 2026, as cited in the research note, section 3.
 1. PyPI JSON for `opentelemetry-exporter-otlp-json-file`, 25 Nov 2026.
