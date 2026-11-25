@@ -51,7 +51,7 @@ Seven decisions. D1, D2 and D4 are the maintainer's (P-2, items 3 and 10). D3, D
 | Todo reminder (TodoReminder) | `TodoReminder(every)` | Never vetoes | PASS | Every N turns, the open todos derived from the Task's unmet child checks |
 
 5. D5, a judgement that needs a model call is not a stop policy. It becomes a recorded step (a classification call through ADR-P07) that saves an artifact, and a policy's pure check reads that artifact. "Is the user's goal met?" for an open-ended coding request is therefore a classification step that writes `goal.assessment`, and the goal check reads it; replay returns the recorded answer.
-6. D6, the hold predicate (D13-4, Proposed). One function, `hold_reason(view, scope)`, returns why a scope is held by human state, or None. Scopes are an instance, a run, and an (owner, agent) pair. Reasons are a closed set: `stop_requested`, `interrupt_open` (any of ADR-P17's five kinds on that instance or run), and `stopped_by_person` (a standing hold after a person's stop, ADR-P18 D4). Every automatic start path calls this one function before it writes: The Run policy before it relays `next_instance` or proposes CONTINUE for an instance, recovery on startup before it writes a resume record, the rebuild-run opener before `run.started{cause: rebuild}`, and the restart limit's path. A start caused by a person's command carries `cause: command:<name>` with its idempotency key and is not automatic. One shared predicate, rather than a convention, matters because two start paths that each repeat some of the checks inline (archived, settled, a pending request, snooze) will check deleted work, pending secret requests or a stored stop on one path and not the other, so the two drift.
+6. D6, the hold predicate (D13-4, Proposed). One function, `hold_reason(view, scope)`, returns why a scope is held by human state, or None. Scopes are an instance, a run, an (owner, agent) pair, and a session (for the request router's `route` interrupt, ADR-P23). Reasons are a closed set: `stop_requested`, `interrupt_open` (any of ADR-P17's six kinds on that instance, run or session), and `stopped_by_person` (a standing hold after a person's stop, ADR-P18 D4). Every automatic start path calls this one function before it writes: The Run policy before it relays `next_instance` or proposes CONTINUE for an instance, recovery on startup before it writes a resume record, the rebuild-run opener before `run.started{cause: rebuild}`, and the restart limit's path. A start caused by a person's command carries `cause: command:<name>` with its idempotency key and is not automatic. One shared predicate, rather than a convention, matters because two start paths that each repeat some of the checks inline (archived, settled, a pending request, snooze) will check deleted work, pending secret requests or a stored stop on one path and not the other, so the two drift.
 7. D7, a named invariant proved by an audit. `inv.no_auto_start_while_held` holds when, for every `run.started`, `task.entered`, model `step.started` and resume record whose cause is not a person's command, `hold_reason(view at seq - 1, its scope)` is None. An audit runs it over every log the suite produces, and a mutation test removes the predicate's call from one start path and asserts the audit fails, because a guard nobody has seen fail is a guard nobody has proved.
 
 One evaluation, as a diagram:
@@ -174,7 +174,7 @@ def commit_stop_decision(store: "Store", owner: str, d: StopDecision) -> None:
 def compose_prep(stack: tuple[StopPolicy, ...], view: "RunView") -> Prep: ...
 
 # D6, the hold predicate
-HoldScope = Union["InstanceRef", "RunRef", "AgentScope"]   # AgentScope = (owner, agent)
+HoldScope = Union["InstanceRef", "RunRef", "AgentScope", "SessionRef"]   # AgentScope = (owner, agent)
 HoldReason = Literal["stop_requested", "interrupt_open", "stopped_by_person"]
 
 @dataclass(frozen=True)
@@ -187,7 +187,8 @@ def hold_reason(view: "RunView", scope: HoldScope) -> Hold | None:
     """The one predicate every automatic start path calls (D6). Pure; a reducer over the event store.
     S1: InstanceRef: an open interrupt on that instance, or a hold on its run.
     RunRef: a stop request or an open run-scoped interrupt (the budget interrupt) only.
-    AgentScope: a stop request or a standing hold (ADR-P18 D4) only, never an instance's interrupt."""
+    AgentScope: a stop request or a standing hold (ADR-P18 D4) only, never an instance's interrupt.
+    SessionRef: an open route interrupt on that session (ADR-P23 D4); no run opens for that message."""
 
 def rebuild_blocked(view: "RunView", entry: "RebuildEntry") -> Hold | None:
     """S1: holds one rebuild entry, not the agent: its writer instance is suspended, or its run or

@@ -35,7 +35,7 @@ My lean:
 1. Three protocols, one per model class, each with its own operation: `GenerationModel.generate`, `ExtractionModel.extract`, `ClassificationModel.classify`. The request and result types are Aksha's own frozen dataclasses. This renames v2's `Model.next`, `Extractor` and `Decider`.
 2. Routing is by declaration, not by request content. An agent declares model aliases with their class; a Task, a verification rule or a fast-class tool names the alias it uses; the generation alias of every Task is implicit and named `generate`. At load, the run mode binds each alias to one adapter, the loader refuses an adapter whose class differs from the alias's class (`model_class_mismatch`) and a field or question type the adapter does not support (`unsupported_type`), and the binding is hashed into the agent definition version hash, so a run cannot resume under a different binding.
 3. Every adapter carries a capability record: native or adapted, the field and question types it supports, whether it returns spans and distributions, whether it works offline. The loader and the cascade branch on these fields, never on the adapter's name or vendor. This is the session API's capability record (PR-19) applied to models: each candidate is classified by its model API, never by who provides it.
-4. Code applies every confidence threshold; a model never does. A fast-class answer is accepted only at or above `accept_at` (and, for extraction, only with a span inside the minted citation spans it was given); otherwise it abstains. Each threshold carries `fitted_on`, `None` until a labelled set exists, and the run inspector lists every unfitted threshold, so nothing implies a calibration nobody measured.
+4. Code applies every confidence threshold; a model never does. At the event boundary every fast-class number is a fixed-point integer, because `step.completed` carries the answers and the event store refuses floats in hashed payloads (ADR-P01 H3): a probability, `p_null` or confidence is an integer in parts per million (0 to 1,000,000), and a `number` field's value is a decimal string. Adapters convert at their edge, and threshold checks and replay compare the integers, so two runs give identical bytes. Thresholds are written as fractions in the agent definition (whose hash uses `canonical_json`, which allows them) and are converted to parts per million once at load (`ppm(0.9) = 900000`). A fast-class answer is accepted only at or above `accept_at` (and, for extraction, only with a span inside the minted citation spans it was given); otherwise it abstains. Each threshold carries `fitted_on`, `None` until a labelled set exists, and the run inspector lists every unfitted threshold, so nothing implies a calibration nobody measured.
 5. Fallback never crosses a class silently:
 
 | From | Allowed fallback | Rule |
@@ -120,10 +120,10 @@ class ModelCapabilities:                 # the capability record of one adapter
     offline: bool = True                 # True for fake, scripted and replay adapters
 
 @dataclass(frozen=True)
-class ConfidenceThresholds:
+class ConfidenceThresholds:              # fractions in the definition; compared as ppm after load (D4)
     accept_at: float = 0.9               # placeholder, unfitted
     reject_at: float = 0.2               # boolean questions: P(true) at or under this accepts False
-    null_at: float = 0.5                 # extraction: p_null at or over this means "absent"
+    null_at: float = 0.5                 # extraction: p_null_ppm at or over ppm(null_at) means "absent"
     margin: float | None = None          # choice: minimum gap between the top two options
     fitted_on: str | None = None         # hash of the labelled set; None means unfitted
 
@@ -169,10 +169,10 @@ class ExtractionRequest:
 
 @dataclass(frozen=True)
 class FieldAnswer:
-    value: str | float | list | None
+    value: str | int | list | None      # a number field is a decimal string ("12.50"), never a float (D4)
     span: "SpanRef | tuple[SpanRef, ...] | None"  # code points into a minted citation span
-    p_null: float | None
-    confidence: float | None
+    p_null_ppm: int | None               # parts per million, 0..1_000_000 (D4)
+    confidence_ppm: int | None
 
 @dataclass(frozen=True)
 class ExtractionResult:
@@ -192,7 +192,7 @@ class ClassificationRequest:
 @dataclass(frozen=True)
 class ClassAnswer:
     choice: str | bool | None            # None: The adapter refused
-    probabilities: tuple[tuple[str, float], ...]  # full distribution, sorted
+    probabilities_ppm: tuple[tuple[str, int], ...]  # full distribution in parts per million, sorted (D4)
 
 @dataclass(frozen=True)
 class ClassificationResult:
@@ -260,7 +260,7 @@ No new event types. Through the durable step executor:
 |---|---|
 | `run.started` | The alias table record: alias, adapter class, native; never configuration or keys |
 | `step.started` | Step ID, `model_class`, alias, adapter, native, `replaces` (the previous candidate's step ID in a cascade), `args_hash` (`context_hash` or `request_hash`) |
-| `step.completed` | The result, the threshold outcome and reason for each fast-class answer, usage |
+| `step.completed` | The result, the threshold outcome and reason for each fast-class answer, usage; every probability and confidence as an integer in parts per million, every number value as a decimal string (D4) |
 | `step.failed` | `model_transient` attempts; `model_unavailable` when a cascade candidate fails permanently |
 
 A cascade needs no event type of its own: each candidate is a step whose `replaces` field names the one before it (P-2).

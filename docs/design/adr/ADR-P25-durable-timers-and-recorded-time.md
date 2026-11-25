@@ -26,10 +26,10 @@ The terms:
 ## Decision
 
 1. D1, a timer is a fact. `timer.scheduled{timer_id, scope, due_at, cause}` is written in the transaction that wants it; `timer.fired{timer_id}` or `timer.cancelled{timer_id}` closes it. `due_at` comes from the injected clock, so fake runs are deterministic.
-2. D2, firing is an automatic start. The scheduler and recovery fire due timers with cause `timer`. Each firing calls `hold_reason` first (ADR-P16 S3) and counts toward the automatic-start limit (ADR-P14 S3), so a held scope never wakes and a timer loop is capped.
+2. D2, firing is an automatic start. The scheduler and recovery fire due timers with cause `timer`. Each firing that starts work calls `hold_reason` first (ADR-P16 S3) and counts toward the automatic-start limit (ADR-P14 S3), so a held scope never wakes and a timer loop is capped. A firing whose cause only voids (`approval_expiry`, D5) starts no work, so it skips the hold check: otherwise the open approval it exists to void would hold it forever.
 3. D3, freshness lifetimes become facts. A versioned source or an artifact kind may declare `max_age_s`. A save or fetch schedules a `recheck` timer at `fetched_at + max_age_s`; firing it writes `source.expired{record}` through `record_source_changes` (ADR-P05 S2), and ordinary invalidation follows.
-4. D4, the current date is a read. A tool that needs the date calls `observe_time(ctx)`, which returns an `InputRef(kind="time", id="clock", version=<ISO date>)` and records it as a read, so an artifact built from today's date is invalidated when a later run observes another date.
-5. D5, approval expiry is a timer with cause `approval_expiry`; firing voids the approval `expired`.
+4. D4, the current date is a read and a recorded source. A tool that needs the date calls `observe_time(ctx)`, which returns an `InputRef(kind="time", id="clock", version=<ISO date>)` and records it as a read. The runtime also records the date itself: at every run start, and at each day boundary while a run is open, it writes the current date as the `time/clock` source version through `record_source_changes` (ADR-P05 S2, cause `clock`). Every artifact that read an older date is then invalidated before any reuse decision, whether or not the later run calls `observe_time`, so reuse always checks the recorded time.
+5. D5, approval expiry is a timer with cause `approval_expiry`, scoped to the approval itself (its approval ID), not to the instance that raised it; firing voids the approval `expired`. The open approval interrupt therefore never holds its own expiry timer (D2).
 
 ## Alternatives considered
 
@@ -46,7 +46,7 @@ The terms:
 @dataclass(frozen=True)
 class TimerSet:
     timer_id: str
-    scope: "HoldScope"
+    scope: "HoldScope | ApprovalRef"             # ApprovalRef only for approval_expiry (D5)
     due_at: str                                   # ISO time from the injected clock
     cause: Literal["approval_expiry", "reminder", "recheck"]
 

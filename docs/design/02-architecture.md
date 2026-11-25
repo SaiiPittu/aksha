@@ -370,7 +370,7 @@ flowchart LR
 
 Caption: both modes run the same runtime behind the same session API, so the only difference is which process holds the single-writer lock.
 
-While a server holds the lock, a mutating CLI command run in embedded mode is refused, and read-only commands still work. The single writer admits commands between turns, not only between runs, so an answer or a stop typed during a long run is taken within one turn (ADR-P19, Proposed).
+While a server holds the lock, a mutating CLI command run in embedded mode is refused, and read-only commands still work. The single writer admits commands between turns, not only between runs, so an answer typed during a long run is taken within one turn; a stop is committed after the next step commit, and an in-memory signal reaches the kill boundary of a running tool at once (ADR-P19 D4, ADR-P18, Proposed).
 
 ## 6. Headless mode never asks, and deny rules still hold
 

@@ -42,7 +42,7 @@ Proposed (not in the log):
 
 4. D4, identity. Four names for four jobs: kind, ref, slot and writer key. A slot has exactly one writer key; another instance that needs the same slot adopts an equal version as a read and is refused `foreign_writer` for a different one (v2 AE-2).
 5. D5, three hashes per version. `content_hash` over the full content answers "is this the exact document a person approved?". `canonical_hash` over a canonical form (refs reduced to slots, citations reduced to record and quote, declared pointers excluded, keyed lists sorted, JSON canonicalised following RFC 8785) answers "did a regeneration change anything a reader cares about?". `reads_hash` over the sorted lineage inputs answers "was it built from the same inputs?". A kind may add a pure `canonicalize` function for normalisation the declarative rules cannot express, such as whitespace in source code (new).
-6. D6, lineage is captured, never declared. Lineage inputs are exactly the versions context assembly rendered to this instance and the versions its tools returned during its turns. A declared kind is not a read; a version is. A save may name a subset of the instance's reads as its own; the store always adds back every record a citation in it points to (v2 LA-3). A tool that tries to write `derived_from` or `supersedes` is refused.
+6. D6, lineage is captured, never declared. Lineage inputs are exactly the versions context assembly rendered to this instance and the versions its tools returned during its turns. A declared kind is not a read; a version is. A save records every input the instance read, never a subset: lineage and invalidation always use the full set of captured reads, plus every record a citation in it points to (v2 LA-3), so an input the save used can never be left out of invalidation (corrected 26 Nov 2026). A save may label some of those reads as its primary inputs, for display in the run inspector only; the label changes no lineage edge and no invalidation. A tool that tries to write `derived_from` or `supersedes` is refused.
 7. D7, one save path. Every save from any tool or extension goes through `ArtifactStore.save` on the runtime thread, in order: rights, schema, lineage inputs, the two checks no agent can switch off (every read current, every citation verified), phrase rules, verifiers (model routing's checks, PR-07), idempotency, then one transaction with the artifact row, `artifact.saved` with its reads, any `relation.saved` (v2: `edge.saved`), any derived versions, any lifecycle change, and the step's `step.completed`.
 8. D8, idempotency against the slot's latest version only. A save equal to the latest version in content and reads returns it; history is never searched, so a reverted change produces a new version equal to an old one, which is the right history (v2 05b W1). An equal regeneration with new reads is a new version (v2 SR-8 lean A).
 9. D9, derived kinds are stored versions. A kind declared as a pure function over other kinds (the Patent Agent's recommendation table) is saved by the runtime in the transaction of the save that completes its inputs. It is one of two stored interpretations in the design (v2 HLD 24.4), justified because later artifacts cite it by version.
@@ -176,6 +176,7 @@ class ArtifactVersion:
     proposal_of: ArtifactRef | None            # set only for a pending revision (ADR-P05)
     run: str
     run_cause: Literal["request", "rebuild", "handoff"]
+    for_runs: tuple[str, ...] = ()            # a rebuild run's originating runs (ADR-P05 S1)
     step: str                                  # deterministic step ID (ADR-P02)
     event_seq: int
 
@@ -184,7 +185,7 @@ class SaveRequest:                             # returned by a tool; the store d
     kind: str
     key: str | None
     content: Mapping[str, Any]
-    reads: tuple[InputRef, ...] | None = None  # a subset of the instance's reads, or None for all
+    primary_inputs: tuple[InputRef, ...] = ()  # display label only; lineage is always every captured read (D6)
     relations: tuple["RelationRequest", ...] = ()
 
 class ReadRecorder(Protocol):

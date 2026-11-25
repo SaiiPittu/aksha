@@ -14,7 +14,7 @@ The product requirements' required demo is invalidation: a closer prior-art refe
 - A version is **invalidated** (v2: stale) when one of its direct inputs really changed: a source record has a new version, a recorded query re-executed with a different result set, an input artifact was rebuilt with a different canonical hash, or a user statement it read was superseded.
 - A version is **transitively invalidated**, written **dirty** below (v2: possibly stale), when it is reachable from an invalidated version through lineage while the versions between them have not yet been rebuilt.
 - **Early cutoff** (v2: confirmed current) is the rule that stops the cascade: when a rebuilt input's canonical hash equals the old one, everything downstream of it stays current. The name comes from build systems; Mokhov, Mitchell and Peyton Jones use it in "Build Systems à la Carte" (ICFP 2018).
-- A **rebuild run** (v2: recheck run) is a run the runtime opens itself, cause `rebuild`, to regenerate one agent's invalidated work for one owner after the run that wrote it has ended.
+- A **rebuild run** (v2: recheck run) is a run the runtime opens itself, cause `rebuild`, to regenerate one agent's invalidated work for one owner after the run that wrote it has ended. It records the runs it rebuilds for (`for_runs`), which decides whose readers its versions may move (S1).
 - A **diff review** (v2: review card) is the interrupt a person answers for an invalidated human-reviewed version: it shows the **pending revision** (v2: proposed version) beside the old one, the inputs that changed, the lineage chain back to the change, and a field-level **redline** (tracked changes).
 - A **human-reviewed** version is one with a person's choice, acceptance or approval on it; every other version is **machine-only**.
 
@@ -84,14 +84,15 @@ Takeaway: invalidation is one deterministic pass in save order, and rebuilding i
 
 ### Amendments from the stress test (25 Nov 2026, Proposed)
 
-1. S1, a version from an unrelated run of the same agent is a sibling. A founder's UK research request writes `research.competitor/COMP-02@v2` into the slot an earlier EU matrix read at `@v1`; under D4 that read is `moved` and the EU matrix rebuilds from UK data with no source change. A newer version now moves a same-agent reader only when it was written by the reader's own run or by a run whose cause is `rebuild`. A version from an unrelated `request` run is a sibling, as D11 of ADR-P04 already says for reads across agents. Agents that want shared slots across requests qualify their keys with a scope ID.
+1. S1, a version from an unrelated run of the same agent is a sibling. A founder's UK research request writes `research.competitor/COMP-02@v2` into the slot an earlier EU matrix read at `@v1`; under D4 that read is `moved` and the EU matrix rebuilds from UK data with no source change. A newer version now moves a same-agent reader only when it was written by the reader's own run or by a rebuild run opened for the reader's run. A rebuild run records the originating runs whose invalidated work it regenerates, `run.started{cause: rebuild, for_runs}`, and each version it saves carries them, so a later rebuild of the UK work (for the UK run) is still a sibling to the EU reader (corrected 26 Nov 2026: "any run whose cause is `rebuild`" let an unrelated rebuild move the reader again). A version from an unrelated `request` run, or from a rebuild for another run, is a sibling, as D11 of ADR-P04 already says for reads across agents. Agents that want shared slots across requests qualify their keys with a scope ID.
 2. S2, one writer of source facts. `record_source_changes` is the only writer of `source.changed` and `query.reexecuted`. The `ApplySourceChange` command (now one change set over several sources, ADR-P19 S1) and recovery's source check (ADR-P02 S2) both call it, once per owner, in one transaction. D6's sentence "an ordinary restart re-executes nothing" is replaced: a restart checks sources and reports what moved.
 
    ```python
    # aksha/runtime/invalidation.py (proposal)
    def record_source_changes(tx: "Transaction", owner: str,
                              moved: Mapping[str, str],            # source -> new version
-                             cause: Literal["command", "recovery"]) -> tuple[str, ...]: ...
+                             cause: Literal["command", "recovery", "clock"]) -> tuple[str, ...]: ...
+                             # clock: the run-start and day-boundary date write of ADR-P25 D4
    ```
 
 3. S3, a withdrawn writer's versions read as `gone`. When `resolve` merges COMP-06 into COMP-02 after `fetch_extract[COMP-06]` has saved, the withdrawn instance's version stays latest in its slot and a `keys="all"` matrix counts the vendor twice. v2 handled this (05b line 348); this ADR's four read states dropped it. A version whose writer instance is `withdrawn` now reads as `gone` to every reader, and `keys="all"` reads skip withdrawn keys.
@@ -179,7 +180,8 @@ def apply_source_change(rt: "Runtime", owner: str, change_set: str, *,
     plain `next` turn end; suspended instances stay suspended."""
 
 def open_rebuild_runs(rt: "Runtime", owner: str) -> tuple[str, ...]:
-    """One run per affected agent with no open run, cause 'rebuild', in dependency order;
+    """One run per affected agent with no open run, cause 'rebuild', in dependency order,
+    recording for_runs (the runs whose invalidated work it regenerates, S1);
     none while a stop request or the hold invariant forbids an automatic start."""
 
 @dataclass(frozen=True)
@@ -217,7 +219,7 @@ Events it writes:
 | `source.changed` (v2: `world.changed`), per owner | none | Source change |
 | `query.reexecuted` (v2: `query.rechecked`: query ID, new result-set hash, `changed`) | none | Source change |
 | `approval.revoked` (approval ID, target, the inputs that moved), `interrupt.voided{revoked}` | none | The save, source change or recovery step that confirmed the invalidation |
-| `run.started{cause: rebuild}` | `rebuild:{owner}/{agent}/{source_version}` | Rebuild start |
+| `run.started{cause: rebuild, for_runs}` | `rebuild:{owner}/{agent}/{source_version}` | Rebuild start |
 | `interrupt.raised{kind: review}` with `card_hash` | none | The step result that saved the pending revision |
 | `review.accepted`, `review.rejected` | `review:{interrupt_id}` | Decision command |
 | `approval.requested` (on acceptance only) | none | Decision command |

@@ -38,16 +38,16 @@ The three agents press on it differently. The Research Agent's tools are reads, 
 I propose eleven decisions. D1 to D3 and D5 to D9 carry v2 forward under the new names; D4, D10 and D11 are new or changed.
 
 1. D1, engine. Aksha owns a durable step executor on the event store, behind a `DurableStepExecutor` protocol, with no external workflow engine underneath (v2 ADR-004 lean C). An engine can go under the protocol later; the mapping is written as "designed so that", never "works with".
-2. D2, step IDs. Every step ID follows the grammar of v2 05a section 2.7: run, Task instance, turn, call, with reserved segments (`t03`, `c02`, `w043`, `d01`, `derived`, `handoff`) that the loader refuses as Task names. A recorded `step.started` carries the arguments' hash; a restart that reaches the same step ID with different arguments raises `StepMismatch` and stops.
+2. D2, step IDs. Every step ID follows the grammar of v2 05a section 2.7: run, Task instance, turn, call, with reserved segments (`t03`, `c02`, `w043`, `d01`, `derived`, `handoff`) that the loader refuses as Task names. A recorded `step.started` carries the arguments' hash; a restart that reaches the same step ID with different arguments raises `StepMismatch` and stops. One second form exists for work that comes before any run: a session-scoped step, `session/<session id>/route/<message seq>`, used only by the request router's classification (ADR-P23 D2). Every step ID also has a **step key**, the step ID minus its run segment (`compare[C1]/t03/c02`, or `route/<message seq>` for a session step), which is independent of which run recorded it; replay matches by the step key (D11, ADR-P22 D4).
 3. D3, clock and IDs. One `Clock` with `now()`, `sleep()` and a real `mono_ms()` for deadlines only, and one `IdSource` that counts run, interrupt, citation span and query IDs from the event store per owner. No module in the runtime core calls `datetime.now`, `time.time`, `time.sleep`, `uuid4` or `random`; a static test greps for them. Two fake-model runs therefore write byte-identical logs, except the `mono_ms` diagnostic, which every comparison excludes by name.
 4. D4, step semantics, renamed. Each tool declares `semantics` as data: `at_least_once` (v2 `rerun`), `reconcile` (v2 `reconcile`) or `at_most_once` (v2 `report`). Defaults come from the tool class: reads, saves and model steps are `at_least_once`; a tool with a declared receiver is `reconcile`; the loader refuses an effectful tool that declares neither a receiver nor `at_most_once`.
-5. D5, recovery on startup, in a fixed order (v2 HLD 10.3): take the lock and check the schema version; reconcile outbox entries that landed (ADR-P03); check each owner's sources for change and record `query.reexecuted` (ADR-P05); reconcile outbox entries that did not land; close each dispatched `at_most_once` step as `outcome_unknown`; classify every open run; write resume records; open rebuild runs; commit `recovery.completed` (v2: `boot.completed`).
+5. D5, recovery on startup, in a fixed order (v2 HLD 10.3): take the lock and check the schema version; reconcile outbox entries that landed (ADR-P03); check each owner's sources for change and record `query.reexecuted` (ADR-P05); reconcile outbox entries that did not land; close each dispatched `at_most_once` step as `outcome_unknown`; settle each open session-scoped route step (a recorded `step.completed` with no `route.decided` writes the decision or its `route` interrupt from the recorded answer; a `step.started` with no completion re-runs the classification, which is `at_least_once`; an open `route` interrupt stays open and holds that message); classify every open run; write resume records; open rebuild runs; commit `recovery.completed` (v2: `boot.completed`).
 6. D6, classification. Each open run is exactly one of: `definition_changed` (the loaded agent definition version hash differs from the one on `run.started`), `stop_requested` (a person's durable stop, `run.stop_requested`, exists; PR-18), `in_flight` (a turn end was lost, or a turn is incomplete), or `suspended` (its last stop decision was HOLD and nothing has resolved the interrupt since). Recovery writes nothing at all for a suspended run, so restarting while an approval request is open never counts toward a limit and never starts a turn.
 7. D7, one resume record per lost turn end. The root stop policy, the Run frame, judges the resume first, before any inner frame: a changed definition stops the run `failed, definition_changed`; a stop request stops it `stopped`; the restart limit stops it `failed, restart_limit`. Otherwise the record either re-authorises the incomplete turn (`resumes_turn: true`, no turn charged) or relabels the lost turn end and lets the ordinary stop-policy evaluation decide (PR-16).
 8. D8, restart limit counted from the event store. The number of resume records since the run's last progress (a completed tool step or a saved artifact) is a projection; above 3 the run stops `failed, restart_limit`. No counter field exists.
-9. D9, timeouts. A timed-out attempt is abandoned, not killed, because `concurrent.futures` cannot kill a thread. That is safe only because tool bodies return values and never touch the store: a late result reaches a step executor that no longer waits for it, and the runtime records `attempt.discarded` and saves nothing. Killing a process-based tool is the kill boundary, designed with the sandbox (PR-12).
+9. D9, timeouts. A timed-out attempt is abandoned, not killed, because `concurrent.futures` cannot kill a thread. That is safe only because tool bodies return values and never touch the store: a late result reaches a step executor that no longer waits for it, and the runtime records `attempt.discarded` and saves nothing. Killing a process-based tool is the kill boundary, designed with the sandbox (PR-12). A timed-out attempt of a dispatched `at_most_once` step is never retried automatically, because the effect may have landed: the step is closed `outcome_unknown` and only a person (or the tool's `on_unknown` interrupt) settles it.
 10. D10, lazy resume per owner. In-flight work resumes before that owner's next mutating command or on `aksha resume`, never eagerly for every owner, so one owner's crash-looping run cannot block another owner's commands (v2 LC-4).
-11. D11, replay check. A designed `replay_check` re-drives a finished run with a replay model and the recorded tool results under the current definition, and fails at the first step ID, argument hash or stop decision that differs. Restart itself needs no replay mode, because the executor returns recorded results.
+11. D11, replay check. A designed `replay_check` re-drives a finished run with a replay model and the recorded tool results under the current definition, and fails at the first step key, argument hash or stop decision that differs. It matches recorded steps by step key (D2), never by the full step ID, because the re-driven run has its own run ID. Restart itself needs no replay mode, because the executor returns recorded results.
 
 Work reuse when a new run meets earlier work: in the first milestone a new run adopts existing artifacts only when the whole agent definition version hash is unchanged, so a prompt edit re-runs every Task instance (v2 SR-7 lean B). A hash per Task, adopting under an unchanged Task hash, is the general design and makes a prompt edit cost only what it touches.
 
@@ -116,12 +116,15 @@ OnUnknown = Literal["tell_model", "interrupt"]
 
 @dataclass(frozen=True)
 class StepId:
-    run: str                                   # "R-0002"
+    run: str | None                            # "R-0002"; None for a session-scoped step
+    session: str | None = None                 # set only for the route step: "session/<id>/route/<seq>"
     instance: str | None                       # "compare[C1]"
     turn: int | None                           # 3 -> "t03"
     call: int | None                           # 2 -> "c02"
     sub: str | None = None                     # "d01" (a fast model-class step), "derived"
     def __str__(self) -> str: ...              # "R-0002/compare[C1]/t03/c02"
+    @property
+    def key(self) -> str: ...                  # run-independent step key: "compare[C1]/t03/c02" (D2)
     @classmethod
     def parse(cls, s: str) -> "StepId": ...
 
@@ -158,7 +161,9 @@ class DurableStepExecutor(Protocol):
         """Run one step at most once to completion:
         1. a recorded step.completed returns its value, replayed=True;
         2. a recorded step.started with another args_hash raises StepMismatch;
-        3. at_most_once: commit step.dispatched alone before the body;
+        3. at_most_once: commit step.dispatched alone before the body; before any retry, check
+           for the step's disp:{step_id} record, and if it exists never run the body again:
+           close the step outcome_unknown (ADR-P14 D4);
         4. attempts are counted from step.failed and attempt.discarded, so a restart never
            resets them; an abandoned attempt's late value is recorded as attempt.discarded;
         5. only the live attempt's value, on the runtime thread, becomes step.completed and

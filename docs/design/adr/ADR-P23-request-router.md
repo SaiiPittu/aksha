@@ -25,14 +25,14 @@ The product requirements ask that users "choose an agent or describe their reque
 ## Decision
 
 1. D1, routing is a classification. The router is one classification call (ADR-P07) under the runtime-owned alias `runtime.route`. Its question's options are the loaded agents' names, and each option's text is the agent's `purpose` field (ADR-P20 S1). The state the classifier sees is the message text only, rendered by code; no earlier transcript enters it.
-2. D2, the call is a durable step. The classification runs under a deterministic step ID in the session's routing namespace (`session/<id>/route/<message seq>`), so a restart after the decision returns the recorded answer and never re-routes (ADR-P02).
+2. D2, the call is a durable step. The classification runs under a deterministic step ID in the session's routing namespace (`session/<id>/route/<message seq>`), the session-scoped form of ADR-P02 D2, so a restart after the decision returns the recorded answer and never re-routes. Recovery settles an open route step in its own place in the fixed order (ADR-P02 D5): a completed step with no decision writes the decision or the interrupt from the recorded answer, and a started step with no completion re-runs the classification, which is `at_least_once`.
 3. D3, abstention asks; it never falls back to generation. The abstention band of ADR-P07 is the trigger: an answer below `accept_at`, or with a margin under `margin` between the top two agents, raises a `route` interrupt. The interrupt lists the two or three highest-scoring agents with their purpose lines and an "other" choice. It never asks a generation model to guess.
-4. D4, the route interrupt is session-scoped. `route` joins the interrupt kinds (ADR-P17 S5). It holds the session's intake, not any run, so the hold predicate (ADR-P16) treats it as human state on the session scope: no run opens for that message until the person answers.
+4. D4, the route interrupt is session-scoped. `route` joins `InterruptKind` (ADR-P17 D2, S5) with a `SessionRef` scope. It holds the session's intake, not any run, so the hold predicate (ADR-P16 D6) treats it as human state on its `SessionRef` hold scope: no run opens for that message until the person answers. The person answers with `AnswerInterrupt(interrupt_id, agent=...)` (ADR-P19), which writes `interrupt.resolved` and `route.decided{by: person}` in the transaction that opens the run.
 5. D5, a named agent skips the router. `SendMessage(agent="patent")` records `route.decided{by: person}` with no classification step. The CLI's `--agent` flag and the web chat's agent picker both use it.
 6. D6, the route decision is the label. `route.decided{agent, by: classifier | person, step_id}` is written in the transaction that opens the run, and the transcript projection labels the reply with that agent.
 7. D7, a message to a session with an open run is not routed. ADR-P19 S2 refuses it `lane_required`; routing applies to new requests only.
 
-Worked example, toy numbers. Two agents are loaded. "Who else does camera-free occupancy sensing?" classifies Research 0.91, Patent 0.05; `accept_at` is 0.8, so the run opens labelled Research. "Help me with the sensor thing" classifies Research 0.48, Patent 0.44; the margin 0.04 is under 0.2, so a `route` interrupt asks "Research competitors and customers, or prepare invention disclosures?". The answer records `route.decided{by: person}` and opens the run.
+Worked example, toy numbers (shown as fractions; recorded as parts per million, so 0.91 is stored as 910000). Two agents are loaded. "Who else does camera-free occupancy sensing?" classifies Research 0.91, Patent 0.05; `accept_at` is 0.8, so the run opens labelled Research. "Help me with the sensor thing" classifies Research 0.48, Patent 0.44; the margin 0.04 is under 0.2, so a `route` interrupt asks "Research competitors and customers, or prepare invention disclosures?". The answer records `route.decided{by: person}` and opens the run.
 
 ## Alternatives considered
 
@@ -54,7 +54,7 @@ class RouteDecision:
     agent: str
     by: Literal["classifier", "person"]
     step_id: str | None                          # the classification step, None when a person named it
-    probabilities: tuple[tuple[str, float], ...]
+    probabilities_ppm: tuple[tuple[str, int], ...]   # parts per million, as ADR-P07 D4 stores them
 
 def route_question(agents: Sequence["LoadedDefinition"],
                    thresholds: "ConfidenceThresholds") -> "QuestionSpec": ...   # pure
@@ -62,7 +62,8 @@ def route(view: "SessionView", message_seq: int, model: "ClassificationModel",
           agents: Sequence["LoadedDefinition"]) -> RouteDecision | "RouteInterrupt": ...
     # runs the classification as a durable step; returns a decision or raises a route interrupt
 
-# Events: route.decided{agent, by, step_id}; interrupt.raised{kind: "route", scope: session}
+# Events: route.decided{agent, by, step_id}; interrupt.raised{kind: "route", scope: SessionRef}
+# The answer: AnswerInterrupt(interrupt_id, agent=...) (ADR-P19); the hold: hold_reason(view, SessionRef) (ADR-P16)
 ```
 
 ## Stress test (25 Nov 2026)

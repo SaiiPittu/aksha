@@ -26,7 +26,7 @@ The store and an outside system are two places that cannot commit together, so "
 | Keys built from step IDs | A rebuild run after a source change has new step IDs, so it is not refused a second send of the same packet version | a stated requirement |
 | Keys without the owner | Two founders building the same packet share one ledger row; the second founder's send is swallowed | a stated requirement |
 | No answer for a system with no ledger | A webhook in flight at the crash is either fired twice or silently dropped | a stated requirement |
-| No command receipt | An up-arrow retry after a crash is recorded as a second message and starts a second run; two browser tabs approving one action both succeed | a stated requirement |
+| No command receipt | A retry after a crash, before the first attempt's receipt arrived, is recorded as a second message and starts a second run; two browser tabs approving one action both succeed | a stated requirement |
 | Acknowledgement means "done" | A client waits on a request that holds the runtime for a whole model turn, then times out and retries | none directly; every multi-interface harness |
 
 The three agents press on it differently. The Research Agent has no external effects. The Patent Agent has two (form write, send), both behind approval and both with ledgered mock services. The contrast coding agent has the effects the field actually meets: `git push`, opening a pull request, triggering a continuous-integration (CI) webhook. Each needs its own answer to "did it land?".
@@ -35,14 +35,14 @@ The three agents press on it differently. The Research Agent has no external eff
 
 I propose eight decisions. D1 to D3 and D6 to D7 carry v2 forward under the new names; D4, D5 and D8 are new or generalised.
 
-1. D1, outbox entry before every external effect. An external effect runs only after an `outbox.enqueued` entry commits, in the transaction of the decision that wants it: The `handoff` command for an approved send, or the step intent of an effectful tool call. The same transaction re-checks authority (an approval granted for this exact action, the target current in the invalidation view, the approval signature recomputed and equal; PR-17, ADR-P05). After commit, the outbox drainer calls the system of record and commits `outbox.completed` (v2: `effect.outcome`) with the receipt and the step's result in one transaction. In the first milestone the drainer is the runtime thread, immediately after commit; one drainer lane per session is the designed scale path.
+1. D1, outbox entry before every external effect. An external effect runs only after an `outbox.enqueued` entry commits, in the transaction of the decision that wants it: The `handoff` command for an approved send, or the step intent of an effectful tool call. The same transaction re-checks authority (an approval granted for this exact action, the target current in the invalidation view, the approval signature recomputed and equal; PR-17, ADR-P05). After commit, the outbox drainer calls the system of record, but only after re-checking the same authority before each delivery attempt (retries included): the approval signature recomputed from current facts and the target still current. On a mismatch it commits `outbox.abandoned{hash_mismatch}` or `{target_invalidated}` and delivers nothing, because a source change can land between enqueue and a later attempt. On success the drainer commits `outbox.completed` (v2: `effect.outcome`) with the receipt and the step's result in one transaction. In the first milestone the drainer is the runtime thread, immediately after commit; one drainer lane per session is the designed scale path.
 2. D2, keys from meaning. Each effectful tool declares `key_fields`, the argument fields that say what the effect is. The runtime builds the key as a SHA-256 over the tool name, the owner, and the canonical JSON of those fields, with every artifact reference resolved to its exact version. A send's key covers the document, its version, the recipient ID and the recipient record's version; a form's covers the form kind, the Task instance key, the reads hash and the content hash (v2 HLD 5.5).
 3. D3, the system of record protocol. A system of record implements `apply(key, request)`, which returns the existing receipt for a known key, and `lookup(key)`. A tool with a system of record that has `lookup` gets `reconcile` semantics (ADR-P02).
 4. D4, outcome unknown. A tool whose system cannot be asked declares `at_most_once`. The executor commits `step.dispatched` alone before the body; recovery closes a dispatched entry with no completion as `outcome_unknown`, tells the model and the person in fixed text, and, when the tool declares `on_unknown="interrupt"`, raises an interrupt asking a person to check the outside system. It never sends again.
-5. D5, a command ID on every command. Every session API command carries a `command_id`; a client that sends none gets one derived from the session, the command's arguments, the pending item it answers and the sequence number of the last reply (v2 DU-6, generalised). Each command's transaction starts with one `command.accepted` event (new) whose dedup key is `cmd:{owner}/{command_id}`; that event is the command receipt. A retried command hits `AlreadyRecorded` and returns the stored receipt. The acknowledgement means "committed", not "done": The client learns what happened next from the event stream (PR-19).
+5. D5, a command ID on every command. Every session API command carries a `command_id`, generated by the client at random once per invocation and reused only for that invocation's retries (the CLI keeps it in a local pending file until the receipt arrives). No ID is derived from the arguments or the session state, because a derived ID drops a deliberate repeat and changes on a retry after a reply lands (corrected 26 Nov 2026; this drops v2 DU-6's derived fallback). Each command's transaction starts with one `command.accepted` event (new) whose dedup key is `cmd:{owner}/{command_id}`; that event is the command receipt. A retried command hits `AlreadyRecorded` and returns the stored receipt. The acknowledgement means "committed", not "done": The client learns what happened next from the event stream (PR-19).
 6. D6, one decision per pending item. Approval decisions, interrupt resolutions and diff-review decisions keep their own dedup keys (`decide:{approval_id}`, `resolve:{interrupt_id}`, `review:{interrupt_id}`), so a second front end deciding the same item gets `command.refused{already_decided}` even with a different command ID.
 7. D7, reconciliation order and refusal. Recovery reconciles entries that landed before the source check and entries that did not land after it (ADR-P02 D5). An entry that did not land is finished with the same key only if its target is still current and its recomputed approval signature is equal; otherwise it is abandoned with `outbox.abandoned{hash_mismatch}` or `{target_invalidated}`. A person's approval is never spent on an action that changed.
-8. D8, bounded receiver retries counted from the event store. A transient failure from the system of record is retried under the tool's step policy; attempts are counted from `step.failed` events, so a restart never resets them. With retries used up, the entry is abandoned with `retries_exhausted`, the document keeps its lifecycle state, and it appears in the person's pending list.
+8. D8, bounded receiver retries counted from the event store. A transient failure from the system of record is retried under the tool's step policy, each retry passing D1's pre-delivery re-check first; a timeout on a dispatched `at_most_once` entry is never retried and stays `outcome_unknown` (D4); attempts are counted from `step.failed` events, so a restart never resets them. With retries used up, the entry is abandoned with `retries_exhausted`, the document keeps its lifecycle state, and it appears in the person's pending list.
 
 ```mermaid
 sequenceDiagram
@@ -140,7 +140,9 @@ def enqueue(tx: "Transaction", owner: str, tool: str, args: Mapping[str, Any],
     Raises Refused(code) instead: approval_required, target_invalidated, hash_mismatch."""
 
 def drain(rt: "Runtime", owner: str) -> tuple[OutboxEntry, ...]:
-    """Run every enqueued entry of this owner after commit, in order, on the runtime thread."""
+    """Run every enqueued entry of this owner after commit, in order, on the runtime thread.
+    Before each delivery attempt, retries included, re-check the approval signature and the
+    target's freshness; on a mismatch commit outbox.abandoned{hash_mismatch | target_invalidated}."""
 
 def reconcile_on_startup(rt: "Runtime", *, phase: Literal["landed", "unlanded"]) -> tuple[str, ...]:
     """landed: lookup each entry with no completion and record outbox.completed for a receipt.
@@ -152,7 +154,7 @@ class Command:
     owner: str
     session: str
     args: Mapping[str, Any]
-    command_id: str | None = None              # derived when None (D5)
+    command_id: str                            # client-generated per invocation, reused only for retries (D5)
 
 @dataclass(frozen=True)
 class CommandReceipt:

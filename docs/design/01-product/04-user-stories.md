@@ -140,7 +140,7 @@ Scenarios: 6.
 As an operator, I want loops, overspend and crash loops stopped by the runtime with a recorded reason, so that I am not watching every run.
 
 1. Each agent declares a budget of tool calls, model turns and active seconds, and each Task instance has a turn limit (10 by default). An agent that declares none gets the runtime default.
-2. A timed-out tool call is retried up to the limit (2 retries, 10 s each, by default) and then recorded as failed.
+2. A timed-out tool call is retried up to the limit (2 retries, 10 s each, by default) and then recorded as failed, when its step semantics allow a retry; a dispatched `at_most_once` call is never retried automatically and is recorded outcome unknown for reconciliation or a person.
 3. Every count is a projection of the event store, so a restart never resets it.
 4. Hitting a budget raises a budget interrupt and keeps every saved artifact; a run that ends on a limit ends `partial`.
 5. A run resumed 3 times without progress ends `failed` with reason `restart_limit`.
@@ -238,7 +238,7 @@ Scenarios: 3.
 
 As a reviewer of agent output, I want each question asked once and my answer to reach the work that asked, so that I am not asked again after a restart or by another item.
 
-1. An interrupt is one of five kinds: `input`, `choice`, `approval`, `budget` or `review`. An agent declares a label for each, never a new kind.
+1. An interrupt is one of six kinds: `input`, `choice`, `approval`, `budget`, `review`, or the session-scoped `route` that the request router raises. An agent declares a label for each, never a new kind.
 2. Only the Task instance that asked waits; other instances continue.
 3. An answer is saved as a user statement and cited wherever it is used.
 4. A retried submission after a crash is recognised by its command ID and recorded once.

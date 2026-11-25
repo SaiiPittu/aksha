@@ -84,7 +84,7 @@ EffectClass = Literal["read", "store", "external", "exec", "model", "reserved"]
 class RetryPolicy:                                   # counted from the event store (ADR-P14)
     timeout_ms: int = 10_000
     max_retries: int = 2                             # attempts = max_retries + 1
-    retry_on: frozenset[str] = frozenset({"timeout", "transient"})
+    retry_on: frozenset[str] = frozenset({"timeout", "transient"})   # never "timeout" after dispatch on at_most_once (ADR-P14 D4)
     backoff_ms: tuple[int, ...] = (500, 1_000)       # injected clock in fake model mode
 
 @dataclass(frozen=True)

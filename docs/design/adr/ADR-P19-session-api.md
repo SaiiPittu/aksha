@@ -42,9 +42,9 @@ The contrast coding agent adds three pressures the product requirements agents d
 ## Decision
 
 1. **One write entry point, `dispatch(command) -> CommandReceipt`, over a closed union of commands.** Every state change any interface makes is one `Command` value. The named functions of v2 HLD 14.1 (`send`, `approve`, `answer` and the rest) stay, as one-line constructors over `dispatch`, so the CLI and the tests read the same as before. `boot` leaves the union, because no client sends it; the runtime thread runs it at start.
-2. **Every command carries a client-generated command ID, and every command gets a receipt.** In the command's first transaction the runtime core appends one fact, `command.accepted` or `command.refused`, with a deduplication key `cmd:{tenant}/{command_id}` under a unique constraint (PR-03 owns the constraint). A second dispatch with the same ID and the same argument hash returns the stored receipt with `replayed=True` and appends nothing. The same ID with different arguments is refused with `command_id_reused`. This generalises v2's `request_id` on `user.message` to every command, and it replaces that field.
+2. **Every command carries a client-generated command ID, and every command gets a receipt.** The client generates one random ID per invocation (a click, a CLI call) and reuses it only for that invocation's retries; it never derives the ID from the command's arguments or from the session's state, so two deliberate identical messages are two commands and a retry after a reply landed is still the same command. The CLI keeps the ID in a local pending file until the receipt arrives, so a retry after a CLI crash, before any receipt, reuses it; once the receipt has arrived the entry is cleared, and the next identical command is a new invocation with a new ID. In the command's first transaction the runtime core appends one fact, `command.accepted` or `command.refused`, with a deduplication key `cmd:{tenant}/{command_id}` under a unique constraint (PR-03 owns the constraint). A second dispatch with the same ID and the same argument hash returns the stored receipt with `replayed=True` and appends nothing. The same ID with different arguments is refused with `command_id_reused`. This generalises v2's `request_id` on `user.message` to every command, and it replaces that field.
 3. **A receipt means committed, not done.** `dispatch` returns when the command's own facts commit (`user.message`, `approval.granted`, `run.started` and so on). Turns, tool calls and outbox work happen after, on the runtime thread, and reach the client through the stream. For the CLI and the tests, `wait_for_yield(tenant, session, after_seq)` blocks until the run yields to a person or ends and returns the same `Yielded` view v2 designed, so exit codes do not change.
-4. **The single writer admits commands between turns, not only between runs.** The runtime thread runs scheduler work one turn at a time and drains the command queue after every turn's commit, so an answer, an approval or a stop typed during a long run is accepted within one turn, not after the run. This is a change to 05e section 2.4, which ran each command to its yield.
+4. **The single writer admits commands between turns, not only between runs, and admits a stop between steps.** The runtime thread runs scheduler work one turn at a time and drains the command queue after every turn's commit, so an answer or an approval typed during a long run is accepted within one turn, not after the run. A queued `Stop` is not left for the turn's end: the runtime thread commits any queued `Stop` after each step commit as well (the stop's `run.stop_requested` and its receipt, in one transaction), so ADR-P18 D5's per-step check reads it before the next tool call. On enqueueing a `Stop`, the session API also sets an in-memory stop signal for that run, which the kill boundary (ADR-P18 D6) watches while a long tool body runs, so a stop four minutes into a ten-minute suite reaches the running process without waiting for the step to end. The signal is a wake-up only; the committed `run.stop_requested` is the record, and there is still one writer. This is a change to 05e section 2.4, which ran each command to its yield.
 5. **One stream per session, resumable from a cursor, with a resync, a catch-up marker and forward-compatible decoding (D13-2 option A).** `subscribe(tenant, session, after_seq)` replays every stored event of that tenant and session with a greater sequence number, then sends `Synchronized(seq)` once, then follows live commits. If the gap exceeds `max_replay` (default: unbounded, because the whole event store is local), it sends `Resync(seq)` instead of the replay: The client refetches every view and moves its cursor. Because clients never build views from payloads (FR-IF-11), a resync needs no snapshot payload. Clients decode an unknown item type as `Unknown`, which advances the cursor and invalidates nothing. The runtime core never renames or removes an event type without bumping the stream's `schema_version`.
 6. **Live deltas are transient and never facts.** Token streams and command output arrive as `Transient` items on the stream while a step runs. They are not stored, never replayed, and carry no cursor; a reconnecting client sees the completed step instead.
 7. **One capability record per runtime, derived from the composition root and the loaded agent definitions, never stored.** `capabilities(tenant)` returns which commands `dispatch` accepts, the interrupt kinds, the model classes with the adapter bound to each, the stream features, the sandbox backends, the run mode and, per agent, its interrupt labels, its effectful tools and its opted-in stop policies. An interface hides a button whose command is absent, so a first-milestone build without cancellation simply reports no `stop` command. The honesty rule: a capability that is claimed and fails at runtime is a bug, so every claimed capability maps to a conformance test.
@@ -69,7 +69,7 @@ sequenceDiagram
   RT-->>C: CommandReceipt(accepted, seq 4127)
   Note over C,RT: committed, not done
   RT->>ES: turn 1 events (handoff run starts)
-  RT->>Q: drain queue between turns
+  RT->>Q: drain queue between turns (a queued Stop after every step)
   RT->>ES: turn 2 events
   ES-->>C: stream: events 4128 onward
   C->>S: subscribe(after_seq 4127) after a reconnect
@@ -82,7 +82,7 @@ Caption: The receipt returns at the first commit, the work continues on the sing
 
 1. S1, a source change is one change set. The product requirements' demo changes two sources (publications and contributor records), and `ApplySourceChange` named one. Two commands with turns admitted between them can rebuild against half the change and raise two selection or packet reviews for one demo. `ApplySourceChange(change_set)` applies a change set over several sources in one transaction through `record_source_changes` (ADR-P05 S2); the receipt's `ids` lists the sources it moved.
 2. S2, a message to a session with an open run needs a lane. Nothing defined what `SendMessage` means while a run is open: a new request, an amendment of the answered scope, or steering for the running instance. A bare `SendMessage` to a session with an open run is refused `lane_required`, and the interface asks the person once. `Steer(run_id, text, lane)` carries the answer: `steer` and `follow_up` are ADR-P27's lanes; `amend` offers the text to the run's intake Task as an amendment of its last answered interrupt, the same path as `AnswerInterrupt(amend=True)`, so invalidation reopens scope and its dependents. A message to an ended run starts a new routed run, as before.
-3. S3, the routing question is an interrupt of kind `route`, scoped to the session (ADR-P23). `route.decided` gets an owner there.
+3. S3, the routing question is an interrupt of kind `route`, scoped to the session (ADR-P23). `route.decided` gets an owner there. `AnswerInterrupt(agent=...)` resolves it, naming one of the listed agents (or the "other" choice with `text`).
 4. S4, `Finalize(run_id)` answers a budget interrupt with partial finalization (ADR-P14 S1, ADR-P24).
 5. Names per ADR-P01 S1: `shown_signature`, and the command receipt type is `CommandReceipt`.
 
@@ -122,15 +122,16 @@ WaitKind = Literal["input", "choice", "approval", "budget", "review", "route"]  
 @dataclass(frozen=True)
 class CommandBase:
     tenant: str
-    command_id: str                     # client-generated idempotency key; CLI derives it (below)
+    command_id: str                     # client-generated, random per invocation, reused only for its retries (D2)
 
 @dataclass(frozen=True)
 class OpenSession(CommandBase): session_id: str | None = None
 @dataclass(frozen=True)
 class SendMessage(CommandBase): session_id: str; text: str; agent: str | None = None
 @dataclass(frozen=True)
-class AnswerInterrupt(CommandBase):     # input and choice interrupts only (IE-10)
+class AnswerInterrupt(CommandBase):     # input, choice and route interrupts only (IE-10; route: S3)
     interrupt_id: str; text: str | None = None; keys: tuple[str, ...] = (); amend: bool = False
+    agent: str | None = None            # route only: one of the agents the interrupt listed (ADR-P23)
 @dataclass(frozen=True)
 class Approve(CommandBase): approval_id: str; shown_signature: str
 @dataclass(frozen=True)
@@ -179,8 +180,9 @@ def receipt(tenant: str, command_id: str) -> CommandReceipt | None: ...  # a pro
 # Sugar kept from v2 HLD 14.1, each one line over dispatch, for example:
 def approve(tenant: str, approval_id: str, shown_signature: str, command_id: str | None = None) -> CommandReceipt: ...
 
-def cli_command_id(session_id: str, cmd_name: str, args: Mapping[str, object],
-                   answers: str | None) -> str: ...  # sha256 over these, so an up-arrow retry is the same command
+def new_command_id() -> str: ...       # random per invocation; never derived from the arguments (D2)
+def cli_pending_command_id(invocation: str) -> str: ...  # the CLI's local pending file: the same
+    # invocation's retry reuses its ID until the receipt arrives; a new invocation gets a new one
 
 # Streams
 @dataclass(frozen=True)
