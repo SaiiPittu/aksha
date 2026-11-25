@@ -563,6 +563,10 @@ def open_store(
     fd = _take_lock(lock_path(path))
     try:
         conn = sqlite3.connect(path, isolation_level=None, check_same_thread=False)
+    except BaseException:
+        os.close(fd)
+        raise
+    try:
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = FULL")
         conn.execute("PRAGMA foreign_keys = ON")
@@ -572,6 +576,7 @@ def open_store(
         )
         boot = int(cur.lastrowid or 0)
     except BaseException:
+        conn.close()
         os.close(fd)
         raise
     return SQLiteEventStore(conn, clock, catalogue, boot=boot, lock_fd=fd, identity=identity)
