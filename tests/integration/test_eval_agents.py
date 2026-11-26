@@ -55,10 +55,13 @@ def test_the_research_happy_path_passes_in_both_worlds(research: SuiteRun) -> No
     report = json.loads((research.out / "report.json").read_text())
     (pair,) = report["relations"]
     outcomes = {c["id"]: c["outcome"] for c in pair["criteria"]}
-    assert outcomes["rel.invariant"] == "pass" and outcomes["rel.same_verdict"] == "pass"
-    # rel.same_calls fails today: the agent profiles companies in name order, so a rename
-    # reorders its reads. The runner reports it; the agent's ordering is the finding.
-    assert outcomes["rel.same_calls"] == "fail"
+    # The agent profiles companies in the order it discovered their pages, not by name, so
+    # a rename leaves its reads in the same order (rel.same_calls).
+    assert outcomes == {
+        "rel.invariant": "pass",
+        "rel.same_verdict": "pass",
+        "rel.same_calls": "pass",
+    }
 
 
 def test_the_research_agent_reads_only_through_the_episode(research: SuiteRun) -> None:

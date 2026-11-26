@@ -3,8 +3,11 @@
 ``citation.bound`` records each verified citation of a saved version, in the save's
 transaction (U2); its dedup key is ``cite:{carrier}#{n}``. :func:`evidence` builds the
 :class:`~aksha.runtime.grounding.verify.Evidence` for one Task instance from the owner's
-log: the span index, the record versions the log last recorded (record grain, S2) and the
-steps that failed. All pure.
+log: the span index, the record versions the log last recorded (record grain, S2), the
+steps that failed, and, for an instance that resumed an earlier session (decision 36), that
+session's instances: a span shown to the session was shown to this instance too, because
+the resumed context shows it again. A stale one is still refused (``stale_source``). All
+pure.
 """
 
 from __future__ import annotations
@@ -56,6 +59,26 @@ def _whole(read: InputRef) -> InputRef:
     return read if read.path is None else InputRef(read.kind, read.id, read.version)
 
 
+def resumed_session(view: LogView, run: str, instance: str) -> frozenset[tuple[str, str]]:
+    """The ``(run, instance)`` segments of the session ``instance`` resumed in ``run``.
+
+    Read from the instance's latest ``task.entered`` in ``run``: when its ``reentry`` chose
+    ``resume``, the segments it names; otherwise none (a fresh entry starts a new session).
+    """
+    latest: Mapping[str, Any] | None = None
+    for e in view.events:
+        if e.type == "task.entered" and e.run == run and e.instance == instance:
+            latest = e.payload
+    choice = latest.get("reentry") if latest is not None else None
+    if not isinstance(choice, Mapping) or choice.get("mode") != "resume":
+        return frozenset()
+    return frozenset(
+        (str(s["run"]), str(s["instance"]))
+        for s in choice.get("session", ())
+        if isinstance(s, Mapping)
+    )
+
+
 def evidence(
     view: LogView,
     *,
@@ -73,4 +96,5 @@ def evidence(
         reads=frozenset(str(_whole(r)) for r in reads),
         artifact=artifact,
         failed_steps=failed_steps(view),
+        resumed=resumed_session(view, run, instance),
     )

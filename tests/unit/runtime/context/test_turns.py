@@ -121,3 +121,40 @@ def test_an_offloaded_reply_ends_its_turn_as_recorded(log: Log, tmp_path: Path) 
         log.tool_result(EDIT, 1, n, "run_tests", result_view("ok"))
     end = recorded_turn_end(log.view(), EDIT, 1, blobs=blobs)
     assert end is not None and end.kind not in ("malformed", "text")
+
+
+def _cited_result(log: Log, turn: int, tool: str, *, read: InputRef | None) -> None:
+    """A tool step citing span EX-0001 of ``files/a.py``; it mints the span when it reads."""
+    from aksha.runtime.tools.results import view_json
+
+    step = StepId(RUN, EDIT.instance, turn=turn, call=1)
+    env = {"run": RUN, "instance": EDIT.instance, "step": str(step)}
+    started = {"kind": "tool", "tool": tool, "args_hash": "sha256:" + "1" * 64, "counted": True}
+    log.store.append("o", "U2a", (NewEvent("step.started", started, **env),))
+    events = []
+    if read is not None:
+        span = {
+            "span_id": "EX-0001", "source": "corpus", "record_id": read.id,
+            "version": read.version, "start": 0, "end": 3, "text": "def", "tool": tool,
+        }  # fmt: skip
+        minted = {"tool": tool, "spans": [span], "shown": ["EX-0001"]}
+        events.append(NewEvent("excerpts.minted", minted, **env))
+        events.append(NewEvent("read.recorded", {"input": read.as_json(), "via": "tool"}, **env))
+    value = {"view": view_json(result_view("def a(): ...")), "spans": ["EX-0001"]}
+    done = {"outcome": "ok", "kind": "tool", "tool": tool, "attempts": 1, "value": value}
+    events.append(NewEvent("step.completed", done, **env))
+    log.store.append("o", "U2", tuple(events))
+
+
+def test_a_second_read_of_the_same_version_still_names_its_input(log: Log) -> None:
+    """A read is recorded once per instance, so the second tool that returned the same
+    version records none; its pair still names the input (through the span it cites), so
+    the result is found stale when that record moves (decision 32, decision 36)."""
+    read = InputRef("record", "files/a.py", "1")
+    log.model_turn(EDIT, 1, (("search", {}),))
+    _cited_result(log, 1, "search", read=read)
+    log.model_turn(EDIT, 2, (("read_file", {"path": "a.py"}),))
+    _cited_result(log, 2, "read_file", read=None)
+    first, second = (t.pairs[0] for t in instance_turns(log.view(), RUN, EDIT.instance))
+    assert first.reads == (read,)
+    assert second.reads == (read,)

@@ -43,6 +43,30 @@ class ChangeStep:
     restart: bool = False
 
 
+ARM_REENTRY = ("fresh", "resume")
+"""The re-entry settings an arm may set (decision 36); the runtime's own list."""
+
+
+@dataclass(frozen=True)
+class Arm:
+    """One arm of a comparison case: the same episode run under one runtime setting.
+
+    ``reentry`` is the re-entry setting the agent's runs record (``fresh`` or ``resume``,
+    decision 36; None keeps the agent's own). ``premise_exempt`` lists artifact kinds added
+    to the agent's resume policy as premise-exempt, which changes its definition hash, so
+    an arm that sets it is reported beside the others and never pooled with them.
+    """
+
+    name: str
+    reentry: str | None = None
+    premise_exempt: tuple[str, ...] = ()
+
+    def as_json(self) -> dict[str, object]:
+        """The arm as a result row records it."""
+        return {"name": self.name, "reentry": self.reentry,
+                "premise_exempt": list(self.premise_exempt)}  # fmt: skip
+
+
 @dataclass(frozen=True)
 class EvalCase:
     """One case: why it exists, where it came from, what it runs and how it is graded."""
@@ -66,9 +90,25 @@ class EvalCase:
     k: int | None = None
     xfail: bool = False
     description: str = ""
+    arms: tuple[Arm, ...] = ()
+    compare: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
-        """Check the field values and the three pairing rules."""
+        """Check the field values, the three pairing rules and the arms."""
+        names = [a.name for a in self.arms]
+        if len(names) != len(set(names)) or any(not a for a in names):
+            raise CaseInvalid(message=f"{self.id}: arm names are non-empty and distinct")
+        for arm in self.arms:
+            if arm.reentry is not None and arm.reentry not in ARM_REENTRY:
+                raise CaseInvalid(
+                    message=f"{self.id}: arm {arm.name}: reentry {arm.reentry!r} is not one "
+                    f"of {ARM_REENTRY}"
+                )
+        for pair in self.compare:
+            if len(pair) != 2 or not set(pair) <= set(names):
+                raise CaseInvalid(message=f"{self.id}: compare {pair!r} names arms it lacks")
+        if self.arms and self.relation != "none":
+            raise CaseInvalid(message=f"{self.id}: a case with arms has relation none")
         _enum(self.id, "kind", self.kind, Kind)
         _enum(self.id, "origin", self.origin, Origin)
         _enum(self.id, "category", self.category, Category)
@@ -186,6 +226,15 @@ def case_from_toml(data: Mapping[str, Any], *, origin_file: str = "") -> EvalCas
             for s in data.get("change_steps", ())
         )
         k = data.get("k")
+        arms = tuple(
+            Arm(
+                name=str(a["name"]),
+                reentry=None if a.get("reentry") is None else str(a["reentry"]),
+                premise_exempt=_tuple(a, "premise_exempt"),
+            )
+            for a in data.get("arms", ())
+        )
+        compare = tuple(tuple(str(x) for x in pair) for pair in data.get("compare", ()))
         return EvalCase(
             id=str(data["id"]),
             kind=cast(Kind, data["kind"]),
@@ -206,6 +255,8 @@ def case_from_toml(data: Mapping[str, Any], *, origin_file: str = "") -> EvalCas
             k=int(k) if k is not None else None,
             xfail=bool(data.get("xfail", False)),
             description=str(data.get("description", "")),
+            arms=arms,
+            compare=cast(tuple[tuple[str, str], ...], compare),
         )
     except KeyError as e:
         raise CaseInvalid(message=f"{origin_file}: missing field {e.args[0]}") from None

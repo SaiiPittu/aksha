@@ -5,6 +5,9 @@
    ("is the new name for", "joined", "acquired"). Names that merely look alike are never
    merged. The canonical name is the company of the earliest-published page; every other
    company and product name is an alias, and the sentence is the merge's evidence.
+   Companies come in the order their first page was discovered (the order of the pages
+   given), never by name, so a renamed world is worked through in the same order; the key
+   leads with that position (``c01-...``) because the runtime fans out by sorted key.
 2. Prices (:func:`price_conflict`): a company's one-off unit prices that differ across its
    pages are a conflict, kept open with each page and date, never averaged or picked.
 3. Reviews (:func:`review_sample`): a row whose product and normalised text repeat an
@@ -105,7 +108,7 @@ def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
     for p in pages:
         groups.setdefault(find(p.record), []).append(p)
     out: list[Company] = []
-    for members in groups.values():
+    for rank, members in enumerate(groups.values(), start=1):
         ordered = sorted(members, key=lambda p: (p.published or "9999", p.record))
         canonical = ordered[0].brand or ordered[0].product
         names: list[str] = []
@@ -116,14 +119,14 @@ def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
         mine = {p.record for p in members}
         out.append(
             Company(
-                key=slug(canonical),
+                key=f"c{rank:02d}-{slug(canonical)}",
                 canonical=canonical,
                 aliases=tuple(names),
                 pages=tuple(ordered),
                 merges=tuple(m for m in merges if m[0].record in mine),
             )
         )
-    return tuple(sorted(out, key=lambda c: c.key))
+    return tuple(out)
 
 
 def price_conflict(points: Iterable[Mapping[str, Any]]) -> bool:

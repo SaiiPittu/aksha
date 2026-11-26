@@ -1,0 +1,7 @@
+# Change cases: a change step moves the world after a finished run and the runtime rebuilds
+# what read it. A case with arms runs the same episode once per runtime setting and reports
+# each arm beside the others (decision 36: resume against fresh).
+[suite]
+name = "change"
+description = "change cases with arms: the same scope change under each re-entry setting"
+k = 1

@@ -32,8 +32,12 @@ def test_every_gradeable_criterion_is_killed_by_a_mutant(
 ) -> None:
     report = reports[name]
     killed, total = report.coverage
-    assert report.key_gaps == ["precision.abstention_count"]
-    assert (killed, total) == (len(REGISTRY) - 1, len(REGISTRY) - 1)
+    # The change checks read a change set's derived key, never a world's own key, so they
+    # are key gaps here; tests/unit/evals/test_change_criteria.py kills each with a mutant.
+    change = ["change.stale_set", "change.unchanged_set", "research.scope_change"]
+    assert report.key_gaps == sorted(["precision.abstention_count", *change])
+    gaps = len(report.key_gaps)
+    assert (killed, total) == (len(REGISTRY) - gaps, len(REGISTRY) - gaps)
 
 
 def test_each_mutant_names_a_registered_criterion() -> None:

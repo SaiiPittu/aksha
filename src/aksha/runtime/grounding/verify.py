@@ -71,6 +71,8 @@ class Evidence:
     reads: frozenset[str]
     artifact: Callable[[ArtifactRef], Mapping[str, Any] | None]
     failed_steps: frozenset[str] = frozenset()
+    resumed: frozenset[tuple[str, str]] = frozenset()
+    """The ``(run, instance)`` segments of the session this instance resumed, if it did."""
 
 
 def _err(code: Any, pointer: str, message: str) -> CiteError:
@@ -92,7 +94,10 @@ def verify_citation(
 
 
 def _seen(span_shown_to: frozenset[tuple[str, str]], evidence: Evidence) -> bool:
-    return (evidence.run, evidence.instance) in span_shown_to
+    """Shown to this instance in this run, or to the session it resumed (decision 36)."""
+    if (evidence.run, evidence.instance) in span_shown_to:
+        return True
+    return bool(evidence.resumed & span_shown_to)
 
 
 def _span(cite: SpanCite, ev: Evidence, policy: CitePolicy, at: str) -> Verified | CiteError:

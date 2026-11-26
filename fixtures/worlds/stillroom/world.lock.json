@@ -1,5 +1,8 @@
 {
   "files": {
+    "changes/scope-eu-uk/business-priorities.md": "sha256:4135b1d58a0f9f2d9f1f88df2902a0c09d8fd0fb380abdca5833bdf79183ac6c",
+    "changes/scope-eu-uk/changeset.json": "sha256:8af0af56d33f7c793f10528c99a3cc678d9d2cf4c4570212de9a9b27e4a20a87",
+    "changes/scope-eu-uk/key.json": "sha256:09783d66f341777b712938006fe3dc621e72d9129bc428319a3444d74eb3c97a",
     "key.json": "sha256:82968b1eaf43b9839195d8e6f6aa6c78984b078f0fad05314784707e3f8ff263",
     "manifest.json": "sha256:697da191176e25aa5dca27c6956e012c80763f04a98a9ff6249b2afde955590d",
     "sources/competitors/comp01-kelvra.html": "sha256:7e7f12b6916ae8f584237a64bcfc7336506aab6f01c25720252a4c382409094b",

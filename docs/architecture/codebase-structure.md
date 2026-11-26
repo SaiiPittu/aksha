@@ -355,7 +355,7 @@ src/aksha/
 │   ├── ports.py                             AgentUnderTest, StoreOpener, Grader, AgentFactory
 │   ├── world.py                             World, world.lock.json, rename and path maps, change sets
 │   ├── key.py                               AnswerKey with resolve, KeyFact, Trap, key_check
-│   ├── case.py                              EvalCase with the pairing rules, TOML case files, Suite
+│   ├── case.py                              EvalCase with the pairing rules and arms, TOML case files, Suite
 │   ├── faults.py                            FaultRule, FaultProfile, decide: seeded fault switches
 │   ├── events.py                            episode.* and eval.* event types and their catalogues
 │   ├── episode.py                           Episode: fixture tools, the path guard, the receiver
@@ -369,6 +369,7 @@ src/aksha/
 │   │   ├── common.py                        spans in code points, tight overlap, keyed lookups
 │   │   ├── invariants.py                    inv.one_row_per_key
 │   │   ├── outputs.py                       research.*, patent.*, precision.* against the key
+│   │   ├── change.py                        change.stale_set, unchanged_set, research.scope_change
 │   │   ├── citations.py                     citation.exists, overlaps_key, edge_excerpts
 │   │   ├── traps.py                         one check per planted trap: handled, missed, fell for it
 │   │   └── forbidden.py                     five text checks with negative sets, no_unbound_send
@@ -388,7 +389,7 @@ src/aksha/
 │       ├── __init__.py                      the adapters registered in aksha.app.eval_agents
 │       ├── patent.py                        PatentUnderTest: the patent agent's outputs as a bundle
 │       ├── research.py                      ResearchUnderTest: the research agent's outputs as a bundle
-│       ├── runtime.py                       RuntimeUnderTest, EpisodeReader, EpisodeMailbox
+│       ├── runtime.py                       RuntimeUnderTest, EpisodeReader, EpisodeSource, EpisodeMailbox
 │       ├── scripted.py                      ScriptedAgent, ScriptedResearchAgent
 │       └── tools.py                         episode_tools: runtime tool bodies over an episode
 └── interfaces/                              INTERFACES: how people reach the runtime

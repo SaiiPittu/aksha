@@ -18,12 +18,18 @@ Rules kept here:
    world clusters (:func:`aksha.evals.metrics.clustered_se`) and a 95% interval from it.
 4. Cost is steps per passing episode with the median and maximum per rollout beside it.
 5. An ``xfail`` case inverts pass and fail only; ``ungradeable`` stays ``ungradeable``.
+6. A case with arms gets one row per arm (``case[arm]``), never pooled, and an arms table:
+   per arm, the must criteria passed, the agent's measures of its rebuild runs (model
+   turns, tool calls, tokens, context characters, re-entries that resumed and why the
+   others went fresh) and pass^k, then each compared pair's differences. In fake mode
+   the measures are a property of the rule-based fake, and the table says so.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import statistics
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -107,6 +113,7 @@ class CaseRow:
     kind: str
     origin: str
     world: str
+    arm: str
     cluster: str
     mode: str
     n: int
@@ -137,11 +144,11 @@ class CaseRow:
 
 def case_rows(results: SuiteResults) -> list[CaseRow]:
     """Rollouts of each (case, world) folded into one row."""
-    groups: dict[tuple[str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
     for ep in results.episodes:
-        groups[(str(ep["case"]), str(ep["world"]))].append(ep)
+        groups[(str(ep["case"]), arm_name(ep), str(ep["world"]))].append(ep)
     rows = []
-    for (case, world), eps in groups.items():
+    for (case, arm, world), eps in groups.items():
         n = len(eps)
         c = sum(e["verdict"] == "pass" for e in eps)
         keff = k_effective([str(e["trace_hash"]) for e in eps])
@@ -156,6 +163,7 @@ def case_rows(results: SuiteResults) -> list[CaseRow]:
                 kind=str(first.get("kind", "")),
                 origin=str(first.get("origin", "")),
                 world=world,
+                arm=arm,
                 cluster=str(first.get("cluster", world)),
                 mode=str(first.get("mode", "")),
                 n=n,
@@ -176,7 +184,121 @@ def case_rows(results: SuiteResults) -> list[CaseRow]:
                 xfail=bool(first.get("xfail", False)),
             )
         )
-    return sorted(rows, key=lambda r: (r.case, r.world))
+    return sorted(rows, key=lambda r: (r.case, r.world, r.arm))
+
+
+def arm_name(episode: Mapping[str, Any]) -> str:
+    """The arm an episode row ran under; empty for a case without arms."""
+    arm = episode.get("arm")
+    return str(arm.get("name", "")) if isinstance(arm, Mapping) else ""
+
+
+MEASURES = ("model_turns", "tool_calls", "input_tokens", "output_tokens", "context_chars")
+"""The agent's measures of its rebuild runs the arms table prints, in order."""
+
+
+def arm_rows(results: SuiteResults) -> list[dict[str, Any]]:
+    """One row per (case, world, arm) of a case with arms: correctness, measures, pass^k."""
+    groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = defaultdict(list)
+    for ep in results.episodes:
+        if arm_name(ep):
+            groups[(str(ep["case"]), str(ep["world"]), arm_name(ep))].append(ep)
+    rows: list[dict[str, Any]] = []
+    for (case, world, arm), eps in groups.items():
+        n = len(eps)
+        c = sum(e["verdict"] == "pass" for e in eps)
+        keff = k_effective([str(e["trace_hash"]) for e in eps])
+        k = min(3, n - 1) if n > 1 else 1
+        musts = [x for e in eps for x in e["criteria"] if x["must"]]
+        rebuilt = [dict(dict(e.get("metrics", {})).get("rebuild", {})) for e in eps]
+        measures = {m: [int(r.get(m, 0)) for r in rebuilt] for m in MEASURES}
+        modes: dict[str, int] = defaultdict(int)
+        reasons: dict[str, int] = defaultdict(int)
+        for r in rebuilt:
+            for mode, count in dict(r.get("reentry_modes", {})).items():
+                modes[str(mode)] += int(count)
+            for reason, count in dict(r.get("fresh_reasons", {})).items():
+                reasons[str(reason)] += int(count)
+        rows.append(
+            {
+                "case": case,
+                "world": world,
+                "arm": arm,
+                "settings": dict(eps[0]["arm"]),
+                "mode": str(eps[0].get("mode", "")),
+                "n": n,
+                "passes": c,
+                "verdicts": [str(e["verdict"]) for e in eps],
+                "must_passed": sum(x["outcome"] == "pass" for x in musts),
+                "must_total": len(musts),
+                "k_eff": keff,
+                "pass_hat_k": pass_hat_k(c, n, k) if keff > 1 and n > k else None,
+                "k": k,
+                "measures_median": {
+                    m: statistics.median(v) if v else 0 for m, v in measures.items()
+                },
+                "reentry_modes": dict(sorted(modes.items())),
+                "fresh_reasons": dict(sorted(reasons.items())),
+                "definition_hash": str(
+                    dict(eps[0].get("conditions", {})).get("agent_definition_hash", "")
+                ),
+            }
+        )
+    return sorted(rows, key=lambda r: (r["case"], r["world"], r["arm"]))
+
+
+def _arm_lines(results: SuiteResults) -> list[str]:
+    rows = arm_rows(results)
+    if not rows:
+        return []
+    lines = ["", "arms (measures are medians over the arm's rollouts, of its rebuild runs):"]
+    if any(r["mode"] in PLUMBING_MODES for r in rows):
+        lines.append(
+            "  fake model mode: turns, tool calls, tokens and context size are properties of "
+            "the rule-based fake, not of a model; a fake that reports no usage counts 0 tokens"
+        )
+    lines.append(
+        "  case | world | arm | reentry | premise exempt | verdict | must passed | "
+        "model turns | tool calls | input/output tokens | context chars | re-entries | "
+        "fresh reasons (re-entries and reasons over all rollouts) | pass^k"
+    )
+    by_key = {(r["case"], r["world"], r["arm"]): r for r in rows}
+    for r in rows:
+        m, s = r["measures_median"], r["settings"]
+        if r["pass_hat_k"] is not None:
+            hat = f"pass^{r['k']} (n={r['n']}) {_fmt(r['pass_hat_k'])}"
+        elif r["k_eff"] > 1:
+            hat = f"n/a (n={r['n']}, too few rollouts)"
+        else:
+            hat = f"= pass^1 (n={r['n']}, rollouts identical)"
+        modes = ", ".join(f"{k} {v}" for k, v in r["reentry_modes"].items()) or "none"
+        reasons = ", ".join(f"{k} {v}" for k, v in r["fresh_reasons"].items()) or "none"
+        lines.append(
+            f"  {r['case']} | {r['world']} | {r['arm']} | {s.get('reentry')} | "
+            f"{', '.join(s.get('premise_exempt', ())) or '-'} | "
+            f"{'/'.join(sorted(set(r['verdicts'])))} ({r['passes']} of {r['n']}) | "
+            f"{r['must_passed']} of {r['must_total']} | {_fmt(m['model_turns'], 0)} | "
+            f"{_fmt(m['tool_calls'], 0)} | {_fmt(m['input_tokens'], 0)}/"
+            f"{_fmt(m['output_tokens'], 0)} | {_fmt(m['context_chars'], 0)} | {modes} | "
+            f"{reasons} | {hat}"
+        )
+    for r in rows:
+        for a, b in r["settings"].get("compare", ()):
+            if a != r["arm"]:
+                continue
+            other = by_key.get((r["case"], r["world"], b))
+            if other is None:
+                continue
+            diffs = ", ".join(
+                f"{name} {_signed(r['measures_median'][name] - other['measures_median'][name])}"
+                for name in MEASURES
+            )
+            lines.append(f"  {r['case']} {r['world']}: {a} against {b}: {diffs}")
+    return lines
+
+
+def _signed(x: float) -> str:
+    return f"{x:+.0f}"
 
 
 def selftest_line(results: SuiteResults) -> str:
@@ -297,13 +419,15 @@ def render_text(results: SuiteResults) -> str:
         p1 = f"{_fmt(r.pass_at_1)} ({_fmt(r.wilson_lo)} to {_fmt(r.wilson_hi)})"
         if r.mode in PLUMBING_MODES:
             p1 += " plumbing"
+        name = f"{r.case}[{r.arm}]" if r.arm else r.case
         lines.append(
-            f"{r.case}{' (xfail)' if r.xfail else ''} | {r.kind}/{r.origin} | {r.world} | "
+            f"{name}{' (xfail)' if r.xfail else ''} | {r.kind}/{r.origin} | {r.world} | "
             f"{r.mode} | "
             f"{r.n} | {r.passes} | {p1} | {hat} | {r.ungradeable} | "
             f"{_fmt(r.steps_per_pass, 1)} ({_fmt(r.steps_median, 1)}, {r.steps_max}) | "
             f"{_fmt(r.seconds)} | {r.trace}"
         )
+    lines.extend(_arm_lines(results))
     if results.relations:
         lines.append("")
         lines.append("relations:")
@@ -345,6 +469,7 @@ def write_reports(results: SuiteResults, out: Path) -> dict[str, Path]:
         "selftests": list(results.selftests),
         "cases": [r.as_json() for r in case_rows(results)],
         "relations": list(results.relations),
+        "arms": arm_rows(results),
     }
     (out / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     (out / "report.txt").write_text(render_text(results), encoding="utf-8")

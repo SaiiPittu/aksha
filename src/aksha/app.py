@@ -36,7 +36,7 @@ from __future__ import annotations
 import os
 import subprocess
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeGuard, cast
@@ -47,8 +47,9 @@ from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
-from aksha.evals.agents.runtime import RuntimeUnderTest
+from aksha.evals.agents.runtime import EpisodeSource, RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
+from aksha.evals.case import Arm
 from aksha.evals.judge import Judge, RuleJudge
 from aksha.evals.ports import StoreOpener
 from aksha.evals.registry import AgentRegistry
@@ -56,8 +57,14 @@ from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.budgets.types import Limits
 from aksha.runtime.context.reentry import ReentrySetting
+from aksha.runtime.context.types import effective_policy
 from aksha.runtime.definitions.hashing import run_started_fields
-from aksha.runtime.definitions.loader import LoadedDefinition, discover, load_agents
+from aksha.runtime.definitions.loader import (
+    LoadedDefinition,
+    discover,
+    load_agents,
+    with_context_policy,
+)
 from aksha.runtime.definitions.modules import import_value
 from aksha.runtime.definitions.names import qualify
 from aksha.runtime.definitions.types import Agent
@@ -772,20 +779,62 @@ class _RuntimeAdapter:
         self.catalogue = catalogue
         self.definition_hash = self.loaded.definition_hash
         self.bound = session_agent(self.loaded, "fake", commit=runtime_commit())
+        self._arms: dict[str, tuple[SessionAgent, str]] = {}
 
     def __call__(self) -> RuntimeUnderTest:
         """A fresh adapter for one episode."""
         return self.adapter(self.session)
 
-    def session(self, folder: Path, reader: RecordReader, systems: Mapping[str, object]) -> Session:
+    def for_arm(self, arm: Arm) -> RuntimeUnderTest:
+        """A fresh adapter for one episode of ``arm``: its re-entry setting and context policy.
+
+        The arm's ``reentry`` is what the agent's request runs record (decision 36); its
+        ``premise_exempt`` kinds are added to the agent's resume policy, which changes the
+        definition hash, so the adapter declares the arm's hash on its result rows.
+        """
+        if arm.name not in self._arms:
+            loaded = self.loaded
+            if arm.premise_exempt:
+                base = effective_policy(loaded.agent.context_policy)
+                resume = replace(base.resume, premise_exempt=frozenset(arm.premise_exempt))
+                loaded = with_context_policy(loaded, replace(base, resume=resume))
+            reentry = cast(ReentrySetting | None, arm.reentry)
+            bound = session_agent(loaded, "fake", commit=runtime_commit(), reentry=reentry)
+            self._arms[arm.name] = (bound, loaded.definition_hash)
+        bound, digest = self._arms[arm.name]
+
+        def build(folder: Path, reader: RecordReader, systems: Mapping[str, object],
+                  source: EpisodeSource) -> Session:  # fmt: skip
+            return self._session(bound, folder, reader, systems, source)
+
+        return self.adapter(build, digest)
+
+    def session(
+        self,
+        folder: Path,
+        reader: RecordReader,
+        systems: Mapping[str, object],
+        source: EpisodeSource,
+    ) -> Session:
         """The writer session of one episode's runtime store in ``folder``."""
+        return self._session(self.bound, folder, reader, systems, source)
+
+    def _session(
+        self,
+        bound: SessionAgent,
+        folder: Path,
+        reader: RecordReader,
+        systems: Mapping[str, object],
+        source: EpisodeSource,
+    ) -> Session:
         folder.mkdir(parents=True, exist_ok=True)
         clock = FakeClock(EVAL_CLOCK_START)
         store = sqlite.open_store(folder / "aksha.sqlite", clock, writer=True,
                                   catalogue=self.catalogue)  # fmt: skip
-        return Session(store, clock, (self.bound,), blobs=FilesystemBlobStore(folder / "blobs"),
+        sources = (source,) if source.collections else ()
+        return Session(store, clock, (bound,), blobs=FilesystemBlobStore(folder / "blobs"),
                        systems=cast(Mapping[str, SystemOfRecord], systems),
-                       reader=reader)  # fmt: skip
+                       sources=sources, reader=reader)  # fmt: skip
 
 
 def eval_agents() -> AgentRegistry:
@@ -806,17 +855,21 @@ def eval_agents() -> AgentRegistry:
         mode="fake",
         description="small rule-based research agent over competitor pages and reviews",
     )
+    research = _RuntimeAdapter(ResearchUnderTest)
     registry.register(
         "research",
-        _RuntimeAdapter(ResearchUnderTest),
+        research,
         mode="fake",
         description="the research agent on the runtime, rule-based fake model",
+        armed=research.for_arm,
     )
+    patent = _RuntimeAdapter(PatentUnderTest)
     registry.register(
         "patent",
-        _RuntimeAdapter(PatentUnderTest),
+        patent,
         mode="fake",
         description="the patent agent on the runtime, rule-based fake model, mock counsel mail",
+        armed=patent.for_arm,
     )
     return registry
 

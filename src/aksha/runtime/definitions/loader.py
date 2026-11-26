@@ -16,12 +16,13 @@ catalogue as it was.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import MappingProxyType
 
 from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
 from aksha.runtime.context.policy import policy_hash
+from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.definitions.contributions import (
     CONTRIBUTIONS,
     event_type_refusals,
@@ -87,6 +88,20 @@ class LoadedDefinition:
     model_aliases: Mapping[str, ModelAlias]
     definition_hash: str
     file_hashes: FileHashes
+
+
+def with_context_policy(loaded: LoadedDefinition, policy: ContextPolicy) -> LoadedDefinition:
+    """``loaded`` with its agent's context policy replaced, and the definition hash recomputed.
+
+    The context policy is in the definition hash (ADR-P08 D9), so a run under the new policy
+    is a run of another definition: an eval arm that changes it is never pooled with runs of
+    the shipped one, and a session started under one never resumes under the other.
+    """
+    agent = replace(loaded.agent, context_policy=policy)
+    new_hash = definition_hash(loaded.folder, loaded.extensions, API_VERSION,
+                             tools_hash=loaded.registry.canonical_hash(),
+                             context_hash=policy_hash(policy))  # fmt: skip
+    return replace(loaded, agent=agent, definition_hash=new_hash)
 
 
 def discover(agent_paths: Sequence[Path], extension_paths: Sequence[Path]) -> tuple[Path, ...]:
