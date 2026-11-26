@@ -32,23 +32,35 @@ import os
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal, TypeGuard, cast
+from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
+from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
+from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage import sqlite
+from aksha.adapters.systems.mailbox import MailboxSystem
 from aksha.runtime.artifacts.ports import BlobStore
+from aksha.runtime.artifacts.store import ArtifactStore
+from aksha.runtime.budgets.types import Limits
 from aksha.runtime.definitions.hashing import run_started_fields
 from aksha.runtime.definitions.loader import LoadedDefinition, discover, load_agents
 from aksha.runtime.definitions.modules import import_value
+from aksha.runtime.definitions.types import Agent
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
+from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock
+from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
+from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.models.errors import BindRefusal, BindRefused
 from aksha.runtime.models.routing import bind_aliases
 from aksha.runtime.models.types import RunMode
 from aksha.runtime.outbox.ports import SystemOfRecord
+from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
 from aksha.runtime.router.types import RoutableAgent
@@ -58,6 +70,11 @@ from aksha.runtime.session.service import Session, SessionAgent
 from aksha.runtime.storage.errors import StoreError
 from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
+from aksha.runtime.tools.registry import ToolRegistry
+from aksha.runtime.tools.types import ToolDecl
+
+if TYPE_CHECKING:
+    from aksha.agents.patent.world import SourceWorld
 
 Backend = Literal["sqlite", "postgres"]
 
@@ -327,3 +344,186 @@ def export_trace(
 
     events = [e for e in store.read(owner) if e.run == run]
     return export_run(events, run, out_dir, store_id=store_id or store.identity().store_id)
+
+
+# --- The offline demo's composition (``make demo``) ---------------------------------------
+#
+# The demo (``aksha.interfaces.demo``) runs the research agent and the patent agent on one
+# owner's SQLite store, offline: a fixed clock, each agent's rule-based fake model, the
+# fixture world's ``sources/`` folder copied into the demo's work folder (the only folder a
+# tool reads), and a ledgered mock mailbox standing in for counsel. Nothing here reaches a
+# network or needs a key.
+
+DEMO_START = datetime(2026, 11, 26, 9, 0, 0, tzinfo=UTC)
+"""The demo's fixed clock: every run of the demo records the same times."""
+DEMO_OWNER = "founder-1"
+DEMO_AGENT_NAMES = ("research", "patent")
+COUNSEL_MAILBOX = "counsel_mail"
+"""The system name the patent agent's ``send_packet`` effect is sent to."""
+
+
+@dataclass
+class DemoRuntime:
+    """One process's view of the demo: the store, both agents' loop setups, the outbox."""
+
+    store: EventStore
+    clock: FakeClock
+    research: LoopSetup
+    patent: LoopSetup
+    patent_source: SharedFolder
+    send_tools: Mapping[str, ApprovalTool]
+    outbox: OutboxWorker
+    mailbox: SystemOfRecord
+    loaded: Mapping[str, str]
+    """Each agent's definition hash, as recovery checks it against ``run.started``."""
+
+    def executor(self) -> StepExecutor:
+        """A step executor for the owner, sending effects through the outbox."""
+        return StepExecutor(self.store, DEMO_OWNER, self.clock, outbox=self.outbox)
+
+    def setup(self, agent: str) -> LoopSetup:
+        """The loop setup of ``agent``."""
+        return self.research if agent == self.research.agent.name else self.patent
+
+    def close(self) -> None:
+        """Close the store (and give up the writer lock)."""
+        self.store.close()
+
+
+class SharedFolder:
+    """The one source folder both agents read, as one versioned source (ADR-P05 D6).
+
+    The two agents name records of the same files differently: the research agent's
+    folder reader by path (``priorities/business-priorities.md``), the patent agent's
+    world by path and view (``notes/C1-self-calibration.md#note``). A record's version is
+    answered by the reader that names it that way, so a change set checks every record
+    either agent read against the reader it came from, and a file nobody's view uses
+    moves nothing. Record IDs carry no source today, so one source per folder is what
+    keeps the research agent's reads from reading as gone to the patent agent's world.
+    """
+
+    def __init__(self, world: SourceWorld, folder: FolderSource, collections: tuple[str, ...]):
+        """Answer for ``world``'s view IDs and ``folder``'s path IDs over ``collections``."""
+        self.world = world
+        self.folder = folder
+        self._collections = collections
+
+    @property
+    def name(self) -> str:
+        """The source's name: the patent agent's, whose change set this records."""
+        return self.world.name
+
+    @property
+    def collections(self) -> tuple[str, ...]:
+        """Both agents' collections."""
+        return self._collections
+
+    def version(self, owner: str) -> str:
+        """The whole folder's version."""
+        return self.world.version(owner)
+
+    def record_version(self, owner: str, record_id: str) -> str | None:
+        """A view ID's version from the world, a path ID's from the folder reader."""
+        if "#" in record_id:
+            return self.world.record_version(owner, record_id)
+        return self.folder.record_version(owner, record_id)
+
+    def run_query(self, owner: str, query: str) -> str:
+        """Re-execute a recorded publication search."""
+        return self.world.run_query(owner, query)
+
+
+def counsel_mailbox(work: Path) -> MailboxSystem:
+    """The demo's mock counsel mailbox: a JSON ledger in ``work``."""
+    return MailboxSystem(work / "mailbox.json", COUNSEL_MAILBOX)
+
+
+def _briefs(folder: Path, agent: Agent) -> dict[str, str]:
+    return {
+        path: (folder / node.task.brief).read_text(encoding="utf-8")
+        for path, node in compile_tree(agent.name, agent.tasks).nodes.items()
+        if node.task.brief
+    }
+
+
+def _setup(
+    store: EventStore,
+    loaded: LoadedDefinition,
+    agent: Agent,
+    registry: ToolRegistry,
+    model: object,
+    request: str,
+    blobs: BlobStore,
+    reader: RecordReader | None = None,
+) -> LoopSetup:
+    kinds = loaded.kinds
+    return LoopSetup(
+        store=store,
+        owner=DEMO_OWNER,
+        agent=agent,
+        tree=compile_tree(agent.name, agent.tasks),
+        registry=registry,
+        table=bind_aliases(agent.model_aliases, "fake", {"generate": model}),
+        instructions=(loaded.folder / agent.instructions).read_text(encoding="utf-8"),
+        request=request,
+        briefs=_briefs(loaded.folder, agent),
+        context_policy=agent.context_policy,
+        artifacts=ArtifactStore(kinds, loaded.relations, blobs=blobs),
+        kinds=kinds,
+        definition_hash=loaded.definition_hash,
+        limits=agent.limits or Limits(),
+        blobs=blobs,
+        reader=reader,
+    )
+
+
+def open_demo(
+    work: Path,
+    sources: Path,
+    requests: Mapping[str, str],
+    *,
+    mailbox: SystemOfRecord | None = None,
+) -> DemoRuntime:
+    """Open the demo's store in ``work`` and wire both agents over the ``sources`` folder.
+
+    ``requests`` holds each agent's request text by agent name. ``mailbox`` replaces the
+    counsel mailbox (the demo's kill step wraps it); by default it is :func:`counsel_mailbox`.
+    The agents' modules are imported here, so importing this module stays light.
+    """
+    from aksha.agents.patent.agent import build_agent as build_patent_agent
+    from aksha.agents.patent.fakes import PatentFake
+    from aksha.agents.patent.world import COLLECTIONS as PATENT_COLLECTIONS
+    from aksha.agents.patent.world import SourceWorld
+    from aksha.agents.research.fakes import ResearchModel
+    from aksha.agents.research.tools import COLLECTIONS as RESEARCH_COLLECTIONS
+    from aksha.agents.research.tools import SOURCE as RESEARCH_SOURCE
+
+    clock = FakeClock(DEMO_START)
+    store = sqlite.open_store(work / "aksha.sqlite", clock, writer=True)
+    blobs = FilesystemBlobStore(work / "blobs")
+    loaded = {
+        d.agent.name: d for d in load_agents([DEFAULT_AGENTS / n for n in DEMO_AGENT_NAMES], [])
+    }
+    research, patent = loaded["research"], loaded["patent"]
+    folder = FolderSource(RESEARCH_SOURCE, sources)
+    research_setup = _setup(
+        store, research, research.agent, research.registry, ResearchModel(),
+        requests[research.agent.name], blobs, folder,
+    )  # fmt: skip
+    world = SourceWorld(sources, DEMO_START.date())
+    agent = build_patent_agent(world)
+    listed = {t.spec.name: t for t in agent.tools if isinstance(t, ToolDecl)}
+    patent_setup = _setup(
+        store, patent, agent, ToolRegistry(agent, listed, ()), PatentFake(),
+        requests[agent.name], blobs,
+    )  # fmt: skip
+    send_tools = {"send_packet": ApprovalTool(listed["send_packet"].spec)}
+    hashes = {research.agent.name: research.definition_hash, agent.name: patent.definition_hash}
+    authority = approval_authority(send_tools, lambda entry: patent.definition_hash)
+    box = mailbox or counsel_mailbox(work)
+    worker = OutboxWorker(store, DEMO_OWNER, clock, {COUNSEL_MAILBOX: box}, authority=authority)
+    collections = tuple(dict.fromkeys((*PATENT_COLLECTIONS, *RESEARCH_COLLECTIONS)))
+    shared = SharedFolder(world, folder, collections)
+    return DemoRuntime(
+        store, clock, research_setup, patent_setup, shared, send_tools, worker, box, hashes
+    )

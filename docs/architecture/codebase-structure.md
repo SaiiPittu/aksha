@@ -57,7 +57,7 @@ Imports under `if TYPE_CHECKING:` count, because they are still a dependency a r
 ```text
 src/aksha/
 ├── __init__.py                              package version
-├── app.py                                   composition root: picks adapters (SQLite by default)
+├── app.py                                   composition root: picks adapters (SQLite by default), wires the demo
 ├── runtime/                                 THE DOMAIN: agent-neutral core, stdlib + jsonschema only
 │   ├── __init__.py                          the one layout rule and the three import rules
 │   ├── api.py                               P20 public runtime API; agents and extensions import only this
@@ -315,9 +315,12 @@ src/aksha/
 │   │   ├── __init__.py                      the Clock port's adapters
 │   │   ├── system.py                        SystemClock
 │   │   └── fake.py                          FakeClock
-│   └── sandbox/                             where a tool body runs so the host can end it
-│       ├── __init__.py                      what is built, what is planned
-│       └── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
+│   ├── sandbox/                             where a tool body runs so the host can end it
+│   │   ├── __init__.py                      what is built, what is planned
+│   │   └── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
+│   └── systems/                             SystemOfRecord implementations the outbox sends to (ADR-P03)
+│       ├── __init__.py                      each keeps its own ledger by idempotency key
+│       └── mailbox.py                       MailboxSystem: a mock mailbox ledgered in a JSON file, fsync
 ├── extensions/                              EXTENSIONS: one folder per extension
 │   ├── __init__.py                          imports aksha.runtime.api only
 │   └── otel/                                P21 trace exporter (extra aksha[otel])
@@ -351,12 +354,19 @@ src/aksha/
     │   ├── __init__.py                      what it serves
     │   ├── server.py                        create_app: JSON commands and reads, SSE per session
     │   └── serve.py                         aksha serve: runtime thread, uvicorn, the server file
-    └── cli/                                 the aksha command line
-        ├── __init__.py                      server mode or embedded mode
-        ├── __main__.py                      python -m aksha.interfaces.cli
-        ├── main.py                          the parser and the commands
-        ├── client.py                        the stdlib HTTP client of a running server
-        └── pending.py                       pending command IDs a retry reuses (ADR-P19 D2)
+    ├── cli/                                 the aksha command line
+    │   ├── __init__.py                      server mode or embedded mode
+    │   ├── __main__.py                      python -m aksha.interfaces.cli
+    │   ├── main.py                          the parser and the commands
+    │   ├── client.py                        the stdlib HTTP client of a running server
+    │   └── pending.py                       pending command IDs a retry reuses (ADR-P19 D2)
+    └── demo/                                make demo: change and recovery, offline, one command
+        ├── __init__.py                      the five acts
+        ├── __main__.py                      python -m aksha.interfaces.demo [--work] [--json]
+        ├── story.py                         the acts over aksha.app.open_demo; scripted answers
+        ├── world.py                         copy the base world, apply the v2 change set
+        ├── child.py                         the send a real SIGKILL ends after the mailbox stored it
+        └── summary.py                       the printed summary
 ```
 
 The package uses the src layout from the Python Packaging User Guide: it lives at `src/aksha/`, and `make venv` installs it in editable mode, so the tests import the installed package rather than whatever sits in the working directory. Outside the package: `tests/` (below), `docs/` (this page), `web/` (the web front end, not Python), and `scratch-pad/` (local design material, never packaged or pushed). Agents stay inside the package, in `src/aksha/agents/<name>/`, so packaging and the import guard cover them; ADR-P20 D1 is amended to say so.

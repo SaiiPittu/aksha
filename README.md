@@ -8,6 +8,10 @@ It ships with two agents: a Research Agent and a Patent Agent.
 
 Design in progress. The design documents (problem, users, requirements, high-level and low-level design, decision records) come first; the code follows them.
 
+## Demo
+
+`make demo` runs the change-and-recovery story in one command, offline, with fake models and no keys, in about 20 seconds. The research agent and the patent agent run on the synthetic `stillroom` world to completion; the input then changes to `stillroom-v2`'s change set (a new publication family and an earlier date on an outside suggestion); invalidation reopens only the work that depends on it, the patent packet is regenerated and a fresh approval is asked; a real `SIGKILL` lands mid-send and recovery finishes it without sending twice; and the event store's hash chain is verified. It prints a short summary of what changed, what was reused and the counts. Every answer and approval a person would give is scripted by the demo and recorded as `by="demo-script"`. The store, the mock mailbox and the sources it used stay in `var/demo/` (`python -m aksha.interfaces.demo --work DIR` picks another folder).
+
 ## Development
 
 Aksha needs Python 3.12 or newer. The runtime package depends on the standard library and `jsonschema` only; `pytest`, `ruff` and `mypy` are development tools.
@@ -22,6 +26,7 @@ make test-postgres  # the storage tests, failing instead of skipping without Pos
 make lint        # ruff check and ruff format --check
 make typecheck   # mypy --strict over src/aksha/ and tests/
 make check       # all three
+make demo        # the change-and-recovery demo (offline, about 20 seconds)
 ```
 
 Code layout (ports and adapters; the full tree, the dependency rule and how to add an adapter are in `docs/architecture/codebase-structure.md`):
