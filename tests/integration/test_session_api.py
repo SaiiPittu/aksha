@@ -112,6 +112,31 @@ def test_an_approved_publish_is_delivered_once(bench: SessionBench) -> None:
     assert len(bench.board.rows) == 1
 
 
+def test_an_accepted_review_rebuilds_with_the_agents_approval_tools(
+    bench: SessionBench, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-P17 B1: AcceptReview hands accept_review the agent's approval tools, so the fresh
+    request after the accept is a body the outbox's re-check rebuilds unchanged."""
+    import aksha.runtime.session.service as service
+    from aksha.runtime.invalidation.commands import accept_review as real
+
+    seen: dict[str, object] = {}
+
+    def spy(*args: object, **kwargs: object) -> object:
+        seen.update(kwargs)
+        return real(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(service, "accept_review", spy)
+    bench.session.dispatch(send(bench, "Write a note and publish it"))
+    bench.session.run_until_yield(OWNER)
+    (waiting,) = bench.session.status(OWNER, SESSION).waiting_on
+    accept = n.AcceptReview(owner=OWNER, review_id=waiting.interrupt_id,
+                            card_hash="sha256:x", command_id="c-2")  # fmt: skip
+    bench.session.dispatch(accept)
+    tools = seen.get("tools")
+    assert isinstance(tools, dict) and sorted(tools) == ["publish"]
+
+
 def test_a_headless_start_needs_a_sandbox(tmp_path: Path) -> None:
     bare = SessionBench(tmp_path / "bare")
     try:

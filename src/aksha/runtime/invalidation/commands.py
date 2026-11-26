@@ -28,14 +28,14 @@ retry returns the first receipt.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
+from aksha.runtime.interrupts.approvals import ApprovalTool, request_events, retarget
 from aksha.runtime.interrupts.approvals import approvals as approval_views
-from aksha.runtime.interrupts.approvals import request_events, retarget
-from aksha.runtime.invalidation.confirm import confirmations
+from aksha.runtime.invalidation.confirm import after, confirmations
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
 from aksha.runtime.invalidation.reviews import ReviewRecord, approvals, reviews
 from aksha.runtime.invalidation.sources import SOURCE_CHANGE_BOUNDARY, record_source_changes
@@ -151,8 +151,12 @@ def _decision(type_: str, review: ReviewRecord) -> tuple[NewEvent, ...]:
     return (NewEvent(type_, payload, run=review.run), resolved)
 
 
-def accept_spec(ids: IdSource) -> CommandSpec:
-    """The ``accept_review`` command; new approval request IDs come from ``ids``."""
+def accept_spec(ids: IdSource, tools: Mapping[str, ApprovalTool] | None = None) -> CommandSpec:
+    """The ``accept_review`` command; new approval request IDs come from ``ids``.
+
+    ``tools`` (by tool name) lets the fresh request rebuild the moved call's body, so the
+    approval it asks for is one execution can carry out (``retarget``).
+    """
 
     def decide(command: Command, view: LogView) -> CommandAccepted | CommandRefused:
         review = _open_review(view, str(command.args["interrupt"]),
@@ -160,6 +164,7 @@ def accept_spec(ids: IdSource) -> CommandSpec:
         if isinstance(review, CommandRefused):
             return review
         events = list(_decision("review.accepted", review))
+        accepted = after(view, events)  # the fresh body's facts read the accepted revision
         old = str(review.old)
         bodies = approval_views(view)
         revision = version(view, review.revision)
@@ -167,7 +172,9 @@ def accept_spec(ids: IdSource) -> CommandSpec:
             held = bodies.get(a.approval)
             if not a.revoked or old not in a.targets or held is None or revision is None:
                 continue
-            body = retarget(held.body, old, str(review.revision), revision.content_hash)
+            tool = (tools or {}).get(held.body.tool)
+            body = retarget(held.body, old, str(review.revision), revision.content_hash,
+                            view=accepted, tool=tool)  # fmt: skip
             events.extend(request_events(ids.next(view.owner, "A"), body, run=held.run,
                                          instance=held.instance, replaces=a.approval))  # fmt: skip
         return CommandAccepted((*events, *confirmations(view, events)))
@@ -206,11 +213,12 @@ def accept_review(
     *,
     command_id: str | None = None,
     session: str | None = None,
+    tools: Mapping[str, ApprovalTool] | None = None,
 ) -> CommandReceipt:
-    """A person accepts a diff review (module doc, item 2)."""
+    """A person accepts a diff review (module doc, item 2); ``tools`` as in ``accept_spec``."""
     args: dict[str, object] = {"interrupt": interrupt_id, "card_hash": card_hash}
     command = _command("accept_review", owner, args, command_id, session, interrupt_id)
-    return dispatch(store, command, accept_spec(ids))
+    return dispatch(store, command, accept_spec(ids, tools))
 
 
 def reject_review(

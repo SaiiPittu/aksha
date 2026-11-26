@@ -27,6 +27,7 @@ commands (``interrupts/commands.py``).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from types import MappingProxyType
@@ -142,14 +143,46 @@ def build_body(
     )
 
 
-def retarget(body: ActionBody, old: str, new: str, content_hash: str) -> ActionBody:
-    """``body`` with target ``old`` moved to ``new`` at ``content_hash``: a new signature.
+def _moved(value: Any, old: str, new: str) -> Any:
+    """``value`` with every string equal to ``old`` replaced by ``new``, at any depth."""
+    if isinstance(value, str):
+        return new if value == old else value
+    if isinstance(value, Mapping):
+        return {k: _moved(v, old, new) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_moved(v, old, new) for v in value]
+    return value
 
-    The fresh request after an accepted review (D7) covers the revision the person accepted;
-    the facts are carried over and recomputed again before execution (D8).
+
+def retarget(
+    body: ActionBody,
+    old: str,
+    new: str,
+    content_hash: str,
+    *,
+    view: LogView | None = None,
+    tool: ApprovalTool | None = None,
+) -> ActionBody:
+    """``body`` moved from target ``old`` to ``new`` at ``content_hash``: a new signature.
+
+    The fresh request after an accepted review (D7) covers the revision the person accepted,
+    so the call itself moves too: every argument naming ``old`` names ``new``. Given the
+    ``tool`` and the ``view``, the body is rebuilt from those arguments (facts, targets and
+    the idempotency key all recomputed), so it equals the body execution rebuilds (D8) and
+    the person sees the new version in the facts. ``view`` must already include the accept
+    (the caller passes the log as it reads once the accept commits), or facts derived from
+    the current version would still name ``old``. Without the tool only the targets, the
+    arguments and the facts move; the key cannot be recomputed, so execution refuses it
+    ``signature_mismatch`` and a fresh call is needed.
     """
+    args = _moved(json.loads(body.canonical_args), old, new)
+    if view is not None and tool is not None and tool.spec.name == body.tool:
+        rebuilt = build_body(view, tool, args, definition_hash=body.definition_hash)
+        if not isinstance(rebuilt, Refusal):
+            return rebuilt
     targets = tuple((new, content_hash) if ref == old else (ref, h) for ref, h in body.targets)
-    return replace(body, targets=targets)
+    facts = MappingProxyType({k: new if v == old else v for k, v in body.facts.items()})
+    return replace(body, targets=targets, canonical_args=canonical_json(args), facts=facts)
 
 
 def request_events(

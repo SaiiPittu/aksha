@@ -9,13 +9,16 @@ alone.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 
 import pytest
 
 from aksha.runtime.artifacts.types import WriterId
+from aksha.runtime.artifacts.versions import current
 from aksha.runtime.execution.recovery import recover_owner
+from aksha.runtime.interrupts.approvals import ApprovalTool
+from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.invalidation.commands import (
     accept_review,
     apply_source_change,
@@ -24,7 +27,10 @@ from aksha.runtime.invalidation.commands import (
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable, writer_has_rebuild
 from aksha.runtime.invalidation.rebuild import open_rebuild_runs, rebuild_brief, rebuild_key
 from aksha.runtime.invalidation.reviews import open_reviews
+from aksha.runtime.outbox.types import EffectSpec
+from aksha.runtime.projections.view import LogView
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tools.types import ToolSpec
 from tests.support.invalidation import (
     OWNER,
     SELECT,
@@ -55,6 +61,28 @@ def change_c1(b: Bench, source: FakeSource, queries: FakeQueries) -> None:
     queries.hashes[(OWNER, "Q-C1")] = "h2"
     receipt = apply_source_change(b.store, OWNER, [source], "c1-change", run_query=queries)
     assert receipt.accepted
+
+
+def _packet_now(view: object, args: object) -> dict[str, str]:
+    """The fact a person approves besides the target: the packet readers see as current."""
+    assert isinstance(view, LogView)
+    found = current(view, "p.packet", "C1")
+    return {"packet_current": "none" if found is None else str(found.ref)}
+
+
+def _targets(args: Mapping[str, object]) -> tuple[str, ...]:
+    found = args["targets"]
+    assert isinstance(found, (list, tuple))
+    return tuple(str(t) for t in found)
+
+
+SEND_DEMO = {"send": ApprovalTool(ToolSpec(
+    name="send", owner="p", effect="external", description="Send the packets.",
+    schema={"type": "object", "properties": {"targets": {"type": "array"}}},
+    external=EffectSpec(system="mailer", key_fields=("/targets",), semantics="reconcile"),
+    approval=ApprovalRule(facts=_packet_now, targets=_targets),
+))}  # fmt: skip
+"""The demo's ``send``: its facts read the current packet, which moves only on the accept."""
 
 
 def untouched(b: Bench) -> None:
@@ -147,13 +175,16 @@ def test_s6_change_and_recovery(bench: Bench) -> None:
     b.save(run, "p.packet/C1", {"forms": ["C1"], "names": 2},
            reads=[ref("p.form/C1@v2").as_input()], review="I-0002")  # fmt: skip
     (card,) = open_reviews(b.view()).values()
-    assert accept_review(b.store, OWNER, "I-0002", card.card_hash, b.ids).accepted
+    assert accept_review(b.store, OWNER, "I-0002", card.card_hash, b.ids,
+                         tools=SEND_DEMO).accepted  # fmt: skip
     requested = [
         e for e in b.events() if e.type == "approval.requested" and "replaces" in e.payload
     ]
     assert [(e.payload["targets"], e.payload["replaces"]) for e in requested] == [
         (("p.packet/C1@v2",), "A-0001")
     ]
+    # ADR-P17 B1: the fresh request's facts are read after the accept, so they name v2.
+    assert [e.payload["body"]["facts"] for e in requested] == [{"packet_current": "p.packet/C1@v2"}]
     types = b.types()
     assert "approval.granted" not in types[types.index("source.changed") :]
     assert not [t for t in types if t.startswith("outbox.")]  # zero sends
