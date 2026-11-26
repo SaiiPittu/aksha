@@ -19,6 +19,7 @@ def test_pages_merge_only_on_a_relationship_sentence() -> None:
     new = _page("p/b", "2026-09-15", "Presence P1", "Corvane Group", said)
     other = _page("p/c", "2026-01-01", "Kelvra TS-32", "Kelvra Systems")
     companies = analysis.resolve([old, new, other])
+    # In the order their first page came, never by name: a renamed world keeps the order.
     assert [c.key for c in companies] == ["c01-brightfield-analytics", "c02-kelvra-systems"]
     merged = companies[0]
     assert merged.canonical == "Brightfield Analytics"  # the earliest page's company
@@ -62,12 +63,25 @@ def test_a_relationship_word_without_another_page_name_merges_nothing() -> None:
     assert len(analysis.resolve([a, b])) == 2
 
 
-def test_price_conflict_needs_two_different_unit_prices() -> None:
-    p229 = {"currency": "USD", "value": "229", "per": "unit"}
-    p199 = {"currency": "USD", "value": "199", "per": "unit"}
-    monthly = {"currency": "USD", "value": "7", "per": "sensor per month"}
-    assert analysis.price_conflict([p229, p199])
-    assert not analysis.price_conflict([p229, dict(p229), monthly])
+def test_price_conflict_needs_two_pages_each_stating_one_differing_price() -> None:
+    p229 = {"record": "a", "currency": "USD", "value": "229", "per": "unit"}
+    p199 = {"record": "b", "currency": "USD", "value": "199", "per": "unit"}
+    monthly = {"record": "b", "currency": "USD", "value": "7", "per": "sensor per month"}
+    same = {"record": "b", "currency": "USD", "value": "7", "per": "Sensor  per month"}
+    assert analysis.price_conflict([p229, p199, monthly]) == ["unit"]
+    assert analysis.price_conflict([p229, dict(p229, record="b"), monthly, same]) == []
+    # Two prices on one page on one basis are tiers, not a conflict.
+    tier = {"record": "a", "currency": "USD", "value": "249", "per": "unit"}
+    assert analysis.price_conflict([p229, tier, p199]) == []
+
+
+def test_terms_match_words_prefixes_and_exclusions() -> None:
+    terms = ["batter*", "not battery powered", "AA cells"]
+    assert analysis.term_hits("Batteries died after a year.", terms) == ["batter*"]
+    assert analysis.term_hits("Cheap and battery powered.", terms) == []
+    assert analysis.term_hits("Battery powered, and the battery died.", terms) == ["batter*"]
+    assert analysis.term_hits("We change the AA  cells often.", terms) == ["AA cells"]
+    assert analysis.term_hits("A cellar.", ["cell"]) == []
 
 
 def test_claim_labels() -> None:
@@ -81,7 +95,7 @@ def test_claim_labels() -> None:
 
 def _row(rid: str, date: str, product: str, text: str, geo: str = "DE") -> dict[str, Any]:
     return {
-        "fields": {"review_id": rid, "date": date, "product": product, "geography": geo},
+        "fields": {"id": rid, "date": date, "product": product, "geography": geo},
         "text": text,
     }
 
@@ -95,14 +109,14 @@ def test_a_cross_posted_review_is_counted_once_and_its_theme_too() -> None:
         ),  # another product
         _row("R-4", "2026-03-04", "Halo", "Cheap and battery powered."),
     ]
-    sample = analysis.review_sample(rows)
+    sample = analysis.review_sample(rows, {"battery": ["batter*", "not battery powered"]})
     assert sample.duplicates == (("R-2", "R-1"),)
     assert len(sample.unique) == 3
-    assert [r["fields"]["review_id"] for r in sample.themes["battery"]] == ["R-1", "R-3"]
+    assert [r["fields"]["id"] for r in sample.themes["battery"]] == ["R-1", "R-3"]
     assert sample.phrase("battery") == "2 of 3 reviews in this sample"
 
 
-def test_stillness_and_privacy_rules() -> None:
+def test_themes_are_the_requests_own_terms() -> None:
     rows = [
         _row("R-1", "2026-01-01", "A", "The lights went off while I was sitting alone."),
         _row(
@@ -110,9 +124,10 @@ def test_stillness_and_privacy_rules() -> None:
         ),
         _row("R-3", "2026-01-03", "A", "Good value."),
     ]
-    sample = analysis.review_sample(rows)
-    assert [r["fields"]["review_id"] for r in sample.themes["stillness"]] == ["R-1"]
-    assert [r["fields"]["review_id"] for r in sample.themes["privacy"]] == ["R-2"]
+    themes = {"stillness": ["sit*", "still"], "privacy": ["privacy", "works council", "image"]}
+    sample = analysis.review_sample(rows, themes)
+    assert [r["fields"]["id"] for r in sample.themes["stillness"]] == ["R-1"]
+    assert [r["fields"]["id"] for r in sample.themes["privacy"]] == ["R-2"]
     assert analysis.tally(sample.unique, "geography") == {"DE": 3}
 
 

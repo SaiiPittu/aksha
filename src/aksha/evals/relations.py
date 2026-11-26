@@ -18,7 +18,9 @@ variant adds, are in the changed set.
 2. ``rel.same_verdict``: the case's verdict in the variant equals its verdict in the base.
 3. ``rel.same_calls``: the agent made the same tool calls in the same order under the path
    map, the stand-in for the design's same-rule-IDs check, so an agent that branches on a
-   name is caught even when its outputs happen to agree.
+   name is caught even when its outputs happen to agree. A call on an input the variant
+   adds (its key's ``changes_from_base.added``) is in the changed set too and is left out:
+   an agent that lists its inputs by content opens every file, the added one included.
 4. ``rel.directional``: invariance outside the changed set, and each output whose key
    section moved (a changed candidate's recommendation or matrix) differs from its base,
    so the change was followed and not ignored.
@@ -53,6 +55,8 @@ class KeyDelta:
 
     changed: frozenset[str]
     must_move: frozenset[tuple[str, str]]
+    added_files: frozenset[str] = frozenset()
+    """The input files the variant adds (``changes_from_base.added``, the path only)."""
 
 
 SECTION_KIND = {"recommendations": "recommendation", "comparison_matrix": "matrix"}
@@ -73,7 +77,9 @@ def key_delta(base: AnswerKey, variant: AnswerKey) -> KeyDelta:
     for label in set(families) - set(dict(base.data.get("families", {}))):
         changed.add(label)  # an agent names a family by its priority number, never the label
         changed.update(str(p) for p in dict(families[label]).get("priority_numbers", ()))
-    return KeyDelta(frozenset(changed), frozenset(move))
+    added = dict(variant.data.get("changes_from_base", {})).get("added", ())
+    files = frozenset(str(a).split(" ", 1)[0] for a in added if isinstance(a, str))
+    return KeyDelta(frozenset(changed), frozenset(move), files)
 
 
 def changed_candidates(base: AnswerKey, variant: AnswerKey) -> set[str]:
@@ -166,12 +172,16 @@ def _result(cid: str, c: Check) -> CriterionResult:
     return CriterionResult(cid, "relation", True, c.outcome, c.evidence)
 
 
-def _calls(rec: EpisodeRecord, maps: Renaming | None) -> list[str]:
+def _calls(
+    rec: EpisodeRecord, maps: Renaming | None, added: frozenset[str] = frozenset()
+) -> list[str]:
     out = []
     for step in rec.trace:
         if "tool" not in step:
             continue
         args = dict(step["args"])
+        if args.get("path") in added:
+            continue  # an input only the variant holds (module doc, item 3)
         if maps is not None:
             args = {k: maps.path(v) if isinstance(v, str) else v for k, v in args.items()}
         out.append(canonical_json({"tool": step["tool"], "args": args}))
@@ -188,6 +198,7 @@ def invariance(
     changed: set[str],
     base_verdict: Outcome,
     variant_verdict: Outcome,
+    added_files: frozenset[str] = frozenset(),
 ) -> list[CriterionResult]:
     """``rel.invariant``, ``rel.same_verdict`` and ``rel.same_calls`` (module docstring)."""
     problems, _ = compare_outputs(base_state, variant_state, maps, changed)
@@ -199,7 +210,7 @@ def invariance(
         if base_verdict == variant_verdict
         else failed(f"base {base_verdict}, variant {variant_verdict}")
     )
-    bc, vc = _calls(base, maps), _calls(variant, None)
+    bc, vc = _calls(base, maps), _calls(variant, None, added_files)
     calls = passed(f"{len(bc)} calls") if bc == vc else failed(*_first_diff(bc, vc))
     return [
         _result("rel.invariant", inv),

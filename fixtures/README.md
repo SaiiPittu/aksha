@@ -32,6 +32,7 @@ fixtures/
         reviews/          42 customer review rows from two sites with different rating scales (.json)
         publications/     ten publications in five families (.json), one of them as PDF-like text (.pdf.txt)
     stillroom-v2/         the change-and-recovery variant, same layout, its own key
+    tilldew/              a world in another domain and layout, to prove the agents general
 ```
 
 ## The base world, `stillroom`
@@ -64,6 +65,21 @@ The same world rendered with every person, company, product, applicant and domai
 2. The consultant's email is dated 2025-11-21 instead of 2026-01-05, which puts it before the consulting agreement's effective date of 2025-12-01.
 
 Its key adds `changes_from_base` and `expected_after_change`: which outputs go stale (C1's matrix, recommendation, forms, packet and any approval bound to that packet), which stay current (C2 to C4 and every research output), and C1's next action moving from `prioritize_counsel_review` to `collect_more_evidence`. The rename map is in its `spec.yaml`.
+
+## The general world, `tilldew`
+
+Tilldew makes a solar-powered soil-moisture probe and an irrigation alert service for smallholder vegetable farms in India, with readings by SMS. It exists to prove that the research and patent agents are general: no agent module names anything in it, and both agents pass its suite (`evals/suites/tilldew/`) with the same code they run on stillroom. It differs from stillroom on purpose wherever a fixture-tuned agent would break:
+
+| What | stillroom | tilldew |
+|---|---|---|
+| Folders | `competitors/`, `reviews/`, `notes/`, `contributors/`, `disclosures/`, `templates/`, `publications/` | `vendors/`, `exports/`, `rnd/`, `people/`, `log/`, `mail/`, `forms/`, `prior-art/`, `reports/` |
+| Seller pages | HTML with JSON-LD | HTML with JSON-LD or Open Graph tags, and one Markdown page with front matter |
+| Reviews | JSON, `review_id`, `text`, `geography` | CSV, `id`, `comment`, `region`, `stars` |
+| Invention notes | `candidate: C1`, "Mechanism", "Parameters" | `invention: TD-1`, "How it works", "Settings", "Options we rejected", "Test results", "Unresolved" |
+| Contributor and disclosure tables | `person_id`, `candidate`, `contributed`; `event_id`, `what_was_shown`, `by` | `person`, `invention`, `contribution`; `event`, `shown`, `who` |
+| Form templates | `invention-disclosure-form`, `filing-information-worksheet` | `tilldew-idf`, `tilldew-filing-sheet`, with other field names |
+
+Its traps: a duplicate company under a new name (Dripwise, now part of Hydrafield Agritech); an unknown price and a price conflict across two dated pages; a vendor claim against its own specification; a hidden instruction to automated readers; two cross-posted reviews; the venture's own field-day disclosure; an outside advisor's earlier suggestion that the contributor records understate; a referenced cost model that is not in the world; conflicting status wordings in one family; a missing rationale and an undated disclosure. The key's element IDs are the mechanism steps (`S1` to `S4`); its review theme counts are for the terms the suite's request gives each theme.
 
 ## How the keys are used
 

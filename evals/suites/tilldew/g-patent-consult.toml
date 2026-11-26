@@ -1,0 +1,10 @@
+id = "g-patent-consult"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CONSULT"
+category = "capability"
+agents = ["patent"]
+worlds = ["tilldew"]
+opening = "Prepare Tilldew's invention candidates for counsel review."
+expect = ["facts.TF-22", "traps.T-CONSULT"]
+criteria = ["trap.T-CONSULT", "citation.exists"]

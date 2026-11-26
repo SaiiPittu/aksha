@@ -33,13 +33,14 @@ bytes. The real agents register in :func:`eval_agents`, one line each.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, TypeGuard, cast
+from typing import Any, Literal, TypeGuard, cast
 
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
@@ -47,6 +48,7 @@ from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.egress.network import HttpTransport, SocketResolver
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
 from aksha.adapters.sources.folder import FolderSource, FolderSources
+from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
 from aksha.evals.agents.runtime import EpisodeSource, RuntimeUnderTest
@@ -99,9 +101,6 @@ from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.tools.registry import ToolRegistry
 from aksha.runtime.tools.types import ToolDecl
-
-if TYPE_CHECKING:
-    from aksha.agents.patent.world import SourceWorld
 
 Backend = Literal["sqlite", "postgres"]
 
@@ -177,7 +176,10 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # =======================  ==============================================  ==================
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
-# for example ``corpus=fixtures/worlds/stillroom/sources`` for the research agent. A
+# for example ``inputs=fixtures/worlds/stillroom/sources`` for the research and patent
+# agents, which both read the ``inputs`` source. Uploads (``aksha run --input``, ``aksha
+# upload``, ``UploadInputs``) go to each owner's input workspace beside the SQLite file
+# (``inputs/<owner>/``), which every run of that owner reads over the configured folder. A
 # declared source with neither a setting nor a ``root`` has no reader: its tools read
 # nothing and say so (``fetch_failed``). A setting naming no declared source is refused.
 #
@@ -495,12 +497,13 @@ def configured_systems(
     }
 
 
-def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> FolderSources:
-    """The record reader over every declared versioned source that has a folder.
+INPUTS_SOURCE = "inputs"
+"""The versioned source an agent declares to read a person's own uploaded files."""
+INPUTS_DIR = "inputs"
+"""Beside the store: each owner's uploaded inputs, ``inputs/<owner>/<path>``."""
 
-    A source's folder is its ``AKSHA_SOURCES`` setting, else its spec's ``root``. Raises
-    ``StoreError`` for a setting that names no declared source (``source_unknown``).
-    """
+
+def _declared_sources(loaded: Sequence[LoadedDefinition]) -> dict[str, VersionedSourceSpec]:
     declared: dict[str, VersionedSourceSpec] = {}
     for definition in loaded:
         for spec in definition.agent.sources:
@@ -508,16 +511,92 @@ def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> 
         for ext in definition.extensions:
             for spec in ext.ext.sources:
                 declared.setdefault(qualify(ext.ext.name, spec.name), spec)
+    return declared
+
+
+def _folder_of(config: RuntimeConfig, spec: VersionedSourceSpec, name: str) -> Path | None:
+    return config.sources.get(name) or (Path(spec.root) if spec.root else None)
+
+
+def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> FolderSources:
+    """The record reader over every declared versioned source that has a folder.
+
+    A source's folder is its ``AKSHA_SOURCES`` setting, else its spec's ``root``. A source
+    that declares one collection is served whole as that collection (``input/<path>``);
+    one that declares several is served by top folder. Raises ``StoreError`` for a setting
+    that names no declared source (``source_unknown``). The inputs source is served per
+    owner by :func:`input_workspace` instead, over the same folder as its base.
+    """
+    declared = _declared_sources(loaded)
     unknown = sorted(set(config.sources) - set(declared))
     if unknown:
         raise StoreError("source_unknown", f"AKSHA_SOURCES names {unknown}, which no loaded "
                          f"agent declares; declared: {sorted(declared)}")  # fmt: skip
-    folders: dict[str, Path] = {}
+    held: dict[str, FolderSource] = {}
     for name, spec in declared.items():
-        folder = config.sources.get(name) or (Path(spec.root) if spec.root else None)
-        if folder is not None:
-            folders[name] = folder
-    return FolderSources(folders)
+        folder = _folder_of(config, spec, name)
+        if folder is None:
+            continue
+        one = spec.collections[0] if len(spec.collections) == 1 else None
+        held[name] = FolderSource(name, folder, one)
+    return FolderSources.of(held)
+
+
+def input_workspace(
+    config: RuntimeConfig, loaded: Sequence[LoadedDefinition]
+) -> InputWorkspace | None:
+    """Each owner's uploaded inputs, when a loaded agent declares the inputs source.
+
+    Uploads live beside the store (``inputs/<owner>/``); the source's configured folder
+    (``AKSHA_SOURCES=inputs=<folder>``), if any, is what every owner sees as well.
+    """
+    spec = _declared_sources(loaded).get(INPUTS_SOURCE)
+    if spec is None:
+        return None
+    collection = spec.collections[0] if spec.collections else "input"
+    return InputWorkspace(INPUTS_SOURCE, config.storage.sqlite_path.parent / INPUTS_DIR,
+                          collection=collection,
+                          base=_folder_of(config, spec, INPUTS_SOURCE))  # fmt: skip
+
+
+class ToolQueryRunner:
+    """Re-executes a recorded query by calling the read tool that recorded it (ADR-P05 D6).
+
+    A recorded query's ID is ``<agent>.<tool>?<canonical JSON arguments>``; its version is
+    the result-set hash the tool returned as a ``query`` read. Re-executing it calls the same
+    tool body again with the same arguments over the owner's current inputs, and answers
+    the version it returns now. A query no loaded tool can answer, or whose tool now
+    fails, answers the empty hash, which differs from any recorded one: the work built on it
+    reopens rather than staying current on an answer nobody can check.
+    """
+
+    def __init__(self, loaded: Sequence[LoadedDefinition], reader: Callable[[str], Any]) -> None:
+        """Answer queries of ``loaded``'s tools, reading through ``reader(owner)``."""
+        self.loaded = {d.agent.name: d for d in loaded}
+        self.reader = reader
+
+    def __call__(self, owner: str, query: str) -> str:
+        """The result-set hash of ``query`` for ``owner`` now."""
+        from aksha.runtime.tools.types import Ok, ToolContext
+
+        head, _, raw = query.partition("?")
+        agent, _, tool = head.partition(".")
+        definition = self.loaded.get(agent)
+        if definition is None or tool not in definition.registry.names():
+            return ""
+        decl = definition.registry.get(tool)
+        if decl.body is None:
+            return ""
+        args = json.loads(raw) if raw else {}
+        ctx = ToolContext(owner, agent, "requery", None, f"requery/{query}", 1,
+                          reader=self.reader(owner))  # fmt: skip
+        outcome = decl.body(ctx, args)
+        if not isinstance(outcome.result, Ok):
+            return ""
+        for read in outcome.result.reads:
+            if read.kind == "query" and read.id == query:
+                return read.version
+        return ""
 
 
 BUILT_IN_BACKENDS: Mapping[str, Callable[[], Sandbox]] = {"bwrap": BwrapSandbox}
@@ -610,6 +689,7 @@ def open_session(
     given = {**configured_systems(config, loaded), **(systems or {})}
     every_system = {**extension_systems(config, loaded, skip=given), **given}
     reader = source_reader(config, loaded)
+    inputs = input_workspace(config, loaded)
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
@@ -622,7 +702,9 @@ def open_session(
     agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
                    blobs=open_blob_store(config.storage), systems=every_system,
-                   reader=reader, ids=ids, tier=tier)  # fmt: skip
+                   reader=reader, ids=ids, tier=tier, inputs=inputs, rebuilds=True,
+                   run_query=None if inputs is None else ToolQueryRunner(
+                       loaded, lambda owner: inputs.reader(owner)))  # fmt: skip
 
 
 def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:
@@ -676,7 +758,8 @@ class DemoRuntime:
     clock: FakeClock
     research: LoopSetup
     patent: LoopSetup
-    patent_source: SharedFolder
+    patent_source: FolderSource
+    run_query: ToolQueryRunner
     send_tools: Mapping[str, ApprovalTool]
     outbox: OutboxWorker
     mailbox: SystemOfRecord
@@ -694,49 +777,6 @@ class DemoRuntime:
     def close(self) -> None:
         """Close the store (and give up the writer lock)."""
         self.store.close()
-
-
-class SharedFolder:
-    """The one source folder both agents read, as one versioned source (ADR-P05 D6).
-
-    The two agents name records of the same files differently: the research agent's
-    folder reader by path (``priorities/business-priorities.md``), the patent agent's
-    world by path and view (``notes/C1-self-calibration.md#note``). A record's version is
-    answered by the reader that names it that way, so a change set checks every record
-    either agent read against the reader it came from, and a file nobody's view uses
-    moves nothing. Record IDs carry no source today, so one source per folder is what
-    keeps the research agent's reads from reading as gone to the patent agent's world.
-    """
-
-    def __init__(self, world: SourceWorld, folder: FolderSource, collections: tuple[str, ...]):
-        """Answer for ``world``'s view IDs and ``folder``'s path IDs over ``collections``."""
-        self.world = world
-        self.folder = folder
-        self._collections = collections
-
-    @property
-    def name(self) -> str:
-        """The source's name: the patent agent's, whose change set this records."""
-        return self.world.name
-
-    @property
-    def collections(self) -> tuple[str, ...]:
-        """Both agents' collections."""
-        return self._collections
-
-    def version(self, owner: str) -> str:
-        """The whole folder's version."""
-        return self.world.version(owner)
-
-    def record_version(self, owner: str, record_id: str) -> str | None:
-        """A view ID's version from the world, a path ID's from the folder reader."""
-        if "#" in record_id:
-            return self.world.record_version(owner, record_id)
-        return self.folder.record_version(owner, record_id)
-
-    def run_query(self, owner: str, query: str) -> str:
-        """Re-execute a recorded publication search."""
-        return self.world.run_query(owner, query)
 
 
 def counsel_mailbox(work: Path) -> MailboxSystem:
@@ -798,11 +838,8 @@ def open_demo(
     """
     from aksha.agents.patent.agent import build_agent as build_patent_agent
     from aksha.agents.patent.fakes import PatentFake
-    from aksha.agents.patent.world import COLLECTIONS as PATENT_COLLECTIONS
     from aksha.agents.patent.world import SourceWorld
     from aksha.agents.research.fakes import ResearchModel
-    from aksha.agents.research.tools import COLLECTIONS as RESEARCH_COLLECTIONS
-    from aksha.agents.research.tools import SOURCE as RESEARCH_SOURCE
 
     clock = FakeClock(DEMO_START)
     store = sqlite.open_store(work / "aksha.sqlite", clock, writer=True)
@@ -811,27 +848,35 @@ def open_demo(
         d.agent.name: d for d in load_agents([DEFAULT_AGENTS / n for n in DEMO_AGENT_NAMES], [])
     }
     research, patent = loaded["research"], loaded["patent"]
-    folder = FolderSource(RESEARCH_SOURCE, sources)
+    folder = FolderSource(INPUTS_SOURCE, sources, "input")
     research_setup = _setup(
         store, research, research.agent, research.registry, ResearchModel(),
         requests[research.agent.name], blobs, folder,
     )  # fmt: skip
-    world = SourceWorld(sources, DEMO_START.date())
+    world = SourceWorld(DEMO_START.date())
     agent = build_patent_agent(world)
     listed = {t.spec.name: t for t in agent.tools if isinstance(t, ToolDecl)}
     patent_setup = _setup(
         store, patent, agent, ToolRegistry(agent, listed, ()), PatentFake(),
-        requests[agent.name], blobs,
+        requests[agent.name], blobs, folder,
     )  # fmt: skip
     send_tools = {"send_packet": ApprovalTool(listed["send_packet"].spec)}
     hashes = {research.agent.name: research.definition_hash, agent.name: patent.definition_hash}
     authority = approval_authority(send_tools, lambda entry: patent.definition_hash)
     box = mailbox or counsel_mailbox(work)
     worker = OutboxWorker(store, DEMO_OWNER, clock, {COUNSEL_MAILBOX: box}, authority=authority)
-    collections = tuple(dict.fromkeys((*PATENT_COLLECTIONS, *RESEARCH_COLLECTIONS)))
-    shared = SharedFolder(world, folder, collections)
+    queries = ToolQueryRunner(list(loaded.values()), lambda owner: folder)
     return DemoRuntime(
-        store, clock, research_setup, patent_setup, shared, send_tools, worker, box, hashes
+        store,
+        clock,
+        research_setup,
+        patent_setup,
+        folder,
+        queries,
+        send_tools,
+        worker,
+        box,
+        hashes,
     )
 
 

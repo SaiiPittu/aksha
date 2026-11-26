@@ -1,0 +1,10 @@
+id = "g-patent-grace"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GRACE"
+category = "capability"
+agents = ["patent"]
+worlds = ["tilldew"]
+opening = "Prepare Tilldew's invention candidates for counsel review."
+expect = ["facts.TF-24", "traps.T-GRACE"]
+criteria = ["trap.T-GRACE", "citation.exists"]

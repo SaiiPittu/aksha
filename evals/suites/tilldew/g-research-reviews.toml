@@ -1,0 +1,11 @@
+id = "g-research-reviews"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-REVIEWDUP"
+category = "capability"
+agents = ["research"]
+worlds = ["tilldew"]
+opening = "What do smallholder farmers in India say about soil-moisture probes? What do farmers say about: accuracy (accura*, wrong reading*, false alert*, still wet, trust*); power (solar*, charg*, batter*, AA cells); connectivity (sms, signal, network, gateway); price (price*, expensive, cost*, cheap*, paid)?"
+expect = ["counts.reviews_unique", "counts.review_themes_unique", "traps.T-REVIEWDUP"]
+criteria = ["research.unique_reviews", "research.theme_counts", "citation.exists", "trap.T-REVIEWDUP"]
+should = ["no_market_percentage"]

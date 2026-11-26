@@ -47,6 +47,8 @@ def _company(key: str, *pages: str, evidence: bool = False) -> dict[str, Any]:
 
 
 BOUNDARY = {"in": "products that do the job", "out": []}
+DIMENSIONS = [{"id": "power", "name": "power", "terms": ["PoE"]}]
+THEMES = [{"id": "battery", "name": "battery", "terms": ["batter*"]}]
 
 
 def _scope(geography: str, *, basis: str = "answer", **extra: Any) -> dict[str, Any]:
@@ -54,6 +56,8 @@ def _scope(geography: str, *, basis: str = "answer", **extra: Any) -> dict[str, 
         "segment": {"value": "offices", "basis": "request"},
         "geography": {"value": geography, "basis": basis},
         "boundary": BOUNDARY,
+        "dimensions": DIMENSIONS,
+        "themes": THEMES,
         **extra,
     }
 
@@ -68,6 +72,16 @@ def test_scope_needs_segment_and_geography() -> None:
 def test_scope_needs_where_each_value_came_from_and_a_boundary() -> None:
     assert not checks.scope_done(_View({("scope", None): _scope("EU", basis="")})).ok
     assert not checks.scope_done(_View({("scope", None): _scope("EU", boundary={})})).ok
+
+
+def test_scope_needs_what_to_compare_each_with_its_terms() -> None:
+    assert checks.scope_done(_View({("scope", None): _scope("EU", dimensions=[], themes=[])})).ok
+    no_terms = [{"id": "power", "name": "power", "terms": []}]
+    assert not checks.scope_done(_View({("scope", None): _scope("EU", dimensions=no_terms)})).ok
+    twice = DIMENSIONS * 2
+    assert not checks.scope_done(_View({("scope", None): _scope("EU", dimensions=twice)})).ok
+    missing = {k: v for k, v in _scope("EU").items() if k != "themes"}
+    assert not checks.scope_done(_View({("scope", None): missing})).ok
 
 
 def _link(src: str, dst: str) -> _Event:
@@ -107,40 +121,67 @@ def test_discover_refuses_a_page_under_two_companies_and_a_wrong_count() -> None
     assert not checks.discover_done(_View({("competitors", None): miscount})).ok
 
 
-def _profile(**cells: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {c: [{"value": "x"}] for c in checks.CELLS}
-    return {**base, "conflicts": [], **cells}
+def _profile(**over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {"prices": [{"value": "x", "record": "p/1", "per": "unit"}],
+                            "cells": {"power": [{"value": "x"}]}, "conflicts": []}  # fmt: skip
+    return {**base, **over}
 
 
-def test_profile_refuses_two_prices_without_a_conflict() -> None:
-    two = [{"value": "229"}, {"value": "199"}]
-    view = _View({("profile", "k"): _profile(unit_price=two)}, key="k")
+def _slots(profile: Mapping[str, Any]) -> dict[tuple[str, str | None], Mapping[str, Any]]:
+    # The competitors carry the scope's dimensions on to each company's evidence.
+    return {("profile", "k"): profile, ("competitors", None): {"dimensions": DIMENSIONS}}
+
+
+def _price(value: str, record: str, currency: str = "USD", per: str = "unit") -> dict[str, Any]:
+    return {"value": value, "record": record, "currency": currency, "per": per}
+
+
+def test_profile_refuses_two_pages_disagreeing_without_a_conflict() -> None:
+    two = [_price("229", "p/1"), _price("199", "p/2")]
+    view = _View(_slots(_profile(prices=two)), key="k")
     assert "conflict" in checks.profile_done(view).message
-    kept = _profile(unit_price=two, conflicts=[{"field": "unit_price"}])
-    assert checks.profile_done(_View({("profile", "k"): kept}, key="k")).ok
+    kept = _profile(prices=two, conflicts=[{"field": "price", "per": "unit"}])
+    assert checks.profile_done(_View(_slots(kept), key="k")).ok
 
 
 def test_profile_reads_one_amount_in_two_currencies_as_a_conflict() -> None:
-    two = [{"value": "229", "currency": "USD"}, {"value": "229", "currency": "EUR"}]
-    view = _View({("profile", "k"): _profile(unit_price=two)}, key="k")
+    two = [_price("229", "p/1", "USD"), _price("229", "p/2", "EUR")]
+    view = _View(_slots(_profile(prices=two)), key="k")
     assert "conflict" in checks.profile_done(view).message
-    same = [{"value": "229", "currency": "USD"}, {"value": "229", "currency": "USD"}]
-    assert checks.profile_done(_View({("profile", "k"): _profile(unit_price=same)}, key="k")).ok
+    same = [_price("229", "p/1"), _price("229", "p/2")]
+    assert checks.profile_done(_View(_slots(_profile(prices=same)), key="k")).ok
 
 
-def test_profile_refuses_an_empty_cell() -> None:
-    view = _View({("profile", "k"): _profile(privacy=[])}, key="k")
+def test_profile_reads_tiers_on_one_page_as_no_conflict() -> None:
+    tiers = [_price("229", "p/1"), _price("249", "p/1")]
+    assert checks.profile_done(_View(_slots(_profile(prices=tiers)), key="k")).ok
+
+
+def test_profile_refuses_a_scope_dimension_left_empty_and_no_price() -> None:
+    view = _View(_slots(_profile(cells={"power": []})), key="k")
+    assert "power" in checks.profile_done(view).message
+    view = _View(_slots(_profile(cells={})), key="k")
     assert not checks.profile_done(view).ok
+    view = _View(_slots(_profile(prices=[])), key="k")
+    assert "prices" in checks.profile_done(view).message
 
 
 def test_needs_must_say_n_of_m_in_this_sample() -> None:
     need = {"theme": "battery", "phrase": "7 of 40 reviews in this sample", "evidence": [{}] * 7}
     good = {"sample": {"rows": 42, "unique": 40, "duplicates": [{}, {}]}, "needs": [need]}
-    assert checks.needs_done(_View({("needs", None): good})).ok
+    Slots = dict[tuple[str, str | None], Mapping[str, Any]]
+
+    def view(needs: Mapping[str, Any]) -> _View:
+        slots: Slots = {("needs", None): needs, ("scope", None): _scope("EU")}
+        return _View(slots)
+
+    assert checks.needs_done(view(good)).ok
     share = {**need, "phrase": "17.5% of customers"}
-    assert not checks.needs_done(_View({("needs", None): {**good, "needs": [share]}})).ok
+    assert not checks.needs_done(view({**good, "needs": [share]})).ok
     miscount = {**need, "evidence": [{}] * 6}
-    assert not checks.needs_done(_View({("needs", None): {**good, "needs": [miscount]}})).ok
+    assert not checks.needs_done(view({**good, "needs": [miscount]})).ok
+    # A scope theme with no need saved is refused by name.
+    assert "battery" in checks.needs_done(view({**good, "needs": []})).message
 
 
 def test_report_needs_every_row_and_proposal_thresholds() -> None:
@@ -149,12 +190,14 @@ def test_report_needs_every_row_and_proposal_thresholds() -> None:
         ("matrix", None): {"rows": [{"key": "a"}]},
         ("findings", None): {"findings": [], "unknowns": []},
         ("tests", None): {"tests": [{"id": "T1", "threshold": {"status": "proposal"}}]},
+        ("scope", None): _scope("EU"),
     }
     assert not checks.report_done(_View(slots)).ok
-    full = {c: [{"value": "x"}] for c in checks.CELLS}
+    full = {"prices": [{"value": "x"}], "cells": {"power": [{"value": "x"}]}}
     slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full}]}
     assert checks.report_done(_View(slots)).ok
-    slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full, "power": []}]}
+    empty = {**full, "cells": {"power": []}}
+    slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **empty}]}
     assert "b/power" in checks.report_done(_View(slots)).message
     slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full}]}
     slots[("tests", None)] = {"tests": [{"id": "T1", "threshold": {"status": "decided"}}]}

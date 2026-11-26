@@ -56,7 +56,9 @@ def test_the_research_happy_path_passes_in_both_worlds(research: SuiteRun) -> No
     (pair,) = report["relations"]
     outcomes = {c["id"]: c["outcome"] for c in pair["criteria"]}
     # The agent profiles companies in the order it discovered their pages, not by name, so
-    # a rename leaves its reads in the same order (rel.same_calls).
+    # a rename leaves its reads in the same order (rel.same_calls). It finds its inputs by
+    # content, so it also opens the file the variant adds (family E's publication); that
+    # read is in the changed set and left out of the comparison.
     assert outcomes == {
         "rel.invariant": "pass",
         "rel.same_verdict": "pass",
@@ -113,3 +115,23 @@ def test_the_episode_mailbox_never_sends_a_landed_key_twice(patent: SuiteRun) ->
         assert episode.receiver.rows == []
     finally:
         store.close()
+
+
+@pytest.fixture(scope="module")
+def general(tmp_path_factory: pytest.TempPathFactory) -> SuiteRun:
+    return _run(tmp_path_factory.mktemp("tilldew"), "tilldew")
+
+
+def test_both_agents_pass_a_world_their_code_has_never_seen(general: SuiteRun) -> None:
+    """The tilldew suite: another domain, layout, column names, headings and form fields.
+
+    The agents run with the same code as on stillroom; their offline models follow general
+    rules here (the stillroom lexicon applies only to the stillroom notes).
+    """
+    verdicts = _verdicts(general)
+    assert len(verdicts) == 12 and set(verdicts.values()) == {"pass"}, verdicts
+    research = [c for c in verdicts if c.startswith("g-research")]
+    patent = [c for c in verdicts if c.startswith("g-patent")]
+    assert len(research) == 6 and len(patent) == 6
+    sends = [rec for rec in general.records.values() if rec.ledger]
+    assert sends and all(len(rec.ledger) == 1 for rec in sends)  # each packet sent once

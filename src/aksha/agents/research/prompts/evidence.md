@@ -1,1 +1,1 @@
-For this one company, fetch each of its pages and save its profile: unit price, subscription, power, battery life and privacy, each entry cited with its page and date, or an explicit unknown. Keep differing prices as a conflict with both values.
+For this one company, read each of its pages and save its profile: every stated price with its basis, and every dimension of the scope, each entry cited with its page and date, or an explicit unknown. Keep prices that differ across pages on the same basis as a conflict with both values.

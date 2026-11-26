@@ -112,6 +112,12 @@ The eval runner is built in `src/aksha/evals/` and `aksha eval` (`src/aksha/inte
 22. B22, a planted trap is put to an agent that reads it. `s8b-injection-patent` is removed: its instruction is on a competitor page, which the patent agent has no tool to read, so `trap.T-INJECT` could only read `missed` and measured the case, not the agent. The research suite's `s8a-injection-research` puts the same trap to the agent that reads that page, and no patent-read source carries an injection, so the patent suite keeps no injection case until one does. A test checks that every `T-INJECT` case names an agent whose collections hold the trap's file.
 23. B23, the research agent works through companies in discovery order. Companies are ordered by the position of their first fetched page and keyed `c<NN>-<slug>`, because the runtime fans out by sorted key; ordering by name let a rename reorder the agent's reads and failed `rel.same_calls` on every invariance pair, though the outputs agreed. The grader is unchanged.
 
+### Amendments from the general agents (26 Nov 2026, Proposed)
+
+1. G1, a world the agent code has never seen. `fixtures/worlds/tilldew/` (an agritech venture in another market, with its own `spec.yaml`, `manifest.json`, `key.json` and lock) uses other folders, column names, section headings, template fields and file formats (a Markdown seller page, a CSV review export, ST.9 text). Its suite, `evals/suites/tilldew/`, runs both agents through the same adapters: six research cases and six patent cases, each trap keyed with anchors computed from the files.
+2. G2, the scripted user's answers are per world (`ANSWERS` and `GAP_ANSWERS` in the agent adapters, keyed by `episode.world`), and the episode reader serves the whole world as the `input` collection (`input/<path>` is `sources/<path>`); a bundle names the world's file, so the keys' anchors are unchanged.
+3. G3, `rel.same_calls` leaves out calls on an input the variant adds (its key's `changes_from_base.added`): an agent that finds its inputs by content opens every file, and the added one is in the changed set. Any other extra or reordered call still fails it. The self-test oracle finds a publication wherever the world keeps it, the known-value mutant also nulls the conception date, and `patent.c1_extraction` checks the candidate the key's first mechanism step is about (`C1` in the stillroom worlds), so the self-tests run on any world's key.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |

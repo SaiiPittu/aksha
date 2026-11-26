@@ -48,6 +48,7 @@ from typing import Any
 from aksha.evals.episode import Episode, guard_path
 from aksha.evals.errors import EvalError, PathRefused
 from aksha.runtime.artifacts.ports import BlobStore
+from aksha.runtime.grounding.parts import part_version
 from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.outbox.types import SystemReceipt
 from aksha.runtime.projections.view import LogView, load_view
@@ -64,25 +65,40 @@ SessionBuilder = Callable[[Path, "EpisodeReader", Mapping[str, Any], "EpisodeSou
 """Builds the writer session over ``<folder>/``, with the reader, systems and source given."""
 
 
+INPUTS = "input"
+"""The one collection an inputs source serves: ``input/<path>`` is ``sources/<path>``."""
+
+
+def world_file(record: str) -> str:
+    """The world's file path of a record ID: an input's ``input/`` prefix dropped."""
+    return record.removeprefix(INPUTS + "/")
+
+
 class EpisodeReader:
-    """The runtime's record reader over one episode, for the source names it serves."""
+    """The runtime's record reader over one episode, for the source names it serves.
+
+    The collection ``input`` is the whole world: its records are ``input/<path>`` for
+    every file under ``sources/``, the way an inputs source serves an uploaded folder. Any
+    other collection is the folder of that name.
+    """
 
     def __init__(self, episode: Episode, sources: tuple[str, ...]) -> None:
         """Serve ``sources`` (the agent's declared source names) from ``episode``."""
         self.episode = episode
         self.sources = sources
         self.texts: dict[str, str] = {}
-        """Every record's text as last returned, by record ID (for citation offsets)."""
+        """Every record's text as last returned, by world file (for citation offsets)."""
 
     def read(self, source: str, record_id: str) -> ReturnedText | None:
         """The record's text through ``read_source``; None for a refusal or a fault."""
-        if source not in self.sources:
+        if source not in self.sources or record_id == INPUTS:
             return None
+        path = world_file(record_id.partition("#")[0])
         try:
-            text = self.episode.read_source(record_id)
+            text = self.episode.read_source(path)
         except EvalError:
             return None
-        self.texts[record_id] = text
+        self.texts[path] = text
         return ReturnedText(source, record_id, _digest(text), text)
 
     def records(self, source: str, collection: str) -> tuple[str, ...]:
@@ -90,17 +106,20 @@ class EpisodeReader:
         if source not in self.sources or not collection:
             return ()
         try:
+            if collection == INPUTS:
+                return tuple(f"{INPUTS}/{p}" for p in self.episode.list_sources(""))
             return tuple(self.episode.list_sources(collection))
         except EvalError:
             return ()
 
     def cite(self, record: str, quote: str) -> dict[str, Any]:
         """A bundle citation of ``quote`` in ``record``, with its offsets when it was read."""
-        text = self.texts.get(record)
+        path = world_file(record.partition("#")[0])
+        text = self.texts.get(path)
         if text is not None and quote and quote in text:
             at = text.index(quote)
-            return {"file": record, "exact": quote, "start": at, "end": at + len(quote)}
-        return {"file": record, "exact": quote}
+            return {"file": path, "exact": quote, "start": at, "end": at + len(quote)}
+        return {"file": path, "exact": quote}
 
 
 class EpisodeSource:
@@ -128,27 +147,39 @@ class EpisodeSource:
         """The collections it versions."""
         return self._collections
 
+    def _files(self, collection: str) -> list[Path]:
+        root = self.episode.sources
+        base = root if collection == INPUTS else root / collection
+        return sorted(p for p in base.rglob("*") if p.is_file()) if base.is_dir() else []
+
     def version(self, owner: str) -> str:
         """The whole copy's version: a hash over every record's version, by path."""
         root = self.episode.sources
         pairs = sorted(
             (p.relative_to(root).as_posix(), _digest(p.read_text(encoding="utf-8")))
             for c in self._collections
-            if (root / c).is_dir()
-            for p in (root / c).rglob("*")
-            if p.is_file()
+            for p in self._files(c)
         )
         return _digest(repr(pairs))
 
     def record_version(self, owner: str, record_id: str) -> str | None:
-        """The record's version now; None when the copy no longer holds it."""
-        if record_id.split("/", 1)[0] not in self._collections:
+        """The record's version now; None when the copy no longer holds it.
+
+        An input (``input/<path>``) is the copy's ``<path>``; a record part has its part's
+        version (``part_version``).
+        """
+        record, _, fragment = record_id.partition("#")
+        if record.split("/", 1)[0] not in self._collections:
             return None
+        rel = world_file(record) if INPUTS in self._collections else record
         try:
-            path = guard_path(self.episode.sources, record_id)
+            path = guard_path(self.episode.sources, rel)
         except PathRefused:
             return None
-        return _digest(path.read_text(encoding="utf-8")) if path.is_file() else None
+        if not path.is_file():
+            return None
+        text = path.read_text(encoding="utf-8")
+        return part_version(text, fragment, _digest(text)) if fragment else _digest(text)
 
 
 def _digest(text: str) -> str:

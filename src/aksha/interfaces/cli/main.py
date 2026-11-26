@@ -8,6 +8,11 @@ dispatches the command, drives the owner's runs until they yield, and exits. Rea
 commands (``status``, ``inspect``, ``verify``, ``trace``) open a read-only handle and work
 beside a server.
 
+``aksha run --input PATH`` (repeatable: a folder, or files) first uploads those files to
+the owner's inputs (``UploadInputs``), then sends the message; ``aksha upload PATH`` uploads
+alone. Uploading a file again with other bytes records what moved, and only the work built
+on it reopens: the command drives the rebuild runs that opens and reports them.
+
 ``aksha run --headless`` starts a headless run (ADR-P11 D12, option B): no approval is
 asked, every deny still holds, and the start is refused ``sandbox_required`` unless a
 sandbox backend probes available (``AKSHA_SANDBOX``) or an outer box is declared. The
@@ -32,6 +37,7 @@ from aksha.app import (
     RuntimeConfig,
     export_trace,
     mock_system_notes,
+    open_blob_store,
     open_reader,
     open_session,
     session_capabilities,
@@ -264,8 +270,112 @@ def _recent(client: Client) -> str | None:
 # --- commands ------------------------------------------------------------------------------
 
 
+SKIPPED_PARTS = frozenset({".git", "__pycache__", ".venv", "node_modules"})
+"""Folders an input folder's upload never walks into."""
+
+
+def collect_inputs(paths: Sequence[str]) -> tuple[dict[str, str], list[str]]:
+    """The files under ``paths`` as ``{relative path: text}``, and what was skipped and why.
+
+    A folder contributes every file below it, at its path relative to the folder; a file
+    contributes itself, under its name. Hidden files, and files that are not UTF-8 text
+    (a PDF: extract its text first), are skipped and reported. Raises ``FileNotFoundError``
+    for a path that does not exist.
+    """
+    files: dict[str, str] = {}
+    skipped: list[str] = []
+    for raw in paths:
+        path = Path(raw).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(raw)
+        found = (
+            [(p, p.relative_to(path).as_posix()) for p in sorted(path.rglob("*")) if p.is_file()]
+            if path.is_dir()
+            else [(path, path.name)]
+        )
+        for file, rel in found:
+            parts = rel.split("/")
+            if any(x.startswith(".") or x in SKIPPED_PARTS for x in parts):
+                continue
+            try:
+                files[rel] = file.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                skipped.append(f"{rel}: not UTF-8 text (extract a PDF's text to .txt first)")
+    return files, skipped
+
+
+def _upload(ctx: Context, paths: Sequence[str]) -> int | None:
+    """Upload ``paths`` to the owner's inputs; None when it went through, else an exit code."""
+    try:
+        files, skipped = collect_inputs(paths)
+    except FileNotFoundError as e:
+        ctx.say(f"no such input: {e}")
+        return wire.EXIT_USAGE
+    for why in skipped:
+        ctx.say(f"skipped {why}")
+    if not files:
+        ctx.say("no input files to upload")
+        return wire.EXIT_USAGE
+    command = n.UploadInputs(owner=ctx.owner, files=files, command_id=ctx.command_id())
+    client = ctx.server()
+    if client is not None:
+        receipt = client.dispatch(command)
+    else:
+        session = _embedded(ctx)
+        try:
+            receipt = session.dispatch(command)
+        finally:
+            session.store.close()
+    ctx.received()
+    if not receipt.accepted:
+        return _refused(ctx, receipt)
+    ctx.say(f"uploaded {len(files)} input files")
+    return None
+
+
+def cmd_upload(ctx: Context, args: argparse.Namespace) -> int:
+    """Upload files to the owner's inputs, then drive the rebuild runs a change opens."""
+    before = _run_ids(ctx)
+    failed = _upload(ctx, args.paths)
+    if failed is not None:
+        return failed
+    client = ctx.server()
+    if client is not None:
+        return wire.EXIT_OK  # the server's runtime thread drives the rebuild runs
+    session = _embedded(ctx)
+    try:
+        session.run_until_yield(ctx.owner)
+        view = load_view(session.store, ctx.owner)
+    finally:
+        session.store.close()
+    opened = [r for r in run_statuses(view) if r.run not in before]
+    if not opened:
+        ctx.say("no work reopened: no input changed, or none that work was built on")
+    code = wire.EXIT_OK
+    for run in opened:
+        code = _report(ctx, run)
+    return code
+
+
+def _run_ids(ctx: Context) -> set[str]:
+    store = open_reader(ctx.config)
+    try:
+        return {r.run for r in run_statuses(load_view(store, ctx.owner))}
+    except AkshaError:
+        return set()
+    finally:
+        store.close()
+
+
 def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
-    """Send a message; with ``--agent`` it starts that agent's run, else the router picks."""
+    """Send a message; with ``--agent`` it starts that agent's run, else the router picks.
+
+    With ``--input``, the files are uploaded to the owner's inputs first.
+    """
+    if args.input:
+        failed = _upload(ctx, args.input)
+        if failed is not None:
+            return failed
     session_id = args.session or ctx.pending.take(ctx.key + "/session", wire.new_session_id)
     ctx.say(f"session {session_id}")
 
@@ -410,6 +520,52 @@ def cmd_inspect(ctx: Context, args: argparse.Namespace) -> int:
     return wire.EXIT_OK
 
 
+def cmd_show(ctx: Context, args: argparse.Namespace) -> int:
+    """What the agents saved: every latest output, or one output's content as JSON.
+
+    ``aksha show`` lists the owner's latest artifact versions (``research.matrix@v2``);
+    ``aksha show research.matrix`` or ``aksha show research.profile/c01-...`` prints that
+    output's latest content. A version an input change has invalidated, or one waiting on
+    such a version, is marked stale (its freshness in the invalidation view, ADR-P05 D4)
+    until its rebuild saves a new one. A read over a read-only store, beside a server too.
+    """
+    from aksha.runtime.artifacts.versions import all_versions, current
+    from aksha.runtime.canonical import thaw
+    from aksha.runtime.invalidation.types import STALE_STATES
+    from aksha.runtime.invalidation.view import invalidation_view
+
+    store = open_reader(ctx.config)
+    try:
+        view = load_view(store, ctx.owner)
+        blobs = open_blob_store(ctx.config.storage)
+        iv = invalidation_view(view, blobs=blobs)
+
+        def freshness(ref: object) -> str:
+            state = iv.versions.get(str(ref))
+            return "current" if state is None else str(state.freshness)
+
+        if args.output is None:
+            slots = sorted({(v.ref.kind, v.ref.key) for v in all_versions(view)},
+                           key=lambda s: (s[0], s[1] or ""))  # fmt: skip
+            for kind, key in slots:
+                found = current(view, kind, key)
+                if found is not None:
+                    state = freshness(found.ref)
+                    mark = f" (stale: {state})" if state in STALE_STATES else ""
+                    ctx.say(f"{found.ref}{mark}")
+            return wire.EXIT_OK
+        kind, _, key = args.output.partition("/")
+        found = current(view, kind, key or None, blobs=blobs)
+        shown = None if found is None else freshness(found.ref)
+    finally:
+        store.close()
+    if found is None:
+        ctx.say(f"no output {args.output}")
+        return wire.EXIT_REFUSED
+    ctx.emit({"ref": str(found.ref), "freshness": shown, "content": thaw(found.content)})
+    return wire.EXIT_OK
+
+
 def cmd_verify(ctx: Context, args: argparse.Namespace) -> int:
     """Check the hash chain from the genesis to the head (ADR-P01 Amendment H)."""
     store = open_reader(ctx.config)
@@ -492,7 +648,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="never ask: asks become allows, denies hold; needs AKSHA_SANDBOX",
     )
+    s.add_argument(
+        "--input",
+        action="append",
+        metavar="PATH",
+        help="a folder or file to upload to your inputs first (repeat for several)",
+    )
     s.set_defaults(handler=cmd_run)
+
+    s = sub.add_parser("upload", help="upload files to your inputs; reopens only changed work")
+    s.add_argument("paths", nargs="+", metavar="PATH", help="folders or files")
+    s.set_defaults(handler=cmd_upload)
 
     s = sub.add_parser("answer", help="answer an input, choice or route interrupt")
     s.add_argument("interrupt")
@@ -532,6 +698,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("inspect", help="the run inspector (read-only)")
     s.add_argument("run")
     s.set_defaults(handler=cmd_inspect)
+
+    s = sub.add_parser("show", help="what the agents saved: list outputs, or print one (read-only)")
+    s.add_argument("output", nargs="?", help="an output, such as research.matrix or KIND/KEY")
+    s.set_defaults(handler=cmd_show)
 
     s = sub.add_parser("verify", help="check the hash chain (read-only)")
     s.set_defaults(handler=cmd_verify)

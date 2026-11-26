@@ -43,7 +43,15 @@ from .world import apply_change, copy_base, variant_key
 BY = "demo-script"
 """Who every scripted decision is recorded as: the log says it was not a person."""
 REQUESTS = {
-    "research": "Who sells camera-free occupancy sensing for offices, and at what price?",
+    "research": (
+        "Who sells camera-free occupancy sensing for offices, and at what price? Compare power "
+        "(PoE, Ethernet, mains, USB-C, battery powered, battery thermal, AA), battery life "
+        "(battery life, years of battery, months at) and privacy (privacy, camera, faces, "
+        "identities, image). What do customers say about: battery (batter*, not battery "
+        "powered); stillness (sit*, sat, seated, still, do not move, barely move); setup "
+        "(cabl*, electrician, socket*, wiring, install*, setup); privacy (privacy, works "
+        "council, image)?"
+    ),
     "patent": "Assess the four invention candidates and prepare the chosen one for counsel.",
 }
 KILLED = -signal.SIGKILL
@@ -216,7 +224,7 @@ def act_2_change(rt: DemoRuntime, sources: Path, report: Report) -> None:
     """Apply the variant's change set to the folder and record what moved (one command)."""
     change = apply_change(sources)
     receipt = apply_source_change(rt.store, DEMO_OWNER, [rt.patent_source], "stillroom-v2",
-                                  run_query=rt.patent_source.run_query)  # fmt: skip
+                                  run_query=rt.run_query)  # fmt: skip
     _require(receipt.accepted, receipt)
     view = _view(rt)
     (moved,) = [e.payload for e in view.events if e.type == "source.changed"]

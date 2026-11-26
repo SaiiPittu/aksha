@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication": "SYN-PUB-0102",
+  "office": "SYN-Office-4",
+  "kind_code": "A1",
+  "title": "Salinity-corrected soil moisture probe",
+  "dates": {"priority": "2020-03-15", "filing": "2021-03-14", "publication": "2021-09-23"},
+  "priority_claims": [{"number": "SYN-PRI-2020-0315", "date": "2020-03-15"}],
+  "url": "https://patents.synthetic.example/SYN-PUB-0102",
+  "status": [{"wording": "Published application", "source": "SYN-Office-4 register", "as_of": "2026-09-01"}],
+  "abstract": "A probe corrects its moisture estimate for salinity.",
+  "description": "A capacitance measurement at two excitation frequencies gives a salinity estimate, and the moisture estimate is corrected with the salinity estimate using a lookup table for each soil type.",
+  "claims": [
+    {"number": 1, "depends_on": null, "text": "A soil moisture probe configured to measure capacitance at two excitation frequencies, estimate salinity from the ratio of the capacitance values, and correct the moisture estimate with the salinity estimate using a lookup table per soil type."}
+  ]
+}

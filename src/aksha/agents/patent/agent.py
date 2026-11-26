@@ -2,6 +2,10 @@
 
 The Task tree, in the order the scheduler runs it:
 
+The inputs are whatever the person uploaded (invention notes, contributor and disclosure
+tables, emails, priorities, blank form templates, publications); ``world.py`` recognises
+each by its content, never by its name or folder.
+
 1. ``scope`` lists the invention candidates into ``portfolio``.
 2. ``candidate[Cn]``, one instance per listed candidate, holds the per-candidate work as
    its children, each reading what the one before saved: ``extract`` (the only Task that
@@ -159,7 +163,7 @@ def tasks() -> tuple[Task, ...]:
             "prepare",
             per=PER_SELECTED,
             reads=("extraction", "comparison", "recommendation", "prior_art"),
-            tools=("read_people", "read_template", "fill_form"),
+            tools=("read_people", "list_templates", "read_template", "fill_form"),
             writes=("disclosure", "worksheet"),
             done=checks.forms_filled,
         ),
@@ -196,9 +200,10 @@ def build_agent(world: SourceWorld) -> Agent:
     return Agent(
         name="patent",
         purpose=(
-            "Prepare invention candidates for counsel review: extract each mechanism, its "
-            "contributors and dated disclosures, search and compare prior art, recommend a "
-            "next step, and send a counsel-review packet only after a person approves it."
+            "Prepare any venture's invention candidates for counsel review from its own "
+            "papers: extract each mechanism, its contributors and dated disclosures, search "
+            "and compare prior art, recommend a next step, and send a counsel-review packet "
+            "only after a person approves it."
         ),
         instructions="prompts/instructions.md",
         reads=tuple(f"record:{c}" for c in COLLECTIONS),

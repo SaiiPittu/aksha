@@ -48,14 +48,19 @@ from aksha.runtime.projections.view import LogView
 from aksha.runtime.session.views import Waiting
 
 AGENT = "patent"
-SOURCE = "patent_sources"
+SOURCE = "inputs"
 MAIL = "counsel_mail"
 SEND_ACTION = "send_counsel_packet"
-GAP_ANSWER = "0.5 m from the vent edge, so its air flow stays outside the footprint."
-"""The inventor's answer to the note's open placement detail, as ``make demo`` gives it."""
+GAP_ANSWERS: Mapping[str, str] = {
+    "stillroom": "0.5 m from the vent edge, so its air flow stays outside the footprint.",
+    "stillroom-v2": "0.5 m from the vent edge, so its air flow stays outside the footprint.",
+    "tilldew": "The state utility's published time-of-day tariff table.",
+}
+"""The inventor's answer to a note's open detail, per world (the scripted user's knowledge)."""
+GAP_DEFAULT = "Not decided yet; the note's author will confirm it."
 FIRST_FOR_COUNSEL = "prioritize_counsel_review"
 COUNSEL = "needs_counsel_confirmation"
-CANDIDATE = re.compile(r"\b(C\d+): (\w+)")
+CANDIDATE = re.compile(r"([A-Za-z0-9][\w.-]*): (\w+)")
 
 
 class PatentUnderTest(RuntimeUnderTest):
@@ -65,16 +70,22 @@ class PatentUnderTest(RuntimeUnderTest):
     agent = AGENT
     sources = (SOURCE,)
     systems = (MAIL,)
-    request = "Assess the four invention candidates and prepare the chosen one for counsel."
+    request = "Assess the invention candidates and prepare the chosen one for counsel."
+    world = ""
+
+    def run(self, episode: Episode) -> None:
+        """Remember the episode's world (the scripted user's answers depend on it), then run."""
+        self.world = episode.world
+        super().run(episode)
 
     def answer(self, w: Waiting, question: str, text: str) -> str:
         """The gap answer, or the candidate the table puts first for counsel review."""
         if w.kind == "choice":
-            listed: list[tuple[str, str]] = CANDIDATE.findall(text)
+            listed = [(c, a) for c, a in CANDIDATE.findall(text) if not w.options or c in w.options]
             first = [c for c, action in listed if action == FIRST_FOR_COUNSEL]
             return str((first or [c for c, _ in listed] or list(w.options) or [""])[0])
         if w.kind == "input":
-            return GAP_ANSWER
+            return GAP_ANSWERS.get(self.world, GAP_DEFAULT)
         return super().answer(w, question, text)
 
     def request_approval(

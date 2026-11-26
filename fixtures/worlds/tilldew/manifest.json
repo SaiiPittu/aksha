@@ -1,0 +1,129 @@
+{
+  "world": "tilldew",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths and publish dates. No answers (no family IDs, no duplicate links). The agents read sources/ as uploaded inputs; folder names mean nothing to them.",
+  "records": [
+    {
+      "path": "exports/farmer-reviews.csv",
+      "folder": "exports",
+      "synthetic": true
+    },
+    {
+      "path": "forms/filing-sheet.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "forms/idf-blank.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "log/2026-03-21-field-day.md",
+      "folder": "log",
+      "synthetic": true
+    },
+    {
+      "path": "log/disclosure-log.csv",
+      "folder": "log",
+      "synthetic": true
+    },
+    {
+      "path": "mail/advisor-email.eml.txt",
+      "folder": "mail",
+      "synthetic": true
+    },
+    {
+      "path": "mail/dealer-note.eml.txt",
+      "folder": "mail",
+      "synthetic": true
+    },
+    {
+      "path": "notes/priorities.md",
+      "folder": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "people/contributions.csv",
+      "folder": "people",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0101.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0102.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0103.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0104.pdf.txt",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0105.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "reports/district-irrigation-survey.pdf.txt",
+      "folder": "reports",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/td1-salinity-compensated-moisture.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/td2-tariff-aware-irrigation.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/td3-electrode-self-cleaning.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "vendors/aquasense-s2.html",
+      "folder": "vendors",
+      "synthetic": true,
+      "published": "2026-06-10"
+    },
+    {
+      "path": "vendors/dripwise-root-2025.html",
+      "folder": "vendors",
+      "synthetic": true,
+      "published": "2025-12-02"
+    },
+    {
+      "path": "vendors/furrowpulse.html",
+      "folder": "vendors",
+      "synthetic": true,
+      "published": "2026-07-02"
+    },
+    {
+      "path": "vendors/hydrafield-root.html",
+      "folder": "vendors",
+      "synthetic": true,
+      "published": "2026-08-20"
+    },
+    {
+      "path": "vendors/khetimeter.md",
+      "folder": "vendors",
+      "synthetic": true,
+      "published": "2026-04-18"
+    }
+  ]
+}

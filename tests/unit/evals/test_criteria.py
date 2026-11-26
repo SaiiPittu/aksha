@@ -166,3 +166,25 @@ def test_a_family_the_variant_adds_is_changed_under_its_priority_number_too() ->
     added = dict(key("stillroom-v2").data["families"])["E"]
     changed = key_delta(key(), key("stillroom-v2")).changed
     assert "E" in changed and str(added["priority_numbers"][0]) in changed
+
+
+def test_same_calls_leaves_out_only_reads_of_an_input_the_variant_adds() -> None:
+    from pathlib import Path
+
+    from aksha.evals.bundle import EpisodeRecord
+    from aksha.evals.relations import _calls, key_delta
+
+    added = key_delta(key(), key("stillroom-v2")).added_files
+    assert added == frozenset({"publications/SYN-PUB-0011.json"})
+
+    def rec(*paths: str) -> EpisodeRecord:
+        events = tuple(
+            {"type": "episode.tool_called",
+             "payload": {"tool": "read_source", "args": {"path": p}, "ok": True}}
+            for p in paths
+        )  # fmt: skip
+        return EpisodeRecord({}, events, (), {}, Path("."))
+
+    base = _calls(rec("a.md", "b.md"), None)
+    assert _calls(rec("a.md", "publications/SYN-PUB-0011.json", "b.md"), None, added) == base
+    assert _calls(rec("a.md", "other.md", "b.md"), None, added) != base  # any other read counts

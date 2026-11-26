@@ -339,7 +339,7 @@ class OracleAgent:
                 ep.relate("family_member_of", f"pub:{member}", f"pub:{members[0]}", excerpt)
 
     def _priority_cite(self, member: str, number: str) -> dict[str, Any] | None:
-        for path in sorted((self.world.sources / "publications").glob(f"{member}*")):
+        for path in sorted(self.world.sources.rglob(f"{member}*")):  # wherever the world keeps it
             text = path.read_text(encoding="utf-8")
             if text.count(number) == 1:
                 at = text.index(number)

@@ -1,0 +1,10 @@
+id = "g-patent-gap"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GAP"
+category = "capability"
+agents = ["patent"]
+worlds = ["tilldew"]
+opening = "Prepare Tilldew's invention candidates for counsel review."
+expect = ["facts.TF-21", "traps.T-GAP"]
+criteria = ["trap.T-GAP", "citation.exists"]

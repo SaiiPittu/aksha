@@ -1,0 +1,5 @@
+event,date,invention,type,shown,audience,public,who,link,synthetic
+SYN-EV-01,2026-03-21,TD-1,farmer field day,Live probe demo and a poster describing the two-frequency salinity estimate,"Krishi field day, Ratnagiri, open to all, about 150 farmers",yes,SYN-P-01,log/2026-03-21-field-day.md,true
+SYN-EV-02,2026-01-08,TD-1,outside email,Dr. Mensah suggested measuring capacitance at two frequencies to separate salinity from moisture,private email to Imran Sethi,no,SYN-P-03,mail/advisor-email.eml.txt,true
+SYN-EV-03,2026-05-12,TD-3,blog post,Full description of the polarity-reversal cleaning cycle and its 96-measurement interval,"public, tilldew.example/blog",yes,SYN-P-04,https://tilldew.example/blog/clean-probes,true
+SYN-EV-04,,TD-3,investor update email,Photo of a cleaned electrode and a one-line summary,"angel investors, recipients not recorded",unclear,SYN-P-05,not on file,true

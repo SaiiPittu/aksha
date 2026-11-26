@@ -1,0 +1,16 @@
+X-Synthetic: true
+From: Dr. Kofi Mensah <k.mensah@eastvale-agri.example>
+To: Imran Sethi <imran@tilldew.example>
+Date: Thu, 08 Jan 2026 10:15:00 +0530
+Subject: salty soil readings
+
+SYNTHETIC FIXTURE. Invented for testing; not a real email or person.
+
+Hi Imran,
+
+Your probes read salty beds as wet because salt raises the measured capacitance. Why not measure the capacitance at two excitation frequencies and estimate the salinity from the ratio of the two values?
+
+I have not tried it in the field. Send me the bench numbers when you have them.
+
+Kofi
+Eastvale Agricultural University

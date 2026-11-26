@@ -147,13 +147,14 @@ def gap_filled(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
 
 
 def known_value_nulled(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
-    """The stated quiet window written as null."""
+    """The stated parameter (the quiet window) and conception date written as null."""
 
     def edit(events: Events) -> Events:
         for p in _outputs(events, "extraction"):
-            f = p["content"]["fields"].get("quiet_window")
-            if f:
-                f.update(value=None, status="unknown")
+            for name in ("quiet_window", "conception_date"):
+                f = p["content"]["fields"].get(name)
+                if f:
+                    f.update(value=None, status="unknown")
         return events
 
     return rec.edited(events=edit)

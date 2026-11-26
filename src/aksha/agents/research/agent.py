@@ -1,9 +1,13 @@
 """The research agent's definition: declared data only (ADR-P20 D4).
 
-Task tree, in order: ``scope`` asks only the questions whose answer changes the result;
-``discover`` searches the corpus for competitors and manual alternatives and resolves
-entities; ``evidence`` fans out per resolved company (a blocked company leaves an explicit
-unknown, ``on_child_blocked="partial"``); ``voice`` reads the customer reviews; ``report``
+The agent works on whatever the person gives it: the request says what to research, for
+whom and on which dimensions, and the inputs (any folder or set of files) are what it reads.
+Task tree, in order: ``scope`` fixes the question, the segment, the geography, the boundary
+and what to compare (``dimensions``) and read reviews for (``themes``), asking only the
+questions whose answer changes the result; ``discover`` lists the inputs, reads every page
+and resolves the companies behind them, finding manual alternatives too; ``evidence``
+fans out per resolved company (a blocked company leaves an explicit unknown,
+``on_child_blocked="partial"``); ``voice`` reads the customer reviews; ``report``
 (the finalizer) saves the matrix, the findings and the tests to run next. The run is
 complete when the matrix, the needs, the findings and the tests exist at current versions.
 """
@@ -42,14 +46,13 @@ Form = Literal["span", "statement", "artifact"]
 SPAN: frozenset[Form] = frozenset({"span"})
 SPAN_OR_ARTIFACT: frozenset[Form] = frozenset({"span", "artifact"})
 ARTIFACT: frozenset[Form] = frozenset({"artifact"})
-CELLS = ("unit_price", "subscription", "power", "battery_life", "privacy")
-"""The evidence grid's columns: each cell lists cited entries or explicit unknowns."""
 
 
 def _cells(prefix: str, forms: frozenset[Form] = SPAN) -> tuple[CitePolicy, ...]:
-    return tuple(
-        CitePolicy(f"{prefix}/{c}/*", forms=forms, may_be_unknown=True, value_in_quote=True)
-        for c in CELLS
+    """The evidence grid: prices, and each scope dimension's entries, cited or unknown."""
+    return (
+        CitePolicy(f"{prefix}/prices/*", forms=forms, may_be_unknown=True, value_in_quote=True),
+        CitePolicy(f"{prefix}/cells/*/*", forms=forms, may_be_unknown=True, value_in_quote=True),
     )
 
 
@@ -60,18 +63,30 @@ SCOPE = ArtifactKind(
         "segment",
         "geography",
         "boundary",
+        "dimensions",
+        "themes",
         "asked",
         question={"type": "string"},
         segment=OBJECT,
         geography=OBJECT,
         boundary=OBJECT,
+        dimensions=LIST,
+        themes=LIST,
         asked=LIST,
     ),
     cites=(CitePolicy("/boundary/out/*", forms=SPAN),),
 )
 COMPETITORS = ArtifactKind(
     "competitors",
-    _obj("companies", "pages_found", "resolved", "manual_alternatives", companies=LIST),
+    _obj(
+        "companies",
+        "pages_found",
+        "resolved",
+        "manual_alternatives",
+        "dimensions",
+        companies=LIST,
+        dimensions=LIST,
+    ),
     cites=(
         CitePolicy("/companies/*/canonical", forms=SPAN, value_in_quote=True),
         CitePolicy("/companies/*/aliases/*", forms=SPAN, value_in_quote=True),
@@ -81,7 +96,7 @@ COMPETITORS = ArtifactKind(
 )
 PROFILE = ArtifactKind(
     "profile",
-    _obj("key", "name", "pages", *CELLS, "flags", "conflicts"),
+    _obj("key", "name", "pages", "prices", "cells", "flags", "conflicts", cells=OBJECT),
     keyed=True,
     cites=(
         *_cells(""),
@@ -119,13 +134,14 @@ TESTS = ArtifactKind(
     cites=(CitePolicy("/tests/*/evidence/*", forms=SPAN),),
 )
 
-PAGE = f"record:{tools.PAGES}"
+PAGE = f"record:{tools.COLLECTION}"
 
 AGENT = Agent(
     name="research",
     purpose=(
-        "Research who sells a product, at what price and what customers say: competitors, "
-        "prices, reviews and needs, every claim cited to a fetched page."
+        "Research who sells a product, at what price and what customers say, over the "
+        "person's own inputs: competitors, prices, the dimensions the request names, "
+        "reviews and needs, every claim cited to a record read."
     ),
     instructions="prompts/instructions.md",
     reads=tuple(f"record:{c}" for c in tools.COLLECTIONS),
@@ -138,7 +154,7 @@ AGENT = Agent(
     tasks=(
         Task(
             "scope",
-            tools=("search", "read_note", "save_artifact"),
+            tools=("list_inputs", "search", "read_note", "save_artifact"),
             writes=("scope",),
             done=checks.scope_done,
             interrupt=DeclaredInterrupt("input", "question"),
@@ -150,7 +166,7 @@ AGENT = Agent(
             "discover",
             needs=("scope",),
             reads=("scope",),
-            tools=("search", "fetch_page", "save_artifact"),
+            tools=("list_inputs", "search", "fetch_page", "save_artifact"),
             writes=("competitors",),
             extracts=True,
             done=checks.discover_done,
@@ -175,7 +191,7 @@ AGENT = Agent(
             "voice",
             needs=("scope",),
             reads=("scope",),
-            tools=("search", "read_reviews", "save_artifact"),
+            tools=("list_inputs", "search", "read_table", "save_artifact"),
             writes=("needs",),
             extracts=True,
             done=checks.needs_done,
@@ -195,7 +211,7 @@ AGENT = Agent(
         ),
     ),
     completion=(checks.outputs_exist,),
-    budget=Budget(model_turns=45, tool_calls=70, active_ms=600_000),
+    budget=Budget(model_turns=90, tool_calls=140, active_ms=600_000),
     limits=Limits(turn_limit=6),
     context_policy=ContextPolicy(
         result_cap_chars=24_000,

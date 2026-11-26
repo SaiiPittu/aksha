@@ -47,7 +47,15 @@ WORLDS = REPO / "fixtures" / "worlds"
 AGENT_DIR = Path(aksha.agents.__file__).parent / "research"
 OWNER = "founder-1"
 RUN = "R-0001"
-REQUEST = "Who sells camera-free occupancy sensing for offices, and at what price?"
+REQUEST = (
+    "Who sells camera-free occupancy sensing for offices, and at what price? Compare power "
+    "(PoE, Ethernet, mains, USB-C, battery powered, battery thermal, AA), battery life "
+    "(battery life, years of battery, months at) and privacy (privacy, camera, faces, "
+    "identities, image). What do customers say about: battery (batter*, not battery powered); "
+    "stillness (sit*, sat, seated, still, do not move, barely move); setup (cabl*, "
+    "electrician, socket*, wiring, install*, setup); privacy (privacy, works council, image)?"
+)
+"""The stillroom request: what to compare and what to read reviews for, in the request."""
 
 
 def load() -> LoadedDefinition:
@@ -84,7 +92,9 @@ class ResearchBench:
         self.world = world
         self.loaded = load()
         self.agent = replace(self.loaded.agent, **(agent_changes or {}))
-        self.reader: RecordReader = reader or FolderSource("corpus", WORLDS / world / "sources")
+        self.reader: RecordReader = reader or FolderSource(
+            "inputs", WORLDS / world / "sources", "input"
+        )
         self.request = request
         self.blobs = FilesystemBlobStore(tmp / "blobs")
         self.store: EventStore = open_store(self.path, self.clock, writer=True)

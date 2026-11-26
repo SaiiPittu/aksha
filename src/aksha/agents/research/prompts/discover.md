@@ -1,1 +1,1 @@
-Search the pages for companies that sell this, and for manual alternatives. Fetch every hit, resolve companies: one record per company, merged only on a page's own statement, with the merge's excerpt. Save the competitors with the pages found and the companies resolved.
+List the inputs and read every page among them (HTML or Markdown) that sells something. Resolve companies: one record per company, merged only on a page's own statement, with the merge's excerpt. Search for manual alternatives. Save the competitors with the pages found and the companies resolved.

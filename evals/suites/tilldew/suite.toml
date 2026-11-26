@@ -1,0 +1,8 @@
+# Both agents on the tilldew world: an agritech venture in another domain, with its own
+# folder layout, column names, headings and template fields, that no agent module names.
+# The agents pass it with the same code that runs the stillroom suites; their offline
+# models follow general rules here (aksha/agents/*/fakes.py), never a lexicon of this world.
+[suite]
+name = "tilldew"
+description = "Research and patent agents on a world the agent code has never seen"
+k = 1

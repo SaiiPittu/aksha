@@ -152,7 +152,7 @@ src/aksha/
 │   ├── invalidation/                        P05 invalidation, early cutoff, rebuilds, diff reviews
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── types.py                         VersionedSourceSpec, ReadStatus, VersionState, RebuildEntry, DiffReview
-│   │   ├── ports.py                         VersionedSource, QueryRunner (Protocols): outside the core
+│   │   ├── ports.py                         VersionedSource, QueryRunner, InputWorkspace (Protocols): outside the core
 │   │   ├── sources.py                       the one writer of source.changed and query.reexecuted; source_facts
 │   │   ├── view.py                          the invalidation view: four states, early cutoff, the sibling rule
 │   │   ├── plan.py                          the rebuild plan (modes, holds, rejected writers) and F2
@@ -172,6 +172,7 @@ src/aksha/
 │   │   ├── verify.py                        verify_citation and verify_content: the one verifier; pure
 │   │   ├── ports.py                         RecordReader (Protocol): the reader a tool body reads records through
 │   │   ├── reading.py                       AttemptReader: one attempt's reads, the texts drafts are minted over
+│   │   ├── parts.py                         where_part, part_version: a read of some rows, versioned by those rows
 │   │   └── facts.py                         citation.bound, the evidence a save is verified against
 │   ├── models/                              P07 model interface and routing by model class
 │   │   ├── __init__.py                      what is built, what is planned
@@ -317,7 +318,8 @@ src/aksha/
 │   │   └── filesystem.py                    FilesystemBlobStore: read-only files named by hash
 │   ├── sources/                             versioned sources a tool body reads through (ADR-P13 D1)
 │   │   ├── __init__.py                      the record readers
-│   │   └── folder.py                        FolderSource: a folder of files, versions by content hash
+│   │   ├── folder.py                        FolderSource: a folder of files, versions by content hash
+│   │   └── workspace.py                     InputWorkspace: each owner's uploaded inputs as one versioned source
 │   ├── anchor/                              AnchorSink implementations (chain anchors outside the store)
 │   │   ├── __init__.py                      a sink is only as good as the writer's inability to rewrite it
 │   │   └── file.py                          FileAnchorSink: JSON Lines, fsync, idempotent per seq
@@ -352,20 +354,21 @@ src/aksha/
 │   ├── research/                            the research agent (scenarios 1, 11, 12)
 │   │   ├── __init__.py                      what it does, where each part lives
 │   │   ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
-│   │   ├── tools.py                         search, fetch_page, read_reviews, read_note
-│   │   ├── parsing.py                       pages, review exports and notes as exact passages; pure
-│   │   ├── analysis.py                      entity resolution, price conflicts, review samples; pure
+│   │   ├── tools.py                         list_inputs, search, fetch_page, read_table, read_note
+│   │   ├── parsing.py                       any input by format (pages, tables, texts) as exact passages; pure
+│   │   ├── analysis.py                      entity resolution, price conflicts, term matching, review samples; pure
 │   │   ├── checks.py                        completion checks over a TaskView; pure
-│   │   ├── fakes.py                         ResearchModel: the offline rule-based policy
+│   │   ├── fakes.py                         ResearchModel: the offline rule-based policy, a test double; reads the request's grammar
 │   │   └── prompts/                         the instructions and one prompt per Task
 │   └── patent/                              the patent-disclosure agent (example)
 │       ├── __init__.py                      what it does and never does
 │       ├── agent.py                         AGENT: kinds, the Task tree, build_agent(world)
-│       ├── world.py                         SourceWorld: typed views, view versions, search
+│       ├── world.py                         SourceWorld: inputs recognised by content, typed views, record parts, search
 │       ├── tools.py                         read tools, fill_form, send_packet (approval)
 │       ├── rules.py                         the rule table, families, form refusals
 │       ├── checks.py                        pure completion checks
-│       └── fakes.py                         PatentFake: the rule-based generation model
+│       ├── fakes.py                         PatentFake: the rule-based generation model, a test double; general rules
+│       └── fakes_stillroom.py               the stillroom notes' hand-written lexicon; applies to those notes only
 ├── evals/                                   P22 EVALS: worlds as environments, graded by code
 │   ├── __init__.py                          the parts and the import rule
 │   ├── errors.py                            EvalError, KeyRefMissing, CaseInvalid, PathRefused, ToolFault

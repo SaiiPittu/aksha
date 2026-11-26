@@ -69,12 +69,59 @@ def test_hidden_text_is_flagged_and_a_sales_line_is_not() -> None:
 
 def test_reviews_are_one_passage_per_row_over_the_text_value() -> None:
     raw = (WORLDS / "stillroom" / "sources" / "reviews" / "reviews.json").read_text("utf-8")
-    header, passages = parsing.read_reviews(raw)
-    assert header["collected"] == "2026-11-01"
-    assert len(passages) == 42
-    first = passages[0]
+    table = parsing.read_table(raw, "json")
+    assert table.header["collected"] == "2026-11-01"
+    assert len(table.passages) == 42
+    first = table.passages[0]
     assert raw[first.start : first.end] == first.text
-    assert first.fields["review_id"] == "R-001" and "text" not in first.fields
+    assert first.fields["id"] == "R-001" and "text" not in first.fields
+    assert (table.roles["text"], table.roles["rating"]) == ("text", "rating")
+
+
+def test_a_csv_with_quoted_commas_is_read_with_exact_offsets() -> None:
+    raw = (WORLDS / "tilldew" / "sources" / "exports" / "farmer-reviews.csv").read_text("utf-8")
+    table = parsing.read_table(raw, "csv")
+    assert len(table.passages) == 24
+    for p in table.passages:
+        assert raw[p.start : p.end] == p.text
+    assert table.passages[0].text == (
+        "Readings were right in our tomato beds, and the SMS came every morning."
+    )
+    assert (table.roles["text"], table.roles["date"], table.roles["geography"]) == (
+        "comment", "posted_on", "region",
+    )  # fmt: skip
+
+
+def test_a_markdown_page_names_its_product_and_maker_from_front_matter() -> None:
+    raw = (WORLDS / "tilldew" / "sources" / "vendors" / "khetimeter.md").read_text("utf-8")
+    page = parsing.read_markdown_page(raw)
+    assert (page.product, page.brand, page.published) == (
+        "KhetiMeter", "Rootline Agro", "2026-04-18",
+    )  # fmt: skip
+    (price,) = [p for p in page.passages if p.kind == "price"]
+    assert price.text == "INR 3,499 per probe"
+    assert (price.fields["amount"], price.fields["number"], price.fields["per"]) == (
+        "3,499", "3499", "probe",
+    )  # fmt: skip
+    for p in page.passages:
+        assert raw[p.start : p.end] == p.text
+
+
+@pytest.mark.parametrize(
+    ("record", "shape"),
+    [
+        ("vendors/khetimeter.md", "seller_page"),
+        ("vendors/furrowpulse.html", "seller_page"),
+        ("exports/farmer-reviews.csv", "review_table"),
+        ("people/contributions.csv", "table"),
+        ("rnd/td1-salinity-compensated-moisture.md", "note"),
+        ("prior-art/SYN-PUB-0101.json", "table"),
+        ("mail/advisor-email.eml.txt", "note"),
+    ],
+)
+def test_an_input_is_recognised_by_its_content(record: str, shape: str) -> None:
+    raw = (WORLDS / "tilldew" / "sources" / record).read_text("utf-8")
+    assert parsing.shape_of(record, raw) == shape
 
 
 def test_note_lines_skip_front_matter() -> None:

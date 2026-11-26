@@ -1,0 +1,6 @@
+row_id,person,full_name,affiliation,position,invention,contribution,date,ip_terms,evidence,synthetic
+SYN-CR-01,SYN-P-01,Imran Sethi,Tilldew,sensor lead,TD-1,Designed the two-frequency measurement and wrote the design note,2026-01-19,"employment, IP assignment",SYN-TD-NOTE-1,true
+SYN-CR-02,SYN-P-02,Neha Bansal,Tilldew,firmware engineer,TD-1,Implemented the confirmation rule in firmware,2026-02-06,"employment, IP assignment",SYN-TD-BL-07,true
+SYN-CR-03,SYN-P-03,Dr. Kofi Mensah,Eastvale Agricultural University,outside advisor,TD-1,Reviewed the salinity lookup tables,2026-01-26,"advisory agreement SYN-AA-2025-04, effective 2025-12-15",invoice SYN-IV-0912,true
+SYN-CR-04,SYN-P-02,Neha Bansal,Tilldew,firmware engineer,TD-2,Sketched the tariff-aware schedule,2026-03-04,"employment, IP assignment",SYN-TD-NOTE-2,true
+SYN-CR-05,SYN-P-04,Arjun Pillai,Tilldew,hardware engineer,TD-3,Built the polarity-reversal prototype,2026-02-10,"employment, IP assignment",SYN-TD-NOTE-3,true

@@ -38,7 +38,7 @@ def defaults(**extra: str) -> dict[str, str]:
     out = {
         "AKSHA_AGENTS": str(DEFAULT_AGENTS),
         "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
-        "AKSHA_SOURCES": f"patent_sources={WORLDS}:corpus={WORLDS}",
+        "AKSHA_SOURCES": f"inputs={WORLDS}",
     }
     out.update(extra)
     return out

@@ -4,7 +4,7 @@ Aksha is a general, headless agent harness in Python. One runtime runs many diff
 
 It thinks fast and slow. Model work is split by the kind of answer it needs: System 1 models (fast, narrow) do extraction and classification, and System 2 models (slow, general) do generation. The three are first-class model classes with their own contracts, routed the same way, so a fast model can route a request or pull typed fields out of a page while a generation model writes the report.
 
-*Status as of 26 Nov 2026: 22 of the 30 primitives are built and tested, among them the session API with the `aksha` command line and server, a trace exporter and the eval runner. Two example agents (research and patent) run on synthetic worlds, and `make demo` shows change and recovery offline.*
+*Status as of 26 Nov 2026: 22 of the 30 primitives are built and tested, among them the session API with the `aksha` command line and server, a trace exporter and the eval runner. Two general agents, competitor research and patent disclosure, run on any folder of a person's own files (`aksha run --input`), and are tested on two synthetic worlds in different domains; `make demo` shows change and recovery offline.*
 
 ## Quick start
 
@@ -26,19 +26,63 @@ make demo    # the change-and-recovery demo, about 20 seconds (creates .venv its
 
 Every answer and approval a person would give is scripted and recorded with `by="demo-script"`; the store and the mailbox stay in `var/demo/`.
 
-### The command line, step by step
+### Your own files
 
-The research agent runs end to end through `aksha run` on the synthetic world. Run this from a fresh clone, after `make venv`:
+The research agent and the patent agent work on whatever you give them: a folder or a set of files (saved web pages, Markdown notes, CSV or JSON exports, email text, text extracted from a PDF). The request says what to research, for whom and what to compare; the agents find each input by its content, never by its name or folder. The example below uses the synthetic `tilldew` world (an agritech venture; see [fixtures/README.md](fixtures/README.md)) as if it were your folder. Run it from a fresh clone, after `make venv`:
 
 ```sh
 . .venv/bin/activate
-export AKSHA_SOURCES=corpus=fixtures/worlds/stillroom/sources   # the folder the research tools read
+cp -r fixtures/worlds/tilldew/sources my-inputs     # stands in for your own folder
+
+aksha run --agent research --input my-inputs "Research the competitors for Tilldew's solar soil-moisture probe, for smallholder vegetable farmers in India. Compare power (solar, battery, AA, cells), battery life (battery life, years of battery) and connectivity (SMS, 2G, LoRa, gateway). What do farmers say about: accuracy (accura*, wrong reading*, false alert*, still wet, trust*); connectivity (sms, signal, network, gateway); price (price*, expensive, cost*, cheap*, paid)?"
+# uploaded 23 input files
+# session S-...
+# R-0001 research ended complete                                          (exit code 0)
+
+aksha show                   # every latest output: research.matrix@v1, ...; stale ones marked
+aksha show research.needs    # one output's content as JSON, every value cited
+```
+
+Uploaded files become versioned records of your inputs (`var/inputs/<user>/`). Upload the folder again after changing a file, and only the work built on that file reopens:
+
+```sh
+aksha upload my-inputs       # nothing changed
+# uploaded 23 input files
+# no work reopened: no input changed, or none that work was built on
+sed -i 's/Too expensive for a two-acre plot./Too expensive, and the battery died./' my-inputs/exports/farmer-reviews.csv
+aksha upload my-inputs
+# uploaded 23 input files
+# R-0002 research ended complete                                          (exit code 0)
+aksha inspect R-0002         # its steps: only the review reading (voice) and the report re-ran
+```
+
+The patent agent reads the same inputs (invention notes, contributor and disclosure tables, emails, priorities, blank forms, publications) and prepares a counsel-review packet:
+
+```sh
+aksha run --agent patent "Prepare Tilldew's invention candidates for counsel review."
+#     asks: TD-2: the note leaves Tariff table source undecided. What is it?   (exit code 3)
+aksha answer I-0001 "The state utility's published time-of-day tariff table."
+#     asks: Which candidate should be prepared for counsel review? TD-1: prioritize_counsel_review; TD-2: collect_more_evidence; TD-3: collect_more_evidence
+aksha answer I-0002 TD-1
+#     packet: patent.packet/TD-1@v1                                       (exit code 4)
+```
+
+The approval and the mock mailbox that receives the packet work as in the stillroom walk-through below. The offline models understand a small grammar in the request: `Compare <dimension> (<terms>), ...` names the matrix's dimensions besides price (a term ending in `*` is a prefix, `not <phrase>` excludes text), `say about: <theme> (<terms>); ...` names the review themes, `for <segment>` and a country or region fix the segment and the geography, and a missing one is asked for. A live model reads the request as free text; see the limitations.
+
+### The command line, step by step
+
+The research agent runs end to end through `aksha run` on the synthetic `stillroom` world, here configured as a folder every run reads (`AKSHA_SOURCES`) instead of uploaded. Run this from a fresh clone, after `make venv`:
+
+```sh
+. .venv/bin/activate
+rm -rf var                   # an empty store, so the IDs below match
+export AKSHA_SOURCES=inputs=fixtures/worlds/stillroom/sources   # a configured inputs folder
 
 aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research
 # session S-...
 # R-0001 research waiting
 #   waiting for input (question) I-0001: aksha answer I-0001 TEXT
-#     asks: Which geography should this cover? Prices are listed in EUR and USD and ...  (exit code 3)
+#     asks: Which geography should this cover? Prices and reviews can come from several ...  (exit code 3)
 
 aksha answer I-0001 EU       # the agent asked which geography to cover
 # R-0001 research ended complete                                          (exit code 0)
@@ -60,7 +104,7 @@ The patent agent runs end to end the same way, up to an approved send. Every wai
 
 ```sh
 rm -rf var                   # an empty store, so the IDs below match
-export AKSHA_SOURCES=patent_sources=fixtures/worlds/stillroom/sources
+export AKSHA_SOURCES=inputs=fixtures/worlds/stillroom/sources
 
 aksha run "Assess the four invention candidates and prepare the chosen one for counsel." --agent patent
 #   waiting for input (missing detail) I-0001: aksha answer I-0001 TEXT
@@ -171,10 +215,10 @@ The layout and how to add an agent or an adapter are in [docs/architecture/codeb
 
 ## Interfaces
 
-Every way in goes through one session API (P19): a closed set of named commands (`SendMessage`, `AnswerInterrupt`, `Approve`, `Reject`, `Stop`, `Finalize`, `GrantBudget`, review and source-change commands), one `dispatch` that commits each command with a stored receipt, so a retried command ID gets the first receipt back, and a capability record that lists what this runtime accepts. A command type this runtime does not carry out is refused `unsupported` with a receipt, never dropped; any other refusal carries its own code, such as `sandbox_required`.
+Every way in goes through one session API (P19): a closed set of named commands (`SendMessage`, `AnswerInterrupt`, `Approve`, `Reject`, `Stop`, `Finalize`, `GrantBudget`, `UploadInputs`, review and source-change commands; over HTTP an upload is `POST /api/v1/inputs`), one `dispatch` that commits each command with a stored receipt, so a retried command ID gets the first receipt back, and a capability record that lists what this runtime accepts. A command type this runtime does not carry out is refused `unsupported` with a receipt, never dropped; any other refusal carries its own code, such as `sandbox_required`.
 
 1. **`aksha serve`** runs the server: FastAPI under `/api/v1`, with Server-Sent Events for a session's event stream (replay from a cursor, then live). It holds the store's writer lock, so it is the single writer; it binds to `127.0.0.1:8765` by default.
-2. **The CLI** (`aksha run`, `answer`, `approve`, `reject`, `stop`, `resume`, `status`, `inspect`, `verify`, `trace`, `capabilities`) finds a running server and sends it the command. With no server it runs embedded: the command takes the writer lock for its one invocation, drives the runs until they yield, and exits. Read commands open a read-only handle and work beside a server. Exit codes are fixed: 0 done, 3 waiting for input, 4 waiting for an approval, 5 partial, 6 stopped, 7 refused, 8 environment, 9 failed, 10 chain broken.
+2. **The CLI** (`aksha run` with `--input`, `upload`, `answer`, `approve`, `reject`, `stop`, `resume`, `status`, `show`, `inspect`, `verify`, `trace`, `capabilities`) finds a running server and sends it the command. With no server it runs embedded: the command takes the writer lock for its one invocation, drives the runs until they yield, and exits. Read commands open a read-only handle and work beside a server. Exit codes are fixed: 0 done, 3 waiting for input, 4 waiting for an approval, 5 partial, 6 stopped, 7 refused, 8 environment, 9 failed, 10 chain broken.
 3. **Headless runs** (`aksha run --headless`) never ask: every ask becomes an allow, every deny still holds, and the start is refused `sandbox_required` unless the operator declares a sandbox in `AKSHA_SANDBOX=<backend>:<strength>`.
 4. **Tracing** (P21) is a projection of the event store named by the OpenTelemetry semantic conventions for generative AI, with content capture off by default. `aksha trace RUN` writes OTLP JSON Lines files, one per execution segment, through the official OpenTelemetry SDK.
 
@@ -188,11 +232,14 @@ aksha eval selftest          # the grader self-tests for every world
 aksha eval run scripted      # self-tests, then every case of the scripted suite
 aksha eval run research      # the research agent on the runtime, fake model, both worlds
 aksha eval run patent        # the patent agent on the runtime, fake model, both worlds
+aksha eval run tilldew       # both agents on a world in another domain their code never names
 aksha eval run change --k 3  # resume against fresh on a scope change, one run per arm
 aksha eval key-check         # recompute every answer key's anchors and counts
 ```
 
-In a run on a fresh clone on 26 Nov 2026 the self-tests passed with 33 of 33 gradeable criteria killed by their mutants, and every suite passed. The research and patent agents run as they ship, with their own tools reading through the episode: research passed 11 of 11 episodes (6 of 6 cases, `rel.same_calls` included on every invariance pair), patent 16 of 16 (8 of 8), the scripted suite 17 of 17 (7 of 7), and the change suite 9 of 9: the resume-against-fresh case (decision 36) at k = 3 per arm, every arm correct against the change's derived key. In that case plain resume fell back to fresh on all four re-entries, and only the arm that exempts the scope from the premise check resumed one Task. With the scope exempt, the rebuild took 8 model turns, 20 tool calls and 152,770 context characters, against fresh's 10, 22 and 182,896. Those measures are properties of the rule-based fake, not of a model, and the fake reports no tokens; [docs/evals/resume-vs-fresh.md](docs/evals/resume-vs-fresh.md) says what they do and do not show. In fake model mode the rates are plumbing checks, not reliability, and the report says so on its second line. Results go to `var/evals/<suite>-<seed>/`. The details are in [docs/evals/README.md](docs/evals/README.md).
+In a run on a fresh clone on 26 Nov 2026 the self-tests passed with 33 of 33 gradeable criteria killed by their mutants, and every suite passed. The research and patent agents run as they ship, with their own tools reading through the episode: research passed 11 of 11 episodes (6 of 6 cases, `rel.same_calls` included on every invariance pair), patent 16 of 16 (8 of 8), the scripted suite 17 of 17 (7 of 7), and the change suite 9 of 9: the resume-against-fresh case (decision 36) at k = 3 per arm, every arm correct against the change's derived key. In that case plain resume resumed only the scope (the other re-entries fell back to fresh: premise changed, session missing, tainted session), and the arm that exempts the scope from the premise check resumed two Tasks. With the scope exempt, the rebuild took 9 model turns, 23 tool calls and 183,723 context characters, against fresh's 11, 23 and 211,638. Those measures are properties of the rule-based fake, not of a model, and the fake reports no tokens; [docs/evals/resume-vs-fresh.md](docs/evals/resume-vs-fresh.md) says what they do and do not show. In fake model mode the rates are plumbing checks, not reliability, and the report says so on its second line. Results go to `var/evals/<suite>-<seed>/`. The details are in [docs/evals/README.md](docs/evals/README.md).
+
+The `tilldew` suite runs both agents, unchanged, on an agritech world with other folders, file formats, column names, section headings and form fields (see [fixtures/README.md](fixtures/README.md)); their offline models follow general rules there, never a lexicon of that world. In the run on a fresh clone on 26 Nov 2026 it passed 12 of 12 episodes (6 research cases, 6 patent cases), with the self-tests passing 33 of 33 mutants on its key. `tests/architecture/test_agent_generality.py` fails if any agent module other than its offline model names a value of either world.
 
 ## The primitives
 
@@ -287,6 +334,9 @@ As of 26 Nov 2026:
 9. **One Task instance at a time.** Concurrency above one and keyed children below the top level are refused by the loader.
 10. **Offline only, in practice.** `AKSHA_MODE` accepts only `fake`. A live generation adapter exists but is never tested against a live server, and there is no live extraction or classification adapter.
 11. **Evals run in fake model mode only, and the coding agent has never run.** The research and patent agents run their suites on the runtime with rule-based fakes, so the numbers are plumbing checks; replay and live modes are not built. The rule of three is a reading for the third agent, not a run.
+12. **The agents' offline models read a grammar, not free text.** With no live model, the research agent's fake finds the dimensions and review themes in a small request grammar (`Compare ...`, `say about: ...`) and the patent agent's fake makes one element per mechanism step from its distinctive words; neither is a model, and a request outside the grammar compares on price only and reads no themes. The agent code (definitions, tools, readers, rules, checks) takes no fixture or grammar assumption, but no live model has been run through it: `AKSHA_MODE` accepts only `fake` (item 10).
+13. **Inputs are text, kept per user.** Uploads must be UTF-8 text: a PDF needs its text extracted first (`.pdf.txt`), and binaries are skipped. Each user's inputs are one workspace that all their sessions read (`var/inputs/<user>/`); uploading a single file stores it under its name, so to replace a file inside an uploaded folder upload the folder again. An upload adds or replaces files and never removes one: a file deleted from the folder stays among the inputs until `var/inputs/<user>/` is cleared. The readers recognise the layouts their module documents name (for example a mechanism section of numbered steps, a bold numbered priorities list, WIPO ST.9 codes in a publication's text); a file in another layout is listed but not understood.
+14. **Some reopening is wider than the change.** A changed seller page re-resolves the companies, which reopens every company's evidence (it reads the whole competitor list) though each saves an equal profile; a changed row of a table reopens what read that row, and a renamed name inside it moves it too.
 
 ## Roadmap
 

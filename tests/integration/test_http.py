@@ -167,3 +167,54 @@ def test_a_string_where_a_bool_belongs_is_refused_not_promoted(
     r = client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
                     json={"text": "Write a note", "headless": 1})  # fmt: skip
     assert r.status_code == 422
+
+
+@pytest.fixture
+def served_agents(tmp_path: Path) -> Iterator[TestClient]:
+    from aksha.app import DEFAULT_AGENTS
+
+    cfg = config(tmp_path, agent_paths=(DEFAULT_AGENTS,))
+    runtime = RuntimeThread(lambda: open_session(cfg))
+    runtime.start()
+
+    def record() -> dict[str, Any]:
+        return runtime.call(lambda s: session_capabilities(s, cfg).as_json()).result(10)
+
+    app = create_app(runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05)
+    with TestClient(app) as client:
+        yield client
+    app.state.closing.set()
+    runtime.stop()
+
+
+def test_inputs_upload_over_http_and_a_changed_file_reopens_its_work(
+    served_agents: TestClient,
+) -> None:
+    client = served_agents
+    root = Path(__file__).resolve().parents[2] / "fixtures" / "worlds" / "tilldew" / "sources"
+    files = {p.relative_to(root).as_posix(): p.read_text("utf-8") for p in root.rglob("*")
+             if p.is_file()}  # fmt: skip
+    assert client.post("/api/v1/inputs", headers=H, json={"files": {}}).status_code == 422
+    r = client.post("/api/v1/inputs", headers=H, json={"files": files})
+    assert r.status_code == 200, r.text
+    prompt = (
+        "Who sells soil-moisture probes for smallholder farmers in India? What do farmers say "
+        "about: price (price*, expensive, cost*, cheap*, paid)?"
+    )
+    client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
+                json={"text": prompt, "agent": "research"})  # fmt: skip
+    assert _wait_run(client, lambda r: r["state"] == "ended", 60)["outcome"] == "complete"
+    changed = files["exports/farmer-reviews.csv"].replace("Cheap at the launch offer.", "Fine.")
+    r = client.post("/api/v1/inputs", headers=H,
+                    json={"files": {"exports/farmer-reviews.csv": changed}})  # fmt: skip
+    assert r.status_code == 200, r.text
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        runs = client.get("/api/v1/runs", headers=H).json()["runs"]
+        if len(runs) == 2 and runs[-1]["state"] == "ended":
+            break
+        time.sleep(0.1)
+    assert [(r["run"], r["outcome"]) for r in runs] == [("R-0001", "complete"),
+                                                        ("R-0002", "complete")]  # fmt: skip
+    report = client.get("/api/v1/runs/R-0002", headers=H).json()
+    assert {s["step"].split("/")[1] for s in report["steps"]} == {"voice", "report"}

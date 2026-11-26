@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication": "SYN-PUB-0103",
+  "office": "SYN-Office-3",
+  "kind_code": "A1",
+  "title": "Irrigation scheduling from forecast evapotranspiration",
+  "dates": {"priority": "2021-08-20", "filing": "2022-08-18", "publication": "2023-02-23"},
+  "priority_claims": [{"number": "SYN-PRI-2021-0820", "date": "2021-08-20"}],
+  "url": "https://patents.synthetic.example/SYN-PUB-0103",
+  "status": [{"wording": "Published application", "source": "SYN-Office-3 register", "as_of": "2026-09-01"}],
+  "abstract": "An irrigation controller forecasts the next day's crop evapotranspiration from a weather feed and schedules the pump to cover the deficit.",
+  "description": "The controller reads a district weather feed, forecasts the next day's crop evapotranspiration, and schedules the pump to cover the evapotranspiration deficit. A scheduled pump run is cancelled when forecast rainfall exceeds a threshold.",
+  "claims": [
+    {"number": 1, "depends_on": null, "text": "A method of irrigation, comprising: forecasting the next day's crop evapotranspiration from a district weather feed; and scheduling a pump to cover the evapotranspiration deficit."},
+    {"number": 2, "depends_on": 1, "text": "The method of claim 1, wherein the scheduled pump run is cancelled when forecast rainfall exceeds a threshold."}
+  ]
+}

@@ -16,6 +16,7 @@ POST     ``/interrupts/{interrupt}/answer``          ``AnswerInterrupt``
 POST     ``/approvals/{approval}/approve``           ``Approve`` (body ``shown_signature``)
 POST     ``/approvals/{approval}/reject``            ``Reject``
 POST     ``/runs/{run}/stop``                        ``Stop``
+POST     ``/inputs``                                 ``UploadInputs`` (body ``files``: path to text)
 GET      ``/sessions/{session}``                     the session's status
 GET      ``/sessions/{session}/events``              SSE from ``?after=`` or ``Last-Event-ID``
 GET      ``/runs``, ``/runs/{run}``                  run statuses; the run inspector's report
@@ -199,6 +200,18 @@ def create_app(
         if "reason" in body:
             args["reason"] = body["reason"]
         return command(x_aksha_user, "Stop", args, body)
+
+    @app.post(f"{API}/inputs")
+    async def inputs(request: Request, x_aksha_user: str = Header()) -> JSONResponse:
+        body = await json_body(request)
+        files = body.get("files")
+        if (
+            not isinstance(files, dict)
+            or not files
+            or not all(isinstance(k, str) and isinstance(v, str) for k, v in files.items())
+        ):
+            return error(422, "validation", "files maps each relative path to its UTF-8 text")
+        return command(x_aksha_user, "UploadInputs", {"files": files}, body)
 
     @app.get(f"{API}/sessions/{{session}}")
     def session(session: str, x_aksha_user: str = Header()) -> dict[str, Any]:

@@ -83,7 +83,7 @@ def test_the_default_agents_load_and_research_runs_offline_on_a_world(tmp_path: 
 
     sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
     defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
-                "AKSHA_SOURCES": f"corpus={sources}"}  # fmt: skip
+                "AKSHA_SOURCES": f"inputs={sources}"}  # fmt: skip
     code, out = aksha(tmp_path, "capabilities", **defaults)
     assert code == wire.EXIT_OK, out
     request = "Who sells camera-free occupancy sensing for offices, and at what price?"
@@ -108,7 +108,7 @@ def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: P
 
     sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
     defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
-                "AKSHA_SOURCES": f"patent_sources={sources}"}  # fmt: skip
+                "AKSHA_SOURCES": f"inputs={sources}"}  # fmt: skip
     request = "Assess the four invention candidates and prepare the chosen one for counsel."
     code, out = aksha(tmp_path, "run", request, "--agent", "patent", "--session", "S-1",
                       **defaults)  # fmt: skip

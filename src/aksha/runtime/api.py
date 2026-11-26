@@ -37,7 +37,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``RecordReader`` and ``ReturnedText`` (the reader a body reads records through, and
    what it returns),
    ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
-   ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one).
+   ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one),
+   ``where_part`` and ``part_version`` (a read of some rows of a table, versioned by
+   exactly those rows, so a change to other rows moves nothing built on it).
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
    ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26);
    what a contributed system of record implements and answers: ``SystemOfRecord`` and
@@ -65,6 +67,7 @@ from aksha.runtime.egress.ports import HttpResponse
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
+from aksha.runtime.grounding.parts import part_version, where_part
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.types import (
     CitePolicy,
@@ -241,6 +244,8 @@ __all__ = [
     "distribution_ppm",
     "from_field",
     "maybe_unknown",
+    "part_version",
     "ppm",
     "source_keys",
+    "where_part",
 ]
