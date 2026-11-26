@@ -10,7 +10,9 @@ In order, all code:
 
 1. The header's width times height is checked against ``Caps.max_pixels`` before any
    pixel is decoded; Pillow's own ``MAX_IMAGE_PIXELS`` guard stays on, and its warning is
-   turned into a refusal. Over either is ``refused`` (``decompression_cap``).
+   turned into a refusal. Over either is ``refused`` (``decompression_cap``). The cap is a
+   budget across every kept frame: each TIFF page's own size is checked before it is
+   decoded, and the pages past the budget are dropped and named.
 2. ``ImageOps.exif_transpose`` applies the EXIF orientation, so a phone photo is upright.
 3. An embedded ICC profile is converted to sRGB; the mode becomes RGB, RGBA or L.
 4. Metadata is never carried over: a re-encode writes fresh bytes with no EXIF (GPS
@@ -138,8 +140,17 @@ def decode(data: bytes, detected_type: str, caps: Caps | None = None) -> Decoded
             frames: list[Frame] = []
             facts: list[tuple[int, int, bool]] = []
             stripped = False
+            budget = caps.max_pixels  # decoded pixels across every kept frame, not per frame
             for i in range(keep):
                 im.seek(i)
+                fw, fh = im.size  # a TIFF page has its own size, unchecked by Pillow's guard
+                if fw * fh > budget:
+                    if i == 0:
+                        detail = f"decompression_cap: {fw}x{fh} pixels, over {caps.max_pixels}"
+                        return Decoded((), Converted(gap=Gap("refused", detail, steps)))
+                    keep = i
+                    break
+                budget -= fw * fh
                 frame = im.copy()
                 frame.load()
                 meta = _has_metadata(im)
@@ -160,7 +171,9 @@ def decode(data: bytes, detected_type: str, caps: Caps | None = None) -> Decoded
     if animated:
         dropped.append(f"{count - 1} animation frames after the first (frame 0 kept)")
     if fmt == "TIFF" and count > keep:
-        dropped.append(f"TIFF pages {keep + 1}-{count}: over the {caps.max_pages}-page cap")
+        cap = (f"the {caps.max_pages}-page cap" if keep == caps.max_pages
+               else f"the {caps.max_pixels:,}-pixel cap across pages")  # fmt: skip
+        dropped.append(f"TIFF pages {keep + 1}-{count}: over {cap}")
     oriented = any(f[2] for f in facts)
     parts: list[str] = []
     anchors: list[Anchor] = []

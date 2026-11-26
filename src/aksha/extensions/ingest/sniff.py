@@ -241,7 +241,7 @@ def _text_type(text: str, claimed: str | None) -> tuple[str, str | None]:
         try:
             json.loads(stripped)
             return JSON, None
-        except ValueError:
+        except (ValueError, RecursionError):  # nesting past the parser's depth is not JSON
             if claimed == JSON:
                 return TEXT, "extension .json, bytes not valid JSON"
     if _looks_like_email(text):

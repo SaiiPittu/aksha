@@ -39,13 +39,14 @@ def markdown(text: str) -> Representation:
     """Markdown, unchanged, with one anchor per heading."""
     found = [(len(m.group(1)), m.group(2).strip(), m.start()) for m in _ATX.finditer(text)]
     anchors: list[Anchor] = []
+    names = Names()
     for i, (level, title, start) in enumerate(found):
         end = len(text)
         for lv, _, s in found[i + 1 :]:
             if lv <= level:
                 end = s
                 break
-        anchors.append(Anchor(_unique(title, anchors), start, end))
+        anchors.append(Anchor(names.take(title), start, end))
     pages = (PageRung("text", "parse_fast", "extracted"),)
     return Representation(text, tuple(anchors), (_STDLIB,), pages, notes=("headings as anchors",))
 
@@ -55,6 +56,7 @@ def json_doc(text: str) -> Representation:
     value = json.loads(text)
     out = json.dumps(value, indent=2, ensure_ascii=False)
     anchors: list[Anchor] = []
+    names = Names()
     if isinstance(value, dict):
         at = 0
         for key in value:
@@ -64,7 +66,7 @@ def json_doc(text: str) -> Representation:
                 continue
             start += 3
             at = start
-            anchors.append(Anchor(_unique(str(key), anchors), start, start))
+            anchors.append(Anchor(names.take(str(key)), start, start))
     elif isinstance(value, list):
         at = 0
         for i, item in enumerate(value[:10_000]):
@@ -208,10 +210,11 @@ def html_doc(text: str) -> Representation:
         at += len(line) + 1
     body = "".join(line + "\n" for line in parser.lines)
     anchors: list[Anchor] = []
+    names = Names()
     for label, index in parser.headings:
         if label:
             start = offsets[index] if index < len(offsets) else len(body)
-            anchors.append(Anchor(_unique(label, anchors), start, start))
+            anchors.append(Anchor(names.take(label), start, start))
     anchors = _close(anchors, len(body))
     dropped = (f"{parser.dropped} script or style blocks",) if parser.dropped else ()
     notes: tuple[str, ...] = ("visible text, headings as anchors",)
@@ -221,15 +224,30 @@ def html_doc(text: str) -> Representation:
     return Representation(body, tuple(anchors), (_STDLIB,), pages, dropped=dropped, notes=notes)
 
 
-def _unique(label: str, seen: list[Anchor]) -> str:
-    """``label``, or ``label (2)`` and so on when an earlier anchor has it."""
-    names = {a.label for a in seen}
-    if label not in names:
-        return label
-    n = 2
-    while f"{label} ({n})" in names:
-        n += 1
-    return f"{label} ({n})"
+class Names:
+    """Anchor labels handed out so far: ``label``, then ``label (2)``, ``label (3)``.
+
+    Each :meth:`take` costs constant time on average, so a file with hundreds of thousands
+    of identical headings stays linear (a set rebuilt per heading made it quadratic).
+    """
+
+    def __init__(self) -> None:
+        """No labels yet."""
+        self._used: set[str] = set()
+        self._next: dict[str, int] = {}
+
+    def take(self, label: str) -> str:
+        """``label``, or the first ``label (n)`` not yet handed out."""
+        if label not in self._used:
+            self._used.add(label)
+            return label
+        n = self._next.get(label, 2)
+        while f"{label} ({n})" in self._used:
+            n += 1
+        self._next[label] = n + 1
+        name = f"{label} ({n})"
+        self._used.add(name)
+        return name
 
 
 def _close(anchors: list[Anchor], size: int) -> list[Anchor]:

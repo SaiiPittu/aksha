@@ -32,7 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from aksha.extensions.ingest import images, mail, office, pdf, sniff, text
-from aksha.extensions.ingest.header import render_header
+from aksha.extensions.ingest.header import clean_name, render_header
 from aksha.extensions.ingest.profiles import SentCopyCache, prepare_image
 from aksha.extensions.ingest.routing import resolve_route
 from aksha.extensions.ingest.types import (
@@ -82,11 +82,15 @@ class Ingested:
         """Whether the file is UTF-8 text an agent's tools parse unchanged (no header).
 
         That is a type in :data:`AS_GIVEN_TYPES`, or an email with no attachments, decoded as
-        UTF-8 with no type conflict and no gap.
+        UTF-8 with no type conflict and no gap. A text type whose converter failed
+        (``unreadable``) is still served as it is: its bytes are what the agent's tools read,
+        and its ``document.gap`` records that no representation was made.
         """
         d = self.document
-        if self.gap is not None or d.charset != "utf-8" or d.type_conflict is not None:
+        if d.charset != "utf-8" or d.type_conflict is not None:
             return False
+        if self.gap is not None:  # a text converter that failed: the file is still the file
+            return self.gap.reason == "unreadable" and d.detected_type in AS_GIVEN_TYPES
         if d.detected_type == sniff.EMAIL:  # nothing to convert without attachments
             return not self.children and not self.refusals
         return d.detected_type in AS_GIVEN_TYPES
@@ -152,7 +156,11 @@ def ingest(
     if len(data) > caps.max_bytes:
         return Refusal("max_bytes", len(data), caps.max_bytes, name, origin)
     blob = put(data) if put is not None else "sha256:" + hashlib.sha256(data).hexdigest()
-    found = sniff.sniff(data, name, declared_type, caps=caps)
+    try:
+        found = sniff.sniff(data, name, declared_type, caps=caps)
+    except Exception as e:  # a hostile container the sniffer cannot judge: never a crash
+        found = sniff.Sniffed(sniff.OCTET, gap=Gap("unreadable", "the type check failed: "
+                                                   f"{type(e).__name__}"))  # fmt: skip
     doc = Document(doc_key, version, blob, name, origin, parent, declared_type,
                    found.detected_type, found.charset, found.type_conflict,
                    len(data))  # fmt: skip
@@ -195,17 +203,22 @@ def ingest(
         else:
             children.append(got)
     if refusals:
-        named = ", ".join(f"{r.name_as_given!r} ({r.cap})" for r in refusals)
+        named = ", ".join(f"{clean_name(r.name_as_given)!r} ({r.cap})" for r in refusals[:10])
+        if len(refusals) > 10:
+            named += f", and {len(refusals) - 10} more"
         rep = Representation(rep.text, rep.anchors, rep.converters, rep.pages,
                              (*rep.dropped, f"attachments refused: {named}"), rep.signals,
                              rep.page_count, rep.image, rep.described, rep.notes)  # fmt: skip
     route: Route | None = None
     if frames:
         first = frames[0]
-        route = resolve_route(
-            doc, profile,
-            prepare=lambda p: prepare_image(blob.split(":", 1)[1], first, p, cache=cache),
-        )  # fmt: skip
+        try:
+            route = resolve_route(
+                doc, profile,
+                prepare=lambda p: prepare_image(blob.split(":", 1)[1], first, p, cache=cache),
+            )  # fmt: skip
+        except Exception as e:  # a resize or encode that fails leaves the header alone
+            route = Route("header_only", None, f"the sent copy failed: {type(e).__name__}")
     header = render_header(doc, rep, None, route=route)
     return Ingested(doc, rep, None, header, route, tuple(frames), tuple(children),
                     tuple(refusals))  # fmt: skip

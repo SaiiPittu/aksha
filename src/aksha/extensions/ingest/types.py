@@ -23,7 +23,7 @@ Origin = Literal["upload", "message", "tool_result", "attachment"]
 Rung = Literal["parse_fast", "parse_layout", "parse_vision"]
 Trust = Literal["extracted", "engine_written", "model_written"]
 GapReason = Literal["refused", "locked", "unsupported", "unreadable", "cancelled"]
-Setup = Literal["s2_only", "s1_decide", "s1_decide_extract"]
+Setup = Literal["s2_only", "s1_decide", "s1_extract", "s1_decide_extract"]
 RouteKind = Literal["text", "native_file", "native_image", "header_only"]
 CostKind = Literal["patch", "flat"]
 
@@ -38,8 +38,10 @@ class Caps:
     Office container expands to; ``max_pages`` bounds a PDF or a TIFF; ``min_chars_per_page``
     is the floor under which a PDF page reads as a scan; ``max_garbled_ppm`` is the share of
     replacement characters over which a page reads as a broken font encoding;
-    ``max_pixels`` is the decoded-pixel cap checked from the image header before decoding;
-    ``max_cells`` is per spreadsheet sheet; ``max_depth`` is how deep email attachments may
+    ``max_pixels`` is the decoded-pixel cap checked from the image header before decoding,
+    a budget across all of a multi-page image's kept pages;
+    ``max_cells`` is per spreadsheet sheet and ``max_book_cells`` per workbook (an empty
+    row counts as one); ``max_depth`` is how deep email attachments may
     nest; ``max_children`` is how many attachments one email may add;
     ``result_cap_chars`` is the tool-result cap over which a result becomes a document
     (ADR-P08 D4); ``message_cap_chars`` the user-message size over which a message is
@@ -55,6 +57,7 @@ class Caps:
     max_garbled_ppm: int = 50_000
     max_pixels: int = 40_000_000
     max_cells: int = 200_000
+    max_book_cells: int = 1_000_000
     rows_per_anchor: int = 200
     max_depth: int = 2
     max_children: int = 50

@@ -28,12 +28,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from aksha.extensions.ingest.sniff import IMAGE_TYPES
-from aksha.extensions.ingest.types import Binding, Document, ImageProfile, Route, SentImage
+from aksha.extensions.ingest.types import Binding, Document, ImageProfile, Route, SentImage, Setup
 
 NO_VISION = "no vision-capable model configured"
 
 
-def setup_of(decide: str | None, extract: str | None) -> str:
+def setup_of(decide: str | None, extract: str | None) -> Setup:
     """The setup a configuration is: ``s2_only``, ``s1_decide``, ``s1_decide_extract``.
 
     (``s1_extract`` for an extraction model with no decision model.)

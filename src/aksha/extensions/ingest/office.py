@@ -7,8 +7,9 @@
 - **XLSX** through openpyxl in read-only mode with ``data_only=True``: a formula cell shows
   the value the file cached when it was last saved, and no formula is ever evaluated. Each
   sheet starts ``[sheet Sheet1]``; each block of ``Caps.rows_per_anchor`` rows is an anchor
-  ``Sheet1!A1:F200``; past ``Caps.max_cells`` cells in a sheet the remaining rows are
-  dropped and named.
+  ``Sheet1!A1:F200``; past ``Caps.max_cells`` cells in a sheet, or ``Caps.max_book_cells``
+  in the workbook, the remaining rows (and sheets) are dropped and named. An empty row
+  counts as one cell, so a sheet that declares a million blank rows cannot loop for long.
 
 A missing library is a gap ``unsupported`` that names the extra; a file the library cannot
 open is ``unreadable``. The ZIP caps already ran on the detected type (``sniff``).
@@ -20,6 +21,7 @@ import io
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from aksha.extensions.ingest.text import Names
 from aksha.extensions.ingest.types import Anchor, Caps, Converted, Gap, PageRung, Representation
 
 EXTRA = "aksha-harness[ingest]"
@@ -51,6 +53,7 @@ class _Builder:
         self.parts: list[str] = []
         self.size = 0
         self.anchors: list[Anchor] = []
+        self.names = Names()
 
     def line(self, text: str) -> int:
         start = self.size
@@ -59,11 +62,7 @@ class _Builder:
         return start
 
     def mark(self, label: str) -> None:
-        names = {a.label for a in self.anchors}
-        name, n = label, 2
-        while name in names:
-            name, n = f"{label} ({n})", n + 1
-        self.anchors.append(Anchor(name, self.size, self.size))
+        self.anchors.append(Anchor(self.names.take(label), self.size, self.size))
 
     def done(self) -> tuple[str, tuple[Anchor, ...]]:
         text = "".join(self.parts)
@@ -172,24 +171,33 @@ def xlsx(data: bytes, caps: Caps | None = None) -> Converted:
     try:
         book = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
         try:
-            for sheet in book.worksheets:
+            left = caps.max_book_cells
+            for s, sheet in enumerate(book.worksheets, start=1):
                 title = sheet.title
+                if left <= 0:
+                    names = [w.title for w in book.worksheets[s - 1 :]]
+                    dropped.append(f"sheets {', '.join(names)[:200]}: over the "
+                                   f"{caps.max_book_cells}-cell workbook cap")  # fmt: skip
+                    break
                 out.line(f"[sheet {title}]")
                 pages.append(PageRung(f"sheet {title}", "parse_fast", "extracted"))
                 cells = 0
                 block: list[tuple[int, Sequence[Any]]] = []
                 for r, row in enumerate(sheet.iter_rows(values_only=True), start=1):
-                    if cells + len(row) > caps.max_cells:
-                        dropped.append(f"sheet {title}: rows from {r} on, over the "
-                                       f"{caps.max_cells}-cell cap")  # fmt: skip
+                    cost = max(len(row), 1)  # an empty row still costs a step: rows are capped
+                    if cells + cost > min(caps.max_cells, left):
+                        cap = (f"{caps.max_cells}-cell cap" if cells + cost > caps.max_cells
+                               else f"{caps.max_book_cells}-cell workbook cap")  # fmt: skip
+                        dropped.append(f"sheet {title}: rows from {r} on, over the {cap}")
                         break
-                    cells += len(row)
+                    cells += cost
                     block.append((r, row))
                     if len(block) == caps.rows_per_anchor:
                         _flush(out, title, block)
                         block = []
                 if block:
                     _flush(out, title, block)
+                left -= cells
         finally:
             book.close()
     except Exception as e:  # openpyxl raises many types on a damaged file

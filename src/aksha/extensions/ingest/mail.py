@@ -15,6 +15,7 @@ from email import policy
 from email.message import EmailMessage
 from email.parser import BytesParser
 
+from aksha.extensions.ingest.header import clean_name
 from aksha.extensions.ingest.text import html_doc
 from aksha.extensions.ingest.types import Anchor, Child, Converted, Gap, PageRung, Representation
 
@@ -68,7 +69,8 @@ def convert(data: bytes) -> Converted:
         name = part.get_filename() or f"attachment-{n}"
         payload = _payload(part)
         children.append(Child(name, payload, part.get_content_type()))
-        listed.append(f"{n}. {name} ({part.get_content_type()}, {len(payload)} bytes)")
+        listed.append(f"{n}. {clean_name(name)} ({part.get_content_type()}, "
+                      f"{len(payload)} bytes)")  # fmt: skip
     if listed:
         add("attachments", "attachments:\n" + "\n".join(listed) + "\n")
         notes.append(f"{len(listed)} attachments read as their own documents")

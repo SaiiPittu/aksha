@@ -11,7 +11,8 @@
    (plain text, Markdown, CSV, JSON, HTML, SVG) as it is; anything converted (PDF, Office,
    email, images, text in another charset, a type conflict) as its header, a blank line
    and its representation; a gap or a refusal as its header alone, so the model is told.
-4. Each attachment is served at ``<path>.parts/<n>-<name>``, ingested the same way.
+4. Each attachment is served at ``<path>.parts/<n>-<name>``, ingested the same way. An
+   upload that also names one of those paths itself is refused (``ValueError``).
 5. The facts, only for a path whose bytes moved: ``document.stored``, then
    ``document.gap`` or ``document.refused``.
 
@@ -130,6 +131,11 @@ class UploadIngester:
             for item in got.walk():
                 k = item.document.doc_key
                 out.append(self._serve(item, paths[k], given[k], fresh[k], put))
+        seen: set[str] = set()
+        for entry in out:  # an uploaded path that is also an attachment's path: refuse both
+            if entry.path in seen:
+                raise ValueError(f"{entry.path!r} is both an uploaded file and an attachment")
+            seen.add(entry.path)
         return tuple(out)
 
     def _serve(
