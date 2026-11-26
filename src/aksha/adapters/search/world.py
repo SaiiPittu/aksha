@@ -8,8 +8,8 @@ world's ``web/<host><path>``, the same path as the record ID a fetch gives it
 the world file that holds it::
 
     {"pages": [
-      {"url": "https://kelvra.example/product", "published": "2026-10-14"},
-      {"url": "https://sensor-deals.example/occupancy", "noise": "spam",
+      {"url": "https://vendor.example/product", "published": "2026-10-14"},
+      {"url": "https://deals.example/sensors", "noise": "spam",
        "why": "an advert reselling every sensor at a price no vendor states"}]}
 
 ``noise`` marks a page an agent should leave alone: ``irrelevant`` (another subject that

@@ -23,6 +23,10 @@ Two runtime ports, in `runtime/web/ports.py`: `WebSearch.search(query, limit)` r
 1. searches through the search port and returns the hits, keeping nothing, so a snippet is never a text the runtime returned and can never be minted as a citation span;
 2. fetches through the fetch port with the attempt's HTTP client, the one bound to the fetch tool's egress policy, and keeps the page as a returned text of the source `web`, record ID `web/<host><path>`, version `sha256:` of its text. A span drafted over the page then mints like a span over any input (ADR-P13 D1), and lineage records the page at its version.
 
+Only a tool declared under the `aksha.web` egress policy (both generic tools are) is handed the handle; every other tool's `ctx.web` is None, so no reader or save can reach a search provider.
+
+A live fetch of a PDF or an Office file goes through document ingestion (ADR-P31): the page's text is ingestion's header and representation, so the model reads it the way it reads an uploaded file of that type.
+
 The generic tools are in `runtime/web/tools.py`, exported through `aksha.runtime.api` (API 2.10): `web_search_tool(agent)` and `fetch_url_spec(agent, ...)`. An agent that reads pages its own way writes its own `fetch_url` body over `fetch_text` and keeps the spec: the research agent reads a fetched page exactly as `fetch_page` reads an input (its fast readers decide the kind and extract), and the patent agent reads a fetched publication as `fetch_publication` reads one (a one-record reader, `OneRecord`, under the same `SourceWorld` rules).
 
 A live fetch runs under the runtime's own egress policy `aksha.web`: any public host over HTTPS, never a private, loopback, link-local or metadata address, every redirect checked again, every decision recorded on the step (ADR-P26 D2 to D4). With `AKSHA_NETWORK` off, it is refused `network_off`.
@@ -74,4 +78,4 @@ A recording made from a fake run ships in `src/aksha/data/recordings/research-oc
 
 ## Limits
 
-See [docs/limitations.md](../limitations.md), items 17 and 18: the offline web is a stand-in for a search engine; live search is tested only against a stub; a fetched binary is refused; a web page that changes reaches no rebuild; a replay needs the same definition, inputs and answers; only answers by question ID and blanket approvals are recorded.
+See [docs/limitations.md](../limitations.md), items 17 and 18: the offline web is a stand-in for a search engine; live search is tested only against a stub; a world's web holds text pages only (a live fetch reads a PDF or Office file through ingestion); a web page that changes reaches no rebuild; a replay needs the same definition, inputs and answers; only answers by question ID and blanket approvals are recorded.

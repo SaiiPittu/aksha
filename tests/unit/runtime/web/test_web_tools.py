@@ -7,6 +7,9 @@ a span over a search snippet (never returned) is refused.
 
 from __future__ import annotations
 
+from dataclasses import replace
+from types import SimpleNamespace
+
 import pytest
 
 from aksha.runtime.egress.client import RefusingHttpClient
@@ -15,7 +18,9 @@ from aksha.runtime.grounding.errors import MintRefused
 from aksha.runtime.grounding.reading import AttemptReader
 from aksha.runtime.grounding.spans import mint_spans
 from aksha.runtime.grounding.types import SpanDraft, SpanIndex
-from aksha.runtime.tools.types import Err, Ok, ToolContext
+from aksha.runtime.loop.tier import web_for
+from aksha.runtime.sandbox.tier import ExecutionTier
+from aksha.runtime.tools.types import Err, Ok, ToolContext, ToolSpec
 from aksha.runtime.web.attempt import AttemptWeb
 from aksha.runtime.web.tools import fetch_url, fetch_url_spec, web_search, web_search_tool
 from aksha.runtime.web.types import (
@@ -117,8 +122,21 @@ def test_without_a_web_port_both_tools_answer_web_off() -> None:
         assert isinstance(out.result, Err) and out.result.code == "web_off"
 
 
-def test_the_search_tool_is_a_read_that_reaches_no_network() -> None:
+def test_the_search_tool_is_a_read_under_the_web_policy_that_mints_nothing() -> None:
     spec = web_search_tool("a").spec
     assert (spec.name, spec.effect, spec.egress, spec.mints_citation_spans) == (
-        "web_search", "read", None, False,
+        "web_search", "read", "aksha.web", False,
     )  # fmt: skip
+
+
+def test_only_a_tool_under_the_web_policy_is_handed_the_web() -> None:
+    setup = SimpleNamespace(tier=ExecutionTier(search=Search(), web=Fetch()))
+    reader, http = AttemptReader(None), RefusingHttpClient()
+    for spec in (web_search_tool("a").spec, fetch_url_spec("a")):
+        assert isinstance(web_for(setup, spec, reader, http), AttemptWeb)  # type: ignore[arg-type]
+    reader_tool = ToolSpec("read_note", "a", "read", "Read a note.", {"type": "object"})
+    other = replace(reader_tool, egress="ext.api")
+    for spec in (reader_tool, other):
+        assert web_for(setup, spec, reader, http) is None  # type: ignore[arg-type]
+    bare = SimpleNamespace(tier=ExecutionTier())
+    assert web_for(bare, fetch_url_spec("a"), reader, http) is None  # type: ignore[arg-type]

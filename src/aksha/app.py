@@ -133,8 +133,9 @@ from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.timers.freshness import lifetimes
 from aksha.runtime.tools.registry import ToolRegistry
 from aksha.runtime.tools.types import ToolDecl
-from aksha.uploads import UploadIngester, profile_named
 from aksha.runtime.web.ports import WebFetch, WebSearch
+from aksha.runtime.web.types import WebError, web_record_id
+from aksha.uploads import UploadIngester, profile_named
 
 Backend = Literal["sqlite", "postgres"]
 
@@ -1041,6 +1042,30 @@ def web_world(config: RuntimeConfig) -> Path | None:
     raise StoreError("search_invalid", f"no world with a web at {ref!r}")
 
 
+def fetched_document(url: str, body: bytes, media_type: str, *, caps: Any = None) -> str:
+    """A binary page a live fetch got, as document ingestion serves it (ADR-P31).
+
+    The bytes are ingested as a document attached at the URL (origin ``attachment``, its
+    parent the URL, its key the page's record ID), named by the URL's last segment:
+    the text is the header and the representation (a PDF's pages, an Office file's text),
+    or the header alone when no representation could be made, so the model is told. A file
+    over a cap (``caps``, the ingestion defaults when None) is refused ``fetch_refused``,
+    nothing kept.
+    """
+    from urllib.parse import urlsplit
+
+    from aksha.extensions.ingest.ingest import ingest
+    from aksha.extensions.ingest.types import Refusal
+
+    name = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1] or "index"
+    found = ingest(name, body, "attachment", doc_key=web_record_id(url), parent=url,
+                   declared_type=media_type, caps=caps)  # fmt: skip
+    if isinstance(found, Refusal):
+        raise WebError("fetch_refused", f"{url}: {found.cap} {found.value:,} is over the "
+                       f"limit {found.limit:,}; nothing was kept")  # fmt: skip
+    return found.record_text
+
+
 def web_ports(config: RuntimeConfig) -> tuple[WebSearch | None, WebFetch | None]:
     """The search and fetch ports ``AKSHA_SEARCH`` names (the table above)."""
     if not config.search:
@@ -1071,7 +1096,7 @@ def web_ports(config: RuntimeConfig) -> tuple[WebSearch | None, WebFetch | None]
                    "fetch is checked by the aksha.web egress policy)")  # fmt: skip
             raise StoreError("network_off", why)
         base = config.search_env.get(BRAVE_BASE_ENV) or BRAVE_BASE_URL
-        return BraveSearch(key, base), HttpFetch()
+        return BraveSearch(key, base), HttpFetch(convert=fetched_document)
     raise StoreError("search_invalid", f"AKSHA_SEARCH={config.search!r}: use world, "
                      "world:<name or folder> or brave")  # fmt: skip
 
@@ -1524,8 +1549,13 @@ def _outputs(session: Session, owner: str) -> dict[str, Any]:
     return out
 
 
-def drive_script(session: Session, script: RunScript, files: Mapping[str, str]) -> ScriptedRun:
-    """Upload ``files``, send the message, answer from the script until the run ends."""
+def drive_script(session: Session, script: RunScript, files: Mapping[str, bytes]) -> ScriptedRun:
+    """Upload ``files``, send the message, answer from the script until the run ends.
+
+    A UTF-8 file goes up as text, any other as its bytes (base64), which ingestion converts.
+    """
+    import base64
+
     from aksha.runtime.session import named as n
     from aksha.runtime.session.views import session_status
 
@@ -1537,7 +1567,15 @@ def drive_script(session: Session, script: RunScript, files: Mapping[str, str]) 
             raise StoreError("script_refused", f"{type(command).__name__}: {receipt.refused}")
 
     if files:
-        dispatch(n.UploadInputs(owner=owner, files=dict(files), command_id="script-upload"))
+        text: dict[str, str] = {}
+        binary: dict[str, str] = {}
+        for rel, body in files.items():
+            try:
+                text[rel] = body.decode("utf-8")
+            except UnicodeDecodeError:
+                binary[rel] = base64.b64encode(body).decode("ascii")
+        dispatch(n.UploadInputs(owner=owner, files=text, binary=binary,
+                                command_id="script-upload"))  # fmt: skip
     dispatch(n.SendMessage(owner=owner, session=RECORD_SESSION, text=script.text,
                            agent=script.agent, command_id="script-message"))  # fmt: skip
     waiting: tuple[str, ...] = ()
@@ -1601,7 +1639,7 @@ def record_run(
     config: RuntimeConfig,
     folder: Path,
     script: RunScript,
-    files: Mapping[str, str],
+    files: Mapping[str, bytes],
     *,
     clock: Clock | None = None,
 ) -> ScriptedRun:
@@ -1613,10 +1651,10 @@ def record_run(
     if folder.exists() and any(folder.iterdir()):
         raise StoreError("recording_exists", f"{folder} is not empty: record into a new folder")
     folder.mkdir(parents=True, exist_ok=True)
-    for rel, text in files.items():
+    for rel, body in files.items():
         target = folder / RECORDING_INPUTS / rel
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text, encoding="utf-8")
+        target.write_bytes(body)
     clock = clock or SystemClock()
     started = clock.now()
     cfg = replace(config, storage=_local_store(folder / "store"), record=folder, server_url=None)
@@ -1674,7 +1712,7 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
                        str(script_raw.get("owner", "local")))  # fmt: skip
     inputs = folder / RECORDING_INPUTS
     files = {
-        p.relative_to(inputs).as_posix(): p.read_text(encoding="utf-8")
+        p.relative_to(inputs).as_posix(): p.read_bytes()
         for p in sorted(inputs.rglob("*")) if p.is_file()
     } if inputs.is_dir() else {}  # fmt: skip
     recorded = Recorded(read_stream(folder, "models"))
@@ -1694,7 +1732,12 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
         session.store.close()
     (out / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True) + "\n",
                                     encoding="utf-8")  # fmt: skip
+    # The same means the same bytes: outputs.json written again equals the recorded file.
+    # A key named below is where they differ; a byte difference with equal values (a float
+    # that printed otherwise) is named as the file itself.
     want = json.loads((folder / OUTPUTS_FILE).read_text(encoding="utf-8"))
     differing = tuple(sorted(k for k in set(want) | set(ended.outputs)
                              if want.get(k) != ended.outputs.get(k)))  # fmt: skip
+    if not differing and (out / OUTPUTS_FILE).read_bytes() != (folder / OUTPUTS_FILE).read_bytes():
+        differing = (OUTPUTS_FILE,)
     return Replayed(replace(ended, trace=trace), not differing, differing, out)

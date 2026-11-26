@@ -275,7 +275,7 @@ def run_position(
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
                                attempt, reader, run_date, http, exe, dates, versions,
                                models if spec.model_aliases else None,
-                               web=web_for(setup, reader, http))  # fmt: skip
+                               web=web_for(setup, spec, reader, http))  # fmt: skip
 
         guarded = spec.edits is not None and guards_edits(run_mode(view, ref.run))
 

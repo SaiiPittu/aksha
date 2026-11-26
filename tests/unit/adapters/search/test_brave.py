@@ -10,12 +10,16 @@ import json
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Any, ClassVar
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from aksha.adapters.recording.sink import JsonlSink
+from aksha.adapters.recording.web import RecordingSearch
 from aksha.adapters.search.brave import BraveSearch
+from aksha.app import RuntimeConfig
 from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.web.types import WebError
 
@@ -98,3 +102,18 @@ def test_no_key_is_refused_before_any_call() -> None:
     with pytest.raises(WebError) as e:
         BraveSearch("")
     assert e.value.code == "search_key_missing" and "AKSHA_BRAVE_API_KEY" in e.value.message
+
+
+def test_the_key_reaches_no_recording_message_or_repr(server: str, tmp_path: Path) -> None:
+    brave = BraveSearch(KEY, server)
+    sink = JsonlSink(tmp_path / "rec")
+    RecordingSearch(brave, sink).search("thermal occupancy sensor", limit=5)
+    Stub.status = 403
+    with pytest.raises(WebError) as refused:
+        RecordingSearch(brave, sink).search("thermal occupancy sensor", limit=5)
+    written = "".join(p.read_text() for p in (tmp_path / "rec").iterdir())
+    assert written.count("kelvra.example") >= 1  # the answer was recorded
+    for text in (written, refused.value.message, repr(brave), str(vars(brave).keys())):
+        assert KEY not in text
+    config = RuntimeConfig.from_env({"AKSHA_SEARCH": "brave", "AKSHA_BRAVE_API_KEY": KEY})
+    assert KEY not in repr(config)

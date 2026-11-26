@@ -78,6 +78,8 @@ def test_a_question_left_unanswered_ends_the_recording_waiting_on_it(tmp_path: P
 def test_the_bundled_example_replays_to_its_recorded_outputs(tmp_path: Path) -> None:
     done = replay_run(RuntimeConfig(), EXAMPLE, tmp_path / "replay")
     assert done.same and done.run.outcome == "complete", done.differing
+    again = (tmp_path / "replay" / "outputs.json").read_bytes()
+    assert again == (EXAMPLE / "outputs.json").read_bytes()  # byte for byte
     assert done.run.trace
     competitors = done.run.outputs["research.competitors"]
     assert competitors["resolved"] == 5

@@ -12,10 +12,13 @@ from collections.abc import Mapping
 import pytest
 
 from aksha.adapters.web.http import HttpFetch
+from aksha.app import fetched_document
+from aksha.extensions.ingest.types import Caps
 from aksha.runtime.egress.client import PolicedHttpClient, RefusingHttpClient
 from aksha.runtime.egress.errors import EgressRefused
 from aksha.runtime.egress.ports import HttpRequest, HttpResponse
 from aksha.runtime.web.types import WEB_POLICY, WebError
+from tests.support.ingest_fixtures import need, text_pdf
 
 
 class Resolver:
@@ -81,3 +84,19 @@ def test_a_binary_answer_is_refused_as_unsupported_content() -> None:
 def test_an_error_status_is_returned_for_the_web_handle_to_refuse() -> None:
     client, _ = _client({PAGE: HttpResponse(404, {"content-type": "text/html"}, b"", PAGE)})
     assert HttpFetch().fetch(PAGE, client).status == 404
+
+
+def test_a_binary_answer_goes_through_document_ingestion_when_wired() -> None:
+    need("pypdf")
+    doc = f"{PAGE}/datasheet.pdf"
+    pdf = text_pdf(["Datasheet: 24 V PoE, EUR 189 per unit"])
+    client, _ = _client({doc: HttpResponse(200, {"content-type": "application/pdf"}, pdf, doc)})
+    page = HttpFetch(convert=fetched_document).fetch(doc, client)
+    assert page.status == 200 and "EUR 189 per unit" in page.text
+    assert "datasheet.pdf" in page.text.split("\n\n", 1)[0]  # ingestion's header names it
+    huge = HttpResponse(200, {"content-type": "application/pdf"}, b"%PDF" + b"0" * 64, doc)
+    client, _ = _client({doc: huge})
+    with pytest.raises(WebError) as e:
+        HttpFetch(convert=lambda u, b, t: fetched_document(u, b, t, caps=Caps(max_bytes=16))
+                  ).fetch(doc, client)  # fmt: skip
+    assert e.value.code == "fetch_refused"

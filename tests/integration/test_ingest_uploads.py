@@ -76,7 +76,9 @@ def test_run_with_binary_inputs_converts_them_and_tells_the_model(tmp_path: Path
     folder = _folder(tmp_path)
     code, out = aksha(tmp_path, "run", PROMPT, "--agent", "research", "--input", str(folder))
     assert code == wire.EXIT_OK, out
-    assert "uploaded 26 input files" in out and "R-0001 research ended complete" in out
+    # The world's 14 uploads (its vendor pages and publications are on its web, not
+    # uploaded) and the 3 binary files added above.
+    assert "uploaded 17 input files" in out and "R-0001 research ended complete" in out
     assert "  vendors/quote.pdf: D-" in out
     assert "application/pdf, converted" in out
     assert "not included: page 3: scanned, not read; OCR not available" in out
@@ -98,7 +100,7 @@ def test_run_with_binary_inputs_converts_them_and_tells_the_model(tmp_path: Path
     assert _served(tmp_path, reviews) == (TILLDEW / reviews).read_text(encoding="utf-8")
 
     stored = {f["path"]: f for f in _facts(tmp_path, "document.stored")}
-    assert len(stored) == 27  # 26 uploaded files and one attachment
+    assert len(stored) == 18  # 17 uploaded files and one attachment
     assert stored["mail/terms.eml.parts/1-terms.pdf"]["origin"] == "attachment"
     assert (
         stored["mail/terms.eml.parts/1-terms.pdf"]["parent"] == stored["mail/terms.eml"]["doc_key"]

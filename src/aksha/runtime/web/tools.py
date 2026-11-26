@@ -6,7 +6,9 @@ an agent. ``fetch_url(url)`` fetches the page and returns it as numbered, citabl
 passages; an agent that reads pages its own way (with its fast-class readers, or as a
 typed document view) writes its own body over :func:`fetch_text`, and keeps
 :func:`fetch_url_spec` so the tool is the same to every model. A fetch is a read with the
-egress policy :data:`WEB_EGRESS`: on a live web, every hop is checked (ADR-P26).
+egress policy :data:`WEB_EGRESS`: on a live web, every hop is checked (ADR-P26). Both
+tools are declared under :data:`WEB_EGRESS`, and only a tool under it is handed
+``ToolContext.web`` (``loop.tier.web_for``), so no other tool can search or fetch.
 
 A fetch's text reaches lineage as a record read (``InputRef("record", "web/...", version)``)
 and its passages are minted as spans of the source ``web`` (ADR-P13 D1).
@@ -76,6 +78,7 @@ def web_search_tool(agent: str) -> ToolDecl:
         "relevant pages with noise: copies, outdated versions, adverts and pages that only "
         "share a word. A snippet is never evidence: fetch_url the results you need.",
         SEARCH_SCHEMA,
+        egress=WEB_EGRESS,
         retry=_RETRY,
     )
     return ToolDecl(spec, web_search)

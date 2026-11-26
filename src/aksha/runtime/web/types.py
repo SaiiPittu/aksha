@@ -7,7 +7,7 @@ returns a :class:`FetchedPage`: the URL asked for, the URL that answered, the st
 content type and the decoded text.
 
 A fetched page becomes a record of the source :data:`WEB_SOURCE` (``web``) whose ID is
-:func:`web_record_id` of the URL that answered (``web/kelvra.example/product``), at the
+:func:`web_record_id` of the URL that answered (``web/site.example/page``), at the
 version ``sha256:`` over its text, so a span over it is minted like any other record's
 (ADR-P13 D1) and a citation names the page it came from.
 """

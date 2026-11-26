@@ -8,7 +8,9 @@ ADR-P26 D2 to D4, ADR-P12 decisions 2, 9 and T6, ADR-P28 D5.
   The runtime's own policies (``aksha.web``, the web fetch's: ADR-P26 A3) need no
   extension.
 - :func:`web_for`: the attempt's web handle over the tier's search and fetch ports, its
-  fetched pages kept by the attempt's reader so they can be cited (ADR-P26 A3).
+  fetched pages kept by the attempt's reader so they can be cited (ADR-P26 A3). Only a
+  tool under the ``aksha.web`` egress policy gets one: any other tool's ``ctx.web`` is
+  None, so a reader or a save can never reach a live search provider.
 - :func:`exec_for`: an exec tool's ``BoxedExec`` under the effective policy (the run ceiling
   narrowed by the tool's needs), its environment resolved through the recorded images.
   A policy that widens refuses every run of the attempt (``policy_widened``).
@@ -41,7 +43,7 @@ from aksha.runtime.sandbox.policy import effective_policy
 from aksha.runtime.sandbox.types import SessionRef
 from aksha.runtime.tools.types import ToolSpec
 from aksha.runtime.web.attempt import AttemptWeb
-from aksha.runtime.web.types import BUILTIN_EGRESS
+from aksha.runtime.web.types import BUILTIN_EGRESS, WEB_EGRESS
 
 EGRESS_FIELD = "egress"
 EXEC_FIELD = "exec"
@@ -64,9 +66,13 @@ def http_for(setup: LoopSetup, spec: ToolSpec) -> HttpFor:
     return PolicedHttpClient(policy, network.resolver, network.transport)
 
 
-def web_for(setup: LoopSetup, reader: AttemptReader, http: HttpFor) -> AttemptWeb | None:
-    """The web handle of one attempt; None when the process has neither web port."""
+def web_for(
+    setup: LoopSetup, spec: ToolSpec, reader: AttemptReader, http: HttpFor
+) -> AttemptWeb | None:
+    """The web handle of one attempt; None for a tool not under ``aksha.web``, or no port."""
     tier = setup.tier
+    if spec.egress is None or resolve_kind(spec.egress, spec.owner) != WEB_EGRESS:
+        return None
     if tier.search is None and tier.web is None:
         return None
     return AttemptWeb(tier.search, tier.web, reader, http)

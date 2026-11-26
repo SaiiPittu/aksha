@@ -27,6 +27,9 @@ from aksha.adapters.recording.sink import JsonlSink, read_stream
 from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.search.world import WorldWeb
 from aksha.runtime.egress.client import RefusingHttpClient
+from aksha.runtime.egress.errors import EgressRefused
+from aksha.runtime.egress.ports import HttpClient
+from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.models.errors import PermanentModelError
 from aksha.runtime.models.types import (
     ClassAnswer,
@@ -43,7 +46,7 @@ from aksha.runtime.models.types import (
     QuestionSpec,
     ToolCall,
 )
-from aksha.runtime.web.types import WebError
+from aksha.runtime.web.types import FetchedPage, SearchHit, SearchResults, WebError
 
 STEP = "R-0001/scope/t01"
 ASK = GenerationRequest(STEP, "generate", (Message("user", "Who sells probes?"),))
@@ -143,3 +146,47 @@ def test_a_sink_appends_one_sorted_line_per_answer(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         sink.append("secrets", {})
     assert list(read_stream(tmp_path / "rec", "fetch")) == []
+
+
+class Flaky:
+    """A web that changes between two fetches and fails a search once, then answers."""
+
+    name = "flaky"
+
+    def __init__(self) -> None:
+        self.fetched = 0
+        self.searched = 0
+
+    def search(self, query: str, *, limit: int) -> SearchResults:
+        self.searched += 1
+        if self.searched == 1:
+            raise TransientStepError("transient", "the provider answered 503")
+        return SearchResults(query, self.name, (SearchHit(1, "P", "https://a.example/p", "s"),))
+
+    def fetch(self, url: str, http: HttpClient) -> FetchedPage:
+        if "private" in url:
+            raise EgressRefused("10.0.0.1", "private_address", url)
+        self.fetched += 1
+        return FetchedPage(url, url, 200, "text/plain", f"version {self.fetched}")
+
+
+def test_answers_replay_in_the_order_the_run_got_them(tmp_path: Path) -> None:
+    inner, sink, http = Flaky(), JsonlSink(tmp_path), RefusingHttpClient()
+    search, fetch = RecordingSearch(inner, sink), RecordingFetch(inner, sink)
+    with pytest.raises(TransientStepError):
+        search.search("p", limit=3)
+    found = search.search("p", limit=3)
+    first, second = (fetch.fetch("https://a.example/p", http) for _ in range(2))
+    with pytest.raises(EgressRefused):
+        fetch.fetch("https://private.example/x", http)
+    assert first.text != second.text
+    replay = ReplayWeb(read_stream(tmp_path, "search"), read_stream(tmp_path, "fetch"))
+    with pytest.raises(TransientStepError):  # retried as the run retried it
+        replay.search("p", limit=3)
+    assert replay.search("p", limit=3) == found
+    assert [replay.fetch("https://a.example/p", http).text for _ in range(3)] == [
+        "version 1", "version 2", "version 2",
+    ]  # fmt: skip
+    with pytest.raises(EgressRefused) as refused:  # the same refusal the body turns into Err
+        replay.fetch("https://private.example/x", http)
+    assert (refused.value.host, refused.value.reason) == ("10.0.0.1", "private_address")
