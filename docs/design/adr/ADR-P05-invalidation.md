@@ -109,6 +109,10 @@ Takeaway: invalidation is one deterministic pass in save order, and rebuilding i
 6. S6, recorded queries hash identities, not raw hits. A re-executed search returning the same five vendors in a new order invalidated every finding. `ToolSpec.result_key` (ADR-P10 S2), a JSON pointer to a hit's stable identity, makes the result-set hash cover the set of identities.
 7. S7, freshness lifetimes come from timers. Data that goes out of date with time, such as a pricing page older than 30 days, needs `max_age_s` on a versioned source or artifact kind and a durable timer that records `source.expired`. Both belong to ADR-P25 and are not first-milestone work.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, a recorded read names no source, so a change set checks a record against every source that serves its collection. `record_source_changes` asks each `VersionedSource` about every record the owner read in that source's collections. Two agents that read one folder through two readers under one owner (the demo: the research agent's folder reader names `priorities/business-priorities.md`, the patent agent's world names `notes/C1-self-calibration.md#note`) collide on the shared `priorities` collection: the patent world does not know the research agent's record ID, answers None, and the research agent's read is recorded `gone`: a rebuild run opens for its `scope`, every save is refused `stale_source`, and the run cannot settle (`evaluation_loop`). The demo composes one versioned source per folder (`aksha.app.SharedFolder`) that answers each ID through the reader that names it that way. The general fix, recording the source on `read.recorded` and checking a read only against its own source, changes an event payload and is left open.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
