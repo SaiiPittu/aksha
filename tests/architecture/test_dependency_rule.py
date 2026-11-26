@@ -136,6 +136,26 @@ def test_every_module_imports_and_has_a_docstring() -> None:
             "from aksha.adapters.storage import postgres\n",
             "interfaces reach adapters, agents and extensions through aksha.app only",
         ),
+        (
+            "aksha/evals/leak.py",
+            "from aksha.adapters.storage import sqlite\n",
+            "evals import the runtime and themselves; stores come through aksha.app",
+        ),
+        (
+            "aksha/evals/leak.py",
+            "import aksha.app\n",
+            "evals import the runtime and themselves; stores come through aksha.app",
+        ),
+        (
+            "aksha/evals/criteria/leak.py",
+            "from aksha.agents import research\n",
+            "evals import the runtime and themselves; stores come through aksha.app",
+        ),
+        (
+            "aksha/evals/agents/leak.py",
+            "from aksha.adapters.clock import fake\n",
+            "evals import the runtime and themselves; stores come through aksha.app",
+        ),
     ],
 )
 def test_dependency_rule_catches_a_plant(copy: Path, rel: str, source: str, rule: str) -> None:

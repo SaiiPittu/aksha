@@ -1,0 +1,10 @@
+id = "p-status-conflict"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-STATUS"
+category = "capability"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+opening = "What is the legal status of family C?"
+expect = ["facts.KF-29", "facts.KF-30", "traps.T-STATUS"]
+criteria = ["trap.T-STATUS", "citation.overlaps_key"]

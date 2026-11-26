@@ -80,9 +80,12 @@ def check_dependency_rule(root: Path) -> list[Violation]:
     2. ``aksha.adapters.<family>`` imports the runtime and its own family only.
     3. ``aksha.extensions.<name>`` imports ``aksha.runtime.api`` and itself only.
     4. ``aksha.agents.<name>`` imports ``aksha.runtime.api``, extensions and itself only.
-    5. ``aksha.interfaces`` imports the runtime, ``aksha.app`` and itself, never an adapter,
-       an agent or an extension directly.
-    6. ``aksha.app`` (the composition root) and ``aksha`` itself may import anything.
+    5. ``aksha.interfaces`` imports the runtime, ``aksha.evals``, ``aksha.app`` and itself,
+       never an adapter, an agent or an extension directly.
+    6. ``aksha.evals`` imports the runtime and itself; ``aksha.evals.agents`` (the adapters
+       that put an agent through an episode) may also import ``aksha.agents`` and
+       ``aksha.extensions``. Stores and clocks reach the evals through ``aksha.app``.
+    7. ``aksha.app`` (the composition root) and ``aksha`` itself may import anything.
     """
     files = sorted((root / "aksha").rglob("*.py"))
     modules = frozenset(module_name(root, f) for f in files)
@@ -132,10 +135,17 @@ def _refusal(me: str, target: str) -> str | None:
             return None
         return "agents import aksha.runtime.api and named extensions only"
     if _within(me, "aksha.interfaces"):
-        allowed = ("aksha.runtime", "aksha.app", "aksha.interfaces")
+        allowed = ("aksha.runtime", "aksha.evals", "aksha.app", "aksha.interfaces")
         if any(_within(target, a) for a in allowed):
             return None
         return "interfaces reach adapters, agents and extensions through aksha.app only"
+    if _within(me, "aksha.evals"):
+        if _within(target, "aksha.runtime") or _within(target, "aksha.evals"):
+            return None
+        adapters_may = ("aksha.agents", "aksha.extensions")
+        if _within(me, "aksha.evals.agents") and any(_within(target, a) for a in adapters_may):
+            return None
+        return "evals import the runtime and themselves; stores come through aksha.app"
     return None  # aksha.app and aksha/__init__.py: the composition root
 
 

@@ -1,0 +1,11 @@
+id = "p-grace-period"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GRACE"
+category = "capability"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+opening = "Is the trade-show demo prior art against C1?"
+expect = ["facts.KF-09", "traps.T-GRACE"]
+criteria = ["trap.T-GRACE", "citation.overlaps_key"]
+should = ["no_file_by_date"]

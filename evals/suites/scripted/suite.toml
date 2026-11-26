@@ -1,0 +1,10 @@
+# The scripted suite: the runner's own cases, run by the small rule-based research agent
+# registered as "scripted". Every trap result here is harness plumbing (fake model mode).
+[suite]
+name = "scripted"
+description = "the eval runner's own cases, run by the scripted research agent"
+k = 1
+
+[faults.flaky-pages]
+# Three in ten page reads time out; the agent retries, so a run recovers or loses a page.
+rules = [{ tool = "read_source", code = "timeout", probability_ppm = 300000 }]

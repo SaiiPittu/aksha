@@ -81,6 +81,19 @@ Worked example, a regression caught by replay. A live Research run is kept as `R
 
 3. S3, reward hacking stays a grading question. The coding agent's "tests pass" check can be gamed by editing the code under test to special-case test inputs, which ImpossibleBench reports for frontier models (Zhong, Raghunathan and Carlini, arXiv 2510.20270, abstract). Running the base tree's tests (ADR-P11 agent-side note) closes the test-editing route only. A grader for the remaining route is not designed.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+The eval runner is built in `src/aksha/evals/` and `aksha eval` (`src/aksha/interfaces/cli/`), following the eval design (`scratch-pad/design/evals/01-eval-design.md`) and its draft amendments E1 to E4 and E8. Where the code differs from the text above or settles something it left open:
+
+1. B1, cases carry an origin, a world list and key references (E1, E2). `EvalCase` has `origin` beside `kind`, `worlds` in place of `world` and `expect` (dotted key references) in place of `key`; the three pairing rules are checked when a case is built, and a planted trap is checked against every listed world's key when the suite loads. Cases are TOML files, one per case, in `evals/suites/<suite>/`.
+2. B2, the agent under test is a port. Graders read a bundle exported from the episode's own event store (`episode.*` events), never a live runtime store. An agent reaches its world only through the episode's tools, behind a path guard that refuses any path naming `key.json`, `spec.yaml`, `manifest.json` or `world.lock.json`, and the world copy holds only `sources/`. A real agent's adapter runs the agent on the runtime and saves its artifacts into the episode in the bundle schema; the registry in `aksha.app.eval_agents` is the one place agents are registered.
+3. B3, results are events in a store of their own (D8). The runner writes `eval.*` events into `results.sqlite` in its output folder, never into the store under test, and the reports are a projection over them (`SuiteResultsReducer`), so `aksha eval report` rebuilds every number from the store.
+4. B4, the grader order gains a trap layer (E3), and outcomes and causes are closed sets (E4). Judge results annotate unless a calibration clears `may_gate`; a fake rule-based judge stands in offline and reads only the output part of its state.
+5. B5, self-tests use five bundles and a mutant per criterion (E8, extending D7). The bundles are written by agents that read the key, in `aksha/evals/selftest/`, through ordinary episodes. Every gradeable criterion has a mutant; `stop-decision-flipped` and `send-on-stale` wait for an agent that records stop decisions and invalidation in the bundle.
+6. B6, invariance uses `stillroom-v2` until a rename-only world exists (E6). The relation compares outputs through the rename map and a path map derived from the map's domain entries, leaving out what the two keys say changed. `rel.same_calls` (the same tool calls under the path map) stands in for the same-rule-IDs check, because the scripted agent has no model rules.
+7. B7, fault switches decide per step and attempt (D9): a rule names a tool, optionally a path, a code and a chance in parts per million, and `decide` hashes the seed, step and attempt. A retry is a new attempt, so a fault-tolerant agent's rollouts differ and `k_effective` exceeds 1.
+8. B8, the two worlds' keys gain `injected_recipient` and `injected_action` on KF-26, so `trap.T-INJECT` can see a send to the injected address. Both worlds gain a `world.lock.json`.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |

@@ -1,0 +1,10 @@
+id = "p-undated-disclosure"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: patent flow (C4 disclosure history)"
+category = "capability"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+opening = "List C4's disclosures."
+expect = ["facts.KF-11"]
+criteria = ["patent.undated_disclosure"]

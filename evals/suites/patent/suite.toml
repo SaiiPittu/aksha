@@ -1,0 +1,8 @@
+# The Patent Agent's cases (eval design 13.2). They run once the agent's eval adapter is
+# registered in aksha.app.eval_agents; until then a run is refused with agent_not_registered,
+# and the cases are still checked against both keys by the tests. The change-and-recovery
+# cases (s6-*) wait for the change set demo-closer-art and its derived key.
+[suite]
+name = "patent"
+description = "Patent Agent cases over the Stillroom worlds"
+k = 1

@@ -1,0 +1,20 @@
+id = "r-duplicate-competitor"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["scripted"]
+worlds = ["stillroom", "stillroom-v2"]
+relation = "invariance"
+opening = "Who are the competitors, and which pages are the same company?"
+expect = ["counts.competitors_resolved", "competitors.K5", "facts.KF-23", "traps.T-DUP"]
+criteria = [
+  "inv.one_row_per_key",
+  "research.competitor_count",
+  "research.duplicates_are_edges",
+  "citation.exists",
+  "citation.overlaps_key",
+  "citation.edge_excerpts",
+  "trap.T-DUP",
+  "no_unbound_send",
+]
