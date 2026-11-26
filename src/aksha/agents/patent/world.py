@@ -223,6 +223,41 @@ def _param(row: Mapping[str, str]) -> dict[str, str]:
     return {**row, "Parameter": name, "Value": by.get("value", ""), "Unit": unit}
 
 
+def _row_lines(table: Table) -> list[str]:
+    """Each data row's raw line, in row order, whatever column comes first.
+
+    A row is one line (as for record parts, :mod:`aksha.runtime.grounding.parts`); blank
+    lines, which hold no row, are skipped as the CSV reader skips them.
+    """
+    return [ln for ln in table.text.splitlines()[1:] if ln.strip()]
+
+
+def _cell_ends(line: str) -> list[int]:
+    """The raw end offset of each cell of one CSV line (a quoted comma is inside a cell)."""
+    ends, quoted = [], False
+    for i, ch in enumerate(line):
+        if ch == '"':
+            quoted = not quoted
+        elif ch == "," and not quoted:
+            ends.append(i)
+    ends.append(len(line))
+    return ends
+
+
+def _row_start(table: Table, line: str) -> str:
+    """The row's raw text through what identifies it: its ID, date and candidate cells.
+
+    A citation of the row is then tight to the cells that say which event it is, wherever
+    those columns sit; the whole line when the table names none of them.
+    """
+    cols = [table.roles[k] for k in ("event_id", "date", "candidate") if k in table.roles]
+    at = [table.header.index(c) for c in cols if c in table.header]
+    ends = _cell_ends(line)
+    if not at or max(at) >= len(ends):
+        return line
+    return line[: ends[max(at)]]
+
+
 @dataclass
 class Table:
     """One CSV input: its record, version, text, header, roles and rows."""
@@ -435,13 +470,11 @@ class SourceWorld:
             if "candidate" not in t.roles:
                 continue
             parts.append((t.record, t.roles["candidate"], candidate))
-            lines = {ln.split(",", 1)[0]: ln for ln in t.text.splitlines()[1:] if ln}
-            for r in t.rows:
+            for r, line in zip(t.rows, _row_lines(t), strict=False):
                 if t.get(r, "candidate") != candidate:
                     continue
                 eid = t.get(r, "event_id")
                 when = t.get(r, "date")
-                line = lines.get(eid, "")
                 out.append(
                     {
                         "event_id": eid,
@@ -452,7 +485,7 @@ class SourceWorld:
                         "by": t.get(r, "by"),
                         "linked_file": self.resolve(t.get(r, "source")),
                         "file": t.record,
-                        "row_start": line[: len(eid) + len(when) + 4],
+                        "row_start": _row_start(t, line),
                     }
                 )
         return {"file": parts[0][0] if parts else None, "rows": out, "parts": parts}
@@ -639,7 +672,9 @@ class SourceWorld:
                 }
             )
         desc = re.search(r"Description\n\n(.+?)\n\n", text, flags=re.S)
-        claims_block = re.search(r"Claims\n\n(.+?)\n\n(?:Legal status|Page \d)", text, flags=re.S)
+        claims_block = re.search(
+            r"Claims\n\n(.+?)(?:\n\n(?:Legal status|Page \d)|\s*\Z)", text, flags=re.S
+        )
         claims = []
         if claims_block:
             for m in re.finditer(r"(\d+)\. (.+?)(?=\n\n\d+\. |\Z)", claims_block.group(1), re.S):

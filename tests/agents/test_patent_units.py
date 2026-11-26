@@ -177,6 +177,34 @@ def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
     assert w.publication("SYN-PUB-0104")["claims"][1]["depends_on"] == 1
 
 
+def test_a_disclosure_row_is_quoted_by_its_own_cells_whatever_the_column_order(
+    tmp_path: Path,
+) -> None:
+    """The row's quote ends at its ID, date and candidate cells, wherever those columns sit."""
+    (tmp_path / "log.csv").write_text(
+        "shown,public,candidate,when,event\n"
+        '"A demo, with a poster",yes,INV-12,2026-02-01,EV-7\n'
+        "A call,no,INV-3,2026-02-02,EV-8\n",
+        encoding="utf-8",
+    )
+    w = _world(tmp_path)
+    (row,) = w.disclosure_rows("INV-12")["rows"]
+    assert (row["event_id"], row["date"]) == ("EV-7", "2026-02-01")
+    assert row["row_start"] == '"A demo, with a poster",yes,INV-12,2026-02-01,EV-7'
+    (other,) = w.disclosure_rows("INV-3")["rows"]
+    assert other["row_start"] == "A call,no,INV-3,2026-02-02,EV-8"
+
+
+def test_st9_claims_at_the_end_of_the_text_are_read(tmp_path: Path) -> None:
+    (tmp_path / "pub.pdf.txt").write_text(
+        "SYN-Office-9  (11) SYN-PUB-9001 A1\n(54) A probe\n\nClaims\n\n"
+        "1. A probe with two electrodes.\n\n2. The probe of claim 1, cleaned by reversal.\n",
+        encoding="utf-8",
+    )
+    claims = _world(tmp_path).publication("SYN-PUB-9001")["claims"]
+    assert [(c["number"], c["depends_on"]) for c in claims] == [(1, None), (2, 1)]
+
+
 # --- the rules -----------------------------------------------------------------------------
 
 

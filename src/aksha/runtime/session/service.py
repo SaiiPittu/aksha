@@ -334,22 +334,31 @@ class Session:
         """Write the files, then record what moved as one source change (ADR-P05 D6).
 
         The change set's name is a hash of the uploaded paths and texts, so a retry of the
-        same upload derives the same command ID and returns the stored receipt.
+        same upload derives the same command ID and returns the stored receipt. A repeat
+        whose bytes did move what is on disk (``A``, then ``B``, then ``A`` again) is not a
+        retry: its stored receipt is for an earlier upload, so what this one moved is
+        recorded under a name that also carries the inputs' version before it.
         """
         assert self.inputs is not None
         files = {str(p): str(t).encode("utf-8") for p, t in command.files.items()}
+        before = self.inputs.version(command.owner)
         try:
-            self.inputs.put(command.owner, files)
+            changed = self.inputs.put(command.owner, files)
         except ValueError as e:
             return self._refuse(command, "upload_inputs", command.owner,
                                 {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
         named = hashlib.sha256()
         for p in sorted(files):
             named.update(p.encode("utf-8") + b"\0" + hashlib.sha256(files[p]).hexdigest().encode())
-        return apply_source_change(self.store, command.owner, self._versioned(),
-                                   "upload:" + named.hexdigest()[:16],
-                                   run_query=self.run_query,
-                                   command_id=command.command_id)  # fmt: skip
+        name = "upload:" + named.hexdigest()[:16]
+        receipt = apply_source_change(self.store, command.owner, self._versioned(), name,
+                                      run_query=self.run_query,
+                                      command_id=command.command_id)  # fmt: skip
+        if receipt.duplicate and changed:
+            receipt = apply_source_change(self.store, command.owner, self._versioned(),
+                                          f"{name}:after:{before}",
+                                          run_query=self.run_query)  # fmt: skip
+        return receipt
 
     def _send(self, command: n.SendMessage) -> CommandReceipt:
         agent = command.agent

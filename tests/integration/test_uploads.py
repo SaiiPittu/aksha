@@ -9,6 +9,7 @@ the rebuild runs that opens. Both shipped agents run on a world in another domai
 from __future__ import annotations
 
 import io
+import json
 import re
 import shutil
 from pathlib import Path
@@ -139,5 +140,49 @@ def test_an_upload_through_the_session_api_is_refused_for_an_unclean_path(tmp_pa
         again = session.dispatch(n.UploadInputs(owner="o1", files={"a.md": "# A\n"}))
         assert again.accepted and again.duplicate  # the same upload: its first receipt
         assert run_statuses(load_view(session.store, "o1")) == ()
+    finally:
+        session.store.close()
+
+
+def test_an_upload_that_moves_a_file_back_is_recorded_even_with_a_derived_command_id(
+    tmp_path: Path,
+) -> None:
+    """``A``, then ``B``, then ``A`` again is three changes, not a retry of the first one.
+
+    Without a client command ID the command ID is derived from the upload's content, so the
+    third upload derives the first one's ID; its bytes still moved the record on disk, so
+    what it moved must be recorded, or work built on ``B`` would stay current over ``A``.
+    """
+    from aksha.app import open_session
+    from aksha.runtime.canonical import thaw
+    from tests.support.session import config
+
+    code, out = aksha(tmp_path, "run", PROMPT, "--agent", "research", "--input", str(TILLDEW))
+    assert code == wire.EXIT_OK, out
+    path = "exports/farmer-reviews.csv"
+    original = (TILLDEW / path).read_text(encoding="utf-8")
+    edited = original.replace("Too expensive for a two-acre plot.", "Too expensive.")
+    assert edited != original
+    session = open_session(
+        config(tmp_path, agent_paths=(DEFAULT_AGENTS,), extension_paths=(DEFAULT_EXTENSIONS,))
+    )
+    try:
+
+        def changes() -> int:
+            return sum(
+                1
+                for e in session.store.read("o1")
+                if e.type == "source.changed" and f"input/{path}" in json.dumps(thaw(e.payload))
+            )
+
+        seen = []
+        for text in (edited, original, edited):
+            receipt = session.dispatch(n.UploadInputs(owner="o1", files={path: text}))
+            assert receipt.accepted and not receipt.duplicate, receipt
+            seen.append(changes())
+        assert seen[0] >= 1 and seen[2] > seen[1], seen
+        again = session.dispatch(n.UploadInputs(owner="o1", files={path: edited}))
+        assert again.accepted and again.duplicate  # a true retry: nothing moved on disk
+        assert changes() == seen[2]
     finally:
         session.store.close()

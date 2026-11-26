@@ -119,7 +119,9 @@ class InputWorkspace:
         """Write ``files`` (relative path to bytes) for ``owner``; the record IDs that changed.
 
         Every path and size is checked before anything is written. Each file is written to
-        a temporary name and renamed over the old one, so a reader never sees half a file.
+        a temporary file outside every owner's folder (``root/.staging``, a name no owner
+        folder can have) and renamed over the old one, so a reader never sees half a file
+        and a crash mid-write leaves no stray record among the owner's inputs.
         """
         checked = {check_path(p): data for p, data in files.items()}
         for p, data in checked.items():
@@ -136,7 +138,9 @@ class InputWorkspace:
             if target.is_file() and target.read_bytes() == data:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
-            tmp = target.with_name(target.name + ".upload-tmp")
+            staging = self.root / ".staging"
+            staging.mkdir(parents=True, exist_ok=True)
+            tmp = staging / hashlib.sha256(f"{owner}\0{p}".encode()).hexdigest()
             tmp.write_bytes(data)
             os.replace(tmp, target)
             changed.append(f"{self.collection}/{p}")

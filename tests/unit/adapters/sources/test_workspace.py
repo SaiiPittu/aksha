@@ -24,6 +24,23 @@ def test_an_upload_is_a_record_per_file_versioned_by_its_bytes(tmp_path: Path) -
     assert ws.record_version("o1", "input/b.csv") is not None  # not uploaded again: kept
 
 
+def test_a_write_stages_its_bytes_outside_every_owner_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A crash between writing the bytes and the rename leaves no stray input record."""
+    import os
+
+    ws = InputWorkspace("inputs", tmp_path / "w")
+
+    def crash(src: object, dst: object) -> None:
+        raise OSError("crashed before the rename")
+
+    monkeypatch.setattr(os, "replace", crash)
+    with pytest.raises(OSError):
+        ws.put("o1", {"notes/a.md": b"one"})
+    assert ws.reader("o1").records("inputs", "input") == ()
+
+
 def test_owners_never_see_each_others_uploads(tmp_path: Path) -> None:
     ws = InputWorkspace("inputs", tmp_path / "w")
     ws.put("o1", {"a.md": b"mine"})
