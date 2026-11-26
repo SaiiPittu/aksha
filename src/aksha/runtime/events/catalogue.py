@@ -132,7 +132,8 @@ RUN_STARTED = EventTypeSpec(
         "required": ["agent", "cause"],
     },
     writer="session",
-    boundaries=frozenset({"U1", "U9"}),
+    # U4: the answer to a route question opens its run (ADR-P23 D4).
+    boundaries=frozenset({"U1", "U4", "U9"}),
     dedup_key="rstart:{run}",
 )
 _UNKNOWN_ENTRY: Mapping[str, Any] = {
@@ -981,6 +982,11 @@ INTERRUPT_RAISED = EventTypeSpec(
             "hunks": {"type": "array", "items": _HUNK},
             "writer": {"type": "object"},
             "reason": _SNAKE,
+            # ADR-P23 D3: a route question's message, each listed agent's purpose line, and
+            # the two or three highest-scoring agents (the rest follow in ``options``).
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "purposes": {"type": "object", "additionalProperties": {"type": "string"}},
+            "suggested": {"type": "array", "items": {"type": "string", "minLength": 1}},
         },
         "required": ["interrupt"],
         "allOf": [
@@ -1237,6 +1243,52 @@ KEYS_LISTED = EventTypeSpec(
     boundaries=frozenset({"U3", "U8"}),
 )
 
+# --- P23: the request router -----------------------------------------------------------
+# A request reaches a session as ``user.message``; the router's decision of which agent
+# handles it is ``route.decided``, written in the transaction that opens the run (D6).
+
+USER_MESSAGE = EventTypeSpec(
+    name="user.message",
+    schema={
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "text": {"type": "string", "minLength": 1},
+            # D5: the agent the person named; a message that names one skips the router.
+            "agent": {"type": "string", "minLength": 1},
+        },
+        "required": ["message", "text"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U1"}),
+    dedup_key="msg:{message}",
+)
+ROUTE_DECIDED = EventTypeSpec(
+    name="route.decided",
+    schema={
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "agent": {"type": "string", "minLength": 1},
+            "by": {"enum": ["classifier", "person"]},
+            "run": {"type": "string", "pattern": "^R-[0-9]{4,}$"},
+            # The classification step behind it; absent when a person named the agent.
+            "step": {"type": "string", "minLength": 1},
+            "probabilities_ppm": {
+                "type": "object",
+                "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
+            },
+        },
+        "required": ["message", "agent", "by", "run"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    # U1: a named agent and a classifier's accepted answer; U4: a person's route answer.
+    boundaries=frozenset({"U1", "U4"}),
+    dedup_key="route:{message}",
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -1282,6 +1334,8 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     COMPLETION_CHECK_EVALUATED,
     COMPLETION_CHECK_RESET,
     KEYS_LISTED,
+    USER_MESSAGE,
+    ROUTE_DECIDED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

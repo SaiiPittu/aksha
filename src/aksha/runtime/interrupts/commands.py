@@ -9,7 +9,10 @@ refused ``already_decided``, and an approval's decision carries the dedup key
 
 1. :func:`answer` resolves an ``input``, ``choice`` or ``route`` interrupt with free text
    (IE-10). Approval, budget and review interrupts are refused
-   ``explicit_command_required``: free text never approves. An ``input`` with several
+   ``explicit_command_required``: free text never approves. So is the request router's
+   own ``route`` question (one that names its ``message``): ``answer_route`` in
+   ``router/commands.py`` answers it, because the run opens in the answer's transaction
+   (ADR-P23 D4). An ``input`` with several
    questions takes ``answers`` keyed by question ID (S2), and each answer of an
    instance-scoped interrupt is minted as its own statement span (ADR-P13). A blocked
    instance is reset in the same transaction (``completion_check.reset{cause: answer}``).
@@ -146,6 +149,10 @@ def answer_spec(tree: CompiledTree | None = None) -> CommandSpec:
         if i.kind not in FREE_TEXT_KINDS:
             return CommandRefused(EXPLICIT_COMMAND_REQUIRED,
                                   f"a {i.kind} interrupt needs its own command")  # fmt: skip
+        if i.kind == "route" and "message" in i.payload:
+            # ADR-P23 D4: the router's question opens its run in the answer's transaction.
+            return CommandRefused(EXPLICIT_COMMAND_REQUIRED,
+                                  f"{i.id} is answered with answer_route")  # fmt: skip
         found = _answers(i, command.args)
         if isinstance(found, CommandRefused):
             return found

@@ -26,7 +26,10 @@ class Boundary:
 
 _ALL = (
     Boundary(
-        "U1", "start", "session", "command.accepted or command.refused, user.message, run.started"
+        "U1",
+        "start",
+        "session",
+        "command.accepted or command.refused, user.message, route.decided, run.started",
     ),
     Boundary(
         "U2a",
@@ -58,7 +61,8 @@ _ALL = (
         "resolution",
         "session",
         "command.accepted or command.refused, interrupt.resolved, the answer's "
-        "excerpts.minted, approvals, budget.granted, "
+        "excerpts.minted, approvals, budget.granted, a route answer's route.decided "
+        "and run.started, "
         "review outcomes, run.stop_requested, "
         "an outbox.enqueued the decision wants",
     ),

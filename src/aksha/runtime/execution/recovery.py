@@ -32,6 +32,10 @@ open run (and every owner the caller names), in ADR-P02 D5's fixed order:
    and ``stop.decided{verdict: stop, cause: resume, reason: definition_changed}``, so no
    person is left a question about a run that has ended. Write nothing at all for a
    suspended or held run; queue an in-flight run for its owner's next command.
+7. Settle the session intake (ADR-P23 D2): a ``RouteCheck`` the composition root passes
+   (``router.Router.route_check``) routes every message left with no decision and no
+   route question, from the recorded classification when its step completed, again when
+   it only started. Without one, nothing is routed.
 
 The report lists, per owner, the steps closed unknown, the runs ended, the outbox keys
 reconciled, and every ``effects_unknown`` step of an open run (a step the kill boundary
@@ -233,10 +237,14 @@ class OwnerRecovery:
     reconciled: tuple[str, ...] = ()
     effects_unknown: tuple[str, ...] = ()
     sources_moved: tuple[str, ...] = ()
+    routed: tuple[str, ...] = ()
 
 
 SourceCheck = Callable[[EventStore, str], tuple[str, ...]]
 """Recovery's source check for one owner (ADR-P05 S2): records what moved, returns the sources."""
+
+RouteCheck = Callable[[EventStore, str], tuple[str, ...]]
+"""Recovery's route settling for one owner (ADR-P23 D2): routes, returns the message IDs."""
 
 
 @dataclass(frozen=True)
@@ -278,11 +286,12 @@ def recover_owner(
     *,
     outbox: OutboxWorker | None = None,
     source_check: SourceCheck | None = None,
+    route_check: RouteCheck | None = None,
 ) -> OwnerRecovery:
-    """Steps 1 to 6 of the module docstring for one owner. ``loaded``: agent to hash.
+    """Steps 1 to 7 of the module docstring for one owner. ``loaded``: agent to hash.
 
     ``outbox`` is the owner's outbox worker; it may be None only when the owner has no
-    outbox entry left to finish. ``source_check`` is step 2.
+    outbox entry left to finish. ``source_check`` is step 2; ``route_check`` is step 7.
     """
     if not store.is_writer:
         raise NotRecoveryWriter(message="recovery needs the writer's store handle")
@@ -320,9 +329,10 @@ def recover_owner(
         else:
             in_flight.append(run)
     unknown = effects_unknown_steps(view, open_runs(rebuild(RUNS, load_view(store, owner))))
+    routed = () if route_check is None else route_check(store, owner)
     return OwnerRecovery(
         owner, tuple(closed), tuple(ended), tuple(suspended), tuple(in_flight), tuple(held),
-        reconciled, unknown, moved,
+        reconciled, unknown, moved, routed,
     )  # fmt: skip
 
 
@@ -355,11 +365,14 @@ def recover_on_startup(
     outbox: OutboxFor | None = None,
     owners: Iterable[str] = (),
     source_check: SourceCheck | None = None,
+    route_check: RouteCheck | None = None,
 ) -> RecoveryReport:
     """Recover every owner with an open run, and ``owners``; drive nothing (D10).
 
     ``loaded`` maps an agent to its definition hash; ``outbox`` builds each owner's outbox
-    worker (needed for any owner with entries to finish); ``source_check`` is step 2.
+    worker (needed for any owner with entries to finish); ``source_check`` is step 2 and
+    ``route_check`` step 7. An owner whose only pending work is an unrouted message has
+    no open run, so it is settled here only when the caller names it in ``owners``.
     """
     if not store.is_writer:
         raise NotRecoveryWriter(message="recovery needs the writer's store handle")
@@ -372,6 +385,7 @@ def recover_on_startup(
                 loaded,
                 outbox=None if outbox is None else outbox(o),
                 source_check=source_check,
+                route_check=route_check,
             )
             for o in every
         )
