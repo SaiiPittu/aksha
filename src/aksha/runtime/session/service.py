@@ -250,8 +250,12 @@ class Session:
             return stop(self.store, command.owner, command.run_id, reason=command.reason,
                         command_id=command.command_id, by=command.by)  # fmt: skip
         if isinstance(command, n.AcceptReview):
+            # The fresh request rebuilds the moved call with the tools the outbox re-checks
+            # against (ADR-P17 B1), so the approval it asks for is one execution can carry out.
+            agent = self._agent_of_interrupt(command.owner, command.review_id)
+            tools = None if agent is None else self._approval_tools(agent, None, None)
             return accept_review(self.store, command.owner, command.review_id,
-                                 command.card_hash, self.ids,
+                                 command.card_hash, self.ids, tools=tools,
                                  command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.RejectReview):
             return reject_review(self.store, command.owner, command.review_id,
