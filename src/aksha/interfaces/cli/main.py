@@ -43,7 +43,14 @@ from aksha.runtime.session import named as n
 from aksha.runtime.session.errors import CommandIdReused
 from aksha.runtime.session.service import Session
 from aksha.runtime.session.types import CommandReceipt
-from aksha.runtime.session.views import RunStatus, inspect_run, run_status, run_statuses
+from aksha.runtime.session.views import (
+    RunStatus,
+    SessionStatus,
+    Waiting,
+    inspect_run,
+    run_status,
+    run_statuses,
+)
 from aksha.runtime.storage.errors import LockHeld, StoreError
 
 DEFAULT_USER = "local"
@@ -77,6 +84,7 @@ class Context:
     def received(self) -> None:
         """The receipt arrived: the next identical command line is a new invocation."""
         self.pending.clear(self.key)
+        self.pending.clear(self.key + "/session")
 
     def server(self) -> Client | None:
         """The running server's client, or None to run embedded."""
@@ -119,20 +127,38 @@ def _embedded(ctx: Context) -> Session:
     return open_session(ctx.config)
 
 
-def _mutate(
-    ctx: Context,
-    build: Callable[[str], n.NamedCommand],
-    run_of: RunOf,
-) -> int:
-    """Dispatch one command in server or embedded mode and report the run it moves."""
+def _report_session(ctx: Context, status: SessionStatus) -> int:
+    """A session with no run yet: what it waits on (a route question), or nothing."""
+    if status.run is not None:
+        return _report(ctx, status.run)
+    if not status.waiting_on:
+        ctx.say("no run")
+        return wire.EXIT_OK
+    for w in status.waiting_on:
+        options = f" (aksha answer {w.interrupt_id} --agent NAME)" if w.kind == "route" else ""
+        ctx.say(f"session {status.session} waiting for {w.kind} {w.interrupt_id}{options}")
+    return wire.run_exit_code(None, status.waiting_on)
+
+
+def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target) -> int:
+    """Dispatch one command in server or embedded mode and report what it moved.
+
+    ``target`` is the run the command moves, or the session whose latest run it is,
+    resolved before the command is sent (an answer clears the item it answers).
+    """
     command = build(ctx.command_id())
+    run, session_id = target
     client = ctx.server()
     if client is not None:
         receipt = client.dispatch(command)
         ctx.received()
         if not receipt.accepted:
             return _refused(ctx, receipt)
-        run = run_of(client, receipt)
+        if run is None and session_id is not None:
+            data = client.get(f"/sessions/{session_id}")
+            if data["run"] is None:
+                return _report_session(ctx, _session_from_json(data))
+            run = str(data["run"]["run"])
         return _report(ctx, None if run is None else client.wait_for_yield(run))
     session = _embedded(ctx)
     try:
@@ -141,7 +167,9 @@ def _mutate(
         ctx.received()
         if not receipt.accepted:
             return _refused(ctx, receipt)
-        run = run_of(session, receipt)
+        if run is None and session_id is not None:
+            started = session.status(ctx.owner, session_id).run
+            run = None if started is None else started.run
         try:
             session.run_until_yield(ctx.owner)
         except KeyboardInterrupt:
@@ -152,45 +180,41 @@ def _mutate(
             session.run_until_yield(ctx.owner)
             _report(ctx, run_status(load_view(session.store, ctx.owner), run))
             return wire.EXIT_STOPPED
+        if run is None and session_id is not None:
+            return _report_session(ctx, session.status(ctx.owner, session_id))
         status = None if run is None else run_status(load_view(session.store, ctx.owner), run)
         return _report(ctx, status)
     finally:
         session.store.close()
 
 
-RunOf = Callable[[Session | Client, CommandReceipt], str | None]
-"""Which run a committed command moves, read after its commit."""
+Target = tuple[str | None, str | None]
+"""The run a command moves, or else the session whose latest run it moves."""
 
 
-def _latest_run_of_session(ctx: Context, session_id: str) -> RunOf:
-    def find(where: Session | Client, receipt: CommandReceipt) -> str | None:
-        if isinstance(where, Client):
-            data = where.get(f"/sessions/{session_id}")
-            return None if data["run"] is None else str(data["run"]["run"])
-        status = where.status(ctx.owner, session_id)
-        return None if status.run is None else status.run.run
-
-    return find
+def _session_from_json(data: dict[str, object]) -> SessionStatus:
+    waiting = tuple(Waiting(**w) for w in data.get("waiting_on") or ())  # type: ignore[attr-defined]
+    return SessionStatus(str(data["session"]), None, waiting, int(str(data.get("seq", 0))))
 
 
-def _run_of_item(ctx: Context, kind: str, ident: str) -> RunOf:
-    """The run an interrupt or approval belongs to, read after the command committed."""
+def _item_target(ctx: Context, kind: str, ident: str) -> Target:
+    """The run (or, for a route question, the session) of an interrupt or approval.
 
-    def find(where: Session | Client, receipt: CommandReceipt) -> str | None:
-        if isinstance(where, Client):
-            for row in where.get("/runs")["runs"]:
-                if any(w.get("interrupt_id") == ident or w.get("approval_id") == ident
-                       for w in row.get("waiting_on", [])):  # fmt: skip
-                    return str(row["run"])
-            return _recent(where)
-        view = load_view(where.store, ctx.owner)
-        if kind == "approval":
-            a = approvals(view).get(ident)
-            return None if a is None else a.run
-        i = interrupts(view).get(ident)
-        return None if i is None else i.run
-
-    return find
+    Read from a read-only handle before the command is sent, so the answer cannot clear
+    the item first; works beside a server.
+    """
+    store = open_reader(ctx.config)
+    try:
+        view = load_view(store, ctx.owner)
+    finally:
+        store.close()
+    if kind == "approval":
+        a = approvals(view).get(ident)
+        return (None, None) if a is None else (a.run, None)
+    i = interrupts(view).get(ident)
+    if i is None:
+        return (None, None)
+    return (i.run, None) if i.run is not None else (None, i.session)
 
 
 def _recent(client: Client) -> str | None:
@@ -203,14 +227,14 @@ def _recent(client: Client) -> str | None:
 
 def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
     """Send a message; with ``--agent`` it starts that agent's run, else the router picks."""
-    session_id = args.session or wire.new_session_id()
+    session_id = args.session or ctx.pending.take(ctx.key + "/session", wire.new_session_id)
     ctx.say(f"session {session_id}")
 
     def build(cid: str) -> n.NamedCommand:
         return n.SendMessage(owner=ctx.owner, session=session_id, text=args.text,
                              agent=args.agent, headless=args.headless, command_id=cid)  # fmt: skip
 
-    return _mutate(ctx, build, _latest_run_of_session(ctx, session_id))
+    return _mutate(ctx, build, (None, session_id))
 
 
 def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
@@ -221,7 +245,7 @@ def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
         return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt,
                                  answers=answers, agent=args.agent, command_id=cid)  # fmt: skip
 
-    return _mutate(ctx, build, _run_of_item(ctx, "interrupt", args.interrupt))
+    return _mutate(ctx, build, _item_target(ctx, "interrupt", args.interrupt))
 
 
 def _full_signature(ctx: Context, approval_id: str, shown: str) -> str:
@@ -251,7 +275,7 @@ def cmd_approve(ctx: Context, args: argparse.Namespace) -> int:
         return n.Approve(owner=ctx.owner, approval_id=args.approval, shown_signature=signature,
                          command_id=cid)  # fmt: skip
 
-    return _mutate(ctx, build, _run_of_item(ctx, "approval", args.approval))
+    return _mutate(ctx, build, _item_target(ctx, "approval", args.approval))
 
 
 def cmd_reject(ctx: Context, args: argparse.Namespace) -> int:
@@ -261,7 +285,7 @@ def cmd_reject(ctx: Context, args: argparse.Namespace) -> int:
         return n.Reject(owner=ctx.owner, approval_id=args.approval, note=args.note,
                         command_id=cid)  # fmt: skip
 
-    return _mutate(ctx, build, _run_of_item(ctx, "approval", args.approval))
+    return _mutate(ctx, build, _item_target(ctx, "approval", args.approval))
 
 
 def cmd_stop(ctx: Context, args: argparse.Namespace) -> int:
@@ -270,7 +294,7 @@ def cmd_stop(ctx: Context, args: argparse.Namespace) -> int:
     def build(cid: str) -> n.NamedCommand:
         return n.Stop(owner=ctx.owner, run_id=args.run, reason=args.reason, command_id=cid)
 
-    return _mutate(ctx, build, lambda where, receipt: args.run)
+    return _mutate(ctx, build, (args.run, None))
 
 
 def cmd_resume(ctx: Context, args: argparse.Namespace) -> int:

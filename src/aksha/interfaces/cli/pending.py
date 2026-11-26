@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from aksha.interfaces.wire import new_command_id
@@ -46,11 +46,15 @@ class PendingIds:
         tmp.write_text(json.dumps(held, sort_keys=True), encoding="utf-8")
         os.replace(tmp, self.path)
 
-    def take(self, key: str) -> str:
-        """The pending ID of ``key``, or a new one recorded as pending."""
+    def take(self, key: str, make: Callable[[], str] = new_command_id) -> str:
+        """The pending value of ``key``, or a new one from ``make`` recorded as pending.
+
+        The CLI keeps the command ID here, and a generated session ID beside it, so a
+        retry names the same session as the command it repeats.
+        """
         held = self._load()
         if key not in held:
-            held[key] = new_command_id()
+            held[key] = make()
             self._save(held)
         return held[key]
 

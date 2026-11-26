@@ -97,9 +97,11 @@ def command_from_json(owner: str, body: Mapping[str, Any]) -> named.NamedCommand
     if extra:
         raise WireInvalid(message=f"{name} has no argument {sorted(extra)}")
     values: dict[str, Any] = {k: args[k] for k in args}
-    for key in ("answers", "changes", "extra"):
-        if key in values and not isinstance(values[key], Mapping):
-            raise WireInvalid(message=f"{key} is an object")
+    types = {f.name: str(f.type) for f in dataclasses.fields(cls)}
+    for key, value in values.items():
+        expected = _WIRE_TYPES.get(types[key])
+        if expected is not None and not isinstance(value, expected):
+            raise WireInvalid(message=f"{name}.{key} is {types[key]}, not {type(value).__name__}")
     command_id = body.get("command_id")
     by = body.get("by") or named.DEFAULT_BY
     try:
@@ -108,6 +110,17 @@ def command_from_json(owner: str, body: Mapping[str, Any]) -> named.NamedCommand
     except TypeError as e:
         raise WireInvalid(message=f"{name}: {e}") from None
     return command  # type: ignore[return-value]
+
+
+_WIRE_TYPES: Mapping[str, tuple[type, ...]] = {
+    "bool": (bool,),
+    "str": (str,),
+    "str | None": (str, type(None)),
+    "Mapping[str, str]": (Mapping,),
+    "Mapping[str, int]": (Mapping,),
+    "Mapping[str, object]": (Mapping,),
+}
+"""The JSON types each annotation of a named command accepts; ``"false"`` is no bool."""
 
 
 def command_to_json(command: named.NamedCommand) -> dict[str, Any]:

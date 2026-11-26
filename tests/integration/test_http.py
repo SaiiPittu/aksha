@@ -154,3 +154,16 @@ def test_capabilities_health_and_verify(served: tuple[TestClient, Any]) -> None:
     _wait_run(client, lambda r: r["state"] == "ended")
     verified = client.get("/api/v1/verify").json()
     assert verified["ok"] is True and verified["seq"] > 0
+
+
+def test_a_string_where_a_bool_belongs_is_refused_not_promoted(
+    served: tuple[TestClient, Any],
+) -> None:
+    client, _ = served
+    body = {"command": "SendMessage",
+            "args": {"session": SESSION, "text": "Write a note", "headless": "false"}}  # fmt: skip
+    r = client.post("/api/v1/commands", headers=H, json=body)
+    assert r.status_code == 422 and "headless" in r.json()["error"]["message"]
+    r = client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
+                    json={"text": "Write a note", "headless": 1})  # fmt: skip
+    assert r.status_code == 422

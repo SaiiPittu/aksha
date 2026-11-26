@@ -171,3 +171,27 @@ def test_server_mode_sends_commands_to_the_server(tmp_path: Path, server: str) -
         tmp_path, "run", "Write", "--session", "S-2", AKSHA_SERVER_URL="http://127.0.0.1:9"
     )  # no server there: embedded
     assert code == wire.EXIT_ENVIRONMENT and "locked" in out
+
+
+def test_a_retry_without_session_reuses_the_generated_session(tmp_path: Path) -> None:
+    from aksha.interfaces.cli.pending import PendingIds, invocation_key
+
+    argv = ["--user", "o1", "run", "Write a note"]
+    key = invocation_key("o1", argv)
+    pending = PendingIds(tmp_path / "var" / "aksha.pending.json")
+    held_session = pending.take(key + "/session", lambda: "S-held")
+    code, out = aksha(tmp_path, "run", "Write a note")
+    assert code == wire.EXIT_OK and f"session {held_session}" in out and "ended complete" in out
+
+
+def test_a_session_waiting_on_a_route_question_reports_it() -> None:
+    from aksha.app import RuntimeConfig
+    from aksha.interfaces.cli.main import Context, _report_session
+    from aksha.runtime.session.views import SessionStatus, Waiting
+
+    out = io.StringIO()
+    ctx = Context(RuntimeConfig(), "o1", out, ["run", "x"])
+    status = SessionStatus("S-1", None, (Waiting("I-0001", "route"),), 4)
+    assert _report_session(ctx, status) == wire.EXIT_WAITING_INPUT
+    assert "aksha answer I-0001 --agent" in out.getvalue()
+    assert _report_session(ctx, SessionStatus("S-1", None, (), 4)) == wire.EXIT_OK

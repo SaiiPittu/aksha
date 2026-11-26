@@ -267,8 +267,8 @@ class Session:
         agent = command.agent
         if agent is None and self.router is None and len(self.agents) == 1:
             agent = next(iter(self.agents))
-        if agent is None and (self.router is None or command.headless):
-            reason = "a headless start names its agent" if command.headless else (
+        if agent is None and (self.router is None or command.headless is True):
+            reason = "a headless start names its agent" if command.headless is True else (
                 "no router is configured; name the agent")  # fmt: skip
             return self._refuse(command, "send_message", command.session,
                                 {"text": command.text}, AGENT_REQUIRED, reason)  # fmt: skip
@@ -278,7 +278,7 @@ class Session:
                              command.text, command_id=command.command_id)  # fmt: skip
             return sent.receipt
         args: dict[str, Any] = {"text": command.text, "agent": agent}
-        if command.headless:
+        if command.headless is True:
             args["headless"] = True
         cmd = Command("send_message", command.owner, command.session, args, command.command_id)
         return dispatch(self.store, cmd, self._start)
