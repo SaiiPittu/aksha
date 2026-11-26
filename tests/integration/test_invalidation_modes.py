@@ -355,6 +355,23 @@ class EditBench:
         raise AssertionError(f"no request on turn {turn}")
 
 
+@pytest.fixture
+def benches() -> Iterator[list[EditBench]]:
+    """Every bench a test opens, closed after it so no store is left to the collector."""
+    opened: list[EditBench] = []
+    yield opened
+    for bench in opened:
+        bench.store.close()
+
+
+def _bench(
+    opened: list[EditBench], path: Path, mode: str, script: Mapping[int, GenerationResult]
+) -> EditBench:
+    bench = EditBench(path, mode, script)
+    opened.append(bench)
+    return bench
+
+
 READ_A = tools_reply(call("read_file", path="a.py"))
 EDIT_A = tools_reply(call("edit_file", path="a.py", old="x = 1", new="x = 2"))
 
@@ -363,9 +380,11 @@ def _someone_else_edits_a(bench: EditBench) -> None:
     bench.tree.put("a.py", "x = 1\ny = 3\n")  # a person adds a line between the turns
 
 
-def test_edit_guard_refuses_a_stale_edit_with_the_current_text(tmp_path: Path) -> None:
+def test_edit_guard_refuses_a_stale_edit_with_the_current_text(
+    tmp_path: Path, benches: list[EditBench]
+) -> None:
     script = {1: READ_A, 2: EDIT_A, 3: READ_A, 4: EDIT_A}
-    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", script)
+    bench = _bench(benches, tmp_path / "e.sqlite", "edit_guard", script)
     bench.hooks[2] = lambda: _someone_else_edits_a(bench)
     bench.run()
     assert bench.code(2) == STALE_EDIT
@@ -377,18 +396,22 @@ def test_edit_guard_refuses_a_stale_edit_with_the_current_text(tmp_path: Path) -
     assert bench.tree.files["a.py"] == "x = 2\ny = 3\n"  # the person's line survived
 
 
-def test_edit_guard_lets_consecutive_edits_through_after_its_own_write(tmp_path: Path) -> None:
+def test_edit_guard_lets_consecutive_edits_through_after_its_own_write(
+    tmp_path: Path, benches: list[EditBench]
+) -> None:
     second = tools_reply(call("edit_file", path="a.py", old="x = 2", new="x = 3"))
-    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", {1: READ_A, 2: EDIT_A, 3: second})
+    bench = _bench(benches, tmp_path / "e.sqlite", "edit_guard", {1: READ_A, 2: EDIT_A, 3: second})
     bench.run()
     assert (bench.code(2), bench.code(3)) == (None, None)
     assert bench.tree.files["a.py"] == "x = 3\n"
 
 
-def test_edit_guard_refuses_overwriting_an_existing_file_never_read(tmp_path: Path) -> None:
+def test_edit_guard_refuses_overwriting_an_existing_file_never_read(
+    tmp_path: Path, benches: list[EditBench]
+) -> None:
     write_b = tools_reply(call("write_file", path="b.py", text="replaced\n"))
     new_c = tools_reply(call("write_file", path="c.py", text="new\n"))
-    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", {1: write_b, 2: new_c})
+    bench = _bench(benches, tmp_path / "e.sqlite", "edit_guard", {1: write_b, 2: new_c})
     bench.run()
     assert bench.code(1) == UNREAD_OVERWRITE
     refused = bench.shown(2)
@@ -397,18 +420,20 @@ def test_edit_guard_refuses_overwriting_an_existing_file_never_read(tmp_path: Pa
     assert bench.code(2) is None and bench.tree.files["c.py"] == "new\n"  # creating is free
 
 
-def test_off_runs_the_same_edits_unchecked(tmp_path: Path) -> None:
+def test_off_runs_the_same_edits_unchecked(tmp_path: Path, benches: list[EditBench]) -> None:
     write_b = tools_reply(call("write_file", path="b.py", text="replaced\n"))
-    bench = EditBench(tmp_path / "e.sqlite", "off", {1: READ_A, 2: EDIT_A, 3: write_b})
+    bench = _bench(benches, tmp_path / "e.sqlite", "off", {1: READ_A, 2: EDIT_A, 3: write_b})
     bench.hooks[2] = lambda: _someone_else_edits_a(bench)
     bench.run()
     assert (bench.code(2), bench.code(3)) == (None, None)
     assert bench.tree.files["b.py"] == "replaced\n"
 
 
-def test_a_resumed_step_keeps_the_recorded_refusal(tmp_path: Path) -> None:
+def test_a_resumed_step_keeps_the_recorded_refusal(
+    tmp_path: Path, benches: list[EditBench]
+) -> None:
     """The check runs inside the durable step: replaying the run never checks again."""
-    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", {1: READ_A, 2: EDIT_A})
+    bench = _bench(benches, tmp_path / "e.sqlite", "edit_guard", {1: READ_A, 2: EDIT_A})
     bench.hooks[2] = lambda: _someone_else_edits_a(bench)
     bench.run()
     before = [e.seq for e in load_view(bench.store, OWNER).events]
@@ -418,12 +443,12 @@ def test_a_resumed_step_keeps_the_recorded_refusal(tmp_path: Path) -> None:
 
 
 def test_edit_guard_refuses_a_write_into_a_source_the_reader_does_not_serve(
-    tmp_path: Path,
+    tmp_path: Path, benches: list[EditBench]
 ) -> None:
     """An unserved source reads every record as absent; that is no licence to create one."""
     write_b = tools_reply(call("write_file", path="b.py", text="replaced\n"))
     new_c = tools_reply(call("write_file", path="c.py", text="new\n"))
-    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", {1: write_b, 2: new_c})
+    bench = _bench(benches, tmp_path / "e.sqlite", "edit_guard", {1: write_b, 2: new_c})
     bench.tree.served = False
     bench.run()
     assert (bench.code(1), bench.code(2)) == (EDIT_UNCHECKED, EDIT_UNCHECKED)
