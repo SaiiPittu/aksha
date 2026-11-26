@@ -6,7 +6,7 @@ import aksha
 
 
 def test_package_has_version() -> None:
-    assert aksha.__version__ == "0.0.0"
+    assert aksha.__version__ not in ("", "0+unknown")  # from the installed metadata
 
 
 def test_runtime_package_imports() -> None:

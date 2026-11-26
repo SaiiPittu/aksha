@@ -1,6 +1,7 @@
-"""``python -m aksha.interfaces.demo [--work DIR] [--json FILE]``: run the demo, print it.
+"""``aksha demo [--work DIR] [--json FILE]``: run the demo, print it.
 
-``--work`` is the folder the demo writes (default ``var/demo``). An existing folder is
+``python -m aksha.interfaces.demo`` is the same command. ``--work`` is the folder the demo
+writes (default ``<AKSHA_HOME>/demo``, :func:`aksha.app.data_home`). An existing folder is
 emptied only when an earlier demo wrote it (it holds the demo's marker file) or it is
 empty; any other folder is refused, so a mistyped path never loses data. ``--json``
 also writes the full report as JSON, which the demo's test reads.
@@ -10,21 +11,34 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+
+from aksha.app import data_home
 
 from .story import MARKER, DemoFailed, run_demo
 from .summary import render
 
 
-def main(argv: list[str] | None = None) -> int:
+def default_work(env: Mapping[str, str]) -> Path:
+    """The folder the demo writes when ``--work`` is not given."""
+    return data_home(env) / "demo"
+
+
+def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
     """Run the demo and print its summary; non-zero when a check fails."""
-    parser = argparse.ArgumentParser(prog="python -m aksha.interfaces.demo")
-    parser.add_argument("--work", type=Path, default=Path("var/demo"))
-    parser.add_argument("--json", type=Path, default=None)
+    parser = argparse.ArgumentParser(
+        prog="aksha demo",
+        description="The change-and-recovery demo: offline fake models, no keys, about 20 s.",
+    )
+    parser.add_argument("--work", type=Path, default=None,
+                        help="the folder the demo writes (default: $AKSHA_HOME/demo)")  # fmt: skip
+    parser.add_argument("--json", type=Path, default=None, help="also write the report as JSON")
     args = parser.parse_args(argv)
-    work: Path = args.work
+    work: Path = args.work or default_work(os.environ if env is None else env)
     if work.exists():
         if not (work / MARKER).is_file() and any(work.iterdir()):
             print(f"{work} exists and was not written by the demo: pick another --work",

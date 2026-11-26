@@ -1,4 +1,4 @@
-"""``PostgresEventStore``: the event store in PostgreSQL. Optional extra ``aksha[postgres]``.
+"""``PostgresEventStore``: the event store in PostgreSQL (extra ``aksha-harness[postgres]``).
 
 The production backend. It keeps the SQLite adapter's rules, enforced by PostgreSQL
 itself, and passes the same contract suite:
@@ -140,7 +140,8 @@ def driver() -> ModuleType:
         import psycopg
     except ImportError:
         raise StoreError(
-            "driver_missing", "the PostgreSQL adapter needs psycopg: pip install 'aksha[postgres]'"
+            "driver_missing",
+            "the PostgreSQL adapter needs psycopg: pip install 'aksha-harness[postgres]'",
         ) from None
     module: ModuleType = psycopg
     return module

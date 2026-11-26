@@ -85,7 +85,9 @@ def check_dependency_rule(root: Path) -> list[Violation]:
     6. ``aksha.evals`` imports the runtime and itself; ``aksha.evals.agents`` (the adapters
        that put an agent through an episode) may also import ``aksha.agents`` and
        ``aksha.extensions``. Stores and clocks reach the evals through ``aksha.app``.
-    7. ``aksha.app`` (the composition root) and ``aksha`` itself may import anything.
+    7. ``aksha.data`` (the bundled worlds and suites) imports nothing of ``aksha``; the
+       interfaces may import it to find a bundled world.
+    8. ``aksha.app`` (the composition root) and ``aksha`` itself may import anything.
     """
     files = sorted((root / "aksha").rglob("*.py"))
     modules = frozenset(module_name(root, f) for f in files)
@@ -134,8 +136,10 @@ def _refusal(me: str, target: str) -> str | None:
         if target == "aksha.agents" or (own and _within(target, own)):
             return None
         return "agents import aksha.runtime.api and named extensions only"
+    if _within(me, "aksha.data"):
+        return "data imports nothing of aksha"
     if _within(me, "aksha.interfaces"):
-        allowed = ("aksha.runtime", "aksha.evals", "aksha.app", "aksha.interfaces")
+        allowed = ("aksha.runtime", "aksha.evals", "aksha.app", "aksha.data", "aksha.interfaces")
         if any(_within(target, a) for a in allowed):
             return None
         return "interfaces reach adapters, agents and extensions through aksha.app only"

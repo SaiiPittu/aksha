@@ -14,6 +14,7 @@ import re
 import shutil
 from pathlib import Path
 
+from aksha import data
 from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
 from aksha.interfaces import wire
 from aksha.interfaces.cli.main import collect_inputs, main
@@ -22,9 +23,8 @@ from aksha.runtime.session import named as n
 from aksha.runtime.session.views import run_statuses
 from tests.support.session import env
 
-REPO = Path(__file__).resolve().parents[2]
-TILLDEW = REPO / "fixtures" / "worlds" / "tilldew" / "sources"
-REQUEST = (REPO / "evals" / "suites" / "tilldew" / "g-research-happy.toml").read_text("utf-8")
+TILLDEW = data.world_path("tilldew") / "sources"
+REQUEST = (data.suites() / "tilldew" / "g-research-happy.toml").read_text("utf-8")
 PROMPT = re.search(r'^opening = "(.*)"$', REQUEST, re.M).group(1)  # type: ignore[union-attr]
 
 

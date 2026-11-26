@@ -2,16 +2,20 @@ PY ?= 3.12
 VENV := .venv
 BIN := $(VENV)/bin
 
-.PHONY: venv venv-postgres test test-postgres lint format typecheck check demo
+# In a checkout, local state (the store, blobs, demo and eval output) stays in var/, which
+# git ignores. An installed aksha uses the per-user data folder instead (aksha doctor).
+export AKSHA_HOME ?= var
 
-## Create .venv and install the package with dev tools, the server and the trace exporter.
+.PHONY: venv venv-postgres test test-postgres lint format typecheck check demo dist release-check
+
+## Create .venv and install the package with the dev group, the server and the trace exporter.
 venv:
 	uv venv --allow-existing --python $(PY) $(VENV)
-	uv pip install --python $(BIN)/python -e ".[dev,server,otel]"
+	uv pip install --python $(BIN)/python -e ".[server,otel]" --group dev
 
-## Add the PostgreSQL driver (extra aksha[postgres]) so the PostgreSQL tests run, not skip.
+## Add the PostgreSQL driver (extra aksha-harness[postgres]) so the PostgreSQL tests run.
 venv-postgres: venv
-	uv pip install --python $(BIN)/python -e ".[dev,server,otel,postgres]"
+	uv pip install --python $(BIN)/python -e ".[server,otel,postgres]" --group dev
 
 test:
 	$(BIN)/pytest
@@ -36,9 +40,21 @@ typecheck:
 check: lint typecheck test
 
 ## The change-and-recovery demo: offline, fake models, no keys, about 20 seconds. Writes var/demo/.
-## On a fresh clone this creates the virtual environment first, so it is one command.
+## On a fresh clone this creates the virtual environment first, so it is one command. It is
+## `aksha demo`, the same command an installed package offers.
 demo: $(BIN)/python
-	$(BIN)/python -m aksha.interfaces.demo
+	$(BIN)/aksha demo --work var/demo
+
+## Build the sdist and the wheel into dist/ and check their metadata (twine check --strict).
+dist:
+	rm -rf dist
+	uv build --out-dir dist
+	uvx --from 'twine>=6.1' twine check --strict dist/*
+
+## Everything the release workflow checks before an upload, run locally: build, check, then
+## install the wheel into a fresh virtual environment outside the repo and run aksha there.
+release-check: dist $(BIN)/python
+	AKSHA_DIST=dist $(BIN)/pytest -p no:cacheprovider tests/package
 
 $(BIN)/python:
 	$(MAKE) venv

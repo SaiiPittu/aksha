@@ -29,7 +29,7 @@ def test_missing_driver_names_the_extra(monkeypatch: pytest.MonkeyPatch) -> None
     with pytest.raises(StoreError) as e:
         postgres.driver()
     assert e.value.code == "driver_missing"
-    assert "aksha[postgres]" in str(e.value)
+    assert "aksha-harness[postgres]" in str(e.value)
 
 
 def test_writer_holds_the_advisory_lock(
@@ -74,7 +74,7 @@ def test_unreachable_server_is_a_store_error(clock: FakeClock) -> None:
     try:
         import psycopg  # noqa: F401
     except ImportError:
-        skip_or_fail("psycopg is missing (pip install 'aksha[postgres]')")
+        skip_or_fail("psycopg is missing (pip install 'aksha-harness[postgres]')")
     dsn = "host=127.0.0.1 port=1 user=nobody dbname=none connect_timeout=1"
     with pytest.raises(StoreError) as e:
         postgres.open_store(dsn, clock, writer=False)

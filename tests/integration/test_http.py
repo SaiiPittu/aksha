@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from aksha import data
 from aksha.app import open_reader, open_session, session_capabilities
 from aksha.interfaces.http.server import create_app
 from aksha.runtime.session.worker import RuntimeThread
@@ -191,7 +192,7 @@ def test_inputs_upload_over_http_and_a_changed_file_reopens_its_work(
     served_agents: TestClient,
 ) -> None:
     client = served_agents
-    root = Path(__file__).resolve().parents[2] / "fixtures" / "worlds" / "tilldew" / "sources"
+    root = data.world_path("tilldew") / "sources"
     files = {p.relative_to(root).as_posix(): p.read_text("utf-8") for p in root.rglob("*")
              if p.is_file()}  # fmt: skip
     assert client.post("/api/v1/inputs", headers=H, json={"files": {}}).status_code == 422

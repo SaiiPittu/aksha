@@ -1,6 +1,6 @@
 """Answer keys: the facts, traps and expected values a world's graders compare against.
 
-A key is ``fixtures/worlds/<w>/key.json``. Agents and tools never read it: it sits beside
+A key is ``worlds/<w>/key.json`` (:mod:`aksha.data`). Agents and tools never read it: it sits beside
 ``sources/``, the only tool root, and :func:`aksha.evals.episode.guard_path` refuses any
 path that resolves to it. Graders read it through :class:`AnswerKey`.
 

@@ -23,7 +23,7 @@ from aksha.extensions.otel import semconv as sc
 from aksha.extensions.otel.trace import Segment, SpanRecord, build_trace
 from aksha.runtime.api import Event
 
-INSTALL_HINT = "pip install 'aksha[otel]'"
+INSTALL_HINT = "pip install 'aksha-harness[otel]'"
 
 
 class ExporterMissing(RuntimeError):

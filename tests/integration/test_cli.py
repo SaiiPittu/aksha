@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from aksha import data
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.storage.sqlite import open_store
 from aksha.interfaces import wire
@@ -21,8 +22,6 @@ from aksha.interfaces.cli.main import main
 from aksha.runtime.canonical import thaw
 from tests.support.events import START
 from tests.support.session import env
-
-REPO = Path(__file__).resolve().parents[2]
 
 
 def aksha(tmp: Path, *argv: str, **extra: str) -> tuple[int, str]:
@@ -81,7 +80,7 @@ def test_an_approved_publish_is_delivered_through_the_extensions_system(tmp_path
 def test_the_default_agents_load_and_research_runs_offline_on_a_world(tmp_path: Path) -> None:
     from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
 
-    sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
+    sources = data.world_path("stillroom") / "sources"
     defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
                 "AKSHA_SOURCES": f"inputs={sources}"}  # fmt: skip
     code, out = aksha(tmp_path, "capabilities", **defaults)
@@ -106,7 +105,7 @@ def test_the_default_agents_load_and_research_runs_offline_on_a_world(tmp_path: 
 def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: Path) -> None:
     from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
 
-    sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
+    sources = data.world_path("stillroom") / "sources"
     defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
                 "AKSHA_SOURCES": f"inputs={sources}"}  # fmt: skip
     request = "Assess the four invention candidates and prepare the chosen one for counsel."

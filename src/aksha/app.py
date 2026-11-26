@@ -11,14 +11,19 @@ Variable               Meaning                                Default
 =====================  =====================================  =====================
 ``AKSHA_STORE``        ``sqlite`` or ``postgres``             ``sqlite``
 ``AKSHA_POSTGRES_DSN`` libpq DSN, needed for ``postgres``     none
-``AKSHA_SQLITE_PATH``  the SQLite file                        ``var/aksha.sqlite``
-``AKSHA_BLOB_PATH``    the filesystem blob store's folder     ``var/blobs``
+``AKSHA_HOME``         the folder local state lives in        the data folder below
+``AKSHA_SQLITE_PATH``  the SQLite file                        ``<home>/aksha.sqlite``
+``AKSHA_BLOB_PATH``    the filesystem blob store's folder     ``<home>/blobs``
 =====================  =====================================  =====================
+
+Without ``AKSHA_HOME``, local state goes to the platform's per-user data folder
+(:func:`data_home`), so an installed ``aksha`` never scatters files into whatever folder
+it was typed in. The ``make`` targets of a checkout set ``AKSHA_HOME=var``.
 
 SQLite is the default so a run needs no setup: one file, no server (decision 34, 26 Nov
 2026). PostgreSQL is the production backend (ADR-P01 D1): choose it with
 ``AKSHA_STORE=postgres`` and ``AKSHA_POSTGRES_DSN``. Both pass one contract suite. The
-PostgreSQL driver is the optional extra ``aksha[postgres]``, imported only when PostgreSQL
+PostgreSQL driver is the optional extra ``aksha-harness[postgres]``, imported only when PostgreSQL
 is chosen, so the runtime itself stays standard library plus ``jsonschema``.
 
 The blob store (decision 25, 26 Nov 2026) holds payload values over the 64 KiB cap and
@@ -36,6 +41,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
@@ -106,14 +112,38 @@ from aksha.runtime.tools.types import ToolDecl
 Backend = Literal["sqlite", "postgres"]
 
 
+def data_home(
+    env: Mapping[str, str], *, platform: str = sys.platform, home: Path | None = None
+) -> Path:
+    """Where local state lives: ``AKSHA_HOME``, else the platform's per-user data folder.
+
+    Linux and others: ``$XDG_DATA_HOME/aksha`` (when absolute) or ``~/.local/share/aksha``;
+    macOS: ``~/Library/Application Support/aksha``; Windows: ``%LOCALAPPDATA%/aksha``.
+    """
+    if env.get("AKSHA_HOME"):
+        return Path(env["AKSHA_HOME"])
+    base = home if home is not None else Path.home()
+    if platform == "win32":
+        local = env.get("LOCALAPPDATA")
+        return (Path(local) if local else base / "AppData" / "Local") / "aksha"
+    if platform == "darwin":
+        return base / "Library" / "Application Support" / "aksha"
+    xdg = env.get("XDG_DATA_HOME", "")
+    return (Path(xdg) if xdg and Path(xdg).is_absolute() else base / ".local" / "share") / "aksha"
+
+
+def _default_home() -> Path:
+    return data_home({})
+
+
 @dataclass(frozen=True)
 class StorageConfig:
     """Which event store backend to open, and where."""
 
     backend: Backend = "sqlite"
     postgres_dsn: str | None = None
-    sqlite_path: Path = Path("var/aksha.sqlite")
-    blob_path: Path = Path("var/blobs")
+    sqlite_path: Path = field(default_factory=lambda: _default_home() / "aksha.sqlite")
+    blob_path: Path = field(default_factory=lambda: _default_home() / "blobs")
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> StorageConfig:
@@ -121,11 +151,12 @@ class StorageConfig:
         backend = env.get("AKSHA_STORE", "sqlite")
         if backend not in ("sqlite", "postgres"):
             raise StoreError("unknown_backend", f"AKSHA_STORE={backend!r}: use sqlite or postgres")
+        home = data_home(env)
         return cls(
             backend=cast(Backend, backend),
-            sqlite_path=Path(env.get("AKSHA_SQLITE_PATH", "var/aksha.sqlite")),
+            sqlite_path=Path(env.get("AKSHA_SQLITE_PATH") or home / "aksha.sqlite"),
             postgres_dsn=env.get("AKSHA_POSTGRES_DSN"),
-            blob_path=Path(env.get("AKSHA_BLOB_PATH", "var/blobs")),
+            blob_path=Path(env.get("AKSHA_BLOB_PATH") or home / "blobs"),
         )
 
 
@@ -177,7 +208,7 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # =======================  ==============================================  ==================
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
-# for example ``inputs=fixtures/worlds/stillroom/sources`` for the research and patent
+# for example ``inputs=src/aksha/data/worlds/stillroom/sources`` for the research and patent
 # agents, which both read the ``inputs`` source. Uploads (``aksha run --input``, ``aksha
 # upload``, ``UploadInputs``) go to each owner's input workspace beside the SQLite file
 # (``inputs/<owner>/``), which every run of that owner reads over the configured folder. A
@@ -330,9 +361,16 @@ def _is_strength(value: str) -> TypeGuard[Strength]:
     return value in STRENGTHS
 
 
-def runtime_commit() -> tuple[str, bool]:
-    """The git commit of the running code and whether its tree is dirty, when readable."""
-    root = Path(__file__).resolve().parents[2]
+def runtime_commit(root: Path | None = None) -> tuple[str, bool]:
+    """The git commit of the running code and whether its tree is dirty, when readable.
+
+    Only a checkout of this project has one: ``root`` (the folder above ``src/``) must hold
+    both ``.git`` and ``src/aksha``. Installed from a wheel, the folder above the package
+    may belong to some other repository, so the answer is ``("unknown", False)``.
+    """
+    root = root or Path(__file__).resolve().parents[2]
+    if not ((root / ".git").exists() and (root / "src" / "aksha").is_dir()):
+        return "unknown", False
     try:
         commit = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
@@ -729,7 +767,7 @@ def export_trace(
 ) -> tuple[Path, ...]:
     """Export ``run``'s trace as OTLP JSON Lines files, one per segment (ADR-P21 D8).
 
-    The exporter is the ``otel`` extension; it needs the optional extra ``aksha[otel]``
+    The exporter is the ``otel`` extension; it needs the optional extra ``aksha-harness[otel]``
     and raises ``ExporterMissing`` with an install hint without it.
     """
     from aksha.extensions.otel.export import export_run

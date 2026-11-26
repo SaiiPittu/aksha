@@ -76,6 +76,7 @@ def test_every_module_imports_and_has_a_docstring() -> None:
             "from aksha.adapters.storage import sqlite\n",
             "runtime imports no outer layer",
         ),
+        ("aksha/data/leak.py", "from aksha import app\n", "data imports nothing of aksha"),
         (
             "aksha/runtime/tools/leak.py",
             "from ... import interfaces\n",
@@ -175,6 +176,7 @@ def test_dependency_rule_catches_a_plant(copy: Path, rel: str, source: str, rule
         ("aksha/adapters/storage/extra.py", "from aksha.runtime.storage.ports import *\n"),
         ("aksha/adapters/storage/extra.py", "from .sqlite import *\nimport psycopg\n"),
         ("aksha/interfaces/cli/extra.py", "from aksha import app\n"),
+        ("aksha/interfaces/demo/extra.py", "from aksha import data\n"),
         ("aksha/app.py", '"""Root."""\nfrom aksha.adapters.storage import sqlite\n'),
         ("aksha/runtime/tools/extra.py", "import jsonschema\nimport sqlite3\n"),
     ],

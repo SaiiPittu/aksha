@@ -100,7 +100,10 @@ def start_server() -> PostgresServer | str:
     try:
         import psycopg  # noqa: F401
     except ImportError:
-        return "PostgreSQL adapter not tested: psycopg is missing (pip install 'aksha[postgres]')"
+        return (
+            "PostgreSQL adapter not tested: psycopg is missing "
+            "(pip install 'aksha-harness[postgres]')"
+        )
     existing = os.environ.get("AKSHA_TEST_POSTGRES_DSN")
     if existing:
         _wait_ready(existing)

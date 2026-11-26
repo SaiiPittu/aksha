@@ -1,6 +1,6 @@
 """Worlds: a fixture world on disk, its lock, its rename map and its change sets.
 
-A world is ``fixtures/worlds/<name>/``: ``sources/`` is the only tool root, and
+A world is ``worlds/<name>/`` (:mod:`aksha.data`): ``sources/`` is the only tool root, and
 ``spec.yaml``, ``manifest.json``, ``key.json`` and ``world.lock.json`` sit beside it, out of
 every tool's reach. ``world.lock.json`` records the SHA-256 of every other file under the
 world's root, change sets and their derived keys included, so the grader's gate can refuse

@@ -20,7 +20,11 @@ exit codes are in :mod:`aksha.interfaces.wire`. A first Ctrl-C during an embedde
 asks the run to stop (ADR-P18 D7) and exits 6.
 
 ``aksha eval`` (ADR-P22) is offline and touches no session store: its line goes whole to
-:func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes.
+:func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes. ``aksha demo``
+goes whole to :func:`aksha.interfaces.demo.__main__.main` the same way (``make demo`` runs
+it), ``aksha example`` copies a bundled world's input files into a new folder to try
+``--input`` on, and ``aksha doctor`` reports the version, the paths in use and the extras, opening
+nothing.
 """
 
 from __future__ import annotations
@@ -28,13 +32,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
+import aksha
+from aksha import data
 from aksha.app import (
     RuntimeConfig,
+    data_home,
     export_trace,
     mock_system_notes,
     open_blob_store,
@@ -80,6 +88,7 @@ class Context:
         pending = config.storage.sqlite_path.parent / PENDING_FILE
         self.pending = PendingIds(pending)
         self.key = invocation_key(owner, argv)
+        self.home = config.storage.sqlite_path.parent
 
     def say(self, text: str) -> None:
         """One line of output."""
@@ -616,9 +625,80 @@ def cmd_serve(ctx: Context, args: argparse.Namespace) -> int:
     try:
         from aksha.interfaces.http.serve import serve
     except ImportError as e:
-        ctx.say(f"aksha serve needs the server extra: pip install 'aksha[server]' ({e.name})")
+        ctx.say(f"aksha serve needs the server extra: {install_hint('server')} ({e.name})")
         return wire.EXIT_ENVIRONMENT
     return serve(ctx.config, args.host, args.port, say=ctx.say)
+
+
+EXTRAS = {
+    "server": ("fastapi", "uvicorn"),
+    "otel": ("opentelemetry.sdk", "opentelemetry.exporter.otlp.json.file"),
+    "postgres": ("psycopg",),
+}
+"""Each optional extra and the modules it installs (``pyproject.toml``)."""
+
+
+def install_hint(extra: str) -> str:
+    """The exact, quoted command that adds ``extra``."""
+    return f'pip install "{aksha.DISTRIBUTION}[{extra}]"'
+
+
+def _importable(module: str) -> bool:
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec(module) is not None
+    except ModuleNotFoundError:  # a missing parent package
+        return False
+
+
+def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
+    """Copy a bundled synthetic world's input files into a new folder, to try ``--input``.
+
+    Only ``sources/`` is copied, never the world's answer key. With no world named, it
+    lists the bundled ones. A folder that already holds files is refused, so nothing of
+    the person's is overwritten.
+    """
+    worlds = sorted(p.name for p in data.worlds().iterdir() if (p / "sources").is_dir())
+    if args.world is None:
+        ctx.say("bundled synthetic worlds (aksha example NAME [FOLDER]):")
+        for name in worlds:
+            ctx.say(f"  {name}")
+        return wire.EXIT_OK
+    try:
+        sources = data.world_path(args.world) / "sources"
+    except KeyError:
+        ctx.say(f"no bundled world {args.world!r}; there are {', '.join(worlds)}")
+        return wire.EXIT_USAGE
+    target = Path(args.folder or f"{args.world}-inputs").expanduser()
+    if target.exists() and (not target.is_dir() or any(target.iterdir())):
+        ctx.say(f"{target} is not empty: pick a new folder")
+        return wire.EXIT_USAGE
+    shutil.copytree(sources, target, dirs_exist_ok=True)
+    count = sum(1 for p in target.rglob("*") if p.is_file())
+    ctx.say(f"copied {count} synthetic input files of {args.world} to {target}")
+    ctx.say(f'next: aksha run --agent research --input {target} "<your request>"')
+    return wire.EXIT_OK
+
+
+def cmd_doctor(ctx: Context, args: argparse.Namespace) -> int:
+    """The version, the paths in use and which extras are installed; opens nothing."""
+    storage = ctx.config.storage
+    ctx.say(f"aksha {aksha.__version__} (Python {sys.version.split()[0]})")
+    ctx.say(f"home:     {ctx.home}")
+    if storage.backend == "sqlite":
+        ctx.say(f"store:    sqlite {storage.sqlite_path}")
+    else:
+        ctx.say("store:    postgres (AKSHA_POSTGRES_DSN)")
+    ctx.say(f"blobs:    {storage.blob_path}")
+    ctx.say(f"agents:   {', '.join(str(p) for p in ctx.config.agent_paths)}")
+    ctx.say(f"mode:     {ctx.config.mode}")
+    for extra, modules in EXTRAS.items():
+        if all(_importable(m) for m in modules):
+            ctx.say(f"{extra}: installed")
+        else:
+            ctx.say(f"{extra}: missing; add it with {install_hint(extra)}")
+    return wire.EXIT_OK
 
 
 # --- parser and entry point ----------------------------------------------------------------
@@ -627,6 +707,7 @@ def cmd_serve(ctx: Context, args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser; a usage error exits 2."""
     p = argparse.ArgumentParser(prog="aksha", description="The Aksha agent harness.")
+    p.add_argument("--version", action="version", version=f"aksha {aksha.__version__}")
     p.add_argument(
         "--user",
         default=os.environ.get("AKSHA_USER", DEFAULT_USER),
@@ -634,7 +715,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("serve", help="run the server (needs aksha[server])")
+    s = sub.add_parser(
+        "demo", help="the offline change-and-recovery demo (aksha demo --help)", add_help=False
+    )
+    s.add_argument("rest", nargs=argparse.REMAINDER)
+
+    s = sub.add_parser("example", help="copy a bundled synthetic world's inputs to a folder")
+    s.add_argument("world", nargs="?", help="the world (none: list them)")
+    s.add_argument("folder", nargs="?", help="a new folder (default: <world>-inputs)")
+    s.set_defaults(handler=cmd_example)
+
+    s = sub.add_parser("doctor", help="version, paths in use and installed extras")
+    s.set_defaults(handler=cmd_doctor)
+
+    s = sub.add_parser("serve", help="run the server (needs aksha-harness[server])")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8765)
     s.set_defaults(handler=cmd_serve)
@@ -706,7 +800,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("verify", help="check the hash chain (read-only)")
     s.set_defaults(handler=cmd_verify)
 
-    s = sub.add_parser("trace", help="export a run's trace as OTLP JSON (needs aksha[otel])")
+    s = sub.add_parser(
+        "trace", help="export a run's trace as OTLP JSON (needs aksha-harness[otel])"
+    )
     s.add_argument("run")
     s.add_argument("--out")
     s.set_defaults(handler=cmd_trace)
@@ -729,6 +825,10 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     first = _command_index(arguments)
     if first < len(arguments) and arguments[first] == "eval":
         return evals.main(arguments[first + 1 :])
+    if first < len(arguments) and arguments[first] == "demo":
+        from aksha.interfaces.demo.__main__ import main as demo
+
+        return demo(arguments[first + 1 :], os.environ if env is None else env)
     args = build_parser().parse_args(arguments)
     try:
         config = RuntimeConfig.from_env(os.environ if env is None else env)
@@ -736,6 +836,7 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
         print(f"environment: {e.code}: {e.message}", file=stream)
         return wire.EXIT_ENVIRONMENT
     ctx = Context(config, args.user, stream, arguments)
+    ctx.home = data_home(os.environ if env is None else env)
     handler: Callable[[Context, argparse.Namespace], int] = args.handler
     try:
         return handler(ctx, args)

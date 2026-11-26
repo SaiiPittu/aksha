@@ -16,9 +16,11 @@ from pathlib import Path
 
 import pytest
 
+from aksha import data
+
 REPO = Path(__file__).resolve().parents[2]
 AGENTS = REPO / "src" / "aksha" / "agents"
-WORLDS = REPO / "fixtures" / "worlds"
+WORLDS = data.worlds()
 FIXTURE_TERMS = (
     # ventures, people, companies and products
     "Stillroom", "Hushframe", "Tilldew", "Kelvra", "Veyra", "Tallyway", "Noctra",
