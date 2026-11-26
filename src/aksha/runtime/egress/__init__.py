@@ -1,5 +1,7 @@
-"""Egress policy (ADR-P26): which hosts a network-reading tool may reach.
+"""Egress policy (ADR-P26): which hosts a tool body may reach, through the runtime's client.
 
-Built: ``types.py`` (``EgressPolicy``). Planned: ``check_destination`` and the
-``HttpClient`` port the runtime hands to tool bodies.
+Built: ``EgressPolicy`` (deny by default), ``check_destination`` (pure), the ``HttpClient``,
+``Resolver`` and ``Transport`` ports, ``PolicedHttpClient`` (checked after resolution and
+on every redirect, each decision recorded) and ``RefusingHttpClient``. The resolver and
+transport are adapters (``aksha.adapters.egress``).
 """

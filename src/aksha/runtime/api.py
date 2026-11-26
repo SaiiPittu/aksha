@@ -18,7 +18,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
 5. Tools (P10): ``ToolSpec``, ``ToolDecl``, ``ToolUse``, ``ToolBody``, ``RetryPolicy``,
    ``EffectClass``; what a body sees and returns: ``ToolContext``, ``ToolOutcome``, ``Ok``,
    ``Err``. A tool spec's parts owned elsewhere: ``EffectSpec`` (P03), ``ApprovalRule``
-   (P17), ``SandboxNeeds`` and ``SandboxPolicy`` (P12).
+   (P17), ``SandboxNeeds``, ``SandboxPolicy``, ``ExecLimits`` and ``TreeManifest`` (P12).
+   What a body's handles answer: ``ExecOutcome`` (``ToolContext.exec``, P12),
+   ``HttpResponse`` and ``EgressRefused`` (``ToolContext.http``, P26).
 6. Stop policies (P16): ``StopPolicyOptIn``, ``Goal``, ``Plan``, ``ForcedTool``,
    ``TodoReminder``. Interrupts (P17): ``DeclaredInterrupt``.
 7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``; what an alias
@@ -58,6 +60,8 @@ from aksha.runtime.budgets.types import Backoff, Budget, Limits
 from aksha.runtime.context.types import ContextPolicy, ResumePolicy, SummaryPolicy
 from aksha.runtime.definitions.types import Agent, Extension, Projection
 from aksha.runtime.definitions.versions import API_VERSION
+from aksha.runtime.egress.errors import EgressRefused
+from aksha.runtime.egress.ports import HttpResponse
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
@@ -102,12 +106,15 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec, SystemReceipt
 from aksha.runtime.projections.ports import Reducer
 from aksha.runtime.projections.view import ArtifactsView, LogView
+from aksha.runtime.sandbox.exec import ExecOutcome
 from aksha.runtime.sandbox.types import (
     EnvironmentSpec,
     SandboxBackendSpec,
     SandboxNeeds,
     SandboxPolicy,
+    TreeManifest,
 )
+from aksha.runtime.sandbox.types import Limits as ExecLimits
 from aksha.runtime.stop_policy.types import ForcedTool, Goal, Plan, StopPolicyOptIn, TodoReminder
 from aksha.runtime.tasks.types import (
     Check,
@@ -158,11 +165,14 @@ __all__ = [
     "EffectClass",
     "EffectSpec",
     "EgressPolicy",
+    "EgressRefused",
     "EnvironmentSpec",
     "Err",
     "Event",
     "EventTypeSpec",
     "Excerpt",
+    "ExecLimits",
+    "ExecOutcome",
     "Extension",
     "ExtractionRequest",
     "ExtractionResult",
@@ -173,6 +183,7 @@ __all__ = [
     "GenerationRequest",
     "GenerationResult",
     "Goal",
+    "HttpResponse",
     "InputRef",
     "InstanceRef",
     "InstanceStatus",
@@ -221,6 +232,7 @@ __all__ = [
     "ToolOutcome",
     "ToolSpec",
     "ToolUse",
+    "TreeManifest",
     "Unknown",
     "Usage",
     "VersionedSourceSpec",

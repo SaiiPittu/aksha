@@ -80,6 +80,7 @@ from aksha.runtime.projections.view import LogView, load_view
 from aksha.runtime.router.commands import answer_route, submit
 from aksha.runtime.router.router import Router
 from aksha.runtime.router.types import RoutableAgent
+from aksha.runtime.sandbox.tier import ExecutionTier
 from aksha.runtime.sandbox.types import Availability
 from aksha.runtime.session import named as n
 from aksha.runtime.session.commands import derive_command_id, dispatch
@@ -148,10 +149,12 @@ class SessionAgent:
         sandbox: Availability | None = None,
         blobs: BlobStore | None = None,
         reader: RecordReader | None = None,
+        tier: ExecutionTier | None = None,
     ) -> LoopSetup:
         """The loop's setup for one of ``owner``'s runs of this agent.
 
-        ``reader`` is the record reader its tool bodies read versioned sources through.
+        ``reader`` is the record reader its tool bodies read versioned sources through;
+        ``tier`` is tier 3 (the sandbox backend, the network, egress and environments).
         """
         limits = self.agent.limits
         extra: dict[str, Any] = {} if limits is None else {"limits": limits}
@@ -172,6 +175,7 @@ class SessionAgent:
             definition_hash=self.definition_hash,
             blobs=blobs,
             reader=reader,
+            tier=tier or ExecutionTier(),
             **extra,
         )
 
@@ -212,8 +216,12 @@ class Session:
         sources: Sequence[VersionedSource] = (),
         reader: RecordReader | None = None,
         ids: IdSource | None = None,
+        tier: ExecutionTier | None = None,
     ) -> None:
-        """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads."""
+        """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads.
+
+        ``tier`` is tier 3 every run's tools use (ADR-P12, P26, P28); None runs nothing.
+        """
         self.store = store
         self.clock = clock
         self.agents: Mapping[str, SessionAgent] = MappingProxyType({a.name: a for a in agents})
@@ -223,6 +231,7 @@ class Session:
         self.systems: Mapping[str, SystemOfRecord] = MappingProxyType(dict(systems or {}))
         self.sources = tuple(sources)
         self.reader = reader
+        self.tier = tier or ExecutionTier()
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
         self._executors: dict[str, StepExecutor] = {}
         self._unavailable: dict[str, dict[str, str]] = {}
@@ -539,7 +548,7 @@ class Session:
         agent = self._agent_of_run(view, run)
         assert agent is not None, f"{run} is not a run of a loaded agent"
         return agent.setup(self.store, owner, _request(view, run), sandbox=self.sandbox(),
-                           blobs=self.blobs, reader=self.reader)  # fmt: skip
+                           blobs=self.blobs, reader=self.reader, tier=self.tier)  # fmt: skip
 
     def _executor(self, owner: str) -> StepExecutor:
         held = self._executors.get(owner)

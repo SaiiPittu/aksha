@@ -1,6 +1,6 @@
-"""Sandbox adapters (ADR-P12): where a tool body runs so the host can bound and end it.
+"""Sandbox adapters (ADR-P12): where a program runs so the host can bound, confine and end it.
 
-Built so far: ``ProcessGroupUnit``, a child process in its own process group, which
-implements cancellation's ``KillableUnit`` port (ADR-P18 D6). The sandbox backends that
-confine a body (``refusing.py``, ``bwrap.py``) arrive with ADR-P12.
+``process.py``: ``ProcessGroupUnit``, a child process in its own process group, which
+implements cancellation's ``KillableUnit`` port (ADR-P18 D6). ``bwrap.py``: the bubblewrap
+backend of strength ``os-jail``. The ``refuse`` backend lives in the runtime core.
 """

@@ -19,14 +19,17 @@ holds the span drafts a read or fetch tool asks the runtime to mint (ADR-P13 D1)
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
 from aksha.runtime.artifacts.types import InputRef, SaveRequest
+from aksha.runtime.egress.client import RefusingHttpClient
+from aksha.runtime.egress.ports import HttpClient
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.types import SpanDraft
 from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.outbox.types import EffectSpec
+from aksha.runtime.sandbox.ports import ExecAPI
 from aksha.runtime.sandbox.types import SandboxNeeds
 
 EffectClass = Literal["read", "store", "external", "exec", "model", "reserved"]
@@ -88,6 +91,10 @@ class ToolContext:
     ``run_date`` is the ISO date (``YYYY-MM-DD``) of the run's recorded ``run.started``,
     so a body that counts days counts them to a recorded date, the same on every replay.
     It is not yet a recorded read: ADR-P25 D4's ``observe_time`` is not built.
+
+    ``http`` is the only way a body reaches the network (ADR-P26 D2): bound to the tool's
+    egress policy, or refusing everything when the tool names none. ``exec`` runs a program
+    in a fresh box under the tool's sandbox policy (ADR-P12); None for a non-exec tool.
     """
 
     owner: str
@@ -98,6 +105,8 @@ class ToolContext:
     attempt: int
     reader: RecordReader | None = None
     run_date: str | None = None
+    http: HttpClient = field(default_factory=RefusingHttpClient)
+    exec: ExecAPI | None = None
 
 
 @dataclass(frozen=True)

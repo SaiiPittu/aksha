@@ -72,3 +72,24 @@ def test_scan_sources_reads_every_aksha_import_form(tmp_path: Path) -> None:
     assert found["c.py"].target == "aksha.app.open_event_store"
     assert found["e.py"].named_extension() == "echo"
     assert found["a.py"].named_extension() is None
+
+
+def test_scan_sources_refuses_network_modules_in_definitions(tmp_path: Path) -> None:
+    """ADR-P26 D2: a tool body reaches the network only through ``ctx.http``."""
+    folder = _pkg(
+        tmp_path,
+        {
+            "a.py": "import socket\n",
+            "b.py": "from urllib import request\n",
+            "c.py": "import urllib.request\n",
+            "d.py": "from http.client import HTTPSConnection\n",
+            "e.py": "import requests\n",
+            "f.py": "importlib.import_module('httpx')\n",
+            "ok.py": (
+                "from urllib.parse import urlsplit\nfrom http import HTTPStatus\nimport json\n"
+            ),
+        },
+    )
+    found = sorted((f.file, f.code) for f in scan_sources(folder))
+    assert found == [(name, "network_import") for name in
+                     ("a.py", "b.py", "c.py", "d.py", "e.py", "f.py")]  # fmt: skip

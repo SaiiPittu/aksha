@@ -17,7 +17,10 @@ listed them. For each position ``tNN/cMM``:
    Route      What runs
    =========  ================================================================
    dispatch   the body (read, store and exec tools) with the attempt's record
-              reader, the reads it declares (``Ok.reads``), its saves through the
+              reader, its HTTP client and, for an exec tool, its exec API
+              (``loop.tier``: egress decisions and exec records go on the step,
+              and an exec step is its own kill boundary), the reads it declares
+              (``Ok.reads``), its saves through the
               one save path with what they confirm (``invalidation.saving``: a diff
               review for a rebuilt human-reviewed version, revocations and review
               voids, ADR-P05 D1, D9), the capped model view, and its span drafts
@@ -65,12 +68,14 @@ from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
+from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, with_records
 from aksha.runtime.loop.types import SIGNAL_FIELD, LoopSetup, PositionOutcome, Signal, skip_code
 from aksha.runtime.models.types import ToolCall as ReplyCall
 from aksha.runtime.policy.events import args_hash, decision_event
 from aksha.runtime.policy.gate import check
 from aksha.runtime.policy.types import Allow, GateInput, StopPolicyNarrowing
 from aksha.runtime.projections.view import LogView
+from aksha.runtime.sandbox.exec import BoxedExec, ExecUnit
 from aksha.runtime.storage.rows import ArtifactRow
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
@@ -90,6 +95,9 @@ SAVE_NOT_ALLOWED = "class_violation"
 SAVING_EFFECTS = frozenset({"store", "exec"})
 """The effect classes whose bodies may ask for saves (ADR-P10)."""
 
+NEVER_RETRIED = frozenset({"egress_refused"})
+"""Codes no retry policy retries: a refused destination is refused again (ADR-P26 D4)."""
+
 UNRECORDED_DEFINITION = "unrecorded"
 """The definition hash an approval body names when neither the loop nor the run has one."""
 
@@ -103,7 +111,7 @@ def tool_policy(spec: ToolSpec) -> StepPolicy:
     return StepPolicy(
         timeout_ms=retry.timeout_ms,
         max_retries=retry.max_retries,
-        retry_on=retry.retry_on,
+        retry_on=retry.retry_on - NEVER_RETRIED,
         backoff=Backoff(base_ms=base, factor=factor, cap_ms=max(delays)),
     )
 
@@ -207,30 +215,35 @@ def run_position(
     hashed = args_hash(call.arguments)
     cap = setup.policy().result_cap_chars
 
-    def record(work: Callable[[], StepOutput]) -> PositionOutcome:
+    def record(work: Callable[[], StepOutput], unit: ExecUnit | None = None) -> PositionOutcome:
         def timed(deadline: Deadline) -> StepOutput:
             return work()
 
-        result = executor.step(step, "tool", call.name, hashed, timed, policy, extra=extra)
+        result = executor.step(step, "tool", call.name, hashed, timed, policy, extra=extra,
+                               unit=unit)  # fmt: skip
         return _outcome(n, call.name, result)
 
     if decision.route == "dispatch":
         args = call.arguments
         attempt = attempt_number(view, str(step))
         run_date = _run_date(view, ref.run)
+        unit = ExecUnit() if spec.effect == "exec" else None
 
-        def ctx(reader: AttemptReader) -> ToolContext:
+        def ctx(reader: AttemptReader, http: HttpFor, exe: BoxedExec | None) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader, run_date)  # fmt: skip
+                               attempt, reader, run_date, http, exe)  # fmt: skip
 
-        # Each attempt reads through a fresh reader; its drafts are minted over what it returned.
-        return record(
-            lambda: (
-                lambda r: _dispatched(
-                    setup, ref, step, spec, call_body(decl, ctx(r), args), r.returned
-                )
-            )(AttemptReader(setup.reader))
-        )
+        def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
+            # Each attempt reads through a fresh reader (its drafts are minted over what it
+            # returned) and reaches the network and the sandbox through its own handles.
+            reader = AttemptReader(setup.reader)
+            http = http_for(setup, spec)
+            exe = None if unit is None else exec_for(setup, spec, str(step), attempt, unit)
+            out = _dispatched(setup, ref, step, spec, body(ctx(reader, http, exe)),
+                              reader.returned)  # fmt: skip
+            return with_records(out, http, exe)
+
+        return record(lambda: dispatched(lambda c: call_body(decl, c, args)), unit)
     if decision.route == "reserved" and call.name == "finish":
         done = ToolOutcome(Ok({"finish": "proposed"}))
         return record(lambda: _shown(done, cap, signal="finish"))

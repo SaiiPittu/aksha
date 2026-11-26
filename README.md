@@ -50,11 +50,11 @@ aksha trace R-0001           # var/traces/R-0001/1.otlp.jsonl, one file per exec
 
 aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research --headless
 # refused: sandbox_required (...)                                         (exit code 7)
-AKSHA_SANDBOX=bwrap:os-jail aksha run "Who sells camera-free occupancy sensing for offices in the EU, and at what price?" --agent research --headless
+AKSHA_SANDBOX=bwrap aksha run "Who sells camera-free occupancy sensing for offices in the EU, and at what price?" --agent research --headless
 # R-0002 research ended complete (headless)
 ```
 
-`AKSHA_SANDBOX` is a declaration by the operator, not a probe: no sandbox backend is built yet, so setting it confines nothing (see the limitations). With `--agent` left out, the router picks the agent from the loaded agents' purposes. State lives in `var/`; delete it to start again.
+`AKSHA_SANDBOX` chooses the sandbox backend, which is probed once at start: `bwrap` (bubblewrap, Linux), `auto` (the strongest that probes available) or `refuse` (runs nothing). A backend that does not probe available becomes `refuse` with the reason, never a weaker box, so on a host without bubblewrap the headless run above is refused. `<name>:<strength>` with any other name declares an outer box the operator attests the process runs in, such as a container: a headless run may start, and exec tools are still refused. The choice and every probe are recorded on `run.started`. Tools reach the network only through the runtime's HTTP client, under their egress policy, and only with `AKSHA_NETWORK=on`. With `--agent` left out, the router picks the agent from the loaded agents' purposes. State lives in `var/`; delete it to start again.
 
 The patent agent runs end to end the same way, up to an approved send. Every waiting line says what is being asked:
 
@@ -211,7 +211,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P09 | Memory | designed | |
 | P10 | Tool registry and schemas | built | One declared spec per tool with one effect class |
 | P11 | Policy gate and permissions | built | Deny by default, one checker in code, headless mode that never asks |
-| P12 | Sandbox and execution environment | designed | Declared sandbox types and a process-group kill unit; no confining backend |
+| P12 | Sandbox and execution environment | built | A bubblewrap backend (allowlisted root, network off, cleared environment, hard limits, process-group kill), the `refuse` backend, policies that only narrow, the exec record on every step |
 | P13 | Grounding and citations | built | Tool-minted spans, verbatim quote checks at save, explicit unknowns |
 | P14 | Budgets, limits, timeouts, retries | built | Every cap counted from the event store |
 | P15 | Task model and scheduler | built | Compiled Task tree, completion checks, status as a projection, the supervisor rule |
@@ -225,9 +225,9 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P23 | Request router | built | Classification over the loaded agents' purposes, a route question when it abstains |
 | P24 | Partial results and finalization | built | Explicit unknowns, the `blocked` outcome, finalize on a budget interrupt |
 | P25 | Durable timers and recorded time | designed | |
-| P26 | Egress policy | designed | The declared `EgressPolicy` type only; no enforcement |
+| P26 | Egress policy | built | Deny by default; the runtime's HTTP client checks every resolved address and every redirect, and records each decision |
 | P27 | Steering and follow-up input | designed | The `Steer` command type exists and is refused `unsupported` |
-| P28 | Execution environment image | designed | |
+| P28 | Execution environment image | built | Images keyed by a content hash of the spec and lock files, first build approved, packages fetched under egress and hash-checked, installed offline, recorded, mounted read-only at `/env` |
 | P29 | External record state | designed | |
 | P30 | Erasure in an append-only store | planned | |
 
@@ -276,12 +276,12 @@ A hash chain is tamper-evident, not tamper-proof: anyone who can open the databa
 
 As of 26 Nov 2026:
 
-1. **No sandbox backend.** Nothing confines a tool call yet (P12). A headless run is refused `sandbox_required` unless `AKSHA_SANDBOX` declares one, and that variable is the operator's word, not a check: Aksha does not probe for or start the sandbox it names. Exec steps can be bounded and killed by process group, not confined.
+1. **One sandbox backend, Linux only.** Bubblewrap (strength `os-jail`) is the only confining backend (P12); container and VM backends, the materialisation cache and nested tree manifests are designed and not built. A host without bubblewrap, or with unprivileged user namespaces turned off, runs no exec tool. The box's total memory and writable storage are sampled every 20 ms and the box is killed on a breach, so a box can overshoot by one interval's growth; no cgroup limit is built. Neither example agent has an exec tool yet. A first image build that no policy pre-approves needs an operator grant (`AKSHA_APPROVED_ENVIRONMENTS`); the approval interrupt for it is not built.
 2. **The only system of record is a mock.** An approved send from the command line goes to the development mailbox `AKSHA_SYSTEMS` binds (a JSON file); no real mail or document system is built. Without the setting the approval is refused `system_unavailable` and the run keeps waiting. A run that was approved by a process with the mailbox and resumed by one without it waits too, and says why, while the owner's other runs go on; recovery still refuses an owner with an unfinished send and no system for it.
 3. **OTLP/HTTP export is not built.** Traces go to local OTLP JSON Lines files only; sending them to a collector over HTTP is designed (P21) and not built.
 4. **Steering is unsupported.** The `Steer` command type exists, but the session API refuses it `unsupported` and the capability record does not list it (P27 is designed).
 5. **A rebuilt Task starts from a fresh context.** When invalidation rebuilds work, the rebuilt instance starts from a fresh context that opens with what changed (`rebuild_brief`); that is the default. Resuming the instance in its own recorded history, with stale tool results masked and a change notice, is built (decision 36) but off by default: a run opts in with `AKSHA_REENTRY=resume`, and a resume that hits a named trigger (a moved premise, a blocked or looping session, injected text, a changed definition, a session over budget) falls back to fresh. Resume becomes the default only if the measured comparison of the two shows it does better. The comparison runs (`aksha eval run change`), but only in fake model mode, where it shows that the arms run and grade correctly and not which mode is better; the live-model run that decides has not been done.
-6. **No egress enforcement.** The `EgressPolicy` type exists; destination checks and the HTTP client do not.
+6. **Egress is per tool, not per process.** The runtime's HTTP client enforces each tool's policy, and the source scan refuses network imports in agent and extension modules; a body that hides an import (`getattr` chains, `exec`) is beyond the scan, which is why only trusted folders load.
 7. **Anchoring is partial.** A file anchor sink and `verify_against` exist; scheduled anchoring, a `chain.anchored` event and a write-once sink do not.
 8. **Erasure is open.** An append-only, hash-chained store and erasing personal data pull in opposite directions; P30 lists options and picks none.
 9. **One Task instance at a time.** Concurrency above one and keyed children below the top level are refused by the loader.
@@ -292,7 +292,7 @@ As of 26 Nov 2026:
 
 [docs/design/05-future-directions.md](docs/design/05-future-directions.md) records what an unattended software factory needs on top of the first release, each item an extension of an existing primitive: a stronger isolation tier for untrusted code (X-1), a halt-everything stop (X-2), repeated denials that ask a person (X-3), per-agent identity and credentials (X-4), an untrusted-origin mark that follows lineage (X-5), a conversation view and a cross-run approval inbox (X-6), and runs started by incoming events (X-7). X-1 to X-7 are designed and not built; X-8, the hash-chained event store, is built, with external anchoring next.
 
-The nearer steps: a sandbox backend behind the P12 port, a real system of record behind the outbox, OTLP/HTTP export, and the live-model run of the comparison of fresh and resumed rebuild contexts (it runs in fake model mode today).
+The nearer steps: a container backend behind the P12 port, a real system of record behind the outbox, OTLP/HTTP export, and the live-model run of the comparison of fresh and resumed rebuild contexts (it runs in fake model mode today).
 
 ## Development
 

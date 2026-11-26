@@ -10,8 +10,9 @@ beside a server.
 
 ``aksha run --headless`` starts a headless run (ADR-P11 D12, option B): no approval is
 asked, every deny still holds, and the start is refused ``sandbox_required`` unless a
-sandbox is declared (``AKSHA_SANDBOX``). The exit codes are in :mod:`aksha.interfaces.wire`.
-A first Ctrl-C during an embedded run asks the run to stop (ADR-P18 D7) and exits 6.
+sandbox backend probes available (``AKSHA_SANDBOX``) or an outer box is declared. The
+exit codes are in :mod:`aksha.interfaces.wire`. A first Ctrl-C during an embedded run
+asks the run to stop (ADR-P18 D7) and exits 6.
 
 ``aksha eval`` (ADR-P22) is offline and touches no session store: its line goes whole to
 :func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes.
@@ -139,7 +140,10 @@ def _asked(ctx: Context, w: Waiting) -> None:
 def _refused(ctx: Context, receipt: CommandReceipt) -> int:
     ctx.say(f"refused: {receipt.refused} (command {receipt.command_id}, seq {receipt.seq})")
     if receipt.refused == "sandbox_required":
-        ctx.say("  a headless run needs a sandbox: set AKSHA_SANDBOX=<backend>:<strength>")
+        ctx.say(
+            "  a headless run needs a sandbox: set AKSHA_SANDBOX=bwrap (probed), or "
+            "AKSHA_SANDBOX=<name>:<strength> for an outer box this process runs in"
+        )
     if receipt.refused == SYSTEM_UNAVAILABLE:
         ctx.say("  no system of record for this send; for development, a mock mailbox: "
                 "AKSHA_SYSTEMS=counsel_mail=mailbox:<folder> (it delivers to a file, "

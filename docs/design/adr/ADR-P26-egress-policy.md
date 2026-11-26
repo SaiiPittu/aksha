@@ -24,6 +24,17 @@ In live mode, a search hit or a link inside a fetched page can point `fetch_page
 3. D3, check the address, not only the URL. The client resolves the host, refuses any resolved address in private, loopback, link-local or metadata ranges unless the policy names it, connects to the checked address, and re-checks on every redirect.
 4. D4, a refusal is a tool error the model reads (`egress_refused{host}`), recorded on `step.completed`; it is never retried.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+Built on 26 Nov 2026: the policy check, the runtime's HTTP client and its adapters, the records, and the source scan.
+
+1. A1, deny by default. An empty `allow_hosts` reaches no host (`host_not_allowed`), where the interface sketch read it as any public host; `"*"` names any host and still refuses private, loopback, link-local and metadata addresses. Entries are exact hosts, `*.` subdomains (not the bare domain), `*`, or CIDR ranges; an allow range matches a host whose every resolved address lies in it, and a deny range refuses a host any of whose resolved addresses lies in it (`host_denied`).
+2. A2, the network is off per process unless asked. The composition root builds the resolver and transport only with `AKSHA_NETWORK=on`; otherwise every tool's client refuses `network_off`, so a default run stays offline. The setting is recorded on `run.started` under `sandbox.network`.
+3. A3, D1 becomes a runtime default, D2 a load-time scan. The loader cannot tell which body reads the network, so `egress_policy_missing` is not a load refusal: a tool with no `egress` gets a client that refuses every URL (`no_egress_policy`), and a policy no loaded extension declares refuses `egress_policy_unknown`. The source scan refuses `network_import` for `socket`, `ssl`, `urllib.request`, `http.client`, `http.server`, `requests`, `httpx`, `aiohttp`, `urllib3` and the mail and file-transfer clients in agent and extension modules (`urllib.parse` and `http.HTTPStatus` stay allowed). A hidden import is beyond the scan, which is why only trusted folders load.
+4. A4, the record and the refusal (D4). Every hop's decision (policy, URL, host, resolved addresses, allowed, reason) goes on the step's `step.completed` under `value["egress"]`, refused or not. A refusal raised out of a body becomes `Err("egress_refused", item=<host>)`; the loop removes `egress_refused` from every tool's `retry_on`, so it is never retried even when a tool names it.
+5. A5, the ports. `HttpClient` (`ToolContext.http`), `Resolver` and `Transport` are in `runtime/egress/ports.py`; `check_url` and `check_destination` are pure; `PolicedHttpClient` resolves, checks every address, records, and connects to the first checked address, so a name is never re-resolved between the check and the connect; TLS still names and verifies the URL's host. Redirects (at most five) are new hops; a URL with credentials is refused; bodies are capped at 5 MiB. The adapters are `adapters/egress/network.py`.
+6. A6, environments use the same client. ADR-P28's fetch step runs the policed client under the environment spec's egress policy; its decisions are in the build record.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

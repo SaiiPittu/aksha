@@ -121,6 +121,23 @@ RUN_STARTED = EventTypeSpec(
                 },
             },
             "model_binding": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            # ADR-P12 decision 9: the backend chosen at start, every probe, the run
+            # ceiling's hash, whether the network is on and any granted image keys.
+            "sandbox": {
+                "type": "object",
+                "properties": {
+                    "backend": {"type": "string", "minLength": 1},
+                    "strength": {"enum": ["none", "os-jail", "container", "vm"]},
+                    "available": {"type": "boolean"},
+                    "version": {"type": "string"},
+                    "declared": {"type": "boolean"},
+                    "probes": {"type": "array", "items": {"type": "object"}},
+                    "ceiling_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                    "network": {"enum": ["on", "off"]},
+                    "approved_images": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["probes", "network"],
+            },
             # ADR-P14 D2: the run's budget; a dimension left out is not capped.
             "budget": {
                 "type": "object",

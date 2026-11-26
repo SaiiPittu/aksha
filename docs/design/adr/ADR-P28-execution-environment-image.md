@@ -25,6 +25,17 @@ The terms:
 4. D4, the first build per environment key needs approval. The policy gate treats the build as an `exec` tool with `approval` on its first build per key, because a package's install script runs arbitrary code, even with the network off.
 5. D5, images are cached by environment key; a hit skips the build and records the read.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+Built on 26 Nov 2026 in `runtime/sandbox/images.py`, with `/env` in the bubblewrap backend.
+
+1. A1, the key. `environment_key(spec, locks)` is SHA-256 over the canonical JSON of the base, the build argv and each declared lock path's blob ref. The lock files come from the exec's inline files, else its workspace tree (`environment_lock_missing`).
+2. A2, which locks pin packages. A `uv.lock` (every `wheels` and `sdist` entry with its `url` and `hash`) and hashed URL lines in `*.lock` or `*.txt` (`<url> --hash=sha256:<hex>`). Any other declared input, such as `pyproject.toml`, keys the image and pins nothing. A URL with no hash refuses the build (`package_unpinned`). Every pinned file is fetched; choosing one wheel per platform is not built.
+3. A3, the image is recorded, not yet an artifact (D2). The build's record rides on the exec record of the step that needed the image: the key, the approval basis, the packages and hashes, the egress decisions, the build box's record, the image's hash and a manifest blob. The image files and the manifest are blobs. `recorded_images` reads the records back as the cache index, so a key built once is a hit (D5, recorded as `hit` with its manifest) with no fetch and no box. An artifact kind with path-scoped lineage is not built, for the same reason as ADR-P12 S4: the kind is the sandbox extension's.
+4. A4, approval of a first build (D4). A key is built only when it was built before (a hit), when the spec pre-approves pinned builds (`EnvironmentSpec.preapprove_pinned`, the workspace strategy's WS-14 lean, a recommendation awaiting the maintainer: every package hash-pinned and fetched under the index policy), or when an operator granted the key (`AKSHA_APPROVED_ENVIRONMENTS`, recorded on `run.started`). Otherwise the exec is refused `environment_approval_required` with the key, and nothing is fetched or run. The approval interrupt that parks the run and asks a person is not built: the approval machinery (ADR-P17) approves external effects only.
+5. A5, the build (D3). It runs inside the exec step that needs it, on the same backend and kill unit, with the network off, writable `out` and `tmp`, and the lock files and `pkgs/<file>` as its only inputs; whatever it writes under `out/env` is the image. A package fetch has its own body cap of 512 MiB, not the 5 MiB page cap, and a body cut at it fails (`package_fetch_failed`). A package whose bytes do not match the lock's hash fails before any box runs (`package_hash_mismatch`); a refused destination is `egress_refused`; a failed install is `environment_build_failed`. The image is mounted read-only at `/env`, with `bin/` executable and `/env/bin` first on `PATH`.
+6. A6, `base` keys the image but does not choose the box's root, which is still the host's allowlisted system paths (ADR-P12 decision 3). Pinning a root image is open.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
