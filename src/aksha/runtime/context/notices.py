@@ -22,6 +22,7 @@ from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import ContextPolicy, Masked, StaleRead
+from aksha.runtime.grounding.types import STATEMENT_SOURCE
 from aksha.runtime.invalidation.plan import rebuild_plan
 from aksha.runtime.invalidation.rebuild import rebuild_brief
 from aksha.runtime.invalidation.types import RebuildBrief
@@ -165,10 +166,28 @@ def rebuild_notice(brief: RebuildBrief, policy: ContextPolicy) -> str:
     return "\n".join(lines)
 
 
+def _statement_spans(view: LogView) -> dict[tuple[str, str], str]:
+    """The statement span minted for each answered question, by (interrupt, question ID)."""
+    out: dict[tuple[str, str], str] = {}
+    for e in view.events:
+        if e.type != "excerpts.minted":
+            continue
+        for s in e.payload.get("spans", ()):
+            if s.get("source") == STATEMENT_SOURCE:
+                qid = str(s["version"]).rsplit("/", 1)[-1]
+                out[(str(s["record_id"]), qid)] = str(s["span_id"])
+    return out
+
+
 def answers(view: LogView, instance: InstanceRef) -> str:
-    """The person's answers to this instance's interrupts, in order, never reduced."""
+    """The person's answers to this instance's interrupts, in order, never reduced.
+
+    Each answer minted as a statement span (ADR-P13 D4) names that span, so the model can
+    cite the person's words with the statement form.
+    """
     questions: dict[str, dict[str, str]] = {}
     lines: list[str] = []
+    statements = _statement_spans(view)
     for e in view.events:
         if e.run != instance.run:
             continue
@@ -176,9 +195,12 @@ def answers(view: LogView, instance: InstanceRef) -> str:
             qs = {str(q["id"]): str(q["text"]) for q in e.payload.get("questions", ())}
             questions[str(e.payload["interrupt"])] = qs
         elif e.type == "interrupt.resolved" and str(e.payload["interrupt"]) in questions:
-            qs = questions[str(e.payload["interrupt"])]
+            ident = str(e.payload["interrupt"])
+            qs = questions[ident]
             for qid, answer in sorted(dict(e.payload.get("answers", {})).items()):
-                lines.append(f"Q: {qs.get(qid, qid)}\nA: {answer}")
+                line = f"Q: {qs.get(qid, qid)}\nA: {answer}"
+                span = statements.get((ident, qid))
+                lines.append(f"{line}\n(cite this answer as statement {span})" if span else line)
             if "decision" in e.payload:
                 lines.append(f"Decision on {e.payload['interrupt']}: {e.payload['decision']}")
     if not lines:

@@ -1,0 +1,1 @@
+Fix the scope: customer segment, geography and research boundary. Take each from the request when it says so, read the founder's priorities, and ask one question only for a dimension that is missing and would change the result. Save the scope with where each value came from.

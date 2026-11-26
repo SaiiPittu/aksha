@@ -60,6 +60,11 @@ What breaks without this primitive: The Research Agent saves a price cell citing
 
 Agent-side, no core change: The Research Agent's `claim_status` (`fact`, `vendor_claim`, `inference`, `unknown`) is agent schema or the evidence-grid extension; keyword rows mint one span per row so the 12-character minimum quote holds and the unit stays in the evidence; the Patent Agent's `Field.status` carries `needs_counsel`.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, the reader (D1). `RecordReader` (`grounding/ports.py`) reads one versioned source's records: `read(source, record_id)` returns a `ReturnedText` at the record's current version, `records(source, collection)` lists IDs. The loop gives each dispatched attempt a fresh `AttemptReader` in `ToolContext.reader` and mints the body's drafts over exactly the texts it returned; with no reader configured every read is None and a draft is refused as before. The composition root picks the adapter; `adapters/sources/folder.py` serves a folder of files, versioned by a hash of their bytes.
+2. B2, the model sees what it may cite. A span is minted after the result is rendered, so the view cannot carry its ID. The step records each draft's span ID in draft order (`value["spans"]`), and the tool message shows `{"citation_spans": [...]}` after the result. An answer to an input interrupt names its statement span in the answers block, and an unknown read line names the blocker's failed steps, so a reader can save `Unknown(reason="unverified", failed_step=...)`.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |

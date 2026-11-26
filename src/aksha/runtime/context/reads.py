@@ -16,7 +16,9 @@ cites (``citation.bound`` with the version as carrier), all of them for ``full``
 ``summary`` rendering is a read of the version: it becomes a lineage input of the step.
 
 After the versions, each slot an ``all`` or field read names that holds an explicit
-unknown (ADR-P24) is shown as one line, ``[unknown kind/key: reason, blocked by ...]``.
+unknown (ADR-P24) is shown as one line, ``[unknown kind/key: reason, blocked by ...]``,
+naming the blocker's failed steps when it has any, so a reader can save an ``unverified``
+unknown that names the step that failed (ADR-P13 D5).
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from aksha.runtime.artifacts.versions import current
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import ContextPolicy, Rendered, RenderMode
 from aksha.runtime.finalization.unknowns import unknown_reads
+from aksha.runtime.grounding.facts import failed_steps
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.grounding.types import SpanIndex
 from aksha.runtime.projections.view import LogView
@@ -186,11 +189,16 @@ def unknown_lines(view: LogView, tree: CompiledTree, instance: InstanceRef) -> t
     """One line per slot an ``all`` or field read names that holds an explicit unknown.
 
     ADR-P24 D2, D4: a key whose writer was blocked under a partial rule, or voided by
-    finalization, is shown as an unknown with its reason and blocker, never left out.
+    finalization, is shown as an unknown with its reason, its blocker and the blocker's
+    failed steps, never left out.
     """
     out = []
+    failed = failed_steps(view)
     for kind, key, entry in unknown_reads(view, tree, instance):
         slot = kind if key is None else f"{kind}/{key}"
         by = f", blocked by {entry.blocker}" if entry.blocker else ""
-        out.append(f"[unknown {slot}: {entry.reason}{by}]")
+        prefix = f"{instance.run}/{entry.blocker}/"
+        steps = sorted(s for s in failed if entry.blocker and s.startswith(prefix))
+        named = f", failed steps {' '.join(steps)}" if steps else ""
+        out.append(f"[unknown {slot}: {entry.reason}{by}{named}]")
     return tuple(out)

@@ -16,11 +16,12 @@ listed them. For each position ``tNN/cMM``:
    =========  ================================================================
    Route      What runs
    =========  ================================================================
-   dispatch   the body (read, store and exec tools), the reads it declares
-              (``Ok.reads``), its saves through the one save path with what they
-              confirm (``invalidation.saving``: a diff review for a rebuilt
-              human-reviewed version, revocations and review voids, ADR-P05 D1,
-              D9), the capped model view, any span drafts minted
+   dispatch   the body (read, store and exec tools) with the attempt's record
+              reader, the reads it declares (``Ok.reads``), its saves through the
+              one save path with what they confirm (``invalidation.saving``: a diff
+              review for a rebuilt human-reviewed version, revocations and review
+              voids, ADR-P05 D1, D9), the capped model view, and its span drafts
+              minted over the texts the reader returned (ADR-P13 D1)
    reserved   ``finish`` (signal ``finish``) or ``ask`` (``interrupt.raised``)
    approval   a granted approval of this exact action runs it through the
               outbox; otherwise ``approval.requested`` and its interrupt
@@ -43,14 +44,16 @@ from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
-from aksha.runtime.context.turns import as_of
+from aksha.runtime.context.turns import SPANS_FIELD, as_of
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ids import highest
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import Deadline, StepId, StepOutput, StepPolicy, StepResult
 from aksha.runtime.finalization.reserve import held_back
 from aksha.runtime.grounding.errors import MintRefused
+from aksha.runtime.grounding.reading import AttemptReader
 from aksha.runtime.grounding.spans import mint_for_result, span_index
+from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.interrupts.approvals import (
     ApprovalTool,
     approval_signature,
@@ -206,10 +209,21 @@ def run_position(
         return _outcome(n, call.name, result)
 
     if decision.route == "dispatch":
-        ctx = ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                          attempt_number(view, str(step)))  # fmt: skip
         args = call.arguments
-        return record(lambda: _dispatched(setup, ref, step, spec, call_body(decl, ctx, args)))
+        attempt = attempt_number(view, str(step))
+
+        def ctx(reader: AttemptReader) -> ToolContext:
+            return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
+                               attempt, reader)  # fmt: skip
+
+        # Each attempt reads through a fresh reader; its drafts are minted over what it returned.
+        return record(
+            lambda: (
+                lambda r: _dispatched(
+                    setup, ref, step, spec, call_body(decl, ctx(r), args), r.returned
+                )
+            )(AttemptReader(setup.reader))
+        )
     if decision.route == "reserved" and call.name == "finish":
         done = ToolOutcome(Ok({"finish": "proposed"}))
         return record(lambda: _shown(done, cap, signal="finish"))
@@ -225,11 +239,19 @@ def run_position(
 
 
 def _dispatched(
-    setup: LoopSetup, ref: InstanceRef, step: StepId, spec: ToolSpec, outcome: ToolOutcome
+    setup: LoopSetup,
+    ref: InstanceRef,
+    step: StepId,
+    spec: ToolSpec,
+    outcome: ToolOutcome,
+    returned: tuple[ReturnedText, ...] = (),
 ) -> StepOutput:
     """A body's outcome as its step records it: saves, minted spans and the capped view.
 
-    A refused save or mint turns the whole result into the error the model reads, and
+    ``returned`` are the texts the attempt's reader returned; the body's span drafts are
+    minted only over them (ADR-P13 D1). The step records the span ID of each draft, in
+    draft order, under ``value["spans"]``, so the model can cite what it was shown. A
+    refused save or mint turns the whole result into the error the model reads, and
     nothing it asked for commits.
     """
     cap = setup.policy().result_cap_chars
@@ -277,12 +299,14 @@ def _dispatched(
         )  # fmt: skip
     try:
         minted = mint_for_result(
-            outcome, (), spec=spec, index=span_index(view), run=ref.run,
+            outcome, returned, spec=spec, index=span_index(view), run=ref.run,
             instance=ref.instance, step=str(step), cap_chars=cap,
         )  # fmt: skip
     except MintRefused as refused:
         return _shown(ToolOutcome(Err(refused.code, refused.message)), cap)
-    out = _shown(outcome, cap, events=(*events, *minted.minted.events))
+    cited = [s.span_id for s in minted.minted.spans]
+    extra = {SPANS_FIELD: cited} if cited else None
+    out = _shown(outcome, cap, events=(*events, *minted.minted.events), extra=extra)
     return StepOutput(out.value, out.outcome, out.code, out.events, tuple(rows))
 
 

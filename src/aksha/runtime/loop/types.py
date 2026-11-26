@@ -23,6 +23,7 @@ from aksha.runtime.artifacts.types import ArtifactKind
 from aksha.runtime.budgets.types import Limits
 from aksha.runtime.context.types import AssemblyInputs, ContextPolicy, effective_policy
 from aksha.runtime.definitions.types import Agent
+from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.policy.permissions import ceiling_of
 from aksha.runtime.policy.types import Permissions, SourceVersion
@@ -130,7 +131,8 @@ class LoopSetup:
     text and ``instructions`` the agent's instruction text, both read by the loader;
     ``briefs`` holds each Task's brief text by Task path. ``ceiling`` defaults to the
     agent's whole tool list. ``artifacts`` is the save path of store tools; without it a
-    body's save is refused ``store_unavailable``.
+    body's save is refused ``store_unavailable``. ``reader`` is the record reader a tool body
+    reads versioned sources through (ADR-P13 D1); without it a body's span drafts are refused.
     """
 
     store: EventStore
@@ -151,6 +153,7 @@ class LoopSetup:
     definition_hash: str | None = None
     limits: Limits = field(default_factory=Limits)
     blobs: BlobStore | None = None
+    reader: RecordReader | None = None
 
     def view(self) -> LogView:
         """The owner's log as it stands now."""

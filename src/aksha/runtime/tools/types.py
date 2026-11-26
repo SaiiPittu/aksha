@@ -11,9 +11,9 @@ has no store, model or adapter handle, so a body cannot write the event store.
 
 ``ToolCall`` is one call the model asked for, the policy gate's only model-written input
 (ADR-P11 D4). ``ToolView`` is what the model is shown for one tool; ``ToolResultView`` is the capped
-model view of one result. ``ToolContext`` gains its readers, deadline and clock with the
-durable step executor (ADR-P02). ``Ok.spans`` holds the span drafts a read or fetch tool asks
-the runtime to mint (ADR-P13 D1).
+model view of one result. ``ToolContext.reader`` is the attempt's record reader (ADR-P13
+D1); its deadline and clock come with the durable step executor (ADR-P02). ``Ok.spans``
+holds the span drafts a read or fetch tool asks the runtime to mint (ADR-P13 D1).
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
 from aksha.runtime.artifacts.types import InputRef, SaveRequest
+from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.types import SpanDraft
 from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.outbox.types import EffectSpec
@@ -78,7 +79,12 @@ class ToolSpec:
 
 @dataclass(frozen=True)
 class ToolContext:
-    """Who and where a call runs for. ``owner`` comes from the session, never from arguments."""
+    """Who and where a call runs for. ``owner`` comes from the session, never from arguments.
+
+    ``reader`` reads versioned records for this attempt (ADR-P13 D1): a body that mints
+    citation spans drafts them over the texts it returned. None when no source is
+    configured, and then every read returns None.
+    """
 
     owner: str
     agent: str
@@ -86,6 +92,7 @@ class ToolContext:
     key: str | None
     step_id: str
     attempt: int
+    reader: RecordReader | None = None
 
 
 @dataclass(frozen=True)
