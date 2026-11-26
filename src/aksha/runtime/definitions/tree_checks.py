@@ -186,7 +186,11 @@ def _read_refusal(full: str, ctx: TreeContext) -> tuple[str, str]:
 def _rest(task: Task, path: str, ctx: TreeContext, out: Refusals) -> None:
     """Writes, key source, completion check, stop-policy opt-ins and model aliases."""
     for kind in task.writes:
-        if resolve_kind(kind, ctx.namespace) not in ctx.own_kinds:
+        full = resolve_kind(kind, ctx.namespace)
+        # A kind an extension the agent names contributes is writable, as its tools are
+        # (ADR-P09 D3: the intake Task writes ``memory.preference``).
+        contributed = full.split(".", 1)[0] in ctx.extension_names and full in ctx.readable_kinds
+        if full not in ctx.own_kinds and not contributed:
             out.add("writes", "write_kind_unknown", f"{kind!r} is not declared here", path)
     per: object = task.per  # an agent module is not type-checked, so check the type here
     if per is not None and not isinstance(per, KeySource):

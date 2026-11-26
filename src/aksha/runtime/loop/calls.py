@@ -19,12 +19,13 @@ listed them. For each position ``tNN/cMM``:
    dispatch   the body (read, store and exec tools) with the attempt's record
               reader, its HTTP client and, for an exec tool, its exec API
               (``loop.tier``: egress decisions and exec records go on the step,
-              and an exec step is its own kill boundary), the reads it declares
-              (``Ok.reads``), its saves through the
-              one save path with what they confirm (``invalidation.saving``: a diff
-              review for a rebuilt human-reviewed version, revocations and review
-              voids, ADR-P05 D1, D9), the capped model view, and its span drafts
-              minted over the texts the reader returned (ADR-P13 D1)
+              and an exec step is its own kill boundary), an artifact reader over
+              its ``reads_kinds`` as the log stood before the step (ADR-P09 D3),
+              the reads it declares (``Ok.reads``), its saves through the one save
+              path with what they confirm (``invalidation.saving``: a diff review
+              for a rebuilt human-reviewed version, revocations and review voids,
+              ADR-P05 D1, D9), the capped model view, and its span drafts minted
+              over the texts the reader returned (ADR-P13 D1)
    reserved   ``finish`` (signal ``finish``) or ``ask`` (``interrupt.raised``)
    approval   a granted approval of this exact action runs it through the
               outbox; otherwise ``approval.requested`` and its interrupt
@@ -47,7 +48,9 @@ from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
+from aksha.runtime.context.reentry import INSTRUCTION_FLAG
 from aksha.runtime.context.turns import SPANS_FIELD, as_of
+from aksha.runtime.definitions.names import resolve_kind
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ids import highest
 from aksha.runtime.execution.ports import DurableStepExecutor
@@ -66,6 +69,7 @@ from aksha.runtime.interrupts.approvals import (
 )
 from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
+from aksha.runtime.invalidation.reading import ViewArtifactReader
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
 from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, run_session, with_records
@@ -128,6 +132,15 @@ def _outcome(position: int, tool: str, result: StepResult) -> PositionOutcome:
     return position_outcome(position, tool, payload)
 
 
+FLAGS_FIELD = "flags"
+"""The recorded value's field re-entry reads a tool result's flags from (decision 36)."""
+
+
+def _flagged(data: Mapping[str, Any]) -> bool:
+    flags = data.get(FLAGS_FIELD)
+    return isinstance(flags, (list, tuple)) and INSTRUCTION_FLAG in flags
+
+
 def _shown(
     outcome: ToolOutcome,
     cap: int,
@@ -136,10 +149,18 @@ def _shown(
     events: tuple[NewEvent, ...] = (),
     extra: Mapping[str, Any] | None = None,
 ) -> StepOutput:
-    """A step output whose recorded value is the capped view of ``outcome`` (ADR-P10 D7)."""
+    """A step output whose recorded value is the capped view of ``outcome`` (ADR-P10 D7).
+
+    A result whose data flags instruction-like text (``data["flags"]`` holding
+    ``INSTRUCTION_FLAG``, as a ``recall`` of a record citing such a source does) keeps the
+    flag on the recorded value, where re-entry's taint check reads it (decision 36): the
+    rendered view alone may hold no instruction-like text.
+    """
     value: dict[str, Any] = {VIEW_FIELD: view_json(render_result(outcome, cap)), **(extra or {})}
     if signal is not None:
         value[SIGNAL_FIELD] = signal
+    if isinstance(outcome.result, Ok) and _flagged(outcome.result.data):
+        value[FLAGS_FIELD] = [INSTRUCTION_FLAG]
     if isinstance(outcome.result, Err):
         return StepOutput(value, outcome="error", code=outcome.result.code, events=events)
     return StepOutput(value, events=events)
@@ -228,11 +249,14 @@ def run_position(
         run_date = recorded_date(view, ref.run)
         unit = ExecUnit() if spec.effect == "exec" else None
 
+        kinds = frozenset(resolve_kind(k, spec.owner) for k in spec.reads_kinds)
+        versions = ViewArtifactReader(view, kinds, setup.blobs) if kinds else None
+
         def ctx(
             reader: AttemptReader, http: HttpFor, exe: BoxedExec | None, dates: TimeReads
         ) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader, run_date, http, exe, dates)  # fmt: skip
+                               attempt, reader, run_date, http, exe, dates, versions)  # fmt: skip
 
         def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
             # Each attempt reads through a fresh reader (its drafts are minted over what it

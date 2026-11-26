@@ -14,7 +14,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``FromField``, ``from_field``, ``Check``, ``CheckResult``; what a completion check
    reads: ``TaskView``, ``InstanceRef``, ``InstanceStatus``.
 4. Artifacts (P04): ``ArtifactKind``, ``RelationKind``, ``SaveRequest``, and what a save
-   names: ``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``, ``SELF``.
+   names: ``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``, ``SELF``; what
+   a read tool reads them through: ``ArtifactReader`` and its ``ArtifactSnapshot``
+   (ADR-P09 D3). Ended runs (P01): ``ended_runs`` and ``RunEnded``.
 5. Tools (P10): ``ToolSpec``, ``ToolDecl``, ``ToolUse``, ``ToolBody``, ``RetryPolicy``,
    ``EffectClass``; what a body sees and returns: ``ToolContext``, ``ToolOutcome``, ``Ok``,
    ``Err``; ``observe_time``, the date a body counts to as a recorded read (P25). A tool
@@ -38,9 +40,11 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``RecordReader`` and ``ReturnedText`` (the reader a body reads records through, and
    what it returns),
    ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
-   ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one),
-   ``where_part`` and ``part_version`` (a read of some rows of a table, versioned by
-   exactly those rows, so a change to other rows moves nothing built on it).
+    ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one),
+    ``where_part`` and ``part_version`` (a read of some rows of a table, versioned by
+    exactly those rows, so a change to other rows moves nothing built on it);
+    ``instruction_text`` and ``INSTRUCTION_FLAG`` (P08), the fixed instruction-pattern
+    check a result is flagged by.
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
    ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26);
    what a contributed system of record implements, answers and raises: ``SystemOfRecord``,
@@ -52,10 +56,12 @@ What an agent or extension declares, grouped by the primitive that owns it:
 
 from __future__ import annotations
 
+from aksha.runtime.artifacts.ports import ArtifactReader
 from aksha.runtime.artifacts.types import (
     SELF,
     ArtifactKind,
     ArtifactRef,
+    ArtifactSnapshot,
     Excerpt,
     InputRef,
     RelationKind,
@@ -63,6 +69,7 @@ from aksha.runtime.artifacts.types import (
     SaveRequest,
 )
 from aksha.runtime.budgets.types import Backoff, Budget, Limits
+from aksha.runtime.context.reentry import INSTRUCTION_FLAG, instruction_text
 from aksha.runtime.context.types import ContextPolicy, ResumePolicy, SummaryPolicy
 from aksha.runtime.definitions.types import Agent, Extension, Projection
 from aksha.runtime.definitions.versions import API_VERSION
@@ -114,6 +121,7 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.records import ExternalRecord, external_records
 from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec, SystemReceipt
 from aksha.runtime.projections.ports import Reducer
+from aksha.runtime.projections.runs import RunEnded, ended_runs
 from aksha.runtime.projections.view import ArtifactsView, LogView
 from aksha.runtime.sandbox.exec import ExecOutcome
 from aksha.runtime.sandbox.types import (
@@ -155,11 +163,14 @@ from aksha.runtime.tools.types import (
 
 __all__ = [
     "API_VERSION",
+    "INSTRUCTION_FLAG",
     "SELF",
     "Agent",
     "ApprovalRule",
     "ArtifactKind",
+    "ArtifactReader",
     "ArtifactRef",
+    "ArtifactSnapshot",
     "ArtifactsView",
     "Backoff",
     "Budget",
@@ -222,6 +233,7 @@ __all__ = [
     "RuleClassificationModel",
     "RuleExtractionModel",
     "RuleGenerationModel",
+    "RunEnded",
     "SandboxBackendSpec",
     "SandboxNeeds",
     "SandboxPolicy",
@@ -251,8 +263,10 @@ __all__ = [
     "artifact_keys",
     "decimal_string",
     "distribution_ppm",
+    "ended_runs",
     "external_records",
     "from_field",
+    "instruction_text",
     "maybe_unknown",
     "observe_time",
     "part_version",

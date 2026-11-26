@@ -280,6 +280,10 @@ class SaveRequest:
     ``kind`` is a full or local kind name; ``key`` is None for an unkeyed kind.
     ``primary_inputs`` labels some of the instance's reads for display only: lineage is
     always every captured read (ADR-P04 D6). ``relations`` ride on the saved version.
+    ``supersedes`` names the slot's latest version this save replaces for every reader
+    (ADR-P09 D4, D11): the store commits a ``supersedes`` relation from the new version to
+    it in the same transaction, and the invalidation view then counts the new version for
+    readers of every run, not only the saving run's line (ADR-P05 S1).
     """
 
     kind: str
@@ -287,6 +291,7 @@ class SaveRequest:
     content: Mapping[str, Any]
     primary_inputs: tuple[InputRef, ...] = ()
     relations: tuple[RelationRequest, ...] = ()
+    supersedes: str | None = None
 
 
 @dataclass(frozen=True)
@@ -306,6 +311,29 @@ class ArtifactVersion:
     step: str | None
     event_seq: int
     primary_inputs: tuple[InputRef, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Deep-freeze ``content``."""
+        object.__setattr__(self, "content", freeze(self.content))
+
+
+@dataclass(frozen=True)
+class ArtifactSnapshot:
+    """One version as a read tool sees it through ``ToolContext.artifacts`` (ADR-P09 D3, D5).
+
+    ``freshness`` is the version's state in the invalidation view (``current``,
+    ``current_by_cutoff``, ``dirty`` or ``invalidated``, ADR-P05 D4) as the log stood before
+    the reading step started. ``is_latest`` says no newer version of its slot exists in any
+    run, a pending revision nobody accepted aside, so a tool can tell that something it
+    cites has moved on even where the sibling rule keeps its readers current.
+    """
+
+    ref: ArtifactRef
+    content: Mapping[str, Any]
+    writer: WriterId
+    run: str | None
+    freshness: str
+    is_latest: bool
 
     def __post_init__(self) -> None:
         """Deep-freeze ``content``."""

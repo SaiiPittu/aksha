@@ -12,7 +12,9 @@ tree and the instance; it has no clock, no model and no network. Its readers:
 4. ``child_status(task_id)``: the statuses of a child Task's instances, by key.
 5. ``freshness(ref)``: a version's state in the invalidation view (ADR-P05), so a check
    that reads a tool's report can refuse a report the files moved past (D4).
-6. ``entries(kind)``: every key of a kind, its current version or, where its writer was
+6. ``called(tool)``: how many calls of ``tool`` this instance completed, so a forced
+   first call (ADR-P09 D3's ``recall``) holds only until it is made.
+7. ``entries(kind)``: every key of a kind, its current version or, where its writer was
    blocked under a partial rule or voided by finalization, an explicit ``Unknown``
    (ADR-P24 D2, D4). A check that refuses unknowns still refuses them (D3).
 
@@ -109,3 +111,15 @@ class TaskView:
         iv = invalidation_view(self.log)
         found = iv.versions.get(ref)
         return None if found is None else found.freshness
+
+    def called(self, tool: str) -> int:
+        """How many calls of ``tool`` this instance completed with outcome ``ok``."""
+        return sum(
+            1
+            for e in self.log.events
+            if e.type == "step.completed"
+            and e.run == self.instance.run
+            and e.instance == self.instance.instance
+            and e.payload.get("tool") == tool
+            and e.payload.get("outcome") == "ok"
+        )

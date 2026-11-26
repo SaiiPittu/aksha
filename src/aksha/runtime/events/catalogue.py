@@ -275,12 +275,17 @@ RELATION_SAVED = EventTypeSpec(
             "label": {"type": ["string", "null"]},
             "src": INPUT_REF_SCHEMA,
             "dst": INPUT_REF_SCHEMA,
-            "evidence": {"type": "array", "items": _EXCERPT, "minItems": 1},
+            "evidence": {"type": "array", "items": _EXCERPT},
             "carrier": {"type": "string", "minLength": 1},
             "n": {"type": "integer", "minimum": 0},
         },
         "required": ["kind", "label", "src", "dst", "evidence", "carrier", "n"],
         "additionalProperties": False,
+        # ADR-P09 D11: ``supersedes`` is lineage the runtime records, with no evidence; every
+        # declared relation still cites at least one excerpt.
+        "if": {"properties": {"kind": {"const": "supersedes"}}},
+        "then": {"properties": {"evidence": {"maxItems": 0}}},
+        "else": {"properties": {"evidence": {"minItems": 1}}},
     },
     writer="artifacts",
     boundaries=frozenset({"U2", "U10"}),

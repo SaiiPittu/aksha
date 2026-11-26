@@ -72,3 +72,21 @@ def test_a_view_holds_no_store_clock_or_model() -> None:
     tree, log = demo_tree(), TaskLog()
     view = TaskView(log.view(), tree, ref("scope"))
     assert set(vars(view)) == {"log", "tree", "instance"}
+
+
+def test_called_counts_this_instances_completed_calls_of_one_tool() -> None:
+    """ADR-P09 D3: a forced first call (``recall``) holds until this instance has made it."""
+    tree, log = demo_tree(), TaskLog()
+    view = TaskView(log.view(), tree, ref("scope"))
+    assert view.called("recall") == 0
+    log.add("step.completed", {"outcome": "ok", "kind": "tool", "tool": "recall"},
+            instance="scope", step="R-0001/scope/t01/c01")  # fmt: skip
+    log.add("step.completed", {"outcome": "error", "kind": "tool", "tool": "recall", "code": "x"},
+            instance="scope", step="R-0001/scope/t01/c02")  # fmt: skip
+    log.add("step.completed", {"outcome": "ok", "kind": "tool", "tool": "recall"},
+            instance="extract[C1]", step="R-0001/extract[C1]/t01/c01")  # fmt: skip
+    log.add("step.completed", {"outcome": "ok", "kind": "tool", "tool": "recall"},
+            run="R-0002", instance="scope", step="R-0002/scope/t01/c01")  # fmt: skip
+    view = TaskView(log.view(), tree, ref("scope"))
+    assert view.called("recall") == 1
+    assert view.called("fetch") == 0

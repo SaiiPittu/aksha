@@ -21,7 +21,6 @@ disagree with them after a crash. Each read of a version gets one state:
    unrelated request, or of a rebuild for another run, is a sibling and moves nobody.
 4. A pending revision (an open diff review) and a rejected or voided one never count:
    readers see the old version until a person accepts (D1).
-
 5. Time (ADR-P25). A ``time:clock`` read is checked like a record read against the
    clock record ``time/clock``, so a later recorded date moves it (D4). A record read of a
    version saved before the record's last ``source.expired`` is ``moved`` to ``expired``
@@ -29,6 +28,14 @@ disagree with them after a crash. Each read of a version gets one state:
    the expiry read it again and is not. A version whose own lifetime ran out (its kind's
    ``max_age_s``) carries one more read, ``time:expiry/<ref>``, ``moved`` to ``expired``,
    so the plan, its brief and the revocations treat it as any invalidated version.
+6. Supersession (ADR-P09 D4, D11). A newer version that carries a ``supersedes`` relation
+   counts for every reader, whatever its run: it replaces the slot for everyone, so the
+   sibling rule yields, and every older version stops being the latest of any line. A
+   version never moves itself or a later version of its own slot: a save that read its
+   slot's earlier version is checked against versions older than itself only. Nor does a
+   superseding version move a reader its own writer saved later in the same run: an
+   intake instance that recalled v1, saved v2 over it and then saved its scope saw both
+   (ADR-P09 D4, M5). A plain revision in the same run still moves that reader.
 
 A version is ``invalidated`` if any read moved or is gone, else ``dirty`` if any is
 unsettled, else ``current_by_cutoff`` if any is equivalent, else ``current``.
@@ -216,6 +223,11 @@ class _Walk:
             str(r.revision) for r in reviews(view) if r.outcome == "accepted"
         }
         self.open = open_reviews(view)
+        self.superseding = frozenset(
+            str(e.payload.get("carrier"))
+            for e in view.events
+            if e.type == "relation.saved" and e.payload.get("kind") == "supersedes"
+        )
         self.done: dict[str, tuple[Freshness, tuple[ReadStatus, ...], tuple[str, ...]]] = {}
         self.busy: set[str] = set()
 
@@ -256,9 +268,13 @@ class _Walk:
             return False
         mine = self.line(v)
         return not any(
-            n.ref.version > v.ref.version and self.line(n) & mine
+            n.ref.version > v.ref.version and self.counts(n, mine)
             for n in self.slots.get(v.ref.slot(), ())
         )
+
+    def counts(self, newer: ArtifactVersion, line: frozenset[str]) -> bool:
+        """Whether ``newer`` counts for a reader of ``line``: one run in common, or rule 6."""
+        return bool(self.line(newer) & line) or str(newer.ref) in self.superseding
 
     def rejected(self) -> frozenset[str]:
         """Old versions whose last review was rejected and whose slot saw no save since."""
@@ -322,18 +338,28 @@ class _Walk:
         A superseded statement the reader also read the replacement of is ``same``: the
         version was saved with the amended answer in view (ADR-P27 D5).
         """
-        status, waits = self.read_state_for(self.line(reader), read, reader.event_seq)
+        status, waits = self.read_state_for(
+            self.line(reader), read, reader.event_seq, reader=reader
+        )
         seen = status.now is not None and InputRef("statement", read.id, status.now) in reader.reads
         if read.kind == "statement" and status.state == "moved" and seen:
             return ReadStatus(read, "same"), None
         return status, waits
 
     def read_state_for(
-        self, mine: frozenset[str], read: InputRef, saved_seq: int | None = None
+        self,
+        mine: frozenset[str],
+        read: InputRef,
+        saved_seq: int | None = None,
+        *,
+        reader: ArtifactVersion | None = None,
     ) -> tuple[ReadStatus, str | None]:
-        """One read's status for a reader written for the runs ``mine`` (rules 1 to 5).
+        """One read's status for a reader written for the runs ``mine`` (rules 1 to 6).
 
         ``saved_seq`` is the reader's save; without it a record's expiry is not judged.
+        ``reader`` is the version that made the read, when it is one: a later version of
+        the read's slot never counts when it is the reader or newer, or when the reader's
+        own writer saved it earlier in the reader's run (rule 6).
         """
         if read.kind == "time":
             return self._versioned(read, self.facts.records), None
@@ -355,7 +381,7 @@ class _Walk:
         target = self.by_ref.get(str(whole))
         if target is None or target.writer in self.withdrawn:
             return ReadStatus(read, "gone"), None
-        newest = self.newest_counting(mine, target)
+        newest = self.newest_counting(mine, target, reader=reader)
         if newest is None:
             if self.stale(target):
                 return ReadStatus(read, "unsettled"), str(target.ref)
@@ -368,14 +394,20 @@ class _Walk:
         return ReadStatus(read, "equivalent", now), None
 
     def newest_counting(
-        self, reader_line: frozenset[str], target: ArtifactVersion
+        self,
+        reader_line: frozenset[str],
+        target: ArtifactVersion,
+        *,
+        reader: ArtifactVersion | None = None,
     ) -> ArtifactVersion | None:
-        """The slot's newest version after ``target`` that counts for the reader (rule 3)."""
+        """The slot's newest version after ``target`` that counts for the reader (rules 3, 6)."""
         mine = reader_line | self.line(target)
         later = [
             n
             for n in self.slots.get(target.ref.slot(), ())
-            if n.ref.version > target.ref.version and self.line(n) & mine
+            if n.ref.version > target.ref.version
+            and self.counts(n, mine)
+            and not (reader is not None and _seen_by(n, reader, self.superseding))
         ]
         return later[-1] if later else None
 
@@ -434,3 +466,20 @@ def _equal(read: InputRef, old: ArtifactVersion, new: ArtifactVersion) -> bool:
         except KeyError:
             return False
     return old.canonical_hash == new.canonical_hash
+
+
+def _seen_by(newer: ArtifactVersion, reader: ArtifactVersion, superseding: frozenset[str]) -> bool:
+    """Whether ``reader`` knew of ``newer`` when it was saved, so it cannot move it (rule 6).
+
+    ``newer`` is the reader itself or a later version of the reader's own slot, or a
+    superseding version the reader's own writer saved earlier in the reader's run.
+    """
+    if newer.ref.slot() == reader.ref.slot() and newer.ref.version >= reader.ref.version:
+        return True
+    return (
+        str(newer.ref) in superseding
+        and newer.writer == reader.writer
+        and newer.run is not None
+        and newer.run == reader.run
+        and newer.event_seq < reader.event_seq
+    )

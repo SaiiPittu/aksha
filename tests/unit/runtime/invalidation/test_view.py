@@ -240,3 +240,69 @@ def test_invalidation_one_pass_equals_fixpoint(tmp_path: Path, seed: int) -> Non
         assert {r: s.freshness for r, s in iv.versions.items()} == naive_fixpoint(view)
     finally:
         b.close()
+
+
+def test_a_superseding_version_moves_readers_in_every_run(bench: Bench) -> None:
+    """ADR-P09 D4: a ``supersedes`` save counts for every reader, so the sibling rule yields.
+
+    Run 1 saves a preference, run 2 reads it, run 3 (an unrelated request) supersedes it:
+    run 2's reader is invalidated. The companion below saves the same v2 without
+    ``supersedes`` and the reader stays current, so this fails if the rule is removed.
+    """
+    writer = WriterId("r", "scope", None)
+    bench.start("R-0001", agent="r")
+    bench.save("R-0001", "r.finding/geo", {"only": "EU"}, writer=writer)
+    bench.start("R-0002", agent="r")
+    bench.save("R-0002", "r.matrix", {"cells": 1}, reads=[a("r.finding/geo@v1")])
+    bench.start("R-0003", agent="r")
+    bench.save("R-0003", "r.finding/geo", {"only": "EU and UK"}, writer=writer,
+               supersedes="r.finding/geo@v1")  # fmt: skip
+    iv = bench.iv()
+    assert iv.state("r.matrix@v1").freshness == "invalidated"
+    assert not iv.state("r.finding/geo@v1").is_latest
+    assert iv.state("r.finding/geo@v2").freshness == "current"
+
+
+def test_without_supersedes_the_same_save_moves_nobody(bench: Bench) -> None:
+    writer = WriterId("r", "scope", None)
+    bench.start("R-0001", agent="r")
+    bench.save("R-0001", "r.finding/geo", {"only": "EU"}, writer=writer)
+    bench.start("R-0002", agent="r")
+    bench.save("R-0002", "r.matrix", {"cells": 1}, reads=[a("r.finding/geo@v1")])
+    bench.start("R-0003", agent="r")
+    bench.save("R-0003", "r.finding/geo", {"only": "EU and UK"}, writer=writer)
+    assert bench.iv().state("r.matrix@v1").freshness == "current"
+
+
+def test_a_version_that_read_its_own_predecessor_is_not_moved_by_itself(bench: Bench) -> None:
+    """A save that read the slot's earlier version is not stale because of its own save."""
+    writer = WriterId("r", "scope", None)
+    bench.start("R-0001", agent="r")
+    bench.save("R-0001", "r.finding/geo", {"only": "EU"}, writer=writer)
+    bench.start("R-0002", agent="r")
+    bench.save("R-0002", "r.finding/geo", {"only": "EU and UK"}, writer=writer,
+               reads=[a("r.finding/geo@v1")], supersedes="r.finding/geo@v1")  # fmt: skip
+    assert bench.iv().state("r.finding/geo@v2").freshness == "current"
+
+
+def test_an_instance_that_supersedes_what_it_read_keeps_its_later_saves_current(
+    bench: Bench,
+) -> None:
+    """ADR-P09 D4: an intake instance recalls v1, saves v2 over it, then saves its scope.
+
+    The scope read v1, but the instance that wrote it replaced v1 itself before saving, so
+    the store accepts the save and the view keeps the scope current. A later run's
+    supersession still moves it.
+    """
+    w = WriterId("r", "scope", None)
+    bench.start("R-0001", agent="r")
+    bench.save("R-0001", "r.finding/geo", {"only": "EU"}, writer=w)
+    bench.start("R-0002", agent="r")
+    bench.save("R-0002", "r.finding/geo", {"only": "EU and UK"}, writer=w,
+               reads=[a("r.finding/geo@v1")], supersedes="r.finding/geo@v1")  # fmt: skip
+    bench.save("R-0002", "r.matrix", {"cells": 1}, writer=w, reads=[a("r.finding/geo@v1")])
+    assert bench.iv().state("r.matrix@v1").freshness == "current"
+    bench.start("R-0003", agent="r")
+    bench.save("R-0003", "r.finding/geo", {"only": "UK"}, writer=w,
+               supersedes="r.finding/geo@v2")  # fmt: skip
+    assert bench.iv().state("r.matrix@v1").freshness == "invalidated"

@@ -332,3 +332,49 @@ def test_frozen_content_is_checked_against_its_schema(world: World) -> None:
     saved = world.save("line", "n1", freeze({"text": "a", "rows": [1, 2]}))
     assert str(saved.version.ref) == "notes.line/n1@v1"
     _refused("schema", world.save, "line", "n2", freeze({"rows": []}))
+
+
+# --- supersedes (ADR-P09 D4, D11): a save that replaces its slot's latest version ------------
+
+
+def test_supersedes_commits_a_typed_relation_in_the_save(world: World) -> None:
+    world.save("line", "n1", {"text": "first"})
+    saved = world.save("line", "n1", {"text": "second"}, supersedes="notes.line/n1@v1")
+    rel = [e for e in saved.events if e.type == "relation.saved"]
+    assert len(rel) == 1
+    p = rel[0].payload
+    assert p["kind"] == "supersedes"
+    assert p["src"] == {"kind": "artifact", "id": "notes.line/n1", "version": "v2"}
+    assert p["dst"] == {"kind": "artifact", "id": "notes.line/n1", "version": "v1"}
+    assert p["evidence"] == [] and p["carrier"] == "notes.line/n1@v2"
+    (found,) = world.artifacts.relations(world.view(), kind="supersedes")
+    assert str(found.carrier) == "notes.line/n1@v2"
+
+
+def test_supersedes_names_its_slots_latest_version(world: World) -> None:
+    world.save("line", "n1", {"text": "first"})
+    world.save("line", "n1", {"text": "second"})
+    world.save("line", "n2", {"text": "other"})
+    for target in ("notes.line/n1@v1", "notes.line/n2@v1", "notes.line/n1@v9", "nonsense"):
+        _refused("supersedes_invalid", world.save, "line", "n1", {"text": "x"},
+                 supersedes=target)  # fmt: skip
+    _refused("supersedes_invalid", world.save, "line", "n3", {"text": "x"},
+             supersedes="notes.line/n3@v1")  # fmt: skip
+
+
+def test_a_read_its_writer_superseded_in_this_run_stays_current(world: World) -> None:
+    """M5: an instance that read v1 and superseded it may still save what read v1."""
+    world.save("line", "n1", {"text": "first"})
+    world.read("gather", InputRef("artifact", "notes.line/n1", "v1"))
+    world.save("line", "n1", {"text": "second"}, supersedes="notes.line/n1@v1")
+    saved = world.save("line", "n2", {"text": "uses n1"})
+    assert InputRef("artifact", "notes.line/n1", "v1") in saved.version.reads
+
+
+def test_a_plain_revision_in_the_same_run_still_refuses_the_older_read(world: World) -> None:
+    """M5 covers supersession only: a revision without ``supersedes`` leaves check 4 as it was."""
+    world.save("line", "n1", {"text": "first"})
+    world.read("gather", InputRef("artifact", "notes.line/n1", "v1"))
+    world.save("line", "n1", {"text": "second"})
+    e = _refused("read_invalidated", world.save, "line", "n2", {"text": "uses n1"})
+    assert "notes.line/n1@v2" in e.message

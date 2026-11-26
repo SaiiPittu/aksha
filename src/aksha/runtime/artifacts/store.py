@@ -19,7 +19,11 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    wrote must be its slot's current version (the latest that is not a pending revision,
    ADR-P05 D1), or, for a path-scoped read (S3), the current version's entry at that path
    must hash the same. A read of another agent's version is
-   pinned (D11) and stays current; only invalidation (ADR-P05) can make it stale.
+   pinned (D11) and stays current; only invalidation (ADR-P05) can make it stale. A read
+   that the same writer superseded in this run before saving (a version saved with
+   ``supersedes``: an instance that recalled a memory record and then replaced it, ADR-P09
+   D4, M5) stays current too: the writer saw both versions. A plain revision in the same
+   run is not exempt.
 5. Grounding (ADR-P13 D2, D4, D5): every citation in the content verified, and every field
    a kind's ``CitePolicy`` names cited or, where allowed, an explicit unknown, with the
    verifier's code (``unknown_span``, ``span_not_seen``, ``stale_source``,
@@ -38,6 +42,10 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    lets every instance of one declared Task write the slot in turn (S4).
 8. Idempotency against the slot's latest version only (D8): equal content, reads and
    relations return it and commit nothing. A reverted change is a new version.
+9. ``supersedes`` (ADR-P09 D11), checked with the relations: it must name the slot's
+   latest version (``supersedes_invalid``). The store, not the request, then adds the
+   ``supersedes`` relation (new version to old, no evidence: the relation is lineage, which
+   only the runtime records) to the save's ``relation.saved`` facts.
 
 Phrase rules, validators (S1), derived kinds (D9), lifecycle and choice bindings are not
 built; nor is a kind's ``save="tool_only"``, which needs the tool's name on the request.
@@ -245,7 +253,7 @@ class ArtifactStore:
                 raise SaveRefused(
                     "read_not_seen", f"/primary_inputs/{i}", f"{primary} was never read here"
                 )
-        self._check_current(view, reads, writer)
+        self._check_current(view, reads, writer, run)
         ev = save_evidence(
             view, run=run, instance=instance, reads=reads, artifact=lambda r: self._content(view, r)
         )
@@ -258,6 +266,8 @@ class ArtifactStore:
             self._check_relation(view, i, rr, writer, reads, ref, ev)
             for i, rr in enumerate(request.relations)
         )
+        if request.supersedes is not None:
+            checked += (_supersedes(request.supersedes, prior, ref),)
         lineage = sorted_inputs(reads)
         if prior is not None and not _may_write(kind, prior.writer, writer):
             if prior.content_hash == hashed:
@@ -356,7 +366,9 @@ class ArtifactStore:
         )  # fmt: skip
         return Saved(version, events=tuple(events), rows=(row,))
 
-    def _check_current(self, view: LogView, reads: frozenset[InputRef], writer: WriterId) -> None:
+    def _check_current(
+        self, view: LogView, reads: frozenset[InputRef], writer: WriterId, run: str | None
+    ) -> None:
         """Check 4: every artifact read this agent wrote is still its slot's latest."""
         for read in sorted_inputs(reads):
             if read.kind != "artifact":
@@ -370,6 +382,8 @@ class ArtifactStore:
             newest = self.current(view, *ref.slot())
             if newest is None or newest.ref == ref:
                 continue
+            if newest.writer == writer and newest.run == run and _supersedes_slot(view, newest):
+                continue  # this writer superseded it in this run, after reading it
             if read.path is not None and read.entry_hash is not None:
                 try:
                     if entry_hash(newest.content, read.path) == read.entry_hash:
@@ -510,6 +524,37 @@ def _check_span_excerpt(excerpt: Excerpt, source: InputRef, ev: Evidence, at: st
     result = verify_citation(SpanCite(excerpt.span, excerpt.quote), ev, pointer=at)
     if isinstance(result, CiteError):
         raise SaveRefused(result.code, result.pointer, result.message)
+
+
+SUPERSEDES = "supersedes"
+"""The relation kind a ``SaveRequest.supersedes`` commits (ADR-P09 D11)."""
+
+
+def _supersedes(target: str, prior: ArtifactVersion | None, ref: ArtifactRef) -> _Resolved:
+    """Check 9: ``target`` is the slot's latest version; the relation that records it."""
+    try:
+        old = ArtifactRef.parse(target)
+    except ValueError:
+        msg = f"not a version: {target!r}"
+        raise SaveRefused("supersedes_invalid", "/supersedes", msg) from None
+    if prior is None or old != prior.ref:
+        latest = "nothing" if prior is None else str(prior.ref)
+        raise SaveRefused(
+            "supersedes_invalid", "/supersedes",
+            f"{old} is not the latest version of {ref.slot_id()} (it holds {latest})",
+        )  # fmt: skip
+    return (SUPERSEDES, None, ref.as_input(), old.as_input(), ())
+
+
+def _supersedes_slot(view: LogView, version: ArtifactVersion) -> bool:
+    """Whether ``version`` was saved with ``supersedes`` (the M5 exemption's condition)."""
+    carrier = str(version.ref)
+    return any(
+        e.type == "relation.saved"
+        and e.payload.get("kind") == SUPERSEDES
+        and e.payload.get("carrier") == carrier
+        for e in view.events
+    )
 
 
 def _may_write(kind: ArtifactKind, owner: WriterId, writer: WriterId) -> bool:
