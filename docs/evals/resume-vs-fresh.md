@@ -20,11 +20,13 @@ The measures are medians over the arm's rollouts, taken in the rebuild run only.
 
 | Arm | Correct against the key | Must criteria passed | Model turns | Tool calls | Input / output tokens | Context characters sent | Re-entries (per rollout) | Why each fresh one was fresh | pass^k |
 |---|---|---|---|---|---|---|---|---|---|
-| `fresh` | 3 of 3 | 24 of 24 | 10 | 22 | 0 / 0 | 182,896 | 4 fresh | `resume_disabled` (4) | = pass^1, rollouts identical |
-| `resume` | 3 of 3 | 24 of 24 | 10 | 22 | 0 / 0 | 182,896 | 4 fresh | `mostly_stale` (scope), `tainted_session` (discover), `premise_changed` (voice), `session_missing` (report) | = pass^1, rollouts identical |
-| `resume_scope_exempt` | 3 of 3 | 24 of 24 | 8 | 20 | 0 / 0 | 152,770 | 1 resumed (voice), 3 fresh | `mostly_stale` (scope), `tainted_session` (discover), `session_missing` (report) | = pass^1, rollouts identical |
+| `fresh` | 3 of 3 | 24 of 24 | 11 | 23 | 0 / 0 | 211,638 | 4 fresh | `resume_disabled` (4) | = pass^1, rollouts identical |
+| `resume` | 3 of 3 | 24 of 24 | 11 | 25 | 0 / 0 | 215,704 | 1 resumed (scope), 3 fresh | `tainted_session` (discover), `premise_changed` (voice), `session_missing` (report) | = pass^1, rollouts identical |
+| `resume_scope_exempt` | 3 of 3 | 24 of 24 | 9 | 23 | 0 / 0 | 183,723 | 2 resumed (scope, voice), 2 fresh | `tainted_session` (discover), `session_missing` (report) | = pass^1, rollouts identical |
 
-Compared with `fresh`, the `resume` arm differs by 0 on every measure. The `resume_scope_exempt` arm uses 2 fewer model turns, 2 fewer tool calls and 30,126 fewer context characters (16% fewer). In all three arms the five `evidence` instances were not re-entered, because the discover Task rebuilt a competitors artifact equal to the old one and the profiles that read it stayed current.
+Compared with `fresh`, the `resume` arm takes the same model turns, 2 more tool calls and 4,066 more context characters. The `resume_scope_exempt` arm uses 2 fewer model turns, the same tool calls and 27,915 fewer context characters (13% fewer). In all three arms the five `evidence` instances were not re-entered, because the discover Task rebuilt a competitors artifact equal to the old one and the profiles that read it stayed current.
+
+*These rows are from a fresh clone on 26 Nov 2026 after the research agent became general (its request names the review themes; the scope re-reads a note whose earlier read went stale, so a resumed scope now resumes instead of falling back `mostly_stale`). The first measurement, before that change, was: fresh 10 turns, 22 calls, 182,896 characters; resume the same, every re-entry fresh; scope exempt 8, 20, 152,770, the voice Task resumed. The points below describe that first measurement, and items 2 and 3 now hold with the scope resumed as well.*
 
 ## What the numbers show
 
