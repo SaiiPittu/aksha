@@ -28,18 +28,36 @@ an object-store backend for unattended runs comes later behind the same port.
 
 from __future__ import annotations
 
+import os
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast
+from typing import Literal, TypeGuard, cast
 
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
+from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.storage import sqlite
 from aksha.runtime.artifacts.ports import BlobStore
-from aksha.runtime.events.catalogue import Catalogue
+from aksha.runtime.definitions.hashing import run_started_fields
+from aksha.runtime.definitions.loader import LoadedDefinition, discover, load_agents
+from aksha.runtime.definitions.modules import import_value
+from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
+from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock
+from aksha.runtime.models.errors import BindRefusal, BindRefused
+from aksha.runtime.models.routing import bind_aliases
+from aksha.runtime.models.types import RunMode
+from aksha.runtime.outbox.ports import SystemOfRecord
+from aksha.runtime.router.fake import PurposeClassifier
+from aksha.runtime.router.router import Router
+from aksha.runtime.router.types import RoutableAgent
+from aksha.runtime.sandbox.types import STRENGTHS, Availability, Strength
+from aksha.runtime.session.capabilities import CapabilityRecord, capabilities
+from aksha.runtime.session.service import Session, SessionAgent
 from aksha.runtime.storage.errors import StoreError
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tasks.tree import compile_tree
 
 Backend = Literal["sqlite", "postgres"]
 
@@ -91,3 +109,221 @@ def open_event_store(
 def open_blob_store(config: StorageConfig) -> BlobStore:
     """Open the blob store: a folder of content-addressed files at ``config.blob_path``."""
     return FilesystemBlobStore(config.blob_path)
+
+
+# --- The session runtime (ADR-P19, decision 22) -------------------------------------------
+#
+# =======================  ==============================================  ==================
+# Variable                 Meaning                                         Default
+# =======================  ==============================================  ==================
+# ``AKSHA_AGENTS``         folders holding agent folders (``os.pathsep``)  ``src/aksha/agents``
+# ``AKSHA_EXTENSIONS``     folders holding extension folders               ``src/aksha/extensions``
+# ``AKSHA_MODE``           run mode: ``fake`` (each agent's ``fakes.py``)  ``fake``
+# ``AKSHA_SANDBOX``        ``<backend>:<strength>`` the operator provides  none
+# ``AKSHA_SERVER_URL``     the server a CLI command talks to               the server file
+# =======================  ==============================================  ==================
+#
+# ``AKSHA_SANDBOX`` is a declaration, not a probe: no sandbox backend is built yet
+# (ADR-P12), so the operator names the one the process runs inside, for example
+# ``bwrap:os-jail``. A headless start needs it (ADR-P11 D12); strength ``none`` does not
+# count as a sandbox.
+
+DEFAULT_AGENTS = Path(__file__).resolve().parent / "agents"
+DEFAULT_EXTENSIONS = Path(__file__).resolve().parent / "extensions"
+SERVER_FILE = "aksha.server.json"
+"""Beside the store: the URL of the server holding the writer lock, written by ``serve``."""
+
+
+@dataclass(frozen=True)
+class RuntimeConfig:
+    """Everything the composition root needs to build a session, from the environment."""
+
+    storage: StorageConfig = StorageConfig()
+    agent_paths: tuple[Path, ...] = (DEFAULT_AGENTS,)
+    extension_paths: tuple[Path, ...] = (DEFAULT_EXTENSIONS,)
+    mode: str = "fake"
+    sandbox: str | None = None
+    server_url: str | None = None
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
+        """Read the configuration (see the table above)."""
+
+        def paths(name: str, default: Path) -> tuple[Path, ...]:
+            raw = env.get(name)
+            if not raw:
+                return (default,)
+            return tuple(Path(p) for p in raw.split(os.pathsep) if p)
+
+        return cls(
+            storage=StorageConfig.from_env(env),
+            agent_paths=paths("AKSHA_AGENTS", DEFAULT_AGENTS),
+            extension_paths=paths("AKSHA_EXTENSIONS", DEFAULT_EXTENSIONS),
+            mode=env.get("AKSHA_MODE", "fake"),
+            sandbox=env.get("AKSHA_SANDBOX") or None,
+            server_url=env.get("AKSHA_SERVER_URL") or None,
+        )
+
+    def sandbox_availability(self) -> Availability | None:
+        """The declared sandbox (``AKSHA_SANDBOX``), or None when none is declared."""
+        if self.sandbox is None:
+            return None
+        backend, _, strength = self.sandbox.partition(":")
+        strength = strength or "os-jail"
+        if not _is_strength(strength):
+            raise StoreError(
+                "sandbox_invalid", f"AKSHA_SANDBOX={self.sandbox!r}: strength is one of {STRENGTHS}"
+            )
+        usable = strength != "none"
+        return Availability(backend, strength, usable,
+                            "" if usable else "strength none is not a sandbox")  # fmt: skip
+
+    def server_file(self) -> Path:
+        """Where ``serve`` records its URL: beside the SQLite file."""
+        return self.storage.sqlite_path.parent / SERVER_FILE
+
+
+def _is_strength(value: str) -> TypeGuard[Strength]:
+    return value in STRENGTHS
+
+
+def runtime_commit() -> tuple[str, bool]:
+    """The git commit of the running code and whether its tree is dirty, when readable."""
+    root = Path(__file__).resolve().parents[2]
+    try:
+        commit = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+        dirty = subprocess.run(
+            ["git", "-C", str(root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown", False
+    return commit.stdout.strip() or "unknown", bool(dirty.stdout.strip())  # fmt: skip
+
+
+def _fake_adapters(loaded: LoadedDefinition) -> Mapping[str, object]:
+    """The agent's ``fakes.py`` ``ADAPTERS``: the ``fake`` run mode's model per alias."""
+    qualname = f"aksha_fakes_{loaded.agent.name}"
+    found = import_value(loaded.folder, qualname, loaded.agent.fakes, "ADAPTERS")
+    if not isinstance(found, Mapping):
+        raise BindRefused(
+            (BindRefusal("*", "fakes_missing", f"{loaded.module}: fakes.py has no ADAPTERS"),)
+        )
+    return found
+
+
+def session_agent(
+    loaded: LoadedDefinition,
+    mode: str,
+    adapters: Mapping[str, object] | None = None,
+    *,
+    commit: tuple[str, bool] = ("unknown", False),
+) -> SessionAgent:
+    """One loaded definition bound to its models, as a session runs it."""
+    agent = loaded.agent
+    if adapters is None:
+        if mode != "fake":
+            refusal = BindRefusal("*", "mode_unsupported", f"AKSHA_MODE={mode!r}: only fake")
+            raise BindRefused((refusal,))
+        adapters = _fake_adapters(loaded)
+    table = bind_aliases(loaded.model_aliases.values(), cast(RunMode, mode), adapters)
+    briefs = {
+        path: (loaded.folder / node.task.brief).read_text(encoding="utf-8")
+        for path, node in compile_tree(agent.name, agent.tasks).nodes.items()
+        if node.task.brief
+    }
+    extra = run_started_fields(loaded, runtime_commit=commit[0], dirty=commit[1])
+    return SessionAgent(
+        agent=agent,
+        tree=compile_tree(agent.name, agent.tasks),
+        registry=loaded.registry,
+        table=table,
+        definition_hash=loaded.definition_hash,
+        instructions=(loaded.folder / agent.instructions).read_text(encoding="utf-8"),
+        briefs=briefs,
+        kinds=loaded.kinds,
+        relations=loaded.relations,
+        context_policy=agent.context_policy,
+        run_extra=extra,
+    )
+
+
+def load_session_agents(
+    config: RuntimeConfig,
+    adapters: Mapping[str, Mapping[str, object]] | None = None,
+    *,
+    catalogue: Catalogue | None = None,
+) -> tuple[SessionAgent, ...]:
+    """Discover, load and bind every agent the configuration names. Raises ``LoadError``.
+
+    ``adapters`` overrides the model adapters of an agent by name (tests, scripted runs).
+    """
+    found = discover(config.agent_paths, ())
+    loaded = load_agents(list(found), list(config.extension_paths), catalogue=catalogue)
+    commit = runtime_commit()
+    return tuple(
+        session_agent(d, config.mode, (adapters or {}).get(d.agent.name), commit=commit)
+        for d in loaded
+    )
+
+
+def open_session(
+    config: RuntimeConfig,
+    clock: Clock | None = None,
+    *,
+    adapters: Mapping[str, Mapping[str, object]] | None = None,
+    systems: Mapping[str, SystemOfRecord] | None = None,
+) -> Session:
+    """The writer's session: the store (taking the writer lock), agents, router, sandbox.
+
+    Raises ``LockHeld`` when another process holds the writer lock (a server, or another
+    embedded command).
+    """
+    clock = clock or SystemClock()
+    catalogue = Catalogue(CORE_EVENT_TYPES)
+    agents = load_session_agents(config, adapters, catalogue=catalogue)
+    store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
+    ids = LogIdSource(store)
+    router = None
+    if len(agents) >= 2:
+        routable = tuple(RoutableAgent(a.name, a.agent.purpose, a.definition_hash) for a in agents)
+        router = Router(routable, PurposeClassifier(), ids)
+    sandbox = config.sandbox_availability()
+    return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
+                   blobs=open_blob_store(config.storage), systems=systems, ids=ids)  # fmt: skip
+
+
+def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:
+    """A read-only handle on the configured store: never takes the lock, never boots."""
+    return open_event_store(config.storage, clock or SystemClock(), writer=False)
+
+
+def session_capabilities(session: Session, config: RuntimeConfig) -> CapabilityRecord:
+    """The capability record of ``session`` (ADR-P19 D7) with this process's commit."""
+    commit, dirty = runtime_commit()
+    sandbox = config.sandbox_availability()
+    backends = () if sandbox is None or not sandbox.available else (sandbox.backend,)
+    return capabilities(session, runtime_commit=commit, dirty=dirty, sandbox_backends=backends)
+
+
+def export_trace(
+    store: EventStore, owner: str, run: str, out_dir: Path, *, store_id: str | None = None
+) -> tuple[Path, ...]:
+    """Export ``run``'s trace as OTLP JSON Lines files, one per segment (ADR-P21 D8).
+
+    The exporter is the ``otel`` extension; it needs the optional extra ``aksha[otel]``
+    and raises ``ExporterMissing`` with an install hint without it.
+    """
+    from aksha.extensions.otel.export import export_run
+
+    events = [e for e in store.read(owner) if e.run == run]
+    return export_run(events, run, out_dir, store_id=store_id or store.identity().store_id)

@@ -15,6 +15,10 @@ dependencies = ["jsonschema>=4.19"]
 # Storage adapters are optional extras; the runtime core never imports them.
 # `make venv` installs dev only; `make venv-postgres` adds the PostgreSQL driver.
 postgres = ["psycopg[binary]>=3.2"]
+# The HTTP server of the session API (ADR-P19): ``aksha serve``.
+server = ["fastapi>=0.115", "uvicorn>=0.30"]
+# The trace exporter extension (ADR-P21 D8): OTLP JSON Lines files, offline.
+otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.66b2"]
 # The live model adapter (aksha.adapters.models.live) uses only the standard library; the
 # extra names the opt-in, so `pip install 'aksha[live]'` is how a live run is asked for.
 live = []
@@ -23,7 +27,11 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "types-jsonschema",
+    "httpx2",  # the test client of starlette, under FastAPI
 ]
+
+[project.scripts]
+aksha = "aksha.interfaces.cli.main:entry"
 
 [tool.setuptools.packages.find]
 # src layout (Python Packaging User Guide): the package lives at ./src/aksha, so tests

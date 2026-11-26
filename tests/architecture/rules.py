@@ -608,12 +608,25 @@ def counter_fields(root: Path) -> list[Violation]:
     return out
 
 
+HEADLESS_PASS_ON = {
+    ("aksha.runtime.session.service", "_send"): (
+        "the start command takes the flag from SendMessage and passes it to the start "
+        "decision, which records it on run.started (ADR-P11 D12 item 1, ADR-P19)"
+    ),
+    ("aksha.runtime.session.views", "inspect_run"): (
+        "the run inspector reports the recorded flag; no decision reads it"
+    ),
+}
+"""Functions that pass the flag on or report it, with the reason. None decides on it."""
+
+
 def headless_reads(root: Path) -> list[Violation]:
     """Every read of a ``headless`` attribute in the runtime outside ``check``'s call of
     ``resolve_ask`` (ADR-P11 D12, ``test_no_bypass_path_headless``).
 
     The flag may be declared (a dataclass field) and passed on; it may be *read* only in
-    ``aksha.runtime.policy.gate.check``, as an argument of ``resolve_ask``.
+    ``aksha.runtime.policy.gate.check``, as an argument of ``resolve_ask``, and in the
+    functions :data:`HEADLESS_PASS_ON` names with their reason.
     """
     import ast
 
@@ -630,6 +643,9 @@ def headless_reads(root: Path) -> list[Violation]:
                     and node.func.id == "resolve_ask"
                 ):
                     allowed.update(id(a) for a in node.args)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and (module, node.name) in HEADLESS_PASS_ON:
+                allowed.update(id(n) for n in ast.walk(node))
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Attribute)

@@ -54,3 +54,9 @@ def test_headless_guard_catches_a_planted_read(copy: Path) -> None:
     planted = copy / "aksha/runtime/policy/gate.py"
     planted.write_text(planted.read_text() + "\n\ndef _skip(g):\n    return g.headless\n")
     assert [v.module for v in headless_reads(copy)] == ["aksha.runtime.policy.gate"]
+
+
+def test_headless_guard_catches_a_read_in_the_session_outside_the_start(copy: Path) -> None:
+    planted = copy / "aksha/runtime/session/service.py"
+    planted.write_text(planted.read_text() + "\n\ndef _skip(c):\n    return c.headless\n")
+    assert [v.module for v in headless_reads(copy)] == ["aksha.runtime.session.service"]

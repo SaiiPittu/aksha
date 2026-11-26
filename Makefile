@@ -4,14 +4,14 @@ BIN := $(VENV)/bin
 
 .PHONY: venv venv-postgres test test-postgres lint format typecheck check
 
-## Create .venv and install the package with dev tools (editable).
+## Create .venv and install the package with dev tools, the server and the trace exporter.
 venv:
 	uv venv --allow-existing --python $(PY) $(VENV)
-	uv pip install --python $(BIN)/python -e ".[dev]"
+	uv pip install --python $(BIN)/python -e ".[dev,server,otel]"
 
 ## Add the PostgreSQL driver (extra aksha[postgres]) so the PostgreSQL tests run, not skip.
 venv-postgres: venv
-	uv pip install --python $(BIN)/python -e ".[dev,postgres]"
+	uv pip install --python $(BIN)/python -e ".[dev,server,otel,postgres]"
 
 test:
 	$(BIN)/pytest
