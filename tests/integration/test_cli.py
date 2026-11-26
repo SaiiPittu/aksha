@@ -308,3 +308,38 @@ def test_a_session_waiting_on_a_route_question_reports_it() -> None:
     assert _report_session(ctx, status) == wire.EXIT_WAITING_INPUT
     assert "aksha answer I-0001 --agent" in out.getvalue()
     assert _report_session(ctx, SessionStatus("S-1", None, (), 4)) == wire.EXIT_OK
+
+
+def test_erase_deletes_a_subjects_values_and_verify_still_passes(tmp_path: Path) -> None:
+    from aksha.runtime.erasure.types import REDACTED, Personal
+    from aksha.runtime.events.envelope import NewEvent
+    from tests.support.events import probe_catalogue
+
+    path = tmp_path / "var" / "aksha.sqlite"
+    path.parent.mkdir(parents=True)
+    store = open_store(path, FakeClock(START), writer=True, catalogue=probe_catalogue())
+    named = {"n": 1, "text": Personal("person:p1", "Ada Contributor")}
+    store.append("o1", "U2", [NewEvent("probe.noted", named, run="R-0001")])
+    store.close()
+    code, out = aksha(tmp_path, "erase", "person:p1", "--reason", "subject asked")
+    assert code == wire.EXIT_OK, out
+    assert re.search(r"erased 1 value of person:p1 for o1 at seq 2", out)
+    code, out = aksha(tmp_path, "erase", "person:p1", "--reason", "subject asked")
+    assert code == wire.EXIT_OK and "nothing to erase for person:p1" in out
+    code, out = aksha(tmp_path, "verify")
+    assert code == wire.EXIT_OK and out.startswith("chain ok: 2 events"), out
+    store = open_store(path, FakeClock(START), writer=False, catalogue=probe_catalogue())
+    try:
+        assert [e.payload["text"] for e in store.read("o1", types=frozenset({"probe.noted"}))] == [
+            REDACTED
+        ]
+    finally:
+        store.close()
+    assert b"Ada Contributor" not in path.read_bytes()
+
+
+def test_erase_refuses_a_bad_subject_or_a_missing_reason(tmp_path: Path) -> None:
+    code, out = aksha(tmp_path, "erase", "x" * 201, "--reason", "r")
+    assert code == wire.EXIT_REFUSED and "erasure_subject_invalid" in out, out
+    with pytest.raises(SystemExit):
+        aksha(tmp_path, "erase", "person:p1")

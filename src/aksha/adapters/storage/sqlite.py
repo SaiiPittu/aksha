@@ -22,21 +22,28 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import secrets
 import sqlite3
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from aksha.runtime.canonical import canonical_json, freeze, iso_utc
+from aksha.runtime.erasure.seal import placeholders, resolve
+from aksha.runtime.erasure.types import ErasureReceipt, StoredValue, UnreadableValue
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.ports import Clock
 from aksha.runtime.storage.append import (
+    ERASURE_BOUNDARY,
     SYSTEM_OWNER,
     PreparedBatch,
     check_owner,
+    check_subject,
+    erasure_event,
     prepare_append,
 )
 from aksha.runtime.storage.chain import (
@@ -70,6 +77,9 @@ _CHAIN_COLUMNS = f"{_EVENT_COLUMNS}, prev_hash, hash"
 _ARTIFACT_COLUMNS = (
     "owner, ref, kind, key, version, content, content_hash, canonical_hash, event_seq"
 )
+_ERASABLE_COLUMNS = "owner, ref, subject, salt, value, event_seq"
+_IN_CHUNK = 500
+"""Refs per ``IN (...)`` list, well under SQLite's bound-parameter limit."""
 
 SCHEMA = """
 CREATE TABLE meta (
@@ -106,13 +116,20 @@ CREATE TABLE artifacts (
   event_seq INTEGER NOT NULL REFERENCES events(seq),
   PRIMARY KEY (owner, ref)
 );
+CREATE TABLE erasables (                         -- ADR-P30 E1: the only table rows leave
+  owner TEXT NOT NULL, ref TEXT PRIMARY KEY, subject TEXT NOT NULL,
+  salt TEXT NOT NULL, value TEXT NOT NULL,
+  event_seq INTEGER NOT NULL REFERENCES events(seq)
+);
+CREATE INDEX er_owner_subject ON erasables(owner, subject);
 """
 
 _TRIGGERS = "".join(
     f"CREATE TRIGGER {table}_no_{verb.lower()} BEFORE {verb} ON {table} "
     "BEGIN SELECT RAISE(ABORT, 'append-only'); END;\n"
-    for table in ("events", "artifacts", "boots", "meta", "store_meta")
+    for table in ("events", "artifacts", "boots", "meta", "store_meta", "erasables")
     for verb in ("UPDATE", "DELETE")
+    if (table, verb) != ("erasables", "DELETE")  # erasure deletes; verify() checks each one
 )
 
 
@@ -251,6 +268,17 @@ def _checked_artifact(row: tuple[Any, ...]) -> StoredArtifact | UnreadableArtifa
     return _artifact(row)
 
 
+def _checked_value(row: tuple[Any, ...]) -> StoredValue | UnreadableValue:
+    """One ``erasables`` row for the walk, or unreadable if its value is bad."""
+    owner, ref, subject, salt, text, event_seq = row
+    value, why = _canonical_or_why(str(text))
+    if why is not None:
+        return UnreadableValue(
+            str(owner), str(ref), int(event_seq), why.replace("payload", "value")
+        )
+    return StoredValue(str(owner), int(event_seq), str(ref), str(subject), str(salt), value)
+
+
 def _artifact(row: tuple[Any, ...]) -> StoredArtifact:
     owner, ref, kind, key, version, content, content_hash, canonical_hash, event_seq = row
     artifact = ArtifactRow(
@@ -315,6 +343,8 @@ class SQLiteEventStore:
         self._identity = identity
         self._head = _stored_head(conn, identity)
         """The writer's last committed ``(seq, hash)``; moves only after a commit."""
+        self._pending_head = self._head
+        """The head an open transaction would leave, set by ``_insert``."""
         self._mutex = threading.RLock()
         self.committed = threading.Condition()
         """Notified after every commit by this handle, to wake its subscriptions."""
@@ -356,40 +386,17 @@ class SQLiteEventStore:
         if not self.is_writer:
             self._db()
             raise NotWriter()
-        batch = prepare_append(self._catalogue, owner, boundary, events, artifacts)
+        batch = prepare_append(
+            self._catalogue, owner, boundary, events, artifacts, entropy=secrets.token_hex
+        )
         with self._mutex:
             db = self._db()
             db.execute("BEGIN IMMEDIATE")
             try:
-                at = iso_utc(self._clock.now())  # inside the lock, so ``at`` follows seq
                 if expected_seq is not None and (actual := self._last(owner)) != expected_seq:
                     raise SequenceConflict(owner, expected_seq, actual)
-                self._refuse_recorded(batch)
-                self._refuse_moved_head(db)
-                seq, prev = self._head
-                stored: list[Event] = []
-                for e in batch.events:
-                    seq += 1
-                    link = next_link(e.stored(seq=seq, owner=owner, at=at, boot=self._boot), prev)
-                    db.execute(
-                        "INSERT INTO events (seq, owner, type, payload, run, instance, step,"
-                        " session, uniq, at, boot, schema_version, prev_hash, hash)"
-                        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (seq, owner, e.type, e.payload_json, e.run, e.instance, e.step,
-                         e.session, e.dedup_key, at, self._boot, e.schema_version,
-                         link.prev_hash, link.hash),
-                    )  # fmt: skip
-                    stored.append(link.event)
-                    prev = link.hash
-                for index, row in batch.artifacts:
-                    db.execute(
-                        "INSERT INTO artifacts VALUES (?,?,?,?,?,?,?,?,?)",
-                        (owner, row.ref, row.kind, row.key, row.version,
-                         canonical_json(row.content), row.content_hash, row.canonical_hash,
-                         stored[index].seq),
-                    )  # fmt: skip
+                stored = self._insert(db, batch)
                 db.execute("COMMIT")
-                self._head = (seq, prev)
             except sqlite3.IntegrityError as e:
                 db.execute("ROLLBACK")
                 self._refuse_recorded(batch)
@@ -397,9 +404,114 @@ class SQLiteEventStore:
             except BaseException:
                 db.execute("ROLLBACK")
                 raise
+            self._head = self._pending_head
         with self.committed:
             self.committed.notify_all()
-        return tuple(stored)
+        return stored
+
+    def _insert(self, db: sqlite3.Connection, batch: PreparedBatch) -> tuple[Event, ...]:
+        """Insert one checked batch inside the open transaction; return what callers see.
+
+        Sets ``_pending_head``, which becomes ``_head`` only once the caller commits.
+        """
+        owner = batch.owner
+        at = iso_utc(self._clock.now())  # inside the lock, so ``at`` follows seq
+        self._refuse_recorded(batch)
+        self._refuse_moved_head(db)
+        seq, prev = self._head
+        hashed: list[Event] = []
+        returned: list[Event] = []
+        for e in batch.events:
+            seq += 1
+            link = next_link(e.stored(seq=seq, owner=owner, at=at, boot=self._boot), prev)
+            db.execute(
+                "INSERT INTO events (seq, owner, type, payload, run, instance, step,"
+                " session, uniq, at, boot, schema_version, prev_hash, hash)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (seq, owner, e.type, e.payload_json, e.run, e.instance, e.step,
+                 e.session, e.dedup_key, at, self._boot, e.schema_version,
+                 link.prev_hash, link.hash),
+            )  # fmt: skip
+            for v in e.sealed:
+                db.execute(
+                    f"INSERT INTO erasables ({_ERASABLE_COLUMNS}) VALUES (?,?,?,?,?,?)",
+                    (owner, v.ref, v.subject, v.salt, canonical_json(v.value), seq),
+                )
+            hashed.append(link.event)
+            returned.append(e.returned(seq=seq, owner=owner, at=at, boot=self._boot))
+            prev = link.hash
+        for index, row in batch.artifacts:
+            db.execute(
+                "INSERT INTO artifacts VALUES (?,?,?,?,?,?,?,?,?)",
+                (owner, row.ref, row.kind, row.key, row.version,
+                 canonical_json(row.content), row.content_hash, row.canonical_hash,
+                 hashed[index].seq),
+            )  # fmt: skip
+        self._pending_head = (seq, prev)
+        return tuple(returned)
+
+    def erase(self, owner: str, subject: str, *, reason: str) -> ErasureReceipt:
+        """Delete the owner's values for ``subject`` and record it (ADR-P30 E4); see the port."""
+        check_owner(owner)
+        check_subject(subject)
+        if not self.is_writer:
+            self._db()
+            raise NotWriter()
+        with self._mutex:
+            db = self._db()
+            db.execute("BEGIN IMMEDIATE")
+            try:
+                refs = tuple(
+                    str(r[0])
+                    for r in db.execute(
+                        "SELECT ref FROM erasables WHERE owner = ? AND subject = ?"
+                        " ORDER BY event_seq, ref",
+                        (owner, subject),
+                    ).fetchall()
+                )
+                if not refs:
+                    db.execute("ROLLBACK")
+                    return ErasureReceipt(owner, subject, (), None)
+                batch = prepare_append(
+                    self._catalogue, owner, ERASURE_BOUNDARY,
+                    [erasure_event(subject, refs, reason)], (), erasure=True,
+                )  # fmt: skip
+                db.execute(
+                    "DELETE FROM erasables WHERE owner = ? AND subject = ?", (owner, subject)
+                )
+                stored = self._insert(db, batch)
+                db.execute("COMMIT")
+            except BaseException:
+                db.execute("ROLLBACK")
+                raise
+            self._head = self._pending_head
+            # E10: the WAL still holds the page images written before the delete. A
+            # TRUNCATE checkpoint copies the zeroed pages home and empties it. A reader in
+            # the middle of a read can keep it busy; the next checkpoint finishes the job.
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        with self.committed:
+            self.committed.notify_all()
+        return ErasureReceipt(owner, subject, refs, stored[-1].seq)
+
+    def _resolve(self, owner: str, events: Iterable[Event]) -> list[Event]:
+        """``events`` with each placeholder replaced by its value, or its stand-in (E2)."""
+        listed = list(events)
+        refs = sorted({p.ref for e in listed for p in placeholders(e.payload)})
+        if not refs:
+            return listed
+        values: dict[str, Any] = {}
+        for i in range(0, len(refs), _IN_CHUNK):
+            chunk = refs[i : i + _IN_CHUNK]
+            rows = self._query(
+                f"SELECT ref, value FROM erasables WHERE owner = ? AND ref IN"
+                f" ({','.join('?' * len(chunk))})",
+                (owner, *chunk),
+            )
+            values.update({str(r[0]): json.loads(r[1]) for r in rows})
+        return [
+            replace(e, payload=freeze(resolve(e.payload, values))) if placeholders(e.payload) else e
+            for e in listed
+        ]
 
     def _refuse_moved_head(self, db: sqlite3.Connection) -> None:
         """Refuse to chain onto a head this writer did not write (rows removed or added)."""
@@ -420,7 +532,9 @@ class SQLiteEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = ? AND uniq IN ({marks})",
             (batch.owner, *keys),
         )
-        existing = batch.first_conflict({r[8]: _event(r) for r in rows})
+        existing = batch.first_conflict(
+            {e.dedup_key or "": e for e in self._resolve(batch.owner, map(_event, rows))}
+        )
         if existing is not None:
             raise AlreadyRecorded(existing)
 
@@ -445,7 +559,8 @@ class SQLiteEventStore:
         if types is not None:
             sql += f" AND type IN ({','.join('?' * len(types))})"
             params.extend(sorted(types))
-        return iter([_event(r) for r in self._query(sql + " ORDER BY seq", params)])
+        rows = self._query(sql + " ORDER BY seq", params)
+        return iter(self._resolve(owner, map(_event, rows)))
 
     def read_artifacts(
         self, owner: str, *, upto_seq: int | None = None
@@ -472,7 +587,7 @@ class SQLiteEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = ? AND uniq = ?",
             (check_owner(owner), key),
         )
-        return _event(rows[0]) if rows else None
+        return self._resolve(owner, [_event(rows[0])])[0] if rows else None
 
     def owners_with_open_runs(self) -> tuple[str, ...]:
         """Owners with a started run that has not ended, sorted."""
@@ -515,11 +630,13 @@ class SQLiteEventStore:
         """Walk the whole chain in seq order; see the port."""
         rows = self._query(f"SELECT {_CHAIN_COLUMNS} FROM events ORDER BY seq")
         saved = self._query(f"SELECT {_ARTIFACT_COLUMNS} FROM artifacts ORDER BY event_seq, ref")
+        held = self._query(f"SELECT {_ERASABLE_COLUMNS} FROM erasables ORDER BY event_seq, ref")
         return verify_chain(
             self._identity,
             (_link(r) for r in rows),
             anchors,
             artifacts=[_checked_artifact(r) for r in saved],
+            erasables=[_checked_value(r) for r in held],
         )
 
     def close(self) -> None:
@@ -581,6 +698,7 @@ def open_store(
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = FULL")
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA secure_delete = ON")  # ADR-P30 E10: erased bytes are zeroed
         identity = _create_or_check(conn, iso_utc(clock.now()), store_id)
         cur = conn.execute(
             "INSERT INTO boots (pid, at) VALUES (?, ?)", (os.getpid(), iso_utc(clock.now()))

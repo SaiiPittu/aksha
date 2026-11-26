@@ -118,3 +118,23 @@ def test_a_break_before_an_unreadable_row_is_reported_first(
         assert found is not None and (found.seq, found.reason) == (1, "hash_mismatch")
     finally:
         store.close()
+
+
+def test_erased_text_leaves_the_file_and_its_wal_while_the_writer_stays_open(
+    tmp_path: Path, clock: FakeClock, catalogue: Catalogue
+) -> None:
+    from aksha.runtime.erasure.types import Personal
+    from aksha.runtime.events.envelope import NewEvent
+
+    path = tmp_path / "s.sqlite"
+    store = open_store(path, clock, writer=True, catalogue=catalogue)
+    try:
+        assert store.pragma("secure_delete") == "1"
+        payload = {"n": 1, "text": Personal("person:p1", "Ada Contributor")}
+        store.append("o1", "U2", [NewEvent("probe.noted", payload, run="R-0001")])
+        store.erase("o1", "person:p1", reason="subject asked")
+        on_disk = b"".join(p.read_bytes() for p in tmp_path.iterdir() if p.is_file())
+        assert b"Ada Contributor" not in on_disk
+        assert store.verify() is None
+    finally:
+        store.close()

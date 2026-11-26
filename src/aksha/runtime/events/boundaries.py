@@ -1,4 +1,4 @@
-"""The closed list of transaction boundaries (U1 to U11) an event type may be appended in.
+"""The closed list of transaction boundaries (U1 to U12) an event type may be appended in.
 
 A boundary is one commit unit: every event (and artifact row) in it commits in one
 transaction or not at all (ADR-P01 D5). The list carries v2 05a section 2.4 forward under
@@ -80,6 +80,8 @@ _ALL = (
     Boundary("U9", "rebuild_start", "invalidation", "run.started with cause rebuild"),
     Boundary("U10", "derived_save", "artifacts", "derived artifact versions, inside U2"),
     Boundary("U11", "clean_exit", "interfaces", "process.closed"),
+    # ADR-P30 E4: the deletes of a subject's sealed values commit with this one event.
+    Boundary("U12", "erasure", "erasure", "erasure.performed"),
 )
 
 BOUNDARIES: Mapping[str, Boundary] = MappingProxyType({b.id: b for b in _ALL})

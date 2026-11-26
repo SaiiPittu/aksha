@@ -13,10 +13,20 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from aksha.runtime.canonical import NUL, NotCanonical, canonical_bytes, freeze, nul_path
-from aksha.runtime.events.catalogue import Catalogue
+from aksha.runtime.canonical import (
+    NUL,
+    NotCanonical,
+    canonical_bytes,
+    canonical_json,
+    freeze,
+    nul_path,
+)
+from aksha.runtime.erasure.ports import Entropy
+from aksha.runtime.erasure.seal import has_personal, redacted, seal, unsealed
+from aksha.runtime.erasure.types import SUBJECT_MAX, ErasureError, SealedValue
+from aksha.runtime.events.catalogue import PAYLOAD_CAP_BYTES, Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
-from aksha.runtime.events.errors import DedupKeyError
+from aksha.runtime.events.errors import DedupKeyError, PayloadTooLarge
 from aksha.runtime.storage.chain import content_hash
 from aksha.runtime.storage.errors import ArtifactWithoutEvent, StoreError
 from aksha.runtime.storage.rows import ArtifactRow
@@ -26,10 +36,41 @@ SYSTEM_OWNER = "_system"
 
 RECOVERY_BOUNDARY = "U7"
 
+ERASURE_BOUNDARY = "U12"
+"""The erasure boundary (ADR-P30 E4). Only ``EventStore.erase`` writes it."""
+
+REASON_MAX = 200
+"""The longest erasure reason, in characters (it is operator text kept in the record)."""
+
+
+def check_subject(subject: str) -> str:
+    """Return ``subject``, or refuse one no sealed value has (``erasure_subject_invalid``)."""
+    if not isinstance(subject, str) or not subject or NUL in subject or len(subject) > SUBJECT_MAX:
+        raise ErasureError(
+            "erasure_subject_invalid",
+            f"a subject is a non-empty string of at most {SUBJECT_MAX} characters, without NUL",
+        )
+    return subject
+
+
+def erasure_event(subject: str, refs: Sequence[str], reason: str) -> NewEvent:
+    """The ``erasure.performed`` event for erasing ``refs`` of ``subject`` (E4)."""
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > REASON_MAX:
+        raise ErasureError(
+            "erasure_reason_invalid",
+            f"a reason is non-empty text of at most {REASON_MAX} characters",
+        )
+    return NewEvent("erasure.performed", {"subject": subject, "refs": list(refs), "reason": reason})
+
 
 @dataclass(frozen=True)
 class PreparedEvent:
-    """A validated event, ready to insert: payload frozen and in canonical JSON."""
+    """A validated event, ready to insert: payload frozen and in canonical JSON.
+
+    ``payload`` and ``payload_json`` are what is stored and hashed. For an event with
+    personal values (ADR-P30 E1) they are the sealed payload, ``sealed`` holds the values
+    for the side table, and ``resolved`` is the payload a reader sees, values in place.
+    """
 
     type: str
     payload: Mapping[str, Any]
@@ -40,12 +81,24 @@ class PreparedEvent:
     session: str | None
     dedup_key: str | None
     schema_version: int
+    resolved: Mapping[str, Any] | None = None
+    sealed: tuple[SealedValue, ...] = ()
 
     def stored(self, *, seq: int, owner: str, at: str, boot: int) -> Event:
-        """The ``Event`` this becomes once the store has given it a seq."""
+        """The ``Event`` this becomes once the store has given it a seq, as it is hashed."""
+        return self._event(self.payload, seq=seq, owner=owner, at=at, boot=boot)
+
+    def returned(self, *, seq: int, owner: str, at: str, boot: int) -> Event:
+        """The ``Event`` a caller and every reader see: personal values in place."""
+        payload = self.payload if self.resolved is None else self.resolved
+        return self._event(payload, seq=seq, owner=owner, at=at, boot=boot)
+
+    def _event(
+        self, payload: Mapping[str, Any], *, seq: int, owner: str, at: str, boot: int
+    ) -> Event:
         return Event(
             type=self.type,
-            payload=self.payload,
+            payload=payload,
             run=self.run,
             instance=self.instance,
             step=self.step,
@@ -154,13 +207,46 @@ def _check_artifact(row: ArtifactRow, saved: PreparedEvent) -> None:
         )
 
 
-def _prepare_event(catalogue: Catalogue, owner: str, boundary: str, e: NewEvent) -> PreparedEvent:
+def _seal_payload(
+    catalogue: Catalogue, e: NewEvent, entropy: Entropy | None
+) -> tuple[str, Mapping[str, Any] | None, tuple[SealedValue, ...]]:
+    """The stored payload's JSON, the resolved payload and the sealed values (ADR-P30 E1-E3).
+
+    Without personal values: the validated payload, None and ``()``. With them, the
+    payload is validated twice, once with each value in place and once with each
+    stand-in in place (so replay after erasure still fits the schema, E2); the sealed
+    payload is what is stored and must fit the size cap too. A dedup-key template that
+    reads a field holding a personal value is refused (``erasure_in_dedup_key``): the
+    key is a stored column the erasure cannot reach.
+    """
+    sealed, values = seal(e.payload, entropy=entropy)
+    if not values:
+        return catalogue.validate_payload(e.type, e.payload), None, ()
+    reads = [f for f in catalogue.dedup_fields(e.type) if has_personal(e.payload.get(f))]
+    if reads:
+        raise ErasureError(
+            "erasure_in_dedup_key",
+            f"{e.type}: the dedup key reads {reads[0]!r}, which holds a personal value",
+        )
+    plain_json = catalogue.validate_payload(e.type, unsealed(e.payload))
+    catalogue.validate_payload(e.type, redacted(e.payload))
+    sealed_json = canonical_json(sealed)
+    size = len(sealed_json.encode("utf-8"))
+    if size > PAYLOAD_CAP_BYTES:
+        raise PayloadTooLarge(e.type, size, PAYLOAD_CAP_BYTES)
+    return sealed_json, freeze(json.loads(plain_json)), values
+
+
+def _prepare_event(
+    catalogue: Catalogue, owner: str, boundary: str, e: NewEvent, entropy: Entropy | None
+) -> PreparedEvent:
     spec = catalogue.get(e.type)
     _refuse_nul_fields(e)
     catalogue.check_boundary(e.type, boundary)
-    payload_json = catalogue.validate_payload(e.type, e.payload)
+    payload_json, resolved, values = _seal_payload(catalogue, e, entropy)
     payload = freeze(json.loads(payload_json))
-    rendered = catalogue.render_dedup_key(e.type, {**e.context(), "owner": owner}, payload)
+    plain = payload if resolved is None else resolved
+    rendered = catalogue.render_dedup_key(e.type, {**e.context(), "owner": owner}, plain)
     if rendered is None and e.dedup_key is not None:
         raise DedupKeyError("dedup_key_not_allowed", f"{e.type} has no dedup-key template")
     if rendered is not None and e.dedup_key is not None and e.dedup_key != rendered:
@@ -177,6 +263,8 @@ def _prepare_event(catalogue: Catalogue, owner: str, boundary: str, e: NewEvent)
         session=e.session,
         dedup_key=rendered,
         schema_version=spec.schema_version,
+        resolved=resolved,
+        sealed=values,
     )
 
 
@@ -186,6 +274,9 @@ def prepare_append(
     boundary: str,
     events: Sequence[NewEvent],
     artifacts: Sequence[ArtifactRow],
+    *,
+    erasure: bool = False,
+    entropy: Entropy | None = None,
 ) -> PreparedBatch:
     """Check one boundary against the catalogue and the owner rules; nothing touches storage.
 
@@ -193,7 +284,9 @@ def prepare_append(
     outside the system owner), every catalogue refusal, a dedup key repeated within the
     boundary, an artifact row with no ``artifact.saved`` event for its ref or one that
     event does not describe (:func:`_check_artifact`), an ``artifact.saved`` event with
-    no artifact row for its ref (``artifact_row_missing``, H6), NUL in any stored string
+    no artifact row for its ref (``artifact_row_missing``, H6), the erasure boundary U12
+    outside ``erasure=True`` (``erasure_boundary_reserved``, ADR-P30 E4), personal values
+    in artifact content (``erasure_in_artifact``, E8), NUL in any stored string
     (``nul_in_field``, ``nul_in_content``) and a lone surrogate in the owner or an
     envelope string (``not_canonical_field``), so both backends refuse alike, and before
     either opens a transaction.
@@ -203,12 +296,17 @@ def prepare_append(
     _refuse_field("boundary", boundary, "the boundary")
     if not events:
         raise StoreError("empty_boundary", "a transaction boundary holds at least one event")
+    if (boundary == ERASURE_BOUNDARY) != erasure:
+        raise StoreError(
+            "erasure_boundary_reserved",
+            f"the erasure boundary {ERASURE_BOUNDARY} is written by EventStore.erase, and only it",
+        )
     if (owner == SYSTEM_OWNER) != (boundary == RECOVERY_BOUNDARY):
         raise StoreError(
             "system_owner_reserved",
             f"the system owner {SYSTEM_OWNER!r} writes the recovery boundary U7, and only it",
         )
-    prepared = tuple(_prepare_event(catalogue, owner, boundary, e) for e in events)
+    prepared = tuple(_prepare_event(catalogue, owner, boundary, e, entropy) for e in events)
     keys = [p.dedup_key for p in prepared if p.dedup_key is not None]
     if len(keys) != len(set(keys)):
         raise DedupKeyError("dedup_key_repeated_in_boundary", "one boundary repeats a dedup key")
@@ -217,6 +315,12 @@ def prepare_append(
     }
     paired: list[tuple[int, ArtifactRow]] = []
     for row in artifacts:
+        if has_personal(row.content):
+            raise ErasureError(
+                "erasure_in_artifact",
+                f"artifact {row.ref!r}: personal values in artifact content are not supported;"
+                " keep them in an event payload and cite the event",
+            )
         _refuse_nul_content(row)
         if row.ref not in saved_at:
             raise ArtifactWithoutEvent(row.ref)

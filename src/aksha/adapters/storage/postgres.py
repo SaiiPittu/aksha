@@ -30,20 +30,27 @@ opened, so the runtime and the SQLite path never need it. Needs PostgreSQL 14 or
 from __future__ import annotations
 
 import os
+import secrets
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import replace
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 from aksha.runtime.canonical import canonical_json, freeze, iso_utc
+from aksha.runtime.erasure.seal import placeholders, resolve
+from aksha.runtime.erasure.types import ErasureReceipt, StoredValue
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.ports import Clock
 from aksha.runtime.storage.append import (
+    ERASURE_BOUNDARY,
     SYSTEM_OWNER,
     PreparedBatch,
     check_owner,
+    check_subject,
+    erasure_event,
     prepare_append,
 )
 from aksha.runtime.storage.chain import (
@@ -83,6 +90,7 @@ _CHAIN_COLUMNS = f"{_EVENT_COLUMNS}, prev_hash, hash"
 _ARTIFACT_COLUMNS = (
     "owner, ref, kind, key, version, content, content_hash, canonical_hash, event_seq"
 )
+_ERASABLE_COLUMNS = "owner, ref, subject, salt, value, event_seq"
 
 SCHEMA = """
 CREATE TABLE meta (
@@ -119,6 +127,12 @@ CREATE TABLE artifacts (
   event_seq BIGINT NOT NULL REFERENCES events (seq),
   PRIMARY KEY (owner, ref)
 );
+CREATE TABLE erasables (
+  owner TEXT NOT NULL, ref TEXT PRIMARY KEY, subject TEXT NOT NULL,
+  salt TEXT NOT NULL, value JSONB NOT NULL,
+  event_seq BIGINT NOT NULL REFERENCES events (seq)
+);
+CREATE INDEX er_owner_subject ON erasables (owner, subject);
 CREATE FUNCTION aksha_refuse_change() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'append-only: % on % is refused', TG_OP, TG_TABLE_NAME;
@@ -131,6 +145,12 @@ _TRIGGERS = "".join(
     f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} "
     "FOR EACH STATEMENT EXECUTE FUNCTION aksha_refuse_change();\n"
     for table in ("events", "artifacts", "boots", "meta", "store_meta")
+) + (
+    # ADR-P30 E1: rows leave erasables only by erase(); verify() checks each one that did.
+    "CREATE TRIGGER erasables_no_change BEFORE UPDATE ON erasables "
+    "FOR EACH ROW EXECUTE FUNCTION aksha_refuse_change();\n"
+    "CREATE TRIGGER erasables_no_truncate BEFORE TRUNCATE ON erasables "
+    "FOR EACH STATEMENT EXECUTE FUNCTION aksha_refuse_change();\n"
 )
 
 
@@ -178,6 +198,11 @@ def _artifact(row: tuple[Any, ...]) -> StoredArtifact:
     owner, ref, kind, key, version, content, content_hash, canonical_hash, event_seq = row
     artifact = ArtifactRow(ref, kind, key, version, content, content_hash, canonical_hash)
     return StoredArtifact(owner=owner, event_seq=int(event_seq), row=artifact)
+
+
+def _value(row: tuple[Any, ...]) -> StoredValue:
+    owner, ref, subject, salt, value, event_seq = row
+    return StoredValue(str(owner), int(event_seq), str(ref), str(subject), str(salt), value)
 
 
 def _require_utf8(conn: psycopg.Connection[tuple[Any, ...]]) -> None:
@@ -365,7 +390,9 @@ class PostgresEventStore:
         if not self._writer:
             self._db()
             raise NotWriter()
-        batch = prepare_append(self._catalogue, owner, boundary, events, artifacts)
+        batch = prepare_append(
+            self._catalogue, owner, boundary, events, artifacts, entropy=secrets.token_hex
+        )
         pg = driver()
         with self._mutex:
             db = self._db()
@@ -401,6 +428,7 @@ class PostgresEventStore:
             )
         seq, prev = self._head
         stored: list[Event] = []
+        returned: list[Event] = []
         for e in batch.events:
             seq += 1
             link = next_link(e.stored(seq=seq, owner=batch.owner, at=at, boot=self._boot), prev)
@@ -411,7 +439,14 @@ class PostgresEventStore:
                 (seq, batch.owner, e.type, e.payload_json, e.run, e.instance, e.step, e.session,
                  e.dedup_key, at, self._boot, e.schema_version, link.prev_hash, link.hash),
             )  # fmt: skip
+            for v in e.sealed:
+                db.execute(
+                    f"INSERT INTO erasables ({_ERASABLE_COLUMNS})"
+                    " VALUES (%s,%s,%s,%s,%s::jsonb,%s)",
+                    (batch.owner, v.ref, v.subject, v.salt, canonical_json(v.value), seq),
+                )
             stored.append(link.event)
+            returned.append(e.returned(seq=seq, owner=batch.owner, at=at, boot=self._boot))
             prev = link.hash
         for index, a in batch.artifacts:
             db.execute(
@@ -420,7 +455,55 @@ class PostgresEventStore:
                  a.content_hash, a.canonical_hash, stored[index].seq),
             )  # fmt: skip
         db.execute("SELECT pg_notify(%s, %s)", (CHANNEL, batch.owner))
-        return tuple(stored), prev
+        return tuple(returned), prev
+
+    def erase(self, owner: str, subject: str, *, reason: str) -> ErasureReceipt:
+        """Delete the owner's values for ``subject`` and record it (ADR-P30 E4); see the port."""
+        check_owner(owner)
+        check_subject(subject)
+        if not self._writer:
+            self._db()
+            raise NotWriter()
+        pg = driver()
+        with self._mutex:
+            db = self._db()
+            try:
+                with db.transaction():
+                    db.execute("SELECT pg_advisory_xact_lock(%s)", (WRITER_LOCK_KEY,))
+                    deleted = db.execute(
+                        "DELETE FROM erasables WHERE owner = %s AND subject = %s"
+                        " RETURNING event_seq, ref",
+                        (owner, subject),
+                    ).fetchall()
+                    if not deleted:
+                        return ErasureReceipt(owner, subject, (), None)
+                    ordered = tuple(
+                        str(r[1]) for r in sorted(deleted, key=lambda r: (int(r[0]), str(r[1])))
+                    )
+                    batch = prepare_append(
+                        self._catalogue, owner, ERASURE_BOUNDARY,
+                        [erasure_event(subject, ordered, reason)], (), erasure=True,
+                    )  # fmt: skip
+                    stored, head_hash = self._insert(db, batch, None)
+                self._head = (stored[-1].seq, head_hash)
+            except pg.Error as e:
+                raise StoreError("backend_error", str(e)) from None
+        return ErasureReceipt(owner, subject, ordered, stored[-1].seq)
+
+    def _resolve(self, owner: str, events: Iterable[Event]) -> list[Event]:
+        """``events`` with each placeholder replaced by its value, or its stand-in (E2)."""
+        listed = list(events)
+        refs = sorted({p.ref for e in listed for p in placeholders(e.payload)})
+        if not refs:
+            return listed
+        rows = self._query(
+            "SELECT ref, value FROM erasables WHERE owner = %s AND ref = ANY(%s)", (owner, refs)
+        )
+        values = {str(r[0]): r[1] for r in rows}
+        return [
+            replace(e, payload=freeze(resolve(e.payload, values))) if placeholders(e.payload) else e
+            for e in listed
+        ]
 
     def _refuse_recorded(self, batch: PreparedBatch) -> None:
         """Raise ``AlreadyRecorded`` if any of the batch's dedup keys is already stored."""
@@ -431,7 +514,9 @@ class PostgresEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = %s AND uniq = ANY(%s)",
             (batch.owner, keys),
         )
-        existing = batch.first_conflict({r[8]: _event(r) for r in rows})
+        existing = batch.first_conflict(
+            {e.dedup_key or "": e for e in self._resolve(batch.owner, map(_event, rows))}
+        )
         if existing is not None:
             raise AlreadyRecorded(existing)
 
@@ -456,7 +541,8 @@ class PostgresEventStore:
         if types is not None:
             sql += " AND type = ANY(%s)"
             params.append(sorted(types))
-        return iter([_event(r) for r in self._query(sql + " ORDER BY seq", params)])
+        rows = self._query(sql + " ORDER BY seq", params)
+        return iter(self._resolve(owner, map(_event, rows)))
 
     def read_artifacts(
         self, owner: str, *, upto_seq: int | None = None
@@ -483,7 +569,7 @@ class PostgresEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = %s AND uniq = %s",
             (check_owner(owner), key),
         )
-        return _event(rows[0]) if rows else None
+        return self._resolve(owner, [_event(rows[0])])[0] if rows else None
 
     def owners_with_open_runs(self) -> tuple[str, ...]:
         """Owners with a started run that has not ended, sorted."""
@@ -526,8 +612,15 @@ class PostgresEventStore:
         """Walk the whole chain in seq order; see the port."""
         rows = self._query(f"SELECT {_CHAIN_COLUMNS} FROM events ORDER BY seq")
         saved = self._query(f"SELECT {_ARTIFACT_COLUMNS} FROM artifacts ORDER BY event_seq, ref")
+        held = self._query(f"SELECT {_ERASABLE_COLUMNS} FROM erasables ORDER BY event_seq, ref")
         links = (ChainLink(_event(r[:12]), str(r[12]), str(r[13])) for r in rows)
-        return verify_chain(self._identity, links, anchors, artifacts=[_artifact(r) for r in saved])
+        return verify_chain(
+            self._identity,
+            links,
+            anchors,
+            artifacts=[_artifact(r) for r in saved],
+            erasables=[_value(r) for r in held],
+        )
 
     def close(self) -> None:
         """Close the session; for the writer that releases the advisory lock. Idempotent."""

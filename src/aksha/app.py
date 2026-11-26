@@ -80,6 +80,7 @@ from aksha.runtime.definitions.names import qualify, resolve_kind
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.egress.ports import Network
 from aksha.runtime.egress.types import EgressPolicy
+from aksha.runtime.erasure.types import ErasureReceipt
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
@@ -752,6 +753,23 @@ def open_session(
 def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:
     """A read-only handle on the configured store: never takes the lock, never boots."""
     return open_event_store(config.storage, clock or SystemClock(), writer=False)
+
+
+def erase_subject(
+    config: RuntimeConfig, owner: str, subject: str, *, reason: str, clock: Clock | None = None
+) -> ErasureReceipt:
+    """Erase ``subject``'s personal values for ``owner`` (ADR-P30 E4), as the writer.
+
+    Opens the configured store as the writer for this one call, so it refuses
+    (``LockHeld``) while a server or another command holds the lock. The store's
+    :meth:`~aksha.runtime.storage.ports.EventStore.erase` is the hook memory (ADR-P09)
+    calls from inside a running session.
+    """
+    store = open_event_store(config.storage, clock or SystemClock(), writer=True)
+    try:
+        return store.erase(owner, subject, reason=reason)
+    finally:
+        store.close()
 
 
 def session_capabilities(session: Session, config: RuntimeConfig) -> CapabilityRecord:
