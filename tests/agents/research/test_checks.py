@@ -46,11 +46,33 @@ def _company(key: str, *pages: str, evidence: bool = False) -> dict[str, Any]:
     return out
 
 
+BOUNDARY = {"in": "products that do the job", "out": []}
+
+
+def _scope(geography: str, *, basis: str = "answer", **extra: Any) -> dict[str, Any]:
+    return {
+        "segment": {"value": "offices", "basis": "request"},
+        "geography": {"value": geography, "basis": basis},
+        "boundary": BOUNDARY,
+        **extra,
+    }
+
+
 def test_scope_needs_segment_and_geography() -> None:
-    view = _View({("scope", None): {"segment": {"value": "offices"}, "geography": {"value": ""}}})
+    view = _View({("scope", None): _scope("")})
     assert not checks.scope_done(view).ok
-    view.slots[("scope", None)] = {"segment": {"value": "offices"}, "geography": {"value": "EU"}}
+    view.slots[("scope", None)] = _scope("EU")
     assert checks.scope_done(view).ok
+
+
+def test_scope_needs_where_each_value_came_from_and_a_boundary() -> None:
+    assert not checks.scope_done(_View({("scope", None): _scope("EU", basis="")})).ok
+    assert not checks.scope_done(_View({("scope", None): _scope("EU", boundary={})})).ok
+
+
+def _link(src: str, dst: str) -> _Event:
+    payload = {"kind": "research.same_entity_as", "src": {"id": src}, "dst": {"id": dst}}
+    return _Event("relation.saved", payload)
 
 
 def test_discover_refuses_a_merge_without_its_relation() -> None:
@@ -58,8 +80,16 @@ def test_discover_refuses_a_merge_without_its_relation() -> None:
                "resolved": 2, "pages_found": 3}  # fmt: skip
     view = _View({("competitors", None): content})
     assert "same_entity_as" in checks.discover_done(view).message
-    view.log.events.append(_Event("relation.saved", {"kind": "research.same_entity_as"}))
+    view.log.events.append(_link("p/1", "p/2"))
     assert checks.discover_done(view).ok
+
+
+def test_discover_refuses_a_relation_that_joins_other_pages() -> None:
+    content = {"companies": [_company("a", "p/1", "p/2", evidence=True), _company("b", "p/3")],
+               "resolved": 2, "pages_found": 3}  # fmt: skip
+    view = _View({("competitors", None): content})
+    view.log.events.append(_link("p/1", "p/3"))  # one relation, but not between a's pages
+    assert checks.discover_done(view).keys == ("a",)
 
 
 def test_discover_refuses_a_page_under_two_companies_and_a_wrong_count() -> None:
@@ -90,6 +120,14 @@ def test_profile_refuses_two_prices_without_a_conflict() -> None:
     assert checks.profile_done(_View({("profile", "k"): kept}, key="k")).ok
 
 
+def test_profile_reads_one_amount_in_two_currencies_as_a_conflict() -> None:
+    two = [{"value": "229", "currency": "USD"}, {"value": "229", "currency": "EUR"}]
+    view = _View({("profile", "k"): _profile(unit_price=two)}, key="k")
+    assert "conflict" in checks.profile_done(view).message
+    same = [{"value": "229", "currency": "USD"}, {"value": "229", "currency": "USD"}]
+    assert checks.profile_done(_View({("profile", "k"): _profile(unit_price=same)}, key="k")).ok
+
+
 def test_profile_refuses_an_empty_cell() -> None:
     view = _View({("profile", "k"): _profile(privacy=[])}, key="k")
     assert not checks.profile_done(view).ok
@@ -113,8 +151,12 @@ def test_report_needs_every_row_and_proposal_thresholds() -> None:
         ("tests", None): {"tests": [{"id": "T1", "threshold": {"status": "proposal"}}]},
     }
     assert not checks.report_done(_View(slots)).ok
-    slots[("matrix", None)] = {"rows": [{"key": "a"}, {"key": "b"}]}
+    full = {c: [{"value": "x"}] for c in checks.CELLS}
+    slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full}]}
     assert checks.report_done(_View(slots)).ok
+    slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full, "power": []}]}
+    assert "b/power" in checks.report_done(_View(slots)).message
+    slots[("matrix", None)] = {"rows": [{"key": "a", **full}, {"key": "b", **full}]}
     slots[("tests", None)] = {"tests": [{"id": "T1", "threshold": {"status": "decided"}}]}
     assert not checks.report_done(_View(slots)).ok
 

@@ -158,6 +158,14 @@ def test_an_unlisted_price_is_unknown_never_zero(run: ResearchBench) -> None:
 # --- claims, injected text ------------------------------------------------------------
 
 
+def test_a_cell_holds_only_passages_about_that_column(run: ResearchBench) -> None:
+    # K1's page puts a cabling line under its Privacy heading: it is power, not privacy.
+    cells = _row(run, "K1")
+    privacy, power = _quotes(cells["privacy"]), _quotes(cells["power"])
+    assert privacy == ["Thermal only. The sensor cannot capture faces or identities."]
+    assert "Installation requires a PoE cable run to every sensor." in power
+
+
 def test_vendor_claim_and_measured_fact_are_both_shown_and_labelled(run: ResearchBench) -> None:
     key = world_key(run.world)
     cell = _row(run, "K3")["battery_life"]

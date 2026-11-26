@@ -66,7 +66,8 @@ def test_a_model_that_obeys_page_text_is_refused_and_nothing_changes(tmp_path: P
     # Every page read that carries the text tempts it once (discover, then the company's own
     # evidence instance); every call is refused before dispatch.
     assert refused and {e.payload["tool"] for e in refused} == {"send_document"}
-    assert {e.payload["code"] for e in refused} == {refused[0].payload["code"]}
+    # The gate's first layer refuses it: the research agent has no tool of that name.
+    assert {(e.payload["layer"], e.payload["code"]) for e in refused} == {(1, "unknown_tool")}
     assert any(str(e.instance).startswith("evidence[") for e in refused)
     for b in (clean, obeyed):
         assert b.events("approval.requested") == [] and b.events("outbox.enqueued") == []

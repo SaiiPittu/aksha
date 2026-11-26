@@ -457,6 +457,7 @@ def _evidence(seen: Seen) -> GenerationResult:
                     {
                         "record": r.data["record"],
                         "kind": "instruction_like",
+                        "hidden": kind == "hidden",
                         "handling": "kept as data: no tool, approval, recipient or budget changed",
                         "text": _entry(r, p, text, "fact"),
                     }
@@ -480,7 +481,7 @@ def _evidence(seen: Seen) -> GenerationResult:
                 cells["battery_life"].append(_entry(r, p, text, label))
             if _POWER.search(text):
                 cells["power"].append(_entry(r, p, text, label))
-            if _PRIVACY.search(text) or p.get("section") == "Privacy":
+            if _PRIVACY.search(text):  # by what it says, never by the heading it sits under
                 cells["privacy"].append(_entry(r, p, text, "vendor_claim"))
     checked = [f"record:{r.data['record']}@{r.data['version']}" for r in ok if r.data]
     questions = {
@@ -699,10 +700,10 @@ def _report(seen: Seen) -> GenerationResult:
                     )
         row["price_conflict"] = bool(profile["conflicts"])
         rows.append(row)
-        for conflict in profile["conflicts"]:
+        for i, conflict in enumerate(profile["conflicts"], start=1):
             findings.append(
                 {
-                    "id": f"price-conflict-{key}",
+                    "id": f"price-conflict-{key}-{i}",
                     "label": "fact",
                     "statement": f"{profile['name']} lists two unit prices: "
                     + "; ".join(conflict["values"])
@@ -721,12 +722,13 @@ def _report(seen: Seen) -> GenerationResult:
                     "evidence": [{"cite": claims[0]["cite"]}, {"cite": facts[0]["cite"]}],
                 }
             )
-        for flag in profile["flags"]:
+        for i, flag in enumerate(profile["flags"], start=1):
+            held = "hidden text" if flag.get("hidden") else "text"
             findings.append(
                 {
-                    "id": f"instruction-like-{key}",
+                    "id": f"instruction-like-{key}-{i}",
                     "label": "fact",
-                    "statement": f"A page of {profile['name']} holds hidden text addressed to automated readers; it was kept as data and changed nothing.",  # noqa: E501
+                    "statement": f"A page of {profile['name']} holds {held} addressed to automated readers; it was kept as data and changed nothing.",  # noqa: E501
                     "evidence": [{"cite": flag["text"]["cite"]}],
                 }
             )

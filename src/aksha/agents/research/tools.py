@@ -46,7 +46,8 @@ SNIPPET_CHARS = 160
 
 def _record(args: Mapping[str, Any], allowed: tuple[str, ...]) -> str | Err:
     record = str(args["record"])
-    if record.split("/", 1)[0] not in allowed or "/" not in record:
+    parts = record.split("/")
+    if len(parts) < 2 or parts[0] not in allowed or any(p in ("", ".", "..") for p in parts):
         return Err(
             "not_in_collection",
             f"{record!r} is not a record of {list(allowed)}",

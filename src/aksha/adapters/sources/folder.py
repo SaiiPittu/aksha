@@ -4,8 +4,9 @@
 ``name``: a record ID is the file's path relative to ``root`` (``pages/P-0001.html``), its
 collection the first folder of that path, its text the file decoded as UTF-8 with nothing
 changed (offsets count code points in the raw file), and its version ``sha256:`` over the
-file's bytes, so an edited file is a new version. A record ID that leaves ``root`` (an
-absolute path, ``..``, a symbolic link out) reads as no record. It implements the
+file's bytes, so an edited file is a new version. A record ID is canonical or it is no
+record: an absolute path, a backslash, an empty, ``.`` or ``..`` segment, or a symbolic
+link out of ``root`` reads as none, so one file has exactly one record ID. It implements the
 runtime's ``RecordReader`` port and ``record_version`` of the ``VersionedSource`` port.
 """
 
@@ -27,6 +28,8 @@ class FolderSource:
 
     def _path(self, record_id: str) -> Path | None:
         if not record_id or record_id.startswith("/") or "\\" in record_id:
+            return None
+        if any(part in ("", ".", "..") for part in record_id.split("/")):
             return None
         path = (self.root / record_id).resolve()
         if not path.is_relative_to(self.root) or not path.is_file():

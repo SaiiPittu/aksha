@@ -65,9 +65,31 @@ def test_a_record_outside_the_tool_collection_is_refused(reader: AttemptReader) 
     assert reader.returned == ()
 
 
-def test_a_path_out_of_the_source_reads_as_no_record(reader: AttemptReader) -> None:
-    out = tools.fetch_page(_ctx(reader), {"record": "competitors/../../key.json"})
-    assert isinstance(out.result, Err) and out.result.code == "fetch_failed"
+@pytest.mark.parametrize(
+    "record",
+    [
+        "competitors/../../key.json",  # out of the source
+        "competitors/../reviews/reviews.json",  # inside it, but another collection's record
+        "competitors/./comp01-kelvra.html",  # a second name for one record
+        "competitors//comp01-kelvra.html",
+    ],
+)
+def test_a_record_id_with_a_dot_or_empty_segment_is_refused_unread(
+    reader: AttemptReader, record: str
+) -> None:
+    out = tools.fetch_page(_ctx(reader), {"record": record})
+    assert isinstance(out.result, Err) and out.result.code == "not_in_collection"
+    assert reader.returned == ()
+
+
+@pytest.mark.parametrize(
+    "record",
+    ["competitors/../reviews/reviews.json", "competitors/./comp01-kelvra.html", "../key.json"],
+)
+def test_folder_source_reads_only_canonical_record_ids(record: str) -> None:
+    source = FolderSource(tools.SOURCE, SOURCES)
+    assert source.read(tools.SOURCE, record) is None
+    assert source.read(tools.SOURCE, "competitors/comp01-kelvra.html") is not None
 
 
 def test_without_a_reader_a_fetch_fails_and_mints_nothing() -> None:
