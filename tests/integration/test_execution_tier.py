@@ -3,7 +3,9 @@
 A tool reaches the network only through ``ctx.http`` and only under its policy, each hop's
 decision is on its ``step.completed``, and a refusal is an error the model reads and that
 is never retried. An exec tool runs through ``ctx.exec`` in a box, the box's record is on
-its ``step.completed``, and with no backend the gate refuses before any body runs. The
+its ``step.completed``, and with no backend the gate refuses before any body runs. Every
+exec of a session's runs names that session, so it runs in the session's one stateful
+workspace (decision 37). The
 bubblewrap test runs a real box and is skipped where the backend does not probe available.
 """
 
@@ -17,9 +19,10 @@ import pytest
 
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
 from aksha.runtime.canonical import thaw
+from aksha.runtime.sandbox.types import SessionRef
 from tests.support.loop import Recorder, call, finish_reply, tools_reply
 from tests.support.sandbox import FakeSandbox
-from tests.support.tier3 import TierBench
+from tests.support.tier3 import OWNER, TierBench
 
 BWRAP = BwrapSandbox()
 BWRAP_PROBE = BWRAP.probe()
@@ -110,3 +113,47 @@ def test_an_exec_tool_runs_in_a_real_bubblewrap_box(make: Any) -> None:
     assert record["backend"] == "bwrap" and record["version"].startswith("bubblewrap")
     assert set(record["outputs"]) == {"out/r.txt"} and record["exit_code"] == 0
     assert "/work" in str(step.payload["value"]["view"])
+
+
+def _session_run(root: Path, box: Any, session: str, *codes: str) -> list[tuple[Any, str]]:
+    """One run in ``session`` (its own store under ``root``) running each script in turn.
+
+    Each exec's record and the view its step showed the model.
+    """
+    replies = [tools_reply(call("run_script", n, code=c)) for n, c in enumerate(codes, 1)]
+    b = TierBench(root, Recorder([*replies, finish_reply()]), box=box, session=session)
+    try:
+        assert b.drive().outcome == "complete"
+        steps = b.tool_steps("run_script")
+        return [(thaw(s.payload["value"]["exec"])[0], str(s.payload["value"].get("view")))
+                for s in steps]  # fmt: skip
+    finally:
+        b.close()
+
+
+def test_every_exec_names_its_runs_session(tmp_path: Path) -> None:
+    box = FakeSandbox()
+    records = _session_run(tmp_path / "a", box, "S-0001", "print(1)", "print(2)")
+    records += _session_run(tmp_path / "b", box, "S-0002", "print(3)")
+    assert [r.session for r in box.requests] == [SessionRef(OWNER, s) for s in
+                                                 ("S-0001", "S-0001", "S-0002")]  # fmt: skip
+    assert [r["session"]["session"] for r, _ in records] == ["S-0001", "S-0001", "S-0002"]
+
+
+WRITE = "open('out/state.txt', 'w').write('from the first exec')"
+READ = "import os; p = 'out/state.txt'; print(open(p).read() if os.path.exists(p) else 'none')"
+
+
+@pytest.mark.skipif(not BWRAP_PROBE.available, reason=f"bwrap: {BWRAP_PROBE.reason}")
+def test_one_session_keeps_one_workspace_across_execs_and_runs(tmp_path: Path) -> None:
+    box = BwrapSandbox(workspaces=tmp_path / "sandbox")
+    (w, _), (r, view) = _session_run(tmp_path / "a", box, "S-0001", WRITE, READ)
+    assert "from the first exec" in view
+    assert w["workspace"]["created"] is True and r["workspace"]["created"] is False
+    assert w["workspace"]["folder"] == str(tmp_path / "sandbox" / OWNER / "S-0001" / "work")
+    assert set(w["outputs"]) == {"out/state.txt"} and r["outputs"] == {}
+    ((later, later_view),) = _session_run(tmp_path / "b", box, "S-0001", READ)
+    assert "from the first exec" in later_view  # a later run of the session: kept
+    assert later["workspace"]["folder"] == w["workspace"]["folder"]
+    ((other, other_view),) = _session_run(tmp_path / "c", box, "S-0002", READ)
+    assert "none" in other_view and other["workspace"]["folder"] != w["workspace"]["folder"]

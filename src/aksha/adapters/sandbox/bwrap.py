@@ -1,5 +1,15 @@
 """``BwrapSandbox``: the ``os-jail`` backend, one bubblewrap box per exec (ADR-P12).
 
+Every exec is its own box, and a request that names a session runs in that session's
+persistent workspace (decision 37, :mod:`aksha.adapters.sandbox.workspace`): the folder is
+bound as ``/work`` instead of a fresh one, so files one exec writes are there for the next.
+The inputs are written over it, nothing else is removed, the session's boxes run one at a
+time, and after the box only the files this exec wrote or changed are collected (or every
+file, for ``collect="all"``). The budgets on the writable paths count what the exec adds to
+what was there. A git workspace is checkpointed after each exec. The folder is kept after
+the run; ``clean`` removes it. A backend built without a workspaces root runs every box
+fresh.
+
 What a box gets (decisions 3, 4, 7):
 
 - **An allowlisted root**: ``/usr`` and the ``/bin``, ``/sbin`` and ``/lib*`` links or
@@ -8,8 +18,9 @@ What a box gets (decisions 3, 4, 7):
   store file.
 - **No network**: every namespace is unshared (``--unshare-all``), so the box has only its
   own loopback. A policy with the network on is refused.
-- **A fresh ``/work``** in a new folder under ``scratch``: the workspace tree (blobs read
-  through the reader given) and the inline files. ``/work`` is read-only except the
+- **A ``/work``**: the session's workspace folder, or for a request with no session a
+  fresh folder under ``scratch``; either way the workspace tree (blobs read through the
+  reader given) and the inline files are written into it. ``/work`` is read-only except the
   policy's writable paths (``.`` is all of it); a protected path is bound read-only again
   over a writable one. An environment image is bound read-only at ``/env``, its ``bin``
   first on ``PATH``.
@@ -30,13 +41,14 @@ What a box gets (decisions 3, 4, 7):
   two samples a program can go over by what it allocates or writes in one interval, each
   file still capped at ``max_file_bytes`` and each process at ``memory_mb``.
 
-After the program exits, every regular file under a writable path is collected, never
-following a symlink (each one skipped is a ``symlink`` denial), up to
-``max_collect_bytes`` (``output_rejected`` past it), and the box's folder is deleted: the
-backend keeps nothing between boxes. Blocked actions found on stderr come back as
-denials. The probe runs one trivial box once per backend object; a host without
-``bwrap`` or ``prlimit``, or with unprivileged user namespaces off, probes unavailable and
-every run is refused ``sandbox_unavailable``: there is no unconfined fallback.
+After the program exits, every regular file under a writable path is collected (for a
+session box, every one it wrote or changed), never following a symlink (each one skipped
+is a ``symlink`` denial), up to ``max_collect_bytes`` (``output_rejected`` past it), and a
+fresh box's folder is deleted: the backend keeps nothing of a box with no session.
+Blocked actions found on stderr come back as denials. The probe runs one trivial box once
+per backend object; a host without ``bwrap`` or ``prlimit``, or with unprivileged user
+namespaces off, probes unavailable and every run is refused ``sandbox_unavailable``: there
+is no unconfined fallback.
 """
 
 from __future__ import annotations
@@ -51,10 +63,12 @@ import subprocess
 import tempfile
 import threading
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import IO
 
 from aksha.adapters.sandbox.process import _group_alive
+from aksha.adapters.sandbox.workspace import SessionFolders
 from aksha.runtime.sandbox.errors import SANDBOX_UNAVAILABLE, SandboxRefused
 from aksha.runtime.sandbox.ports import BlobReader, UnitHolder
 from aksha.runtime.sandbox.types import (
@@ -66,6 +80,7 @@ from aksha.runtime.sandbox.types import (
     ExecPolicy,
     ExecStatus,
     Limits,
+    SessionRef,
     Strength,
     TreeManifest,
 )
@@ -80,6 +95,9 @@ HOST_ENV = {"PATH": "/usr/bin:/bin"}
 """The environment bubblewrap itself starts with; ``--clearenv`` clears it for the box."""
 BASE_PATH = "/usr/local/bin:/usr/bin:/bin"
 WATCH_INTERVAL_S = 0.02
+LARGE_WORK_ENTRIES = 2_000
+"""A session workspace holding more entries than this is sampled every ``LARGE_WATCH_S``."""
+LARGE_WATCH_S = 0.25
 MAX_WORK_ENTRIES = 10_000
 """The most files and folders the writable paths may hold while a box runs."""
 SIGNAL_LIMITS = frozenset({128 + signal.SIGXCPU, 128 + signal.SIGXFSZ})
@@ -201,9 +219,18 @@ def _work_usage(roots: list[Path], max_entries: int) -> tuple[int, int]:
 class _Watch:
     """Samples a running box's memory and writable storage; kills it on a breach (module doc)."""
 
-    def __init__(self, box: _Box, pid: int, roots: list[Path], limits: Limits) -> None:
+    def __init__(
+        self,
+        box: _Box,
+        pid: int,
+        roots: list[Path],
+        limits: Limits,
+        base: tuple[int, int] = (0, 0),
+    ) -> None:
         self.breach: Denial | None = None
         self._box, self._pid, self._roots, self._limits = box, pid, roots, limits
+        self._base = base
+        self._interval = LARGE_WATCH_S if base[1] > LARGE_WORK_ENTRIES else WATCH_INTERVAL_S
         self._stop = threading.Event()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -218,15 +245,16 @@ class _Watch:
         if anon > memory:
             return Denial("limit", f"box memory {anon} bytes over {memory}")
         cap = self._limits.max_collect_bytes
-        used, entries = _work_usage(self._roots, MAX_WORK_ENTRIES)
-        if used > cap:
-            return Denial("output", f"writable paths hold {used} bytes, over {cap}")
-        if entries > MAX_WORK_ENTRIES:
+        base_used, base_entries = self._base
+        used, entries = _work_usage(self._roots, base_entries + MAX_WORK_ENTRIES)
+        if used - base_used > cap:
+            return Denial("output", f"writable paths hold {used - base_used} bytes, over {cap}")
+        if entries - base_entries > MAX_WORK_ENTRIES:
             return Denial("output", f"writable paths hold over {MAX_WORK_ENTRIES} entries")
         return None
 
     def _run(self) -> None:
-        while not self._stop.wait(WATCH_INTERVAL_S):
+        while not self._stop.wait(self._interval):
             found = self._sample()
             if found is not None:
                 self.breach = found
@@ -250,10 +278,17 @@ class BwrapSandbox:
         binary: str | None = None,
         scratch: Path | None = None,
         prlimit: str = PRLIMIT,
+        workspaces: Path | None = None,
+        origin: Path | None = None,
     ) -> None:
-        """Use ``binary`` (default: ``bwrap`` on ``PATH``); make boxes under ``scratch``."""
+        """Use ``binary`` (default: ``bwrap`` on ``PATH``); make fresh boxes under ``scratch``.
+
+        ``workspaces`` is the root of the session workspaces, each started from ``origin``
+        (a git repository, a folder, or None for empty); without it every box is fresh.
+        """
         self._binary = binary or shutil.which("bwrap") or "bwrap"
         self._scratch = scratch
+        self.folders = None if workspaces is None else SessionFolders(workspaces, origin)
         self._prlimit = prlimit
         self._probe: Availability | None = None
         self._version = ""
@@ -298,30 +333,89 @@ class BwrapSandbox:
     # --- one box ----------------------------------------------------------------------
 
     def run(self, request: BoxRequest, blobs: BlobReader, unit: UnitHolder) -> BoxResult:
-        """Run one box (module doc); the folder is deleted whatever happens."""
+        """Run one box (module doc); a fresh box's folder is deleted whatever happens."""
         probe = self.probe()
         if not probe.available:
             raise SandboxRefused(SANDBOX_UNAVAILABLE, f"bwrap: {probe.reason}")
         policy = request.policy
         if policy.network != "none":
             raise SandboxRefused("network_unsupported", "bwrap boxes run with the network off")
+        if request.session is not None and self.folders is not None:
+            with self.folders.lock(request.session):
+                return self._run_in_session(request, request.session, blobs, unit)
         if self._scratch is not None:
             self._scratch.mkdir(parents=True, exist_ok=True)
         root = Path(tempfile.mkdtemp(prefix="aksha-box-", dir=self._scratch))
         try:
             work = root / "work"
-            _materialise(work, request.tree, request.files, blobs)
-            for path in policy.writable:
-                if path != ".":
-                    (work / path).mkdir(parents=True, exist_ok=True)
-            env_dir = None
-            if request.environment is not None:
-                env_dir = root / "env"
-                _materialise_env(env_dir, request.environment, blobs)
-            argv = self._command(request, work, env_dir)
-            return self._spawn(argv, request, work, unit)
+            work.mkdir(parents=True)
+            return self._box_in(work, root, request, blobs, unit)
         finally:
             _remove(root)
+
+    def _run_in_session(
+        self, request: BoxRequest, ref: SessionRef, blobs: BlobReader, unit: UnitHolder
+    ) -> BoxResult:
+        """One box in the session's workspace: kept, checkpointed, recorded (module doc)."""
+        assert self.folders is not None
+        work, meta, created = self.folders.ensure(ref)
+        if self._scratch is not None:
+            self._scratch.mkdir(parents=True, exist_ok=True)
+        root = Path(tempfile.mkdtemp(prefix="aksha-env-", dir=self._scratch))
+        try:
+            result = self._box_in(work, root, request, blobs, unit, session=meta)
+        finally:
+            _remove(root)
+        record: dict[str, object] = {
+            "backend": NAME,
+            "folder": meta["folder"],
+            "created": created,
+            "origin": _shown(meta["origin"]),
+        }
+        commit = self.folders.checkpoint(meta, f"aksha: {request.invocation_id}")
+        if commit is not None:
+            record["checkpoint"] = commit
+        return replace(result, workspace=record)
+
+    def sessions(self) -> tuple[SessionRef, ...]:
+        """Every session with a workspace folder."""
+        return () if self.folders is None else self.folders.sessions()
+
+    def clean(self, ref: SessionRef) -> Mapping[str, object] | None:
+        """Remove ``ref``'s workspace folder; a git workspace's branch and commits stay."""
+        return None if self.folders is None else self.folders.clean(ref)
+
+    def _box_in(
+        self,
+        work: Path,
+        root: Path,
+        request: BoxRequest,
+        blobs: BlobReader,
+        unit: UnitHolder,
+        *,
+        session: Mapping[str, object] | None = None,
+    ) -> BoxResult:
+        policy = request.policy
+        fixed = () if session is None or self.folders is None else self.folders.protected(session)
+        inputs = (*(request.tree.entries if request.tree is not None else ()), *request.files)
+        for rel in inputs:
+            if any(rel == p or rel.startswith(p + "/") for p in fixed):
+                raise SandboxRefused("exec_invalid", f"input {rel!r} would overwrite the "
+                                     "workspace's own git file")  # fmt: skip
+        _write_inputs(work, request.tree, request.files, blobs)
+        for path in policy.writable:
+            if path != ".":
+                (work / path).mkdir(parents=True, exist_ok=True)
+        env_dir = None
+        if request.environment is not None:
+            env_dir = root / "env"
+            _materialise_env(env_dir, request.environment, blobs)
+        argv = self._command(request, work, env_dir, fixed)
+        before = None
+        if session is not None and request.collect == "changed":
+            before = _signatures(_writable_roots(work, policy))
+        return self._spawn(argv, request, work, unit, fixed=fixed, before=before,
+                           stateful=session is not None)  # fmt: skip
 
     def _base_args(self, limits: Limits) -> list[str]:
         args = [self._binary, "--unshare-all", "--die-with-parent", "--new-session",
@@ -340,7 +434,13 @@ class BwrapSandbox:
         args += ["--tmpfs", "/tmp"]
         return args
 
-    def _command(self, request: BoxRequest, work: Path, env_dir: Path | None) -> list[str]:
+    def _command(
+        self,
+        request: BoxRequest,
+        work: Path,
+        env_dir: Path | None,
+        fixed: tuple[str, ...] = (),
+    ) -> list[str]:
         policy = request.policy
         limits = policy.limits
         args = self._base_args(limits)
@@ -348,8 +448,8 @@ class BwrapSandbox:
         for path in policy.writable:
             host = work if path == "." else work / path
             args += ["--bind", str(host), "/work" if path == "." else f"/work/{path}"]
-        for path in policy.protected:
-            if (work / path).exists():
+        for path in (*policy.protected, *fixed):
+            if (work / path).exists() or (work / path).is_symlink():
                 args += ["--ro-bind", str(work / path), f"/work/{path}"]
         path_var = BASE_PATH
         if env_dir is not None:
@@ -367,16 +467,26 @@ class BwrapSandbox:
         return args
 
     def _spawn(
-        self, argv: list[str], request: BoxRequest, work: Path, unit: UnitHolder
+        self,
+        argv: list[str],
+        request: BoxRequest,
+        work: Path,
+        unit: UnitHolder,
+        *,
+        fixed: tuple[str, ...] = (),
+        before: Mapping[str, tuple[int, ...]] | None = None,
+        stateful: bool = False,
     ) -> BoxResult:
         limits = request.policy.limits
+        roots = _writable_roots(work, request.policy)
+        base = _work_usage(roots, 10**9) if stateful else (0, 0)
         proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, start_new_session=True,
                                 close_fds=True, env=HOST_ENV)  # fmt: skip
         box = _Box(proc)
         unit.attach(box)
         timed_out = False
-        watch = _Watch(box, proc.pid, _writable_roots(work, request.policy), limits)
+        watch = _Watch(box, proc.pid, roots, limits, base)
         try:
             out = _Capped(_pipe(proc.stdout), limits.max_output_bytes)
             err = _Capped(_pipe(proc.stderr), limits.max_output_bytes)
@@ -415,7 +525,7 @@ class BwrapSandbox:
         if breach is not None and breach.kind == "output":
             collected, rejected = {}, True
         else:
-            collected, rejected = _collect(work, request.policy, denials)
+            collected, rejected = _collect(work, request.policy, denials, fixed, before)
         status: ExecStatus
         if breach is not None:
             status = "exec_limit" if breach.kind == "limit" else "output_rejected"
@@ -450,16 +560,28 @@ def _feed(stdin: IO[bytes] | None, data: bytes) -> None:
 
 
 def _write(base: Path, rel: str, data: bytes) -> None:
-    target = base / rel
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target = base
+    for part in Path(rel).parts[:-1]:
+        target = target / part
+        if target.is_symlink() or (target.exists() and not target.is_dir()):
+            target.unlink()
+        target.mkdir(exist_ok=True)
+    target = target / Path(rel).name
+    if target.is_symlink() or target.is_file():
+        target.unlink()
+    elif target.is_dir():
+        _remove(target)
     target.write_bytes(data)
 
 
-def _materialise(
+def _write_inputs(
     work: Path, tree: TreeManifest | None, files: Mapping[str, bytes], blobs: BlobReader
 ) -> None:
-    """``/work``: the tree's blobs, then the inline files over them."""
-    work.mkdir(parents=True)
+    """Into ``/work``: the tree's blobs, then the inline files over them.
+
+    In a session workspace a path the box made a symlink or a folder is replaced, never
+    followed, so an input cannot be written outside the workspace.
+    """
     if tree is not None:
         for rel, ref in tree.entries.items():
             _write(work, rel, blobs.get(ref))
@@ -486,13 +608,45 @@ def _denials(stderr: bytes) -> list[Denial]:
     return out[:20]
 
 
+def _signature(info: os.stat_result) -> tuple[int, ...]:
+    return (info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_ino)
+
+
+def _signatures(roots: list[Path]) -> dict[str, tuple[int, ...]]:
+    """Each file or symlink under ``roots`` (absolute path) to what says it changed."""
+    out: dict[str, tuple[int, ...]] = {}
+    for top in roots:
+        if top.is_symlink() or not top.is_dir():
+            continue
+        for folder, dirs, names in os.walk(top, followlinks=False):
+            for name in (*dirs, *names):
+                path = os.path.join(folder, name)
+                with contextlib.suppress(OSError):
+                    info = os.lstat(path)
+                    if not stat.S_ISDIR(info.st_mode):
+                        out[path] = _signature(info)
+    return out
+
+
+def _shown(origin: Mapping[str, object]) -> dict[str, object]:
+    """A workspace origin as an exec records it (the git directory is the backend's own)."""
+    return {k: v for k, v in origin.items() if k != "gitdir"}
+
+
 def _collect(
-    work: Path, policy: ExecPolicy, denials: list[Denial]
+    work: Path,
+    policy: ExecPolicy,
+    denials: list[Denial],
+    fixed: tuple[str, ...] = (),
+    before: Mapping[str, tuple[int, ...]] | None = None,
 ) -> tuple[dict[str, bytes], bool]:
-    """Every regular file under a writable path, symlink-safe and capped (module doc)."""
+    """Every regular file under a writable path, symlink-safe and capped (module doc).
+
+    With ``before``, only the files whose signature differs from it (written or changed).
+    """
     out: dict[str, bytes] = {}
     total = 0
-    protected = policy.protected
+    protected = (*policy.protected, *fixed)
     for top in _writable_roots(work, policy):
         if top.is_symlink() or not top.is_dir():
             continue
@@ -501,6 +655,8 @@ def _collect(
             for d in list(dirs):
                 if (base / d).is_symlink():
                     dirs.remove(d)
+                    if before is not None and str(base / d) in before:
+                        continue  # left by an earlier exec of the session, reported then
                     denials.append(Denial("symlink", f"skipped {(base / d).relative_to(work)}"))
             for name in names:
                 path = base / name
@@ -508,6 +664,8 @@ def _collect(
                 if any(rel == p or rel.startswith(p + "/") for p in protected):
                     continue
                 info = path.lstat()
+                if before is not None and before.get(str(path)) == _signature(info):
+                    continue  # unchanged by this exec
                 if stat.S_ISLNK(info.st_mode):
                     denials.append(Denial("symlink", f"skipped {rel}"))
                     continue
@@ -529,8 +687,12 @@ def _remove(root: Path) -> None:
     """Delete the box's folder, even where the program took away permissions."""
 
     def unlock(func: Callable[..., object], path: str, _exc: object) -> None:
+        # Never chmod through a symlink the program left: it would reach outside the box.
         with contextlib.suppress(OSError):
-            os.chmod(path, 0o700)
+            if os.path.abspath(path) != os.path.abspath(root):
+                os.chmod(os.path.dirname(path), 0o700)
+            if not os.path.islink(path):
+                os.chmod(path, 0o700)
             func(path)
 
     shutil.rmtree(root, onexc=unlock)

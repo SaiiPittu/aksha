@@ -8,6 +8,8 @@ ADR-P26 D2 to D4, ADR-P12 decisions 2, 9 and T6, ADR-P28 D5.
 - :func:`exec_for`: an exec tool's ``BoxedExec`` under the effective policy (the run ceiling
   narrowed by the tool's needs), its environment resolved through the recorded images.
   A policy that widens refuses every run of the attempt (``policy_widened``).
+- :func:`run_session`: the session whose one stateful workspace every exec of a run uses
+  (decision 37): the session ``run.started`` was recorded in, else the owner's own.
 - :func:`with_records`: the step's value with ``egress`` (every hop's decision) and
   ``exec`` (every box's record) added, so both are on ``step.completed``.
 """
@@ -31,6 +33,7 @@ from aksha.runtime.sandbox.errors import PolicyWidened
 from aksha.runtime.sandbox.exec import BoxedExec, ExecUnit
 from aksha.runtime.sandbox.images import EnvironmentImages, recorded_images
 from aksha.runtime.sandbox.policy import effective_policy
+from aksha.runtime.sandbox.types import SessionRef
 from aksha.runtime.tools.types import ToolSpec
 
 EGRESS_FIELD = "egress"
@@ -59,8 +62,21 @@ def _built(view: LogView) -> dict[str, str]:
     return recorded_images(v for v in values if isinstance(v, Mapping))
 
 
+def run_session(view: LogView, owner: str, run: str) -> SessionRef:
+    """The session of ``run`` (module doc); a run started outside a session uses the owner's."""
+    for e in view.events:
+        if e.type == "run.started" and e.run == run:
+            return SessionRef(owner, e.session or owner)
+    return SessionRef(owner, owner)
+
+
 def exec_for(
-    setup: LoopSetup, spec: ToolSpec, step: str, attempt: int, unit: ExecUnit
+    setup: LoopSetup,
+    spec: ToolSpec,
+    step: str,
+    attempt: int,
+    unit: ExecUnit,
+    session: SessionRef | None = None,
 ) -> BoxedExec | None:
     """The exec API of one attempt of an exec tool, or None for any other tool."""
     needs = spec.sandbox
@@ -85,6 +101,7 @@ def exec_for(
     return BoxedExec(
         tier.box, tier.availability, needs, policy, invocation=f"{step}#a{attempt}",
         blobs=setup.blobs, environments=environments, unit=unit, refusal=refusal,
+        session=session,
     )  # fmt: skip
 
 

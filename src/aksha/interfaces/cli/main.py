@@ -25,6 +25,11 @@ goes whole to :func:`aksha.interfaces.demo.__main__.main` the same way (``make d
 it), ``aksha example`` copies a bundled world's input files into a new folder to try
 ``--input`` on, and ``aksha doctor`` reports the version, the paths in use and the extras, opening
 nothing.
+
+``aksha sandbox list`` shows the user's session workspaces (decision 37) and ``aksha sandbox
+clean SESSION`` removes one: the bubblewrap folder is deleted (a git worktree is removed and
+its ``aksha/<owner>/<session>`` branch and commits are kept), and an E2B sandbox is killed. Neither
+opens the store.
 """
 
 from __future__ import annotations
@@ -42,6 +47,7 @@ import aksha
 from aksha import data
 from aksha.app import (
     RuntimeConfig,
+    clean_sandbox_session,
     data_home,
     export_trace,
     mock_system_notes,
@@ -49,6 +55,7 @@ from aksha.app import (
     open_reader,
     open_session,
     session_capabilities,
+    session_workspaces,
 )
 from aksha.interfaces import wire
 from aksha.interfaces.cli import evals
@@ -706,6 +713,38 @@ def _importable(module: str) -> bool:
         return False
 
 
+def cmd_sandbox(ctx: Context, args: argparse.Namespace) -> int:
+    """List the user's session workspaces, or remove one (decision 37); opens no store."""
+    if args.action == "list":
+        found = False
+        for backend, workspaces in session_workspaces(ctx.config).items():
+            for ref in workspaces.sessions():
+                if ref.owner == ctx.owner:
+                    ctx.say(f"{ref.session}  {backend}")
+                    found = True
+        if not found:
+            ctx.say(f"no session workspaces under {ctx.config.sandboxes.root}")
+        return wire.EXIT_OK
+    if not args.session:
+        raise wire.WireInvalid(message="aksha sandbox clean needs a SESSION")
+    removed = clean_sandbox_session(ctx.config, ctx.owner, args.session)
+    if not removed:
+        ctx.say(f"{args.session} has no session workspace")
+        return wire.EXIT_OK
+    failed = False
+    for backend, what in sorted(removed.items()):
+        if "error" in what:
+            ctx.say(f"{backend}: not removed: {what['error']}")
+            failed = True
+        elif backend == "e2b":
+            ctx.say(f"e2b: killed sandbox {what['sandbox']}")
+        else:
+            kept = what.get("kept_branch")
+            note = f"; branch {kept} kept with its commits" if kept else ""
+            ctx.say(f"{backend}: removed {what.get('folder', args.session)}{note}")
+    return wire.EXIT_ENVIRONMENT if failed else wire.EXIT_OK
+
+
 def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
     """Copy a bundled synthetic world's input files into a new folder, to try ``--input``.
 
@@ -745,6 +784,7 @@ def cmd_doctor(ctx: Context, args: argparse.Namespace) -> int:
     else:
         ctx.say("store:    postgres (AKSHA_POSTGRES_DSN)")
     ctx.say(f"blobs:    {storage.blob_path}")
+    ctx.say(f"sandbox:  {ctx.config.sandbox or 'none'}, workspaces {ctx.config.sandboxes.root}")
     ctx.say(f"agents:   {', '.join(str(p) for p in ctx.config.agent_paths)}")
     ctx.say(f"mode:     {ctx.config.mode}")
     for extra, modules in EXTRAS.items():
@@ -874,6 +914,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("run")
     s.add_argument("--out")
     s.set_defaults(handler=cmd_trace)
+
+    s = sub.add_parser("sandbox", help="list your session workspaces, or clean one")
+    s.add_argument("action", choices=("list", "clean"))
+    s.add_argument("session", nargs="?", help="for clean: the session to remove")
+    s.set_defaults(handler=cmd_sandbox)
 
     s = sub.add_parser("capabilities", help="the capability record")
     s.set_defaults(handler=cmd_capabilities)
