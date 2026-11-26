@@ -8,14 +8,15 @@ export AKSHA_HOME ?= var
 
 .PHONY: venv venv-postgres test test-postgres lint format typecheck check demo dist release-check
 
-## Create .venv and install the package with the dev group, the server and the trace exporter.
+## Create .venv and install the package with the dev group, the server, the trace exporter
+## and the ingest extension's parsers (so their tests run rather than skip).
 venv:
 	uv venv --allow-existing --python $(PY) $(VENV)
-	uv pip install --python $(BIN)/python -e ".[server,otel]" --group dev
+	uv pip install --python $(BIN)/python -e ".[server,otel,ingest]" --group dev
 
 ## Add the PostgreSQL driver (extra aksha-harness[postgres]) so the PostgreSQL tests run.
 venv-postgres: venv
-	uv pip install --python $(BIN)/python -e ".[server,otel,postgres]" --group dev
+	uv pip install --python $(BIN)/python -e ".[server,otel,ingest,postgres]" --group dev
 
 test:
 	$(BIN)/pytest

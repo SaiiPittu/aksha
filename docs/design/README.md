@@ -71,6 +71,6 @@ The documents use the industry name for each concept, one name per concept:
 ## Sources
 
 1. The maintainer's decision log, entries 1 to 35, 25 and 26 Nov 2026.
-2. The primitives index and the 30 primitive ADRs, ADR-P01 to ADR-P30, 25 Nov 2026.
+2. The primitives index and the 30 primitive ADRs, ADR-P01 to ADR-P30, 25 Nov 2026, and the draft extension ADR for document ingestion, [ADR-P31](adr/ADR-P31-document-ingestion-extension.md) (a working number: it ships as an extension, not a primitive), 26 Nov 2026.
 3. The glossary that maps older working names to these industry names, 25 Nov 2026.
 4. The product problem-and-users and features-and-requirements documents, version 2, 25 Nov 2026, from which the product chain is drawn.

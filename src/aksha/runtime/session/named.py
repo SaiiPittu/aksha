@@ -125,11 +125,14 @@ class ApplySourceChange(CommandBase):
 class UploadInputs(CommandBase):
     """Add or replace files in the owner's inputs; record what moved (ADR-P05 D6).
 
-    ``files`` maps a relative path to the file's UTF-8 text. A path uploaded again with
-    other bytes moves that one record, and only the work built on it reopens.
+    ``files`` maps a relative path to the file's UTF-8 text; ``binary`` maps a path to the
+    file's bytes in base64 (RFC 4648), for a PDF, an Office file, an image or text in
+    another charset, which only a runtime with ingestion configured takes. A path uploaded
+    again with other bytes moves that one record, and only the work built on it reopens.
     """
 
     files: Mapping[str, str]
+    binary: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -126,6 +126,7 @@ from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.timers.freshness import lifetimes
 from aksha.runtime.tools.registry import ToolRegistry
 from aksha.runtime.tools.types import ToolDecl
+from aksha.uploads import UploadIngester, profile_named
 
 Backend = Literal["sqlite", "postgres"]
 
@@ -232,6 +233,9 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_REENTRY``        re-entry setting a request run records:         ``fresh``
 #                          ``fresh`` or ``resume`` (decision 36)
 # ``AKSHA_SYSTEMS``        ``<system>=<kind>:<folder>`` pairs (``,``)      none
+# ``AKSHA_IMAGE_PROFILE``  the image profile of the model reading uploads  none (no vision)
+#                          (``patch28-standard``, ``patch28-hires``,
+#                          ``patch32-high``, ``flat-1120``)
 # =======================  ==============================================  ==================
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
@@ -241,6 +245,14 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # (``inputs/<owner>/``), which every run of that owner reads over the configured folder. A
 # declared source with neither a setting nor a ``root`` has no reader: its tools read
 # nothing and say so (``fetch_failed``). A setting naming no declared source is refused.
+#
+# Every upload goes through the ingest extension (:mod:`aksha.uploads`): its bytes are
+# stored in the blob store and typed from content, and a PDF, an Office file, an email, an
+# image or text in another charset reaches the agent as a header that says what was done
+# followed by its text, with each email attachment as its own input. The parsers are the
+# optional extra ``aksha-harness[ingest]``; without it those types are named gaps.
+# ``AKSHA_IMAGE_PROFILE`` sizes images for the reading model; unset, an image is its
+# header alone ("no vision-capable model configured").
 #
 # Systems of record that extensions contribute (``Extension.systems``, ADR-P20 S2) are
 # built here, once per full name (``<extension>.<name>``), by calling the spec's factory
@@ -360,6 +372,8 @@ class RuntimeConfig:
     live_env: Mapping[str, str] = field(default_factory=dict, repr=False)
     """``AKSHA_LIVE_*`` and ``AKSHA_ALIAS_*``: live mode's settings, the key among them.
     Read only when ``mode`` is ``live``, and never recorded."""
+    image_profile: str | None = None
+    """``AKSHA_IMAGE_PROFILE``: the image profile of the model that reads uploads, or None."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -383,6 +397,7 @@ class RuntimeConfig:
             reentry=env.get("AKSHA_REENTRY") or "fresh",
             systems=_system_settings(env.get("AKSHA_SYSTEMS", "")),
             network=env.get("AKSHA_NETWORK") or "off",
+            image_profile=env.get("AKSHA_IMAGE_PROFILE") or None,
             approved_environments=tuple(
                 k.strip()
                 for k in env.get("AKSHA_APPROVED_ENVIRONMENTS", "").split(",")
@@ -749,6 +764,15 @@ def input_workspace(
                           base=_folder_of(config, spec, INPUTS_SOURCE))  # fmt: skip
 
 
+def upload_ingester(config: RuntimeConfig) -> UploadIngester:
+    """The ingester every upload goes through, sizing images for ``AKSHA_IMAGE_PROFILE``."""
+    try:
+        profile = profile_named(config.image_profile)
+    except ValueError as e:
+        raise StoreError("image_profile_unknown", str(e)) from None
+    return UploadIngester(profile=profile)
+
+
 class ToolQueryRunner:
     """Re-executes a recorded query by calling the read tool that recorded it (ADR-P05 D6).
 
@@ -946,6 +970,7 @@ def open_session(
     every_system = {**extension_systems(config, loaded, skip=given), **given}
     reader = source_reader(config, loaded)
     inputs = input_workspace(config, loaded)
+    ingester = None if inputs is None else upload_ingester(config)  # refuses before the store opens
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
@@ -959,6 +984,7 @@ def open_session(
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
                    blobs=open_blob_store(config.storage), systems=every_system,
                    reader=reader, ids=ids, tier=tier, inputs=inputs, rebuilds=True,
+                   ingester=ingester,
                    run_query=None if inputs is None else ToolQueryRunner(
                        loaded, lambda owner: inputs.reader(owner),
                        {a.agent.name: a.table for a in agents}))  # fmt: skip

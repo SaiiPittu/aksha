@@ -255,3 +255,20 @@ def test_the_answer_endpoint_carries_amend(served: tuple[TestClient, Any]) -> No
     r = client.post(f"/api/v1/interrupts/{waiting['interrupt_id']}/answer", headers=H,
                     json={"text": "blue", "amend": True, "command_id": "c-2"})  # fmt: skip
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_answered", r.text
+
+
+def test_inputs_upload_takes_binary_files_in_base64(served_agents: TestClient) -> None:
+    import base64
+
+    from tests.support import ingest_fixtures as fx
+
+    fx.need("pypdf")
+    pdf = base64.b64encode(fx.text_pdf(["Quote: 89 EUR per sensor, 40 units"])).decode()
+    r = served_agents.post(
+        "/api/v1/inputs", headers=H, json={"files": {"a.md": "# A\n"}, "binary": {"q.pdf": pdf}}
+    )
+    assert r.status_code == 200, r.text
+    bad = served_agents.post("/api/v1/inputs", headers=H, json={"binary": {"x.pdf": "%%%"}})
+    assert bad.status_code == 409 and "upload_refused" in bad.text, bad.text
+    wrong = served_agents.post("/api/v1/inputs", headers=H, json={"binary": {"x.pdf": 3}})
+    assert wrong.status_code == 422

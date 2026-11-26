@@ -24,7 +24,7 @@ Every answer and approval a person would give is scripted and recorded with `by=
 
 ## Your own files
 
-The research agent and the patent agent work on whatever you give them: a folder or a set of files (saved web pages, Markdown notes, CSV or JSON exports, email text, text extracted from a PDF). The request says what to research, for whom and what to compare; the agents find each input by its content, never by its name or folder. The example below uses the synthetic `tilldew` world (an agritech venture; see [src/aksha/data/README.md](../src/aksha/data/README.md)) as if it were your folder. Run it from a fresh clone, after `make venv`:
+The research agent and the patent agent work on whatever you give them: a folder or a set of files (saved web pages, Markdown notes, CSV or JSON exports, emails, PDFs, Word, PowerPoint and Excel files, images; the binary formats need `pip install "aksha-harness[ingest]"`, which `make venv` includes). The request says what to research, for whom and what to compare; the agents find each input by its content, never by its name or folder. The example below uses the synthetic `tilldew` world (an agritech venture; see [src/aksha/data/README.md](../src/aksha/data/README.md)) as if it were your folder. Run it from a fresh clone, after `make venv`:
 
 ```sh
 . .venv/bin/activate

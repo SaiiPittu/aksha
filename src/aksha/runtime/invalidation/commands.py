@@ -28,7 +28,7 @@ retry returns the first receipt.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.events.envelope import NewEvent
@@ -78,9 +78,14 @@ def _command(
 
 
 def source_change_spec(
-    sources: Iterable[VersionedSource], run_query: QueryRunner | None = None
+    sources: Iterable[VersionedSource],
+    run_query: QueryRunner | None = None,
+    facts: Sequence[NewEvent] = (),
 ) -> CommandSpec:
-    """The ``apply_source_change`` command over these source adapters."""
+    """The ``apply_source_change`` command over these source adapters.
+
+    ``facts`` commit first in the same transaction: an upload's ``document.*`` facts.
+    """
     held = tuple(sources)
 
     def decide(command: Command, view: LogView) -> CommandAccepted:
@@ -90,8 +95,8 @@ def source_change_spec(
             change_set=None if change_set is None else str(change_set),
         )  # fmt: skip
         if not events:
-            return CommandAccepted(())
-        return CommandAccepted((*events, *confirmations(view, events)))
+            return CommandAccepted(tuple(facts))
+        return CommandAccepted((*facts, *events, *confirmations(view, events)))
 
     return CommandSpec("apply_source_change", SOURCE_CHANGE_BOUNDARY, decide)
 
@@ -105,11 +110,12 @@ def apply_source_change(
     run_query: QueryRunner | None = None,
     command_id: str | None = None,
     session: str | None = None,
+    facts: Sequence[NewEvent] = (),
 ) -> CommandReceipt:
-    """Record what ``change_set`` moved for ``owner`` (module doc, item 1)."""
+    """Record what ``change_set`` moved for ``owner`` (module doc, item 1), after ``facts``."""
     command = _command("apply_source_change", owner, {"change_set": change_set}, command_id,
                        session)  # fmt: skip
-    return dispatch(store, command, source_change_spec(sources, run_query))
+    return dispatch(store, command, source_change_spec(sources, run_query, facts))
 
 
 def check_sources(

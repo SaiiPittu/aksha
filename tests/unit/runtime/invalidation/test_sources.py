@@ -55,3 +55,20 @@ def test_a_record_of_another_collection_is_not_asked(bench: Bench) -> None:
     other = FakeSource(name="pages", collections=("pages",))
     other.change(OWNER, {"refs/K-1": "9"})
     assert record_source_changes(bench.view(), [other], cause="command") == ()
+
+
+def test_a_never_recorded_source_is_recorded_when_a_query_now_answers_differently(
+    bench: Bench,
+) -> None:
+    """A change no read record saw still reaches the work that searched: the queries decide."""
+    source = FakeSource()
+    source.versions[OWNER] = 1
+    same = FakeQueries({(OWNER, "Q-1"): "h1"})
+    assert record_source_changes(bench.view(), [source], cause="command", run_query=same) == ()
+    moved = FakeQueries({(OWNER, "Q-1"): "h2"})
+    changed, rerun = record_source_changes(bench.view(), [source], cause="command",
+                                           run_query=moved)  # fmt: skip
+    assert changed.type == "source.changed" and dict(changed.payload["records"]) == {}
+    assert (rerun.payload["previous"], rerun.payload["hash"], rerun.payload["changed"]) == (
+        "h1", "h2", True,
+    )  # fmt: skip

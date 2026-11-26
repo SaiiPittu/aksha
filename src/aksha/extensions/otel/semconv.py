@@ -180,5 +180,8 @@ EVENT_MAP: Mapping[str, tuple[Role, str]] = {
     "input.queued": ("span_event", "aksha.input.queued"),
     "input.consumed": ("span_event", "aksha.input.consumed"),
     "interrupt.amended": ("span_event", "aksha.interrupt.amended"),
+    "document.stored": ("span_event", "aksha.document.stored"),
+    "document.gap": ("span_event", "aksha.document.gap"),
+    "document.refused": ("span_event", "aksha.document.refused"),
 }
 """Every core event type and what it becomes in the trace (D9)."""

@@ -1579,6 +1579,118 @@ INTERRUPT_AMENDED = EventTypeSpec(
     boundaries=frozenset({"U4"}),
 )
 
+# --- Uploaded documents (the ingest extension's ADR, D2, D7) ---------------------------
+# An upload that goes through ingestion records what each file is with the upload's source
+# change (U8): ``document.stored`` once its bytes are in the blob store and typed,
+# ``document.gap`` for a dead end the model is told about, ``document.refused`` for a cap
+# that failed before anything was stored. The text itself is in the input workspace and the
+# original in the blob store, so a payload holds facts only.
+
+_DOC_KEY = {"type": "string", "pattern": "^D-[0-9]{4,}$"}
+_NULLABLE_TEXT = {"type": ["string", "null"]}
+
+DOCUMENT_STORED = EventTypeSpec(
+    name="document.stored",
+    schema={
+        "type": "object",
+        "properties": {
+            "doc_key": _DOC_KEY,
+            "version": {"type": "integer", "minimum": 1},
+            "path": {"type": "string", "minLength": 1},
+            "blob": _HASH,
+            "name": {"type": "string"},
+            "origin": {"enum": ["upload", "message", "tool_result", "attachment"]},
+            "parent": _NULLABLE_TEXT,
+            "declared_type": _NULLABLE_TEXT,
+            "detected_type": {"type": "string", "minLength": 1},
+            "charset": _NULLABLE_TEXT,
+            "type_conflict": _NULLABLE_TEXT,
+            "size_bytes": {"type": "integer", "minimum": 0},
+            "representation": {
+                "type": "object",
+                "properties": {
+                    "chars": {"type": "integer", "minimum": 0},
+                    "anchors": {"type": "integer", "minimum": 0},
+                    "converters": {"type": "array", "items": {"type": "string"}},
+                    "dropped": {"type": "array", "items": {"type": "string"}},
+                    "served": {"enum": ["as_given", "converted"]},
+                },
+                "required": ["chars", "anchors", "converters", "dropped", "served"],
+                "additionalProperties": False,
+            },
+            "route": {
+                "type": "object",
+                "properties": {
+                    "kind": {"enum": ["text", "native_file", "native_image", "header_only"]},
+                    "reason": {"type": "string"},
+                    "profile": {"type": "string"},
+                    "sent": _HASH,
+                    "width": {"type": "integer", "minimum": 1},
+                    "height": {"type": "integer", "minimum": 1},
+                    "tokens": {"type": "integer", "minimum": 0},
+                    "passed_through": {"type": "boolean"},
+                },
+                "required": ["kind"],
+                "additionalProperties": False,
+            },
+        },
+        "required": [
+            "doc_key",
+            "version",
+            "path",
+            "blob",
+            "name",
+            "origin",
+            "parent",
+            "declared_type",
+            "detected_type",
+            "charset",
+            "type_conflict",
+            "size_bytes",
+        ],
+        "additionalProperties": False,
+    },
+    writer="inputs",
+    boundaries=frozenset({"U8"}),
+    dedup_key="document:{doc_key}/v{version}",
+)
+DOCUMENT_GAP = EventTypeSpec(
+    name="document.gap",
+    schema={
+        "type": "object",
+        "properties": {
+            "doc_key": _DOC_KEY,
+            "version": {"type": "integer", "minimum": 1},
+            "path": {"type": "string", "minLength": 1},
+            "reason": {"enum": ["refused", "locked", "unsupported", "unreadable", "cancelled"]},
+            "detail": {"type": "string"},
+            "steps": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["doc_key", "version", "path", "reason", "detail", "steps"],
+        "additionalProperties": False,
+    },
+    writer="inputs",
+    boundaries=frozenset({"U8"}),
+)
+DOCUMENT_REFUSED = EventTypeSpec(
+    name="document.refused",
+    schema={
+        "type": "object",
+        "properties": {
+            "cap": {"type": "string", "minLength": 1},
+            "value": {"type": "integer", "minimum": 0},
+            "limit": {"type": "integer", "minimum": 0},
+            "origin": {"enum": ["upload", "message", "tool_result", "attachment"]},
+            "name": {"type": "string"},
+            "path": {"type": "string", "minLength": 1},
+        },
+        "required": ["cap", "value", "limit", "origin", "name"],
+        "additionalProperties": False,
+    },
+    writer="inputs",
+    boundaries=frozenset({"U8"}),
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -1633,6 +1745,9 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     INPUT_QUEUED,
     INPUT_CONSUMED,
     INTERRUPT_AMENDED,
+    DOCUMENT_STORED,
+    DOCUMENT_GAP,
+    DOCUMENT_REFUSED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

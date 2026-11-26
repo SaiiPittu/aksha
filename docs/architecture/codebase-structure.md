@@ -59,6 +59,7 @@ Imports under `if TYPE_CHECKING:` count, because they are still a dependency a r
 src/aksha/
 ├── __init__.py                              package version
 ├── app.py                                   composition root: picks adapters (SQLite by default), wires the demo
+├── uploads.py                               composition root: UploadIngester, the ingest extension behind the inputs port
 ├── data/                                    the bundled synthetic worlds and eval suites, shipped in the wheel
 │   └── __init__.py                          root, worlds, suites, world_path: the one place a world is found
 ├── runtime/                                 THE DOMAIN: agent-neutral core, stdlib + jsonschema only
@@ -291,10 +292,12 @@ src/aksha/
 │   │   ├── approvals.py                     approval_signature, build_body, request_approval, approvals, verify_for_execution, approval_authority
 │   │   ├── commands.py                      answer, approve, reject, edit, grant_budget, finalize, handoff
 │   │   └── amend.py                         amend, amendment_facts, last_answered: a superseding statement (P27 D5)
-│   ├── inputs/                              P27 steering and follow-up input
+│   ├── inputs/                              P27 steering and follow-up input; uploaded documents
 │   │   ├── __init__.py                      what is built, what is planned
-│   │   ├── types.py                         lanes, QueuedInput, the input.* names and refusal codes
-│   │   ├── reducers.py                      queued_inputs, pending_input, consumed_at, consumed_by_step; pure
+│   │   ├── types.py                         lanes, QueuedInput, the input.* names; KnownDocument, IngestedInput
+│   │   ├── ports.py                         DocumentIngester: uploaded bytes to what the workspace serves
+│   │   ├── reducers.py                      queued_inputs, pending_input, consumed_at, consumed_by_step, known_documents; pure
+│   │   ├── uploads.py                       upload_bytes: UploadInputs files and base64 binary as one map
 │   │   └── commands.py                      steer: input.queued, and an amendment's facts, in U4
 │   ├── router/                              P23 request router
 │   │   ├── __init__.py                      what is built, what is planned
@@ -369,6 +372,21 @@ src/aksha/
 │       └── mailbox.py                       MailboxSystem: a mock mailbox ledgered in a JSON file, fsync
 ├── extensions/                              EXTENSIONS: one folder per extension
 │   ├── __init__.py                          imports aksha.runtime.api only
+│   ├── ingest/                              document ingestion (ADR-P31 draft; parsers in extra aksha-harness[ingest])
+│   │   ├── __init__.py                      EXTENSION; what each module does
+│   │   ├── types.py                         Caps, Document, Gap, Refusal, Representation, ImageProfile, SentImage, Route, Binding
+│   │   ├── sniff.py                         sniff: magic bytes, ZIP part names, charset by BOM then UTF-8 then fallback, ZIP caps
+│   │   ├── text.py                          plain, markdown, json_doc, csv_doc, html_doc: the standard-library converters
+│   │   ├── pdf.py                           convert: pypdf text layer, [p.N] anchors, scanned pages dropped and named, locked
+│   │   ├── office.py                        docx, pptx, xlsx: heading, slide and sheet-range anchors, cached values only
+│   │   ├── mail.py                          convert: headers, body, attachments as children
+│   │   ├── images.py                        decode: pixel cap, EXIF orientation, sRGB, metadata stripped, GIF frame 0, TIFF pages
+│   │   ├── profiles.py                      PROFILES, fit_size, estimate_tokens, prepare_image, plan_request_images
+│   │   ├── routing.py                       setup_of, resolve_bindings (three setups), resolve_route
+│   │   ├── offload.py                       offload_result, offload_message: oversized text as a document with a view
+│   │   ├── header.py                        render_header, escape_name: what the model is told
+│   │   ├── ingest.py                        ingest: intake for one input, its children and its header
+│   │   └── events.py                        stored, gap, refused: the document.* payloads
 │   ├── memory/                              P09 memory: artifacts, one recall tool, citations required
 │   │   ├── __init__.py                      EXTENSION (the three kinds) and what agents import
 │   │   ├── types.py                         MemorySpec, RecallHit, RecallResult, Episode, MemoryRefused
@@ -557,7 +575,7 @@ The ADR interface sections name a flat file per primitive (for example `aksha/ru
 | `tests/contract/` | One suite per port, parametrised over every adapter of that port; a new adapter must pass it unchanged | `tests/contract/storage/test_event_store.py` runs against `SQLiteEventStore` and `PostgresEventStore`; `tests/contract/blobs/test_blob_store.py` against `FilesystemBlobStore` |
 | `tests/integration/` | Several primitives together through `aksha.app`, on a temporary store | a run that suspends on an approval and resumes after a restart |
 | `tests/architecture/` | The dependency rule, the layout rules and the ADR-named guards, each with a planted violation; the committed snapshots (`api_surface.json`, `permission_matrix.md`) | `test_dependency_rule.py`, `test_definitions.py` |
-| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container, named per session), `steps.py` (simulated crashes, scripted work, `FaultStore`), `systems.py` (mock systems of record), `killrun.py` (the run a real SIGKILL ends after its Nth commit), `agents.py` (copies the fixture agent and extension into a temporary folder), `artifacts.py` (kinds, relations and a `World` with a SQLite store, a blob store and an artifact store), `patent.py` (the patent agent's episode rig over a fixture world, and the graders that read `key.json`) |
+| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container, named per session), `steps.py` (simulated crashes, scripted work, `FaultStore`), `systems.py` (mock systems of record), `killrun.py` (the run a real SIGKILL ends after its Nth commit), `agents.py` (copies the fixture agent and extension into a temporary folder), `artifacts.py` (kinds, relations and a `World` with a SQLite store, a blob store and an artifact store), `patent.py` (the patent agent's episode rig over a fixture world, and the graders that read `key.json`), `ingest_fixtures.py` (synthetic PDF, Office, email and image files built in code for the ingest extension's tests) |
 | `tests/fixtures/` | Plugins the loader tests copy, never load in place | `agents/toy/` (the conformance agent), `extensions/echo/` (the conformance extension), `agent_terms.txt` (words the runtime must not contain) |
 
 1. A test function name says the behaviour it checks. A test named in an ADR's Tests section keeps that name (`test_update_and_delete_refused`).
