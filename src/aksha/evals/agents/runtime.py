@@ -267,6 +267,8 @@ class RuntimeUnderTest:
         ]
         if not applied:
             return
+        if not self.collections:
+            raise EvalError("change_unsupported", f"{self.name}: no collections a change may move")
         for seq, name in applied:
             change = n.ApplySourceChange(
                 owner=OWNER, change_set=name, command_id=f"episode-change-{seq}"

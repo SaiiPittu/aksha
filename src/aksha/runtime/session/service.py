@@ -522,7 +522,8 @@ class Session:
             try:
                 out.extend(drive_rebuilds(setup, self._executor(owner), self.ids))
             except EffectNeedsOutbox as e:
-                self._unavailable.setdefault(owner, {})[name] = f"{e.code}: {e.message}"
+                why = f"{e.code}: {e.message}"
+                self._unavailable.setdefault(owner, {})[f"rebuilds of {name}"] = why
         return tuple(out)
 
     def unavailable(self, owner: str) -> Mapping[str, str]:
