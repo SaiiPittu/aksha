@@ -36,7 +36,7 @@ def bench(tmp_path: Path) -> Iterator[Bench]:
 
 
 def _ctx(run_date: str | None = DAY1, reads: TimeReads | None = None) -> ToolContext:
-    return ToolContext("o", "a", "t", None, "s", 1, None, run_date, reads)
+    return ToolContext("o", "a", "t", None, "s", 1, None, run_date, time_reads=reads)
 
 
 def _record(b: Bench, today: str) -> tuple[NewEvent, ...]:
