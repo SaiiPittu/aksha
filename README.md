@@ -8,7 +8,7 @@ It thinks fast and slow. Model work is split by the kind of answer it needs: Sys
 
 ## Quick start
 
-Everything below runs offline. There are no API keys and no network calls: every model is a rule-based fake or a replay of a recorded run. Python 3.12 or newer and [uv](https://docs.astral.sh/uv/) are needed.
+`make venv` downloads the dependencies once; after that everything below runs offline. There are no API keys and no model calls over the network: every model is a rule-based fake or a replay of a recorded run. Python 3.12 or newer and [uv](https://docs.astral.sh/uv/) are needed.
 
 ```sh
 make venv    # .venv with aksha (editable), dev tools, the server and the trace exporter
@@ -138,7 +138,7 @@ The layout and how to add an agent or an adapter are in [docs/architecture/codeb
 
 ## Interfaces
 
-Every way in goes through one session API (P19): a closed set of named commands (`SendMessage`, `AnswerInterrupt`, `Approve`, `Reject`, `Stop`, `Finalize`, `GrantBudget`, review and source-change commands), one `dispatch` that commits each command with a stored receipt, so a retried command ID gets the first receipt back, and a capability record that lists what this runtime accepts. A command it does not carry out is refused `unsupported` with a receipt, never dropped.
+Every way in goes through one session API (P19): a closed set of named commands (`SendMessage`, `AnswerInterrupt`, `Approve`, `Reject`, `Stop`, `Finalize`, `GrantBudget`, review and source-change commands), one `dispatch` that commits each command with a stored receipt, so a retried command ID gets the first receipt back, and a capability record that lists what this runtime accepts. A command type this runtime does not carry out is refused `unsupported` with a receipt, never dropped; any other refusal carries its own code, such as `sandbox_required`.
 
 1. **`aksha serve`** runs the server: FastAPI under `/api/v1`, with Server-Sent Events for a session's event stream (replay from a cursor, then live). It holds the store's writer lock, so it is the single writer; it binds to `127.0.0.1:8765` by default.
 2. **The CLI** (`aksha run`, `answer`, `approve`, `reject`, `stop`, `resume`, `status`, `inspect`, `verify`, `trace`, `capabilities`) finds a running server and sends it the command. With no server it runs embedded: the command takes the writer lock for its one invocation, drives the runs until they yield, and exits. Read commands open a read-only handle and work beside a server. Exit codes are fixed: 0 done, 3 waiting for input, 4 waiting for an approval, 5 partial, 6 stopped, 7 refused, 8 environment, 9 failed, 10 chain broken.
