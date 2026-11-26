@@ -1,0 +1,19 @@
+SYNTHETIC FIXTURE - text extracted from a PDF patent document. Invented for testing; not a real patent.
+
+(19) SYN-Office-2          (11) SYN-PUB-0302 B1
+(54) SOIL SENSOR WITH THRESHOLD-BASED RADIO REPORTING
+(71) Ferrolark Instruments (synthetic)
+(30) Priority: SYN-PRI-2021-0614, 14.06.2021
+(22) Filed: 10.06.2022     (45) Granted: 03.04.2024
+
+Description (extract)
+[0011] The sensor compares each new moisture value with the last value it transmitted and
+sends the new value only if the difference exceeds a reporting threshold, for example 1 %
+volumetric water content. A heartbeat is sent every 24 hours.
+[0016] A rise of the raw reading of more than 10 % within 3 hours is treated as a wetting
+event.
+
+Claims
+1. A soil sensor that transmits a moisture value only when it differs from the last transmitted value by more than a reporting threshold, and that transmits a heartbeat every 24 hours.
+
+-- page footer: SYNTHETIC FIXTURE --

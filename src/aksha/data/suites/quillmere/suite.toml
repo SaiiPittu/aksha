@@ -1,0 +1,11 @@
+# The patent agent on the quillmere world: a held-out world in the same task family (review
+# candidates against prior art, recommend, prepare one for counsel), written without reading
+# the agent code, so a pass here is evidence that nothing of the other worlds leaked into the
+# agent definition or the harness runtime. Soil-moisture probes; five candidates, two of them
+# combinations of steps found in two families; a lab notebook in plain text; a university
+# co-contributor under an agreement; an earlier conference poster. No agent module names
+# anything in it.
+[suite]
+name = "quillmere"
+description = "Patent agent on a held-out world written blind to the agent code"
+k = 1

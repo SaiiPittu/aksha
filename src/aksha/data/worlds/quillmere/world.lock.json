@@ -1,0 +1,20 @@
+{
+  "files": {
+    "key.json": "sha256:2c9b576208c24ab34fc7eef1de0f8aed1d76edcc28603991308b09817b733be3",
+    "manifest.json": "sha256:5e20bb4ab111aeacfb618efe8f0ef68a39dfe9f452f311c3b0e7a06435a4cf37",
+    "sources/agreements/vantry-research-agreement.docx.txt": "sha256:1fc52c121edab19f1016822102ff638c74c64d1d24d4d18350084315e15af886",
+    "sources/board/update-2026-10.txt": "sha256:763aba1e6f0ed440514d19c9436ad5abf6350854210e9e0189d423d95902750d",
+    "sources/forms/disclosure-questionnaire.html": "sha256:7820c06da35f16d63efcbbf7dc3b0da83231cca20344050d31cce113f05d0dbc",
+    "sources/lab/notebook-QP3-vol2.txt": "sha256:c2632874be6aefee9b3aa364b4d1f09038b9478bcf8320b02f9a8e9d5e7181bd",
+    "sources/literature/SYN-PUB-0301.xml": "sha256:2fb0bc16298077efc4828ab0f1299512bdf2266478393c09433a6fcd35ada160",
+    "sources/literature/SYN-PUB-0302.pdf.txt": "sha256:197d30444c25f379f4abf42d0bc71623af10efd675c86feb6e828fd330d1b658",
+    "sources/literature/SYN-PUB-0303.md": "sha256:aeedb6d8dd1e8a843963e8fa02ebf80286c0f97680c859946c8667eb62b4e7b9",
+    "sources/literature/SYN-PUB-0304.xml": "sha256:1546a2cbab8f2e204fa4aeaaa2ebef8ad523e5bff0f2fa1a0d7d786965809790",
+    "sources/ops/outreach-log.jsonl": "sha256:5a0343a8d7b0b1a0ea1bd8781f50065764cf527a715aeb5cd8c44a97123c4f38",
+    "sources/talks/agronomy-symposium-2025-poster.pdf.txt": "sha256:532fd949f7ee40543d8e3954f5a3d8a8818695df1291910811c2dc242d7dece9",
+    "sources/team/roster.yaml": "sha256:2ab18287861327b87a36779b0b271c6e48d460f6d54ab20449649164c96c1862",
+    "sources/tracker/ideas-export.xml": "sha256:b8f219192631c22bf5d6fbc25e6a6e84610f19517e20807db18872766d3d2234",
+    "spec.yaml": "sha256:e53aed258e64632193ecdb600351e369150684907268930ee4672aae13794b9a"
+  },
+  "world": "quillmere"
+}

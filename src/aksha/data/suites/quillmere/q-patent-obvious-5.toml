@@ -1,0 +1,11 @@
+id = "q-patent-obvious-5"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-OBVIOUS-5"
+category = "capability"
+agents = ["patent"]
+worlds = ["quillmere"]
+opening = "Here is everything we have on Quillmere's probe IP: the lab notebook, the idea tracker export, the team roster, the university research agreement, the symposium poster, our outreach log, the board update, counsel's questionnaire and the four publications our search turned up. Review our five invention candidates against that prior art, tell me which ones are worth counsel's time and the next action for each, and prepare the strongest one for counsel's disclosure questionnaire."
+expect = ["facts.QF-22", "facts.QF-23", "facts.QF-27", "recommendations.AG-5.next_action", "traps.T-OBVIOUS-5"]
+criteria = ["patent.matrix", "patent.next_action", "citation.exists", "citation.overlaps_key"]
+should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date"]

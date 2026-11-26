@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FIXTURE. An idea-tracker export invented for testing; not real data. -->
+<export synthetic="true" tool="idea board" exported="2026-11-19" project="QP-3">
+  <idea key="AG-3" state="idea" created="2026-06-03" reporter="Kwabena Osei-Darko">
+    <summary>Air-gap alarm after the soil cracks</summary>
+    <description>
+      In clay soils a dry spell opens cracks around the probe and readings drop for no real
+      reason. Proposal: compare the 10 cm and 30 cm electrodes; when their usual coherence
+      breaks after a run of dry days, flag a possible air gap instead of reporting a dry soil.
+      Not built. No data collected yet.
+    </description>
+    <step n="1">Track the rolling correlation between the 10 cm and 30 cm readings.</step>
+    <step n="2">After 5 or more dry days, if the correlation falls below 0.3, flag "possible air gap" to the grower.</step>
+  </idea>
+  <idea key="AG-4" state="built" created="2026-03-09" reporter="Mateo Lindqvist">
+    <summary>Battery-aware exception reporting over the radio</summary>
+    <description>
+      Saves airtime and battery. Built into firmware 3.2 and shipping.
+    </description>
+    <step n="1">Send a reading over LoRa only when moisture has changed by more than 1 % VWC since the last report.</step>
+    <step n="2">Always send one heartbeat a day so the gateway knows the probe is alive.</step>
+    <step n="3">When the solar battery is under 30% charge, sample every 60 minutes instead of every 15.</step>
+    <comment author="Mateo Lindqvist">I think this is our strongest one, nobody combines these.</comment>
+  </idea>
+  <idea key="AG-5" state="built" created="2026-04-22" reporter="Mateo Lindqvist">
+    <summary>Rain-aware irrigation nudge</summary>
+    <description>
+      The app tells growers when to irrigate. Live since May 2026.
+    </description>
+    <step n="1">Hold back the irrigate-now advice when the forecast gives more than 60% chance of rain in the next 24 hours.</step>
+    <step n="2">Deliver the advice only inside the delivery window the grower chose in the app.</step>
+  </idea>
+</export>

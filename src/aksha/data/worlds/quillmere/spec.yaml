@@ -1,0 +1,80 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: quillmere
+synthetic: true
+notice: Author-side truth for a held-out patent world, written without reading the agent code, in the same task family (review invention candidates against prior art, recommend a next action, prepare one for counsel) but in another product, file shapes, counts and traps. No tool reads this file, and no agent module names anything in it.
+frozen_today: '2026-11-26'
+date_convention: ISO 8601 in exports and XML; notebook dates as written by hand (Wed 14 Jan 2026, 2 Apr 2026); DD.MM.YYYY in the PDF grant
+identifier_schemes:
+  publication: SYN-PUB-\d{4}
+  priority: SYN-PRI-YYYY-MMDD
+  event: SYN-EV-\d{2}
+  agreement: SYN-RA-YYYY-\d{2}
+  office: SYN-Office-\d
+  invention: AG-\d
+shape_note: >-
+  Patent inputs only, in shapes no other world uses. Two candidates live in a bound lab
+  notebook transcribed to plain text (dated page headers, lettered steps, a dated margin note,
+  an empty witness line); three live in an idea-tracker XML export (step elements, a comment
+  element). Contributors are a YAML roster with nested worked_on lists and no person IDs.
+  Disclosures are JSON Lines with a header row. Priorities are lines of a board update in
+  plain text. The only form is counsel's HTML questionnaire (label and input pairs, a
+  disabled counsel-only fieldset). An agreement is a Word export with numbered clauses, and
+  a conference poster is PDF text. Publications are two XML documents, one PDF-text grant
+  with INID codes, and one Markdown file with front matter.
+venture:
+  name: Quillmere Soil Systems
+  domain: quillmere.example
+  product: Quillmere QP-3 capacitance soil-moisture probe (10 cm and 30 cm electrodes, thermistor, solar battery, LoRa radio)
+  segment: horticulture and orchard growers, through grower co-operatives
+  geography: not stated
+people:
+- {name: Mateo Lindqvist, employer: Quillmere, role: founder and CTO}
+- {name: Ruth Achterberg, employer: Quillmere, role: firmware lead, keeps the notebook}
+- {name: Kwabena Osei-Darko, employer: Quillmere, role: data scientist}
+- {name: Dr. Odalys Ferreira-Kwan, employer: Vantry University of Agriculture, role: principal investigator under SYN-RA-2025-03, listed as academic adviser}
+- {name: Liang Moreau-Adeyemi, employer: Vantry University of Agriculture, role: doctoral student, first author of the poster}
+- {name: Hana Yoshikawa-Brandt, employer: contractor, role: field technician, no IP clause on file}
+candidates:
+  AG-1:
+    name: self-calibrating field-capacity anchor from the drainage plateau
+    source: lab/notebook-QP3-vol2.txt p.41, p.44, p.52
+    conceived: '2026-01-14 (S1, S2, S4); S3 added 2026-04-02 in the margin'
+    status: field trial on three sites
+    elements: {S1: wetting event from a >15% rise in 2 h at 10 cm, S2: plateau below 0.4 % VWC per hour for 6 consecutive hours is the anchor, S3: 30 cm electrode must rise within 12 h, S4: blend 0.2 of the new plateau and reject one >25% away unless the next event agrees}
+  AG-2:
+    name: per-site learned temperature coefficient
+    source: lab/notebook-QP3-vol2.txt p.47
+    status: bench only
+    elements: {S1: read the on-board thermistor every sample, S2: fit the site's coefficient from the day-night swing on dry days over 72 h}
+  AG-3:
+    name: air-gap alarm from depth coherence
+    source: tracker/ideas-export.xml
+    status: idea
+    elements: {S1: rolling correlation of 10 cm and 30 cm readings, S2: flag an air gap if it drops below 0.3 after 5 dry days}
+  AG-4:
+    name: battery-aware exception reporting
+    source: tracker/ideas-export.xml
+    status: built and shipping
+    elements: {S1: send only on a change above 1 % VWC, S2: daily heartbeat, S3: sample every 60 min instead of 15 under 30% charge}
+    design: an obvious-looking combination of family A (S1, S2) and family C (S3)
+  AG-5:
+    name: rain-aware irrigation nudge
+    source: tracker/ideas-export.xml
+    status: live since May 2026, in public release notes
+    elements: {S1: hold advice if rain chance above 60% in 24 h, S2: deliver only in the grower's window}
+    design: an obvious-looking combination of family B (S1) and family C (S2)
+families:
+  A: {priority: SYN-PRI-2021-0614, members: [SYN-PUB-0301, SYN-PUB-0302], note: XML application and PDF-text grant; the grant claims less}
+  B: {priority: SYN-PRI-2022-0301, members: [SYN-PUB-0303], note: Markdown with front matter; teaches a fixed factory temperature coefficient}
+  C: {priority: SYN-PRI-2023-1020, members: [SYN-PUB-0304], note: XML; battery-aware sampling, advice window, smoothed calibration offset}
+disclosures:
+  SYN-EV-31: {date: '2025-09-10', candidate: AG-1, public: true, by: the university group, note: poster states the S2 threshold in m3/m3 per hour}
+  SYN-EV-32: {date: '2026-05-04', candidate: AG-1, public: false, note: co-op trial under NDA}
+  SYN-EV-33: {date: '2026-05-15', candidate: AG-5, public: true, by: the venture, note: release notes}
+traps:
+- two candidates that each combine steps found in two different families, one at business priority 2 with the founder calling it the strongest (AG-4), one already public in the venture's release notes (AG-5)
+- a university adviser labelled not an inventor who suggested the key step, under an agreement with a joint-ownership clause and a filing-notice duty, plus a contractor with no IP clause (T-CONSULT, new kind)
+- the university group's public poster that shows the key step before the notebook's first entry (T-GRACE, new kind)
+- a notebook step added later in the margin, in an unwitnessed entry, so one conception date does not cover all steps
+- the same plateau threshold written in other units in the poster (0.004 m3/m3 per hour against 0.4 % VWC per hour)
+- also keyed, not a trap: the raw bench runs named in the notebook are not in the world

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FIXTURE. A patent publication invented for testing; not a real publication. -->
+<publication synthetic="true">
+  <bibliographic>
+    <doc-number>SYN-PUB-0301</doc-number>
+    <kind>A1</kind>
+    <office>SYN-Office-1</office>
+    <title>Low-power soil moisture sensor network with exception reporting</title>
+    <applicant>Ferrolark Instruments (synthetic)</applicant>
+    <dates>
+      <priority number="SYN-PRI-2021-0614">2021-06-14</priority>
+      <filed>2022-06-13</filed>
+      <published>2022-12-22</published>
+    </dates>
+    <status>Application published</status>
+  </bibliographic>
+  <abstract>
+    A buried soil moisture sensor transmits a reading over a low-power radio only when the
+    moisture value has changed by more than a set amount since the last transmitted reading,
+    and otherwise transmits a heartbeat message once per day. The sensor also detects a
+    wetting event when its reading rises by more than a threshold within a time window,
+    and then samples more often until the reading settles.
+  </abstract>
+  <claims>
+    <claim n="1">A soil sensor that transmits a moisture reading only when it differs from the last transmitted reading by more than a threshold, and transmits a heartbeat at least once per day.</claim>
+    <claim n="2">The sensor of claim 1, which detects a wetting event from a rise of the reading by more than a set fraction within a time window.</claim>
+  </claims>
+</publication>

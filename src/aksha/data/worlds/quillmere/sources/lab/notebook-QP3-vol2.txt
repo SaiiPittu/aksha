@@ -1,0 +1,55 @@
+SYNTHETIC FIXTURE - lab notebook transcribed to plain text. Invented for testing; not a real notebook.
+QUILLMERE SOIL SYSTEMS - R&D NOTEBOOK, QP-3 PROBE, VOLUME 2
+Kept by: Ruth Achterberg (firmware)
+Pages 41-58. Transcribed 2026-11-18 from the bound notebook. Margin notes are marked [margin].
+
+------------------------------------------------------------
+p.41  Wed 14 Jan 2026
+Re: AG-1  Field capacity without a lab sample
+
+Problem. Every new site needs a soil sample sent away so we can set the field-capacity
+point on the probe's calibration curve. Takes 3 weeks and growers skip it.
+
+Idea (RA, with KOD at the bench). Let the soil tell us. After a big wetting the soil
+drains and then levels off; that level-off IS field capacity for that spot.
+
+Method as I would build it:
+  (a) Wetting event: raw permittivity at the 10 cm electrode rises by more than 15% within 2 hours.
+  (b) Track the dry-down. When the fall in moisture stays below 0.4 % VWC per hour for 6 consecutive hours, take the value at that point as the site's field-capacity anchor.
+  (c) Update the site curve by blending: new anchor = 0.8 x old anchor + 0.2 x measured plateau.
+      Reject a plateau more than 25% away from the running anchor unless the next wetting event agrees with it.
+
+[margin, added 2 Apr 2026, RA] (b2) Before accepting a plateau, require the 30 cm electrode to show its own rise within 12 hours of the wetting event - this rules out a sprinkler wetting only the probe head.
+
+Tried instead and dropped:
+  - Fixed factory curve per soil texture class: dropped, error of 6-9 % VWC on our loam sites.
+  - Asking the grower to enter field capacity in the app: dropped, nobody knows the number.
+
+Signed: R. Achterberg     Witnessed: ______________     Date: ________
+
+------------------------------------------------------------
+p.44  Mon 2 Feb 2026
+Re: AG-1  Bench run
+
+Soil column, sandy loam, 3 wet-up cycles. Plateau detected each time; anchor moved
+31.2 -> 30.6 -> 30.8 % VWC. Lab sample of the same soil: 30.5 % VWC.
+Raw runs are on the shared drive as dry-down-runs-2026Q1.parquet.
+
+------------------------------------------------------------
+p.47  Thu 19 Feb 2026
+Re: AG-2  Temperature drift
+
+Readings swing with soil temperature through the day even when moisture is flat.
+  (a) Read the thermistor already on the probe board at every sample.
+  (b) On dry days with no wetting event, fit the site's own temperature coefficient from the
+      day-night swing (least squares over 72 hours), instead of the one factory coefficient.
+Bench only so far: two weeks in the warm room. No field data yet.
+
+------------------------------------------------------------
+p.52  Tue 12 May 2026
+Re: AG-1  Field trial, three sites
+
+Sites QM-S1, QM-S2, QM-S3 (grower co-op trial, under NDA). Anchor settled within 9 days
+on all three. Mean error against lab samples 1.1 % VWC.
+
+-- page footer: SYNTHETIC FIXTURE --

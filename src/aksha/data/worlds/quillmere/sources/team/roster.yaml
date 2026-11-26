@@ -1,0 +1,37 @@
+# SYNTHETIC FIXTURE. A contributor roster invented for testing; not real people.
+synthetic: true
+exported: 2026-11-20
+team:
+  - name: Mateo Lindqvist
+    org: Quillmere Soil Systems
+    title: founder and CTO
+    terms: founder agreement, IP assigned to Quillmere
+    worked_on:
+      - {idea: AG-4, what: designed the reporting rules and wrote the firmware change}
+      - {idea: AG-5, what: wrote the forecast check and the delivery window}
+  - name: Ruth Achterberg
+    org: Quillmere Soil Systems
+    title: firmware lead
+    terms: employment contract, IP assigned to Quillmere
+    worked_on:
+      - {idea: AG-1, what: conceived the plateau anchor and the blended update; built the firmware}
+      - {idea: AG-2, what: proposed fitting the per-site temperature coefficient}
+  - name: Kwabena Osei-Darko
+    org: Quillmere Soil Systems
+    title: data scientist
+    terms: employment contract, IP assigned to Quillmere
+    worked_on:
+      - {idea: AG-1, what: ran the bench dry-down analysis and set the 0.4 threshold}
+      - {idea: AG-3, what: proposed the coherence check}
+  - name: Dr. Odalys Ferreira-Kwan
+    org: Vantry University of Agriculture
+    title: academic adviser (not an inventor)
+    terms: university research agreement SYN-RA-2025-03
+    worked_on:
+      - {idea: AG-1, what: "suggested using the drainage plateau as the field-capacity reference, as in her group's 2025 poster"}
+  - name: Hana Yoshikawa-Brandt
+    org: contractor
+    title: field technician
+    terms: contractor agreement, no IP clause on file
+    worked_on:
+      - {idea: AG-1, what: installed the three trial probes and logged the lab samples}

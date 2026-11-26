@@ -1,0 +1,15 @@
+SYNTHETIC FIXTURE - a board update invented for testing; not a real company.
+
+Quillmere Soil Systems - board update, October 2026
+From: Mateo Lindqvist (founder and CTO)
+
+Where we want IP protection, in order:
+Priority 1: Self-calibration so a new site needs no lab sample (AG-1)
+Priority 2: Longer battery life in the field (AG-4)
+Priority 3: Stable readings through hot afternoons (AG-2)
+Priority 4: Fewer wasted irrigations before rain (AG-5)
+Priority 5: Catch bad installs in clay (AG-3)
+
+Cash runway 14 months. Two grower co-ops in trial.
+
+-- footer: SYNTHETIC FIXTURE --

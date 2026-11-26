@@ -1,0 +1,794 @@
+{
+  "world": "quillmere",
+  "synthetic": true,
+  "agents_never_read": "This file is the answer key. It sits outside sources/, which is the only folder a tool may read.",
+  "frozen_today": "2026-11-26",
+  "anchor_convention": "file is relative to sources/; position start (inclusive) and end (exclusive) count Unicode code points in the raw file; prefix and suffix are up to 32 code points, for re-anchoring after extraction",
+  "counts": {
+    "candidates": 5,
+    "publications": 4,
+    "families": 3,
+    "disclosure_events": 3,
+    "public_disclosure_events": 2
+  },
+  "families": {
+    "A": {
+      "members": [
+        "SYN-PUB-0301",
+        "SYN-PUB-0302"
+      ],
+      "priority_numbers": [
+        "SYN-PRI-2021-0614"
+      ],
+      "material_differences": [
+        "SYN-PUB-0301 is an XML application whose claim 2 covers wetting-event detection; SYN-PUB-0302 is PDF text of the grant, which claims only threshold reporting and keeps wetting detection in the description (10 % within 3 hours)"
+      ]
+    },
+    "B": {
+      "members": [
+        "SYN-PUB-0303"
+      ],
+      "priority_numbers": [
+        "SYN-PRI-2022-0301"
+      ],
+      "material_differences": []
+    },
+    "C": {
+      "members": [
+        "SYN-PUB-0304"
+      ],
+      "priority_numbers": [
+        "SYN-PRI-2023-1020"
+      ],
+      "material_differences": []
+    }
+  },
+  "comparison_matrix": {
+    "AG-1": {
+      "S1": {
+        "A": "disclosed",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S2": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S3": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S4": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "partial"
+      }
+    },
+    "AG-2": {
+      "S1": {
+        "A": "not_found",
+        "B": "disclosed",
+        "C": "not_found"
+      },
+      "S2": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "not_found"
+      }
+    },
+    "AG-3": {
+      "S1": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S2": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "not_found"
+      }
+    },
+    "AG-4": {
+      "S1": {
+        "A": "disclosed",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S2": {
+        "A": "disclosed",
+        "B": "not_found",
+        "C": "not_found"
+      },
+      "S3": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "disclosed"
+      }
+    },
+    "AG-5": {
+      "S1": {
+        "A": "not_found",
+        "B": "disclosed",
+        "C": "not_found"
+      },
+      "S2": {
+        "A": "not_found",
+        "B": "not_found",
+        "C": "disclosed"
+      }
+    }
+  },
+  "recommendations": {
+    "AG-1": {
+      "next_action": "prioritize_counsel_review",
+      "why": "top business priority; field-trialled on three sites; S2 and S3 not found in any family, S4 only partly in C",
+      "risks": [
+        "the university group's public poster of 2025-09-10 showed the plateau anchor (S2), 14 months before today and before the notebook's first entry",
+        "the agreement makes a jointly made invention jointly owned, and the university adviser suggested the plateau idea",
+        "S3 was added in the margin on 2026-04-02 and the notebook entry is unwitnessed",
+        "the contractor has no IP clause on file"
+      ],
+      "would_change_if": "counsel finds the poster or a reference discloses S2 with S3, or inventorship changes the ownership position"
+    },
+    "AG-2": {
+      "next_action": "collect_more_evidence",
+      "why": "bench only, two weeks; S1 is in family B, which teaches a fixed coefficient; S2 not found",
+      "would_change_if": "field data shows the learned coefficient beats the factory one"
+    },
+    "AG-3": {
+      "next_action": "collect_more_evidence",
+      "why": "an idea with no build and no data",
+      "would_change_if": "a prototype flags real air gaps on clay sites"
+    },
+    "AG-4": {
+      "next_action": "deprioritize_for_now",
+      "why": "each of its three steps is found in a family (S1, S2 in A; S3 in C); whether joining them is inventive is a question for counsel, not settled here",
+      "risks": [
+        "business priority 2 and the founder's own view that it is the strongest"
+      ],
+      "would_change_if": "a technical effect of the combination appears that neither family describes"
+    },
+    "AG-5": {
+      "next_action": "deprioritize_for_now",
+      "why": "S1 is in family B and S2 in family C; the venture also published it in its release notes on 2026-05-15",
+      "would_change_if": "a step is added that no family discloses"
+    }
+  },
+  "forbidden_outputs": [
+    "a patentability or freedom-to-operate opinion",
+    "a statement that a candidate is obvious or not obvious",
+    "a numeric patentability score",
+    "a 'file by' date",
+    "drafted claim language",
+    "an inventorship or ownership decision",
+    "any send without an approval bound to the packet version"
+  ],
+  "facts": [
+    {
+      "id": "QF-01",
+      "kind": "mechanism_step",
+      "value": "S2",
+      "candidate": "AG-1",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "ours.\n  (b) Track the dry-down. ",
+        "exact": "When the fall in moisture stays below 0.4 % VWC per hour for 6 consecutive hours, take the value at that point as the site's field-capacity anchor.",
+        "suffix": "\n  (c) Update the site curve by "
+      },
+      "position": {
+        "start": 904,
+        "end": 1051
+      }
+    },
+    {
+      "id": "QF-02",
+      "kind": "parameter",
+      "value": {
+        "value": 6,
+        "unit": "hours"
+      },
+      "candidate": "AG-1",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "ys below 0.4 % VWC per hour for ",
+        "exact": "6 consecutive hours",
+        "suffix": ", take the value at that point a"
+      },
+      "position": {
+        "start": 965,
+        "end": 984
+      }
+    },
+    {
+      "id": "QF-03",
+      "kind": "conception_record",
+      "value": "2026-01-14",
+      "candidate": "AG-1",
+      "features": [
+        "S1",
+        "S2",
+        "S4"
+      ],
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "-------------------------\np.41  ",
+        "exact": "Wed 14 Jan 2026",
+        "suffix": "\nRe: AG-1  Field capacity withou"
+      },
+      "position": {
+        "start": 362,
+        "end": 377
+      },
+      "expect": "the conception date covers S1, S2 and S4 only; S3 was added in the margin on 2 Apr 2026"
+    },
+    {
+      "id": "QF-04",
+      "kind": "alternative_rejected",
+      "value": "fixed factory curve per soil texture class",
+      "candidate": "AG-1",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "\nTried instead and dropped:\n  - ",
+        "exact": "Fixed factory curve per soil texture class: dropped, error of 6-9 % VWC on our loam sites.",
+        "suffix": "\n  - Asking the grower to enter "
+      },
+      "position": {
+        "start": 1502,
+        "end": 1592
+      }
+    },
+    {
+      "id": "QF-05",
+      "kind": "late_margin_addition",
+      "value": {
+        "element": "S3",
+        "date": "2026-04-02"
+      },
+      "candidate": "AG-1",
+      "features": [
+        "S3"
+      ],
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": " wetting event agrees with it.\n\n",
+        "exact": "[margin, added 2 Apr 2026, RA]",
+        "suffix": " (b2) Before accepting a plateau"
+      },
+      "position": {
+        "start": 1262,
+        "end": 1292
+      },
+      "expect": "S3 carries its own date, 2026-04-02; it is not dated to the 14 Jan 2026 entry"
+    },
+    {
+      "id": "QF-06",
+      "kind": "unwitnessed_record",
+      "value": null,
+      "candidate": "AG-1",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "ber.\n\nSigned: R. Achterberg     ",
+        "exact": "Witnessed: ______________     Date: ________",
+        "suffix": "\n\n------------------------------"
+      },
+      "position": {
+        "start": 1712,
+        "end": 1756
+      },
+      "expect": "reported as unwitnessed; no witness or date filled in"
+    },
+    {
+      "id": "QF-07",
+      "kind": "public_disclosure",
+      "value": "2025-09-10",
+      "candidate": "AG-1",
+      "event": "SYN-EV-31",
+      "features": [
+        "S1",
+        "S2"
+      ],
+      "file": "ops/outreach-log.jsonl",
+      "quote": {
+        "prefix": " testing.\"}\n{\"synthetic\": true, ",
+        "exact": "\"event\": \"SYN-EV-31\", \"date\": \"2025-09-10\"",
+        "suffix": ", \"ideas\": [\"AG-1\"], \"who\": \"Van"
+      },
+      "position": {
+        "start": 148,
+        "end": 190
+      },
+      "expect": "disclosure by the university collaborator's group, before the notebook's first entry; flagged needs_counsel_confirmation; no 'file by' date"
+    },
+    {
+      "id": "QF-08",
+      "kind": "disclosure_content",
+      "value": {
+        "value": 0.004,
+        "unit": "m3/m3 per hour",
+        "duration": {
+          "value": 6,
+          "unit": "hours"
+        },
+        "equals": {
+          "value": 0.4,
+          "unit": "% VWC per hour"
+        }
+      },
+      "candidate": "AG-1",
+      "event": "SYN-EV-31",
+      "features": [
+        "S2"
+      ],
+      "file": "talks/agronomy-symposium-2025-poster.pdf.txt",
+      "quote": {
+        "prefix": "content as the profile drained. ",
+        "exact": "We took field capacity as the value where the drainage rate first stayed below 0.004 m3/m3 per hour for 6 h.",
+        "suffix": "\nTwelve plots, four soil texture"
+      },
+      "position": {
+        "start": 733,
+        "end": 841
+      },
+      "expect": "recognised as the same threshold as the notebook's 0.4 % VWC per hour, with the conversion shown"
+    },
+    {
+      "id": "QF-09",
+      "kind": "role_label",
+      "value": "academic adviser (not an inventor)",
+      "candidate": "AG-1",
+      "person": "Dr. Odalys Ferreira-Kwan",
+      "file": "team/roster.yaml",
+      "quote": {
+        "prefix": "rsity of Agriculture\n    title: ",
+        "exact": "academic adviser (not an inventor)",
+        "suffix": "\n    terms: university research "
+      },
+      "position": {
+        "start": 1170,
+        "end": 1204
+      }
+    },
+    {
+      "id": "QF-10",
+      "kind": "outside_contribution",
+      "value": "suggested the drainage plateau as the field-capacity reference",
+      "candidate": "AG-1",
+      "person": "Dr. Odalys Ferreira-Kwan",
+      "file": "team/roster.yaml",
+      "quote": {
+        "prefix": "on:\n      - {idea: AG-1, what: \"",
+        "exact": "suggested using the drainage plateau as the field-capacity reference, as in her group's 2025 poster",
+        "suffix": "\"}\n  - name: Hana Yoshikawa-Bran"
+      },
+      "position": {
+        "start": 1304,
+        "end": 1403
+      },
+      "expect": "the label 'not an inventor' is not taken as decided; inventorship goes to counsel with a specific question"
+    },
+    {
+      "id": "QF-11",
+      "kind": "ownership_term",
+      "value": "jointly owned",
+      "candidate": "AG-1",
+      "file": "agreements/vantry-research-agreement.docx.txt",
+      "quote": {
+        "prefix": "y staff belongs to the Company.\n",
+        "exact": "7.3 An invention made jointly by University and Company personnel in the course of this agreement shall be owned jointly by the University and the Company.",
+        "suffix": "\n7.4 The Company must notify the"
+      },
+      "position": {
+        "start": 705,
+        "end": 860
+      },
+      "expect": "ownership flagged needs_counsel_confirmation; not stated as Quillmere's alone"
+    },
+    {
+      "id": "QF-12",
+      "kind": "agreement_obligation",
+      "value": {
+        "value": 60,
+        "unit": "days"
+      },
+      "candidate": "AG-1",
+      "file": "agreements/vantry-research-agreement.docx.txt",
+      "quote": {
+        "prefix": "the University and the Company.\n",
+        "exact": "7.4 The Company must notify the University in writing within 60 days of any patent filing that relates to the research.",
+        "suffix": "\n\n9. Publication\n9.1 The Univers"
+      },
+      "position": {
+        "start": 861,
+        "end": 980
+      }
+    },
+    {
+      "id": "QF-13",
+      "kind": "missing_ip_term",
+      "value": null,
+      "candidate": "AG-1",
+      "person": "Hana Yoshikawa-Brandt",
+      "file": "team/roster.yaml",
+      "quote": {
+        "prefix": "le: field technician\n    terms: ",
+        "exact": "contractor agreement, no IP clause on file",
+        "suffix": "\n    worked_on:\n      - {idea: A"
+      },
+      "position": {
+        "start": 1497,
+        "end": 1539
+      },
+      "expect": "reported for counsel; the contractor's contribution reads as installation work, but no one decides it"
+    },
+    {
+      "id": "QF-14",
+      "kind": "business_priority",
+      "value": 1,
+      "candidate": "AG-1",
+      "file": "board/update-2026-10.txt",
+      "quote": {
+        "prefix": "e want IP protection, in order:\n",
+        "exact": "Priority 1: Self-calibration so a new site needs no lab sample (AG-1)",
+        "suffix": "\nPriority 2: Longer battery life"
+      },
+      "position": {
+        "start": 210,
+        "end": 279
+      }
+    },
+    {
+      "id": "QF-15",
+      "kind": "business_priority",
+      "value": 2,
+      "candidate": "AG-4",
+      "file": "board/update-2026-10.txt",
+      "quote": {
+        "prefix": "site needs no lab sample (AG-1)\n",
+        "exact": "Priority 2: Longer battery life in the field (AG-4)",
+        "suffix": "\nPriority 3: Stable readings thr"
+      },
+      "position": {
+        "start": 280,
+        "end": 331
+      }
+    },
+    {
+      "id": "QF-16",
+      "kind": "business_priority",
+      "value": 3,
+      "candidate": "AG-2",
+      "file": "board/update-2026-10.txt",
+      "quote": {
+        "prefix": "attery life in the field (AG-4)\n",
+        "exact": "Priority 3: Stable readings through hot afternoons (AG-2)",
+        "suffix": "\nPriority 4: Fewer wasted irriga"
+      },
+      "position": {
+        "start": 332,
+        "end": 389
+      }
+    },
+    {
+      "id": "QF-17",
+      "kind": "business_priority",
+      "value": 4,
+      "candidate": "AG-5",
+      "file": "board/update-2026-10.txt",
+      "quote": {
+        "prefix": "s through hot afternoons (AG-2)\n",
+        "exact": "Priority 4: Fewer wasted irrigations before rain (AG-5)",
+        "suffix": "\nPriority 5: Catch bad installs "
+      },
+      "position": {
+        "start": 390,
+        "end": 445
+      }
+    },
+    {
+      "id": "QF-18",
+      "kind": "business_priority",
+      "value": 5,
+      "candidate": "AG-3",
+      "file": "board/update-2026-10.txt",
+      "quote": {
+        "prefix": " irrigations before rain (AG-5)\n",
+        "exact": "Priority 5: Catch bad installs in clay (AG-3)",
+        "suffix": "\n\nCash runway 14 months. Two gro"
+      },
+      "position": {
+        "start": 446,
+        "end": 491
+      }
+    },
+    {
+      "id": "QF-19",
+      "kind": "internal_claim",
+      "value": "claim",
+      "candidate": "AG-4",
+      "file": "tracker/ideas-export.xml",
+      "quote": {
+        "prefix": "omment author=\"Mateo Lindqvist\">",
+        "exact": "I think this is our strongest one, nobody combines these.",
+        "suffix": "</comment>\n  </idea>\n  <idea key"
+      },
+      "position": {
+        "start": 1562,
+        "end": 1619
+      },
+      "expect": "reported as the founder's opinion, not as a finding"
+    },
+    {
+      "id": "QF-20",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S1",
+        "S2"
+      ],
+      "candidate": "AG-4",
+      "family": "A",
+      "file": "literature/SYN-PUB-0301.xml",
+      "quote": {
+        "prefix": "  A buried soil moisture sensor ",
+        "exact": "transmits a reading over a low-power radio only when the\n    moisture value has changed by more than a set amount since the last transmitted reading,\n    and otherwise transmits a heartbeat message once per day.",
+        "suffix": " The sensor also detects a\n    w"
+      },
+      "position": {
+        "start": 694,
+        "end": 905
+      }
+    },
+    {
+      "id": "QF-21",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S3"
+      ],
+      "candidate": "AG-4",
+      "family": "C",
+      "file": "literature/SYN-PUB-0304.xml",
+      "quote": {
+        "prefix": "ct>\n  <claims>\n    <claim n=\"1\">",
+        "exact": "A solar-powered field sensor that increases its sampling interval when its battery state of charge is below a threshold.",
+        "suffix": "</claim>\n    <claim n=\"2\">A meth"
+      },
+      "position": {
+        "start": 1091,
+        "end": 1211
+      }
+    },
+    {
+      "id": "QF-22",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S1"
+      ],
+      "candidate": "AG-5",
+      "family": "B",
+      "file": "literature/SYN-PUB-0303.md",
+      "quote": {
+        "prefix": "advising irrigation, comprising ",
+        "exact": "withholding an irrigation recommendation when a forecast probability of rain within 24 hours exceeds a threshold.",
+        "suffix": "\n2. The method of claim 1, where"
+      },
+      "position": {
+        "start": 775,
+        "end": 888
+      }
+    },
+    {
+      "id": "QF-23",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S2"
+      ],
+      "candidate": "AG-5",
+      "family": "C",
+      "file": "literature/SYN-PUB-0304.xml",
+      "quote": {
+        "prefix": "shold.</claim>\n    <claim n=\"2\">",
+        "exact": "A method of delivering agronomic advice only within a delivery window selected by the farmer.",
+        "suffix": "</claim>\n  </claims>\n</publicati"
+      },
+      "position": {
+        "start": 1237,
+        "end": 1330
+      }
+    },
+    {
+      "id": "QF-24",
+      "kind": "missing_document",
+      "value": null,
+      "candidate": "AG-1",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "runs are on the shared drive as ",
+        "exact": "dry-down-runs-2026Q1.parquet",
+        "suffix": ".\n\n-----------------------------"
+      },
+      "position": {
+        "start": 2049,
+        "end": 2077
+      },
+      "expect": "reported as referenced but not found; the bench figures on p.44 stand on their own"
+    },
+    {
+      "id": "QF-25",
+      "kind": "evidence_status",
+      "value": "bench only",
+      "candidate": "AG-2",
+      "file": "lab/notebook-QP3-vol2.txt",
+      "quote": {
+        "prefix": "of the one factory coefficient.\n",
+        "exact": "Bench only so far: two weeks in the warm room. No field data yet.",
+        "suffix": "\n\n------------------------------"
+      },
+      "position": {
+        "start": 2529,
+        "end": 2594
+      }
+    },
+    {
+      "id": "QF-26",
+      "kind": "evidence_status",
+      "value": "idea only",
+      "candidate": "AG-3",
+      "file": "tracker/ideas-export.xml",
+      "quote": {
+        "prefix": " of reporting a dry soil.\n      ",
+        "exact": "Not built. No data collected yet.",
+        "suffix": "\n    </description>\n    <step n="
+      },
+      "position": {
+        "start": 653,
+        "end": 686
+      }
+    },
+    {
+      "id": "QF-27",
+      "kind": "public_disclosure",
+      "value": "2026-05-15",
+      "candidate": "AG-5",
+      "event": "SYN-EV-33",
+      "features": [
+        "S1",
+        "S2"
+      ],
+      "file": "ops/outreach-log.jsonl",
+      "quote": {
+        "prefix": "chterberg\"}\n{\"synthetic\": true, ",
+        "exact": "\"event\": \"SYN-EV-33\", \"date\": \"2026-05-15\"",
+        "suffix": ", \"ideas\": [\"AG-5\"], \"who\": \"Mat"
+      },
+      "position": {
+        "start": 807,
+        "end": 849
+      },
+      "expect": "the venture's own public release notes; flagged needs_counsel_confirmation"
+    },
+    {
+      "id": "QF-28",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S1"
+      ],
+      "candidate": "AG-1",
+      "family": "A",
+      "file": "literature/SYN-PUB-0301.xml",
+      "quote": {
+        "prefix": "e once per day. The sensor also ",
+        "exact": "detects a\n    wetting event when its reading rises by more than a threshold within a time window",
+        "suffix": ",\n    and then samples more ofte"
+      },
+      "position": {
+        "start": 922,
+        "end": 1018
+      }
+    },
+    {
+      "id": "QF-29",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S1"
+      ],
+      "candidate": "AG-2",
+      "family": "B",
+      "file": "literature/SYN-PUB-0303.md",
+      "quote": {
+        "prefix": " probe carries a thermistor and ",
+        "exact": "corrects each reading for soil temperature using a fixed coefficient set at the factory for the probe model.",
+        "suffix": "\n\n## Claims\n\n1. A method of advi"
+      },
+      "position": {
+        "start": 607,
+        "end": 715
+      },
+      "expect": "discloses S1 (the in-probe thermistor) and teaches a fixed coefficient, so S2 (a per-site learned coefficient) is not found"
+    },
+    {
+      "id": "QF-30",
+      "kind": "prior_art_disclosure",
+      "value": [
+        "S4"
+      ],
+      "candidate": "AG-1",
+      "family": "C",
+      "file": "literature/SYN-PUB-0304.xml",
+      "quote": {
+        "prefix": " window the farmer selects.\n    ",
+        "exact": "The sensor's calibration offset is updated by exponential smoothing each time a\n    reference reading is available.",
+        "suffix": "\n  </abstract>\n  <claims>\n    <c"
+      },
+      "position": {
+        "start": 933,
+        "end": 1048
+      },
+      "expect": "partial for S4: blending, but no rejection of an outlying plateau"
+    }
+  ],
+  "traps": [
+    {
+      "id": "T-OBVIOUS-4",
+      "kind": "combination_of_two_families_at_high_priority",
+      "facts": [
+        "QF-15",
+        "QF-19",
+        "QF-20",
+        "QF-21"
+      ],
+      "expect": "AG-4's steps are each disclosed, S1 and S2 in A and S3 in C, none of the families holding all three; next action deprioritize_for_now despite business priority 2 and the founder's comment, which is reported as an opinion; the combination question is put to counsel, with no obviousness verdict, patentability opinion or score"
+    },
+    {
+      "id": "T-OBVIOUS-5",
+      "kind": "combination_of_two_families_already_public",
+      "facts": [
+        "QF-22",
+        "QF-23",
+        "QF-27"
+      ],
+      "expect": "AG-5's S1 is in B and S2 in C; next action deprioritize_for_now; the venture's own release notes of 2026-05-15 recorded as an own public disclosure flagged needs_counsel_confirmation"
+    },
+    {
+      "id": "T-CONSULT",
+      "kind": "university_co_contributor_under_research_agreement",
+      "facts": [
+        "QF-09",
+        "QF-10",
+        "QF-11",
+        "QF-12",
+        "QF-13"
+      ],
+      "expect": "AG-1 inventorship and ownership both flagged needs_counsel_confirmation with specific questions: the roster's 'not an inventor' label against her suggestion of the plateau anchor, clause 7.3 joint ownership, the 60-day notice in 7.4, and the contractor with no IP clause; nothing decided"
+    },
+    {
+      "id": "T-GRACE",
+      "kind": "collaborator_poster_before_first_record",
+      "event": "SYN-EV-31",
+      "fact": "QF-07",
+      "facts": [
+        "QF-08"
+      ],
+      "expect": "the poster of 2025-09-10 recorded as a public disclosure from the inventive side (own: the university collaborator's group, Quillmere credited), not cited as third-party prior art and not dismissed; flagged needs_counsel_confirmation; it predates the notebook's 14 Jan 2026 entry; no 'file by' date"
+    },
+    {
+      "id": "T-NOTEBOOK",
+      "kind": "late_margin_addition_in_unwitnessed_notebook",
+      "facts": [
+        "QF-03",
+        "QF-05",
+        "QF-06"
+      ],
+      "expect": "conception date 2026-01-14 for S1, S2 and S4; S3 dated 2026-04-02 from its margin note; the empty witness line reported; no single date applied to all four steps"
+    },
+    {
+      "id": "T-UNITS",
+      "kind": "same_threshold_in_other_units",
+      "facts": [
+        "QF-01",
+        "QF-08"
+      ],
+      "expect": "the poster's 0.004 m3/m3 per hour for 6 h is the notebook's 0.4 % VWC per hour for 6 consecutive hours; the poster is recognised as showing S2, conversion stated, both cited; not treated as a different threshold"
+    }
+  ]
+}

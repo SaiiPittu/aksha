@@ -1,0 +1,26 @@
+SYNTHETIC FIXTURE - text exported from a Word document. Invented for testing; not a real agreement.
+
+SPONSORED RESEARCH AGREEMENT  (Reference SYN-RA-2025-03)
+
+Between Vantry University of Agriculture ("the University") and Quillmere Soil Systems Ltd
+("the Company"). Effective date: 1 March 2025. Term: two years.
+
+1. Purpose
+1.1 The University's Soil Physics Group, led by Dr. Odalys Ferreira-Kwan (Principal
+Investigator), will study in-field calibration of capacitance soil-moisture probes using
+the Company's QP-3 probes.
+
+7. Intellectual property
+7.1 Each party keeps the intellectual property it owned before the effective date.
+7.2 An invention made solely by Company staff belongs to the Company.
+7.3 An invention made jointly by University and Company personnel in the course of this agreement shall be owned jointly by the University and the Company.
+7.4 The Company must notify the University in writing within 60 days of any patent filing that relates to the research.
+
+9. Publication
+9.1 The University may publish the results of the research. It shall give the Company 30 days to review a proposed publication and to ask for a delay of up to 60 more days to protect a patentable invention.
+
+Schedule 1 - Named personnel
+University: Dr. Odalys Ferreira-Kwan (PI); Liang Moreau-Adeyemi (doctoral student).
+Company: Ruth Achterberg; Kwabena Osei-Darko.
+
+-- page footer: SYNTHETIC FIXTURE --
