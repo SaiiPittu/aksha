@@ -6,14 +6,20 @@ reaches the real service, and the key is a synthetic value.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import os
+import resource
+import shutil
+import subprocess
 import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
+from aksha.adapters.sandbox import e2b as e2b_module
 from aksha.adapters.sandbox.e2b import E2BSandbox
 from aksha.runtime.sandbox.errors import SandboxRefused
 from aksha.runtime.sandbox.exec import ExecUnit
@@ -124,10 +130,16 @@ def test_the_sandbox_is_created_offline_and_ends_per_the_setting(
     run(backend(stub, tmp_path, on_end="kill", timeout_s=120), ("true",))
     body = stub.boxes["SYN-sbx-1"].body
     assert body["allow_internet_access"] is False and body["autoPause"] is False
+    intent = json.loads((tmp_path / "e2b" / "o" / "S-0001" / "e2b.json").read_text())
     assert body["timeout"] == 120 and body["metadata"] == {"aksha_owner": "o",
-                                                           "aksha_session": "S-0001"}  # fmt: skip
+                                                           "aksha_session": "S-0001",
+                                                           "aksha_intent": body["metadata"][
+                                                               "aksha_intent"]}  # fmt: skip
+    assert "intent" not in intent and intent["sandbox"] == "SYN-sbx-1"
     run(backend(stub, tmp_path / "b"), ("true",))
     assert stub.boxes["SYN-sbx-2"].body["autoPause"] is True
+    run(backend(stub, tmp_path / "c"), ("true",), None)  # one box, then killed: never paused
+    assert stub.boxes["SYN-sbx-3"].body["autoPause"] is False
 
 
 def test_the_key_goes_only_to_the_control_api_and_nowhere_else(
@@ -170,6 +182,31 @@ def test_clean_kills_the_sandbox_and_forgets_it(stub: E2BStub, tmp_path: Path) -
     assert e2b.clean(S1) is None
 
 
+def test_a_sandbox_whose_create_answer_was_lost_is_adopted_not_leaked(
+    stub: E2BStub, tmp_path: Path
+) -> None:
+    """A crash between the create and recording its ID: the next exec finds it by intent."""
+    e2b = backend(stub, tmp_path)
+    stub.lose_create_answer = True
+    with pytest.raises(SandboxRefused) as lost:
+        run(e2b, ("true",))
+    assert lost.value.code == "backend_failed" and stub.boxes["SYN-sbx-1"].alive
+    assert e2b.sessions() == (S1,)  # the intent is on disk, so list and clean see it
+    got = run(e2b, ("true",))
+    assert got.workspace is not None and got.workspace["sandbox"] == "SYN-sbx-1"
+    assert got.workspace.get("adopted") is True and creates(stub) == 1
+
+
+def test_clean_kills_a_sandbox_known_only_by_its_intent(stub: E2BStub, tmp_path: Path) -> None:
+    e2b = backend(stub, tmp_path)
+    stub.lose_create_answer = True
+    with pytest.raises(SandboxRefused):
+        run(e2b, ("true",))
+    removed = e2b.clean(S1)
+    assert removed is not None and removed["sandbox"] == "SYN-sbx-1" and removed["killed"]
+    assert not stub.boxes["SYN-sbx-1"].alive and e2b.sessions() == ()
+
+
 def test_a_request_with_no_session_gets_a_sandbox_killed_afterwards(
     stub: E2BStub, tmp_path: Path
 ) -> None:
@@ -184,8 +221,82 @@ def test_the_deadline_kills_the_remote_process(stub: E2BStub, tmp_path: Path) ->
     got = run(backend(stub, tmp_path), ("sleep", "99"),
               policy=ExecPolicy.of(limits=Limits(wall_ms=300)))  # fmt: skip
     assert got.status == "exec_timeout" and got.exit_code is None
+    # The whole process group first, through the helper, then the script's own process.
+    [(sandbox, group, signal)] = stub.group_signals
+    assert (sandbox, signal) == ("SYN-sbx-1", "KILL") and group.startswith("/tmp/aksha-group-")
     assert stub.signals == [("SYN-sbx-1", 4242, "SIGNAL_SIGKILL")]
     assert time.monotonic() - started < 10
+
+
+needs_util = pytest.mark.skipif(
+    any(shutil.which(t) is None for t in ("sh", "setsid", "prlimit")),
+    reason="needs sh, setsid and prlimit on the host",
+)
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    with contextlib.suppress(OSError):
+        if Path(f"/proc/{pid}/stat").read_text().split(") ", 1)[1].startswith("Z"):
+            return False  # a zombie waiting for its parent is already gone
+    return True
+
+
+def _wait_gone(pid: int, seconds: float = 5.0) -> bool:
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if not _alive(pid):
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def _scripts(tmp_path: Path) -> tuple[str, list[str]]:
+    """The real run script, run by the host's ``sh`` in a scratch workspace."""
+    nproc = resource.getrlimit(resource.RLIMIT_NPROC)[0]  # the host user's own processes count
+    script = e2b_module._RUN.format(workdir=tmp_path / "work", cpu=30, cpu1=31, mem=1 << 30,
+                                    nproc="unlimited" if nproc < 0 else nproc, nofile=256,
+                                    fsize=1 << 24)  # fmt: skip
+    stdin = tmp_path / "stdin"
+    stdin.write_bytes(b"")
+    return script, [str(stdin), str(tmp_path / "mark"), str(tmp_path / "group")]
+
+
+@needs_util
+def test_the_run_script_kills_a_child_left_behind_when_the_program_exits(tmp_path: Path) -> None:
+    """The scripts the adapter sends, run here by ``sh``: a backgrounded child dies too."""
+    script, head = _scripts(tmp_path)
+    child = tmp_path / "child.pid"
+    program = f"sleep 60 >/dev/null 2>&1 </dev/null & echo $! > {child}; exit 4"
+    done = subprocess.run(["sh", "-c", script, "aksha", *head, "--", "sh", "-c", program],
+                          capture_output=True, timeout=30, check=False)  # fmt: skip
+    assert done.returncode == 4
+    assert _wait_gone(int(child.read_text()))
+
+
+@needs_util
+def test_the_signal_script_kills_the_whole_group_of_a_running_program(tmp_path: Path) -> None:
+    script, head = _scripts(tmp_path)
+    child = tmp_path / "child.pid"
+    program = f"sleep 60 >/dev/null 2>&1 </dev/null & echo $! > {child}; sleep 60"
+    runner = subprocess.Popen(["sh", "-c", script, "aksha", *head, "--", "sh", "-c", program],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # fmt: skip
+    try:
+        end = time.monotonic() + 10
+        while not (child.exists() and child.read_text().strip()) and time.monotonic() < end:
+            time.sleep(0.05)
+        group = tmp_path / "group"
+        subprocess.run(["sh", "-c", e2b_module._SIGNAL, "aksha", str(group), "KILL"],
+                       timeout=30, check=True)  # fmt: skip
+        assert _wait_gone(int(child.read_text()))
+        assert _wait_gone(int(group.read_text()))
+        assert runner.wait(10) == 128 + 9
+    finally:
+        runner.kill()
+        runner.wait()
 
 
 def test_collection_reports_symlinks_honours_protected_paths_and_caps(

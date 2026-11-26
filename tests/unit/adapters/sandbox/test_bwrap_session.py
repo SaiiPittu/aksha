@@ -149,8 +149,8 @@ def test_a_git_origin_is_a_worktree_on_its_own_branch(tmp_path: Path, repo: Path
     folders = SessionFolders(tmp_path / "sandbox", repo)
     work, meta, _ = folders.ensure(S1)
     origin = meta["origin"]
-    assert origin["kind"] == "git" and origin["branch"] == "aksha/S-0001"
-    assert git(work, "rev-parse", "--abbrev-ref", "HEAD") == "aksha/S-0001"
+    assert origin["kind"] == "git" and origin["branch"] == "aksha/o/S-0001"
+    assert git(work, "rev-parse", "--abbrev-ref", "HEAD") == "aksha/o/S-0001"
     assert (work / "app.py").read_text() == "x = 1\n"  # the last commit, not the dirty file
     assert git(repo, "rev-parse", "--abbrev-ref", "HEAD") == "main"
     assert (repo / "app.py").read_text() == "x = 'uncommitted'\n"
@@ -164,9 +164,41 @@ def test_a_checkpoint_commits_on_the_session_branch_only(tmp_path: Path, repo: P
     assert folders.checkpoint(meta, "aksha: nothing") is None  # nothing changed
     (work / "new.py").write_text("y = 2\n")
     commit = folders.checkpoint(meta, "aksha: R-1/x1")
-    assert commit is not None and git(repo, "rev-parse", "aksha/S-0001") == commit
+    assert commit is not None and git(repo, "rev-parse", "aksha/o/S-0001") == commit
     assert git(repo, "rev-parse", "main") == main_before
     assert git(repo, "log", "-1", "--format=%an %s", commit) == "aksha aksha: R-1/x1"
+
+
+@needs_git
+def test_a_checkpoint_runs_no_filter_the_box_assigns(tmp_path: Path, repo: Path) -> None:
+    """A ``.gitattributes`` the box wrote cannot make the host's ``git add`` run a driver."""
+    ran = tmp_path / "SYN-filter-ran"
+    git(repo, "config", "filter.syn.clean", f"touch {ran}; cat")
+    git(repo, "config", "filter.syn.process", f"touch {ran}")
+    git(repo, "config", "filter.syn.required", "true")
+    folders = SessionFolders(tmp_path / "sandbox", repo)
+    work, meta, _ = folders.ensure(S1)
+    (work / ".gitattributes").write_text("* filter=syn\n")
+    (work / "payload.txt").write_text("as written\n")
+    commit = folders.checkpoint(meta, "aksha: x")
+    assert commit is not None and not ran.exists()
+    assert git(repo, "show", f"{commit}:payload.txt") == "as written"
+
+
+@needs_git
+def test_two_owners_with_one_session_label_get_their_own_branches(
+    tmp_path: Path, repo: Path
+) -> None:
+    folders = SessionFolders(tmp_path / "sandbox", repo)
+    mine, meta_mine, _ = folders.ensure(SessionRef("o", "S-0001"))
+    theirs, meta_theirs, _ = folders.ensure(SessionRef("p", "S-0001"))
+    assert meta_mine["origin"]["branch"] == "aksha/o/S-0001"
+    assert meta_theirs["origin"]["branch"] == "aksha/p/S-0001"
+    (mine / "mine.txt").write_text("o only")
+    assert folders.checkpoint(meta_mine, "aksha: o") is not None
+    folders.clean(SessionRef("o", "S-0001"))
+    again, _, _ = folders.ensure(SessionRef("p", "S-0001"))
+    assert again == theirs and not (theirs / "mine.txt").exists()
 
 
 @needs_git
@@ -180,7 +212,7 @@ def test_a_checkpoint_ignores_a_git_file_the_box_rewrote(tmp_path: Path, repo: P
     (work / ".git").write_text(f"gitdir: {other / '.git'}\n")
     (work / "f.txt").write_text("f")
     commit = folders.checkpoint(meta, "aksha: x")
-    assert commit is not None and git(repo, "rev-parse", "aksha/S-0001") == commit
+    assert commit is not None and git(repo, "rev-parse", "aksha/o/S-0001") == commit
     assert subprocess.run(["git", "-C", str(other), "rev-parse", "HEAD"],
                           capture_output=True).returncode != 0  # fmt: skip
 
@@ -194,8 +226,8 @@ def test_clean_keeps_the_branch_and_a_new_workspace_continues_it(
     (work / "kept.py").write_text("k = 1\n")
     commit = folders.checkpoint(meta, "aksha: x")
     removed = folders.clean(S1)
-    assert removed is not None and removed["kept_branch"] == "aksha/S-0001"
-    assert not work.exists() and git(repo, "rev-parse", "aksha/S-0001") == commit
+    assert removed is not None and removed["kept_branch"] == "aksha/o/S-0001"
+    assert not work.exists() and git(repo, "rev-parse", "aksha/o/S-0001") == commit
     assert str(work) not in git(repo, "worktree", "list")
     again, meta2, _ = folders.ensure(S1)
     assert meta2["origin"]["continued"] and (again / "kept.py").read_text() == "k = 1\n"
@@ -293,7 +325,7 @@ def test_a_git_workspace_runs_checkpoints_and_keeps_git_read_only(
     record = got.workspace
     assert record is not None and record["origin"]["kind"] == "git"
     assert "gitdir" not in record["origin"]
-    assert record["checkpoint"] == git(repo, "rev-parse", "aksha/S-0001")
-    assert git(repo, "show", "aksha/S-0001:app.py") == "x = 2"
+    assert record["checkpoint"] == git(repo, "rev-parse", "aksha/o/S-0001")
+    assert git(repo, "show", "aksha/o/S-0001:app.py") == "x = 2"
     assert (repo / "app.py").read_text() == "x = 'uncommitted'\n"
     assert "checkpoint" not in (run(backend, ("true",), policy=WHOLE).workspace or {})

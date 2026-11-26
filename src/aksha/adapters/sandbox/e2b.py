@@ -16,13 +16,18 @@ directory's ``sandbox/e2b/<owner>/<session>/e2b.json``); nothing secret is writt
   that, E2B pauses the sandbox (``on_end="pause"``, so the next exec resumes it with its
   files) or kills it (``on_end="kill"``). ``clean`` kills it at once. A sandbox that is gone
   when the session comes back is replaced by a new, empty one, and the record says so
-  (``replaced``).
+  (``replaced``). The intent to create is written to the state file before the create
+  request and sent as sandbox metadata, so a crash between the two leaves a sandbox the next
+  exec finds and adopts (``adopted``) and ``clean`` kills, never one Aksha cannot see. A
+  sandbox for a request with no session is killed after its one box and never paused.
 - **What a box gets.** The workspace is ``/home/user/work`` inside the remote sandbox; the
   inputs are uploaded over it and the program runs there with a fixed base environment,
   its argv passed as arguments (never assembled into a shell string), stdin from an
   uploaded file, and the CPU, memory, process, open-file and file-size limits applied with
   ``prlimit`` (the template must have it; E2B's base template does). The sandbox is created
-  with internet access off. At the wall deadline, or on a stop, the process is killed.
+  with internet access off. The program runs under ``setsid`` in its own process group: at
+  the wall deadline, or on a stop, the whole group is signalled, and when the program exits
+  whatever it left running in the group is killed before collection.
 - **Outputs.** After the program, the files under the writable paths that it wrote or
   changed (every file, for ``collect="all"``) are listed in the sandbox, symlinks reported
   as denials and never followed, and downloaded up to ``max_collect_bytes``.
@@ -83,11 +88,25 @@ OnEnd = Literal["pause", "kill"]
 
 _RUN = """# aksha-run
 mkdir -p {workdir} && cd {workdir} || exit 125
-in="$1"; mark="$2"; shift 2
+in="$1"; mark="$2"; group="$3"; shift 3
 while [ "$1" != "--" ]; do mkdir -p "$1"; shift; done; shift
 touch "$mark"
-exec prlimit --cpu={cpu}:{cpu1} --as={mem} --nproc={nproc} --nofile={nofile} \\
-  --fsize={fsize} --core=0 -- "$@" < "$in"
+setsid prlimit --cpu={cpu}:{cpu1} --as={mem} --nproc={nproc} --nofile={nofile} \\
+  --fsize={fsize} --core=0 -- "$@" < "$in" &
+pid=$!
+echo "$pid" > "$group"
+wait "$pid"; code=$?
+kill -KILL "-$pid" 2>/dev/null
+n=0; while kill -0 "-$pid" 2>/dev/null && [ "$n" -lt 40 ]; do sleep 0.05; n=$((n+1)); done
+exit "$code"
+"""
+_SIGNAL = """# aksha-signal
+group=$(cat "$1" 2>/dev/null) || exit 0
+[ -n "$group" ] || exit 0
+kill "-$2" "-$group" 2>/dev/null
+[ "$2" = KILL ] || exit 0
+n=0; while kill -0 "-$group" 2>/dev/null && [ "$n" -lt 40 ]; do sleep 0.05; n=$((n+1)); done
+true
 """
 _COLLECT = """# aksha-collect
 cd {WORKDIR} || exit 125
@@ -97,7 +116,7 @@ if [ "$mode" = changed ]; then
 else
   find "$@" \\( -type f -o -type l \\) -printf '%y\\t%s\\t%p\\0' 2>/dev/null
 fi
-rm -f "$mark" "/tmp/aksha-stdin-${mark##*-}"
+rm -f "$mark" "/tmp/aksha-stdin-${mark##*-}" "/tmp/aksha-group-${mark##*-}"
 true
 """
 
@@ -112,6 +131,7 @@ class _Remote:
     token: str | None
     created: bool
     replaced: bool = False
+    adopted: bool = False
 
 
 class _Http:
@@ -198,26 +218,37 @@ def _read_exactly(stream: IO[bytes], n: int) -> bytes | None:
 
 
 class _RemoteBox:
-    """A running remote process as a ``KillableUnit``: a signal through the sandbox's daemon."""
+    """A running remote process as a ``KillableUnit``: its whole process group is signalled.
 
-    def __init__(self, backend: E2BSandbox, remote: _Remote) -> None:
-        self._backend, self._remote = backend, remote
+    The run script starts the program with ``setsid``, so the program and every child it
+    starts are one process group whose ID the script writes to ``group``. A stop or the
+    wall deadline signals that group (a second, short process in the sandbox), then the
+    script's own process; when the program exits, the script kills what is left of the
+    group before collection, as the end of a bubblewrap box does.
+    """
+
+    def __init__(self, backend: E2BSandbox, remote: _Remote, group: str | None = None) -> None:
+        self._backend, self._remote, self._group = backend, remote, group
         self.pid: int | None = None
         self.done = threading.Event()
         self.killed = False
 
     def _signal(self, name: str) -> None:
-        if self.pid is None or self.done.is_set():
+        if self.done.is_set():
             return
-        with contextlib.suppress(E2BError):
-            self._backend._signal(self._remote, self.pid, name)
+        if self._group is not None:
+            with contextlib.suppress(E2BError):
+                self._backend._signal_group(self._remote, self._group, name)
+        if self.pid is not None:
+            with contextlib.suppress(E2BError):
+                self._backend._signal(self._remote, self.pid, "SIGNAL_SIG" + name)
 
     def request_settle(self) -> None:
-        self._signal("SIGNAL_SIGTERM")
+        self._signal("TERM")
 
     def terminate(self) -> None:
         self.killed = True
-        self._signal("SIGNAL_SIGKILL")
+        self._signal("KILL")
 
     def settled(self) -> bool:
         return self.done.is_set()
@@ -308,18 +339,31 @@ class E2BSandbox:
         return tuple(out)
 
     def clean(self, ref: SessionRef) -> Mapping[str, Any] | None:
-        """Kill the session's remote sandbox and forget its ID."""
+        """Kill the session's remote sandbox (and any a crash left unrecorded); forget it."""
         known = self._known(ref)
         if known is None:
             return None
         with self._lock(ref):
-            sandbox = str(known["sandbox"])
-            self._kill(sandbox)
+            killed: list[str] = []
+            if known.get("sandbox"):
+                killed.append(str(known["sandbox"]))
+            elif known.get("intent"):
+                killed.extend(self._intended(str(known["intent"])))
+            for sandbox in killed:
+                self._kill(sandbox)
             state = self._state(ref)
             with contextlib.suppress(OSError):
                 state.unlink()
                 state.parent.rmdir()
-        return {"owner": ref.owner, "session": ref.session, "sandbox": sandbox, "killed": True}
+        out: dict[str, Any] = {
+            "owner": ref.owner,
+            "session": ref.session,
+            "sandbox": killed[0] if killed else None,
+            "killed": bool(killed),
+        }
+        if len(killed) > 1:
+            out["also_killed"] = killed[1:]
+        return out
 
     # --- one box ----------------------------------------------------------------------
 
@@ -364,13 +408,14 @@ class E2BSandbox:
             self._upload(remote, f"{WORKDIR}/{rel}", data)
         tag = uuid.uuid4().hex[:12]  # names this exec's temporary files in the remote /tmp
         stdin, mark = f"/tmp/aksha-stdin-{tag}", f"/tmp/aksha-mark-{tag}"
+        group = f"/tmp/aksha-group-{tag}"
         self._upload(remote, stdin, request.stdin)
         writable = [w for w in policy.writable if w != "."]
         script = _RUN.format(workdir=WORKDIR, cpu=limits.cpu_s, cpu1=limits.cpu_s + 1,
                              mem=limits.memory_mb * 1_048_576, nproc=limits.max_processes,
                              nofile=limits.max_open_files, fsize=limits.max_file_bytes)  # fmt: skip
-        args = ["-c", script, "aksha", stdin, mark, *writable, "--", *request.argv]
-        box = _RemoteBox(self, remote)
+        args = ["-c", script, "aksha", stdin, mark, group, *writable, "--", *request.argv]
+        box = _RemoteBox(self, remote, group)
         unit.attach(box)
         try:
             code, out, err, timed_out, out_cut, err_cut = self._process(
@@ -400,6 +445,8 @@ class E2BSandbox:
                          "on_end": self._on_end}  # fmt: skip
             if remote.replaced:
                 workspace["replaced"] = True
+            if remote.adopted:
+                workspace["adopted"] = True
         return BoxResult(status, code, out, err, tuple(denials), {} if rejected else collected,
                          out_cut, err_cut, workspace)  # fmt: skip
 
@@ -419,12 +466,16 @@ class E2BSandbox:
     def _envd_url(self, remote: _Remote, path: str) -> str:
         return self._envd.replace("{sandbox}", urllib.parse.quote(remote.sandbox, safe="")) + path
 
-    def _create(self, ref: SessionRef | None) -> _Remote:
-        body = {"templateID": self._template, "timeout": self._timeout_s,
-                "autoPause": self._on_end == "pause", "secure": True,
-                "allow_internet_access": False,
-                "metadata": {} if ref is None else {"aksha_owner": ref.owner,
-                                                    "aksha_session": ref.session}}  # fmt: skip
+    def _create(self, ref: SessionRef | None, intent: str | None = None) -> _Remote:
+        metadata = {} if ref is None else {"aksha_owner": ref.owner, "aksha_session": ref.session}
+        if intent is not None:
+            metadata["aksha_intent"] = intent
+        # A sandbox for no session is killed after its one box; if that kill is lost, its
+        # timeout kills it rather than pausing it.
+        pause = self._on_end == "pause" and ref is not None
+        body = {"templateID": self._template, "timeout": self._timeout_s, "autoPause": pause,
+                "secure": True, "allow_internet_access": False,
+                "metadata": metadata}  # fmt: skip
         raw = self._http.call("POST", f"{self._api}/sandboxes", headers=self._control(),
                               body=json.dumps(body).encode())  # fmt: skip
         got = json.loads(raw or b"{}")
@@ -433,27 +484,62 @@ class E2BSandbox:
             raise E2BError("POST /sandboxes: no sandboxID in the answer")
         return _Remote(sandbox, got.get("envdAccessToken"), created=True)
 
-    def _connect_or_create(self, ref: SessionRef) -> _Remote:
-        known = self._known(ref)
-        replaced = False
-        if known is not None:
-            sandbox = str(known["sandbox"])
-            raw = self._http.call(
-                "POST", f"{self._api}/sandboxes/{urllib.parse.quote(sandbox, safe='')}/connect",
-                headers=self._control(), body=json.dumps({"timeout": self._timeout_s}).encode(),
-                missing=True,
-            )  # fmt: skip
-            if raw is not None:
-                got = json.loads(raw or b"{}")
-                return _Remote(sandbox, got.get("envdAccessToken"), created=False)
-            replaced = True  # the sandbox timed out and was killed, or was removed elsewhere
-        remote = self._create(ref)
+    def _write_state(self, ref: SessionRef, **fields: str) -> None:
         state = self._state(ref)
         state.parent.mkdir(parents=True, exist_ok=True)
         tmp = state.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"owner": ref.owner, "session": ref.session,
-                                   "sandbox": remote.sandbox}, sort_keys=True))  # fmt: skip
+        tmp.write_text(json.dumps({"owner": ref.owner, "session": ref.session, **fields},
+                                  sort_keys=True))  # fmt: skip
         tmp.replace(state)
+
+    def _connect(self, sandbox: str) -> _Remote | None:
+        raw = self._http.call(
+            "POST", f"{self._api}/sandboxes/{urllib.parse.quote(sandbox, safe='')}/connect",
+            headers=self._control(), body=json.dumps({"timeout": self._timeout_s}).encode(),
+            missing=True,
+        )  # fmt: skip
+        if raw is None:
+            return None
+        return _Remote(sandbox, json.loads(raw or b"{}").get("envdAccessToken"), created=False)
+
+    def _intended(self, intent: str) -> list[str]:
+        """The sandboxes created under ``intent``: a create whose answer a crash lost."""
+        query = urllib.parse.urlencode([("metadata", f"aksha_intent={intent}"),
+                                        ("state", "running"), ("state", "paused")])  # fmt: skip
+        raw = self._http.call("GET", f"{self._api}/v2/sandboxes?{query}",
+                              headers=self._control())  # fmt: skip
+        listed = json.loads(raw or b"[]")
+        if not isinstance(listed, list):
+            raise E2BError("GET /v2/sandboxes: the answer is not a list")
+        return [str(item["sandboxID"]) for item in listed
+                if isinstance(item, dict) and item.get("sandboxID")]  # fmt: skip
+
+    def _connect_or_create(self, ref: SessionRef) -> _Remote:
+        """The session's sandbox: the one kept by ID, one a crash left unrecorded, or a new one.
+
+        The intent to create is written before the create request and rides on the sandbox
+        as metadata, so a crash between the two leaves a sandbox this finds and adopts,
+        never one that list and clean cannot see.
+        """
+        known = self._known(ref) or {}
+        replaced = False
+        if known.get("sandbox"):
+            remote = self._connect(str(known["sandbox"]))
+            if remote is not None:
+                return remote
+            replaced = True  # the sandbox timed out and was killed, or was removed elsewhere
+        elif known.get("intent"):
+            found = self._intended(str(known["intent"]))
+            for extra in found[1:]:
+                self._kill(extra)
+            remote = self._connect(found[0]) if found else None
+            if remote is not None:
+                self._write_state(ref, sandbox=remote.sandbox)
+                return _Remote(remote.sandbox, remote.token, created=False, adopted=True)
+        intent = uuid.uuid4().hex
+        self._write_state(ref, intent=intent)
+        remote = self._create(ref, intent)
+        self._write_state(ref, sandbox=remote.sandbox)
         return _Remote(remote.sandbox, remote.token, created=True, replaced=replaced)
 
     def _kill(self, sandbox: str) -> None:
@@ -480,6 +566,14 @@ class E2BSandbox:
         body = json.dumps({"process": {"pid": pid}, "signal": signal}).encode()
         self._http.call("POST", self._envd_url(remote, "/process.Process/SendSignal"), body=body,
                         headers=self._daemon(remote, "application/json"))  # fmt: skip
+
+    def _signal_group(self, remote: _Remote, group: str, name: str) -> None:
+        """Send ``name`` (``TERM`` or ``KILL``) to the process group recorded in ``group``."""
+        helper = _RemoteBox(self, remote)
+        try:
+            self._process(remote, ["-c", _SIGNAL, "aksha", group, name], 10_000, 4096, helper)
+        finally:
+            helper.done.set()
 
     def _process(
         self, remote: _Remote, args: list[str], wall_ms: int, cap: int, box: _RemoteBox

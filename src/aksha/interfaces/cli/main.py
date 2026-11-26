@@ -28,7 +28,7 @@ nothing.
 
 ``aksha sandbox list`` shows the user's session workspaces (decision 37) and ``aksha sandbox
 clean SESSION`` removes one: the bubblewrap folder is deleted (a git worktree is removed and
-its ``aksha/<session>`` branch and commits are kept), and an E2B sandbox is killed. Neither
+its ``aksha/<owner>/<session>`` branch and commits are kept), and an E2B sandbox is killed. Neither
 opens the store.
 """
 

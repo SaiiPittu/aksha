@@ -62,8 +62,12 @@ class E2BStub:
         self.requests: list[tuple[str, str, dict[str, str]]] = []
         """Each request's method, path and headers (names lower-cased)."""
         self.signals: list[tuple[str, int, str]] = []
+        self.group_signals: list[tuple[str, str, str]] = []
+        """Each process-group signal the adapter's helper sent: sandbox, group file, signal."""
         self.clock = 0
         self.fail_create = False
+        self.lose_create_answer = False
+        """Create the sandbox, then answer 500: a crash between the create and its answer."""
         self.program: Callable[[Box, list[str], bytes], Ran] = lambda b, a, s: Ran()
         self.listing: Callable[[list[str]], list[str]] = lambda lines: lines
         """Rewrites the collect listing, to play a box that lies about its files."""
@@ -123,10 +127,12 @@ class E2BStub:
     def route(self, h: Any) -> None:
         parts = urlsplit(h.path)
         segs = [s for s in parts.path.split("/") if s]
-        if segs[:1] == ["sandboxes"]:
+        if segs[:1] == ["sandboxes"] or segs[:2] == ["v2", "sandboxes"]:
             if h.headers.get("X-API-Key") != self.key:
                 h._answer(401, {"message": "bad key"})
                 return
+            if segs[0] == "v2":
+                return self._listed(h, parse_qs(parts.query))
             return self._control(h, segs[1:])
         if segs[:1] == ["envd"] and len(segs) >= 3:
             box = self.boxes.get(segs[1])
@@ -148,6 +154,10 @@ class E2BStub:
                 return
             ident = f"SYN-sbx-{len(self.boxes) + 1}"
             self.boxes[ident] = Box(ident, json.loads(body or b"{}"))
+            if self.lose_create_answer:
+                self.lose_create_answer = False
+                h._answer(500, {"message": "SYN lost answer"})
+                return
             h._answer(201, {"sandboxID": ident, "envdAccessToken": f"tok-{ident}"})
             return
         box = self.boxes.get(rest[0]) if rest else None
@@ -165,6 +175,12 @@ class E2BStub:
             return
         h._answer(404)
         return
+
+    def _listed(self, h: Any, query: dict[str, list[str]]) -> None:
+        wanted = dict(pair.split("=", 1) for pair in query.get("metadata", []))
+        h._answer(200, [{"sandboxID": box.ident} for box in self.boxes.values()
+                        if box.alive and all(box.body.get("metadata", {}).get(k) == v
+                                             for k, v in wanted.items())])  # fmt: skip
 
     def _daemon(self, h: Any, box: Box, what: str, query: dict[str, list[str]]) -> None:
         if h.headers.get("X-Access-Token") != f"tok-{box.ident}":
@@ -212,7 +228,8 @@ class E2BStub:
 
         send({"start": {"pid": 4242}})
         if script.startswith("# aksha-run"):
-            stdin_path, mark = args[3], args[4]
+            stdin_path, mark, group = args[3], args[4], args[5]
+            box.files[group] = (b"4242\n", self.tick(), "f")
             argv = args[args.index("--") + 1 :]
             box.marks[mark] = self.tick()
             ran = self.program(box, argv, box.files.get(stdin_path, (b"", 0, "f"))[0])
@@ -232,6 +249,10 @@ class E2BStub:
                 if ran.code:
                     end["exitCode"] = ran.code
                 send({"end": end})
+        elif script.startswith("# aksha-signal"):
+            self.group_signals.append((box.ident, args[3], args[4]))
+            box.killed.set()
+            send({"end": {"exited": True, "status": "exit status 0"}})
         elif script.startswith("# aksha-collect"):
             mark, mode, roots = args[3], args[4], args[5:]
             since = box.marks.get(mark, 0)

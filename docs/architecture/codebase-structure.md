@@ -354,7 +354,7 @@ src/aksha/
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
 │   │   ├── bwrap.py                         BwrapSandbox: os-jail, allowlisted root, no network, prlimit limits, sampled box budgets, group kill; a session's folder as /work
-│   │   ├── workspace.py                     SessionFolders: one persistent workspace per session (decision 37), git worktree on aksha/<session>, checkpoints, clean
+│   │   ├── workspace.py                     SessionFolders: one persistent workspace per session (decision 37), git worktree on aksha/<owner>/<session>, checkpoints, clean
 │   │   └── e2b.py                           E2BSandbox: vm, one remote E2B sandbox per session kept by ID, pause or kill at idle, stdlib HTTP only
 │   ├── egress/                              the network under the runtime's HTTP client (ADR-P26)
 │   │   ├── __init__.py                      what is built

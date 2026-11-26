@@ -13,13 +13,16 @@ sandbox clean <session>``, or erasing the session when that is built).
 
 What a new workspace starts from is the backend's ``origin``:
 
-- **A git repository** gets a git worktree of it on its own branch, ``aksha/<session>``,
-  from the repository's ``HEAD`` (an existing branch of that name is checked out instead,
-  so a cleaned session continues from its commits). The user's own checkout is never
-  touched. After each exec that changed the worktree, the host commits everything as one
-  checkpoint on that branch, with hooks off and the git directory named explicitly, so
-  nothing the box wrote can redirect it. The worktree's ``.git`` file is bound read-only in
-  the box. Cleaning removes the worktree and keeps the branch and its commits for the user.
+- **A git repository** gets a git worktree of it on its own branch,
+  ``aksha/<owner>/<session>``, from the repository's ``HEAD`` (an existing branch of that
+  name is checked out instead, so a cleaned session continues from its commits; two owners
+  never share one). The user's own checkout is never touched. After each exec that changed
+  the worktree, the host commits everything as one checkpoint on that branch, with hooks
+  off, every configured filter driver off (the box writes ``.gitattributes``, so it could
+  otherwise name a driver that ``git add`` runs on the host) and the git directory named
+  explicitly, so nothing the box wrote can redirect it or run on the host. The worktree's
+  ``.git`` file is bound read-only in the box. Cleaning removes the worktree and keeps the
+  branch and its commits for the user.
 - **Any other folder** is copied in once (symlinks kept as links).
 - **None** is an empty folder.
 
@@ -73,6 +76,38 @@ def _git(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str
     env.update(_GIT_ENV)
     return subprocess.run(["git", *_GIT_SAFE, *args], cwd=cwd, capture_output=True, text=True,
                           timeout=GIT_TIMEOUT_S, env=env, check=False)  # fmt: skip
+
+
+def _branch(ref: SessionRef) -> str:
+    """The session's checkpoint branch, ``aksha/<owner>/<session>``, valid as a ref name."""
+    plain = BRANCH_PREFIX + ref.owner + "/" + ref.session
+    if "/" not in ref.owner + ref.session and _git("check-ref-format", "--branch", plain
+                                                  ).returncode == 0:  # fmt: skip
+        return plain
+    return BRANCH_PREFIX + folder_name(ref.owner) + "/" + folder_name(ref.session)
+
+
+def _no_filters(named: tuple[str, ...]) -> tuple[str, ...]:
+    """``-c`` overrides that turn off every filter driver the repository's config defines.
+
+    A driver runs only when the config defines it, and the box cannot write the config, but
+    it can write ``.gitattributes`` to assign any defined driver to its files. Blanking each
+    driver's commands means a checkpoint stores the files as the box left them and runs no
+    program on the host.
+    """
+    listed = _git(*named, "config", "--get-regexp", r"^filter\.")
+    names = set()
+    for line in listed.stdout.splitlines():
+        key = line.split(" ", 1)[0]
+        name, _, _var = key.removeprefix("filter.").rpartition(".")
+        if name:
+            names.add(name)
+    out: list[str] = []
+    for name in sorted(names):
+        for var in ("clean", "smudge", "process"):
+            out += ["-c", f"filter.{name}.{var}="]
+        out += ["-c", f"filter.{name}.required=false"]
+    return tuple(out)
 
 
 def _git_top(origin: Path) -> Path | None:
@@ -146,9 +181,7 @@ class SessionFolders:
         return {"origin": self._worktree(ref, top, work)}
 
     def _worktree(self, ref: SessionRef, repo: Path, work: Path) -> dict[str, Any]:
-        branch = BRANCH_PREFIX + ref.session
-        if _git("check-ref-format", "--branch", branch, cwd=repo).returncode != 0:
-            branch = BRANCH_PREFIX + folder_name(ref.session)
+        branch = _branch(ref)
         _git("worktree", "prune", cwd=repo)
         exists = _git("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", cwd=repo)
         if exists.returncode == 0:
@@ -176,7 +209,13 @@ class SessionFolders:
         origin = meta.get("origin", {})
         if origin.get("kind") != "git":
             return None
-        named = ("--git-dir", str(origin["gitdir"]), "--work-tree", str(meta["folder"]))
+        named: tuple[str, ...] = (
+            "--git-dir",
+            str(origin["gitdir"]),
+            "--work-tree",
+            str(meta["folder"]),
+        )
+        named = (*_no_filters(named), *named)
         if _git(*named, "add", "-A").returncode != 0:
             return None
         if _git(*named, "diff", "--cached", "--quiet").returncode == 0:

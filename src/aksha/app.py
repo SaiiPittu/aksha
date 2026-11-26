@@ -262,7 +262,7 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # every exec of the session's runs sees what the earlier ones wrote; the E2B backend keeps
 # one remote sandbox per session by its ID (``e2b/<owner>/<session>/e2b.json``). A new
 # bubblewrap workspace starts from ``AKSHA_WORKSPACE``: a git repository becomes a git
-# worktree on the branch ``aksha/<session>`` (never the checkout itself), any other folder
+# worktree on the branch ``aksha/<owner>/<session>`` (never the checkout itself), any other folder
 # is copied in, and unset is an empty folder. Workspaces are kept after the run;
 # ``aksha sandbox clean <session>`` removes one (:func:`clean_sandbox_session`).
 #
