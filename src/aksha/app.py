@@ -1130,13 +1130,13 @@ def open_session(
     reader = source_reader(config, loaded)
     inputs = input_workspace(config, loaded)
     ingester = None if inputs is None else upload_ingester(config)  # refuses before the store opens
+    tier = execution_tier(config, loaded)  # so does a web it cannot reach
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
     if len(agents) >= 2:
         routable = tuple(a.routable() for a in agents)
         router = Router(routable, PurposeClassifier(), ids)
-    tier = execution_tier(config, loaded)
     sandbox = tier.gate_availability
     recorded = tier.record()
     agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
