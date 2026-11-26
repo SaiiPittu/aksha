@@ -78,29 +78,37 @@ def _guard(body: Callable[[ToolContext, Mapping[str, Any]], ToolOutcome]) -> Any
     return run
 
 
-def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
-    """The agent's own tools, reading ``world``."""
+def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
+    """The agent's own tools, reading ``bound``.
+
+    A world with no folder reads through the call's record reader (``SourceWorld.over``).
+    """
 
     def list_candidates(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         data = world.candidates()
         return ToolOutcome(Ok(data, reads=(_record("notes/index#portfolio", data),)))
 
     def read_note(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         data = world.note(str(args["candidate"]))
         return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#note", data),)))
 
     def read_contributors(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         c = str(args["candidate"])
         data = world.contributor_rows(c)
         return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#rows:{c}", data),)))
 
     def read_people(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         ids = sorted(str(p) for p in args["person_ids"])
         data = world.people(ids)
         rid = f"{data['file']}#people:{','.join(ids)}"
         return ToolOutcome(Ok(data, reads=(_record(rid, data),)))
 
     def read_disclosures(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         c = str(args["candidate"])
         data = world.disclosure_rows(c)
         read = _record(f"{data['file']}#rows:{c}", data)
@@ -114,6 +122,7 @@ def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
         return ToolOutcome(Ok(shown, reads=(read,)))
 
     def read_document(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         path = str(args["path"])
         if not path.startswith("disclosures/") or ".." in path.split("/"):
             return ToolOutcome(Err("not_allowed", "read_document reads disclosure records only"))
@@ -121,15 +130,18 @@ def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
         return ToolOutcome(Ok(data, reads=(_record(f"{path}#doc", data),)))
 
     def read_priorities(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         data = world.priorities()
         return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#items", data),)))
 
     def read_template(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         name = str(args["template"])
         data = world.template(name)
         return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#template:{name}", data),)))
 
     def search_publications(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         groups = [[str(t) for t in g] for g in args["all_of"]]
         hits = world.search(groups)
         qid = query_id(groups)
@@ -137,10 +149,12 @@ def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
         return ToolOutcome(Ok(data, reads=(InputRef("query", qid, query_version(hits)),)))
 
     def fetch_publication(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         data = world.publication(str(args["id"]))
         return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#publication", data),)))
 
     def fill_form(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader)
         name, candidate = str(args["template"]), str(args["candidate"])
         kind = FORMS.get(name)
         if kind is None:

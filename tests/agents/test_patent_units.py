@@ -340,3 +340,22 @@ def test_parse_reads_the_instance_reads_answers_and_starts_over_after_finish() -
     assert ctx.read("table") == ("patent.table@v2", {"rows": []})
     assert ctx.answers == ["C1"]
     assert ctx.results == []  # a finish ends the attempt: a re-entry reads again
+
+
+def test_a_world_with_no_folder_reads_the_same_views_through_the_record_reader() -> None:
+    from aksha.adapters.sources.folder import FolderSources
+    from aksha.agents.patent.world import SOURCE_NAME, SourceWorld
+    from tests.support.patent import sources
+
+    folder = SourceWorld(sources("stillroom"))
+    read = SourceWorld().over(FolderSources({SOURCE_NAME: sources("stillroom")}))
+    assert read is not folder and folder.over(None) is folder
+    assert read.candidates() == folder.candidates()
+    for c in ("C1", "C2"):
+        assert read.note(c) == folder.note(c)
+        assert read.disclosure_rows(c) == folder.disclosure_rows(c)
+    assert read.priorities() == folder.priorities()
+    assert read.search([["vent"]]) == folder.search([["vent"]])
+    note = "notes/C1-self-calibration.md#note"
+    assert read.record_version("o1", note) == folder.record_version("o1", note)
+    assert SourceWorld().over(None).root is None

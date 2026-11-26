@@ -29,6 +29,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from aksha.runtime.api import RecordReader
+
 SOURCE_NAME = "patent_sources"
 COLLECTIONS = (
     "notes",
@@ -132,7 +134,8 @@ class SourceWorld:
 
     ``root`` can be switched to another world (``use``): that is how a test, or an
     operator, applies a change set. ``today`` is the date elapsed days are counted to;
-    the composition root passes the injected clock's date.
+    the composition root passes the injected clock's date. With no ``root``, the tools
+    read through the runtime's record reader instead (:meth:`over`).
     """
 
     root: Path | None = None
@@ -142,6 +145,16 @@ class SourceWorld:
     def use(self, root: Path) -> None:
         """Read from ``root`` from now on."""
         self.root = Path(root)
+
+    def over(self, reader: RecordReader | None) -> SourceWorld:
+        """This world, or, when it has no ``root``, one reading through ``reader``.
+
+        A session gives each tool call the record reader the composition root configured
+        for :data:`SOURCE_NAME` (``AKSHA_SOURCES``); a world bound to a folder keeps it.
+        """
+        if self.root is not None or reader is None:
+            return self
+        return ReaderWorld(today=self.today, reader=reader)
 
     # --- raw access -------------------------------------------------------------------
 
@@ -534,6 +547,55 @@ class SourceWorld:
     def run_query(self, owner: str, query: str) -> str:
         """Re-execute a recorded search: the hash of its hit IDs as a set."""
         return query_version(self.search(parse_query(query)))
+
+
+@dataclass
+class ReaderWorld(SourceWorld):
+    """A world whose files are the records the runtime's reader serves for the source.
+
+    A record ID is the file's path under the world's ``sources/`` folder, so every view,
+    view version and quote is the same as reading the folder directly. The whole world's
+    ``version`` covers the declared collections only, the records the reader serves.
+    """
+
+    reader: RecordReader | None = None
+
+    def _reader(self) -> RecordReader:
+        if self.reader is None:
+            raise NotInWorld("no source folder is configured")
+        return self.reader
+
+    def raw(self, rel: str) -> str:
+        """The record ``rel``'s text, as the reader returns it."""
+        found = self._reader().read(SOURCE_NAME, rel)
+        if found is None:
+            raise NotInWorld(f"{rel} is not in the source folder")
+        return found.text
+
+    def _all(self) -> list[str]:
+        return [r for c in COLLECTIONS for r in self._reader().records(SOURCE_NAME, c)]
+
+    def exists_anywhere(self, name: str) -> bool:
+        """Whether a record's file is called ``name``."""
+        return any(r.rsplit("/", 1)[-1] == name for r in self._all())
+
+    def file_naming(self, ref: str) -> bool:
+        """Whether any record's file name holds ``ref``."""
+        low = ref.casefold()
+        return any(low in r.rsplit("/", 1)[-1].casefold() for r in self._all())
+
+    def files(self, collection: str) -> list[str]:
+        """The records directly in ``collection``, sorted."""
+        found = self._reader().records(SOURCE_NAME, collection)
+        return sorted(r for r in found if r.count("/") == 1)
+
+    def version(self, owner: str) -> str:
+        """A hash over every served record's ID and text."""
+        h = hashlib.sha256()
+        for r in sorted(self._all()):
+            h.update(r.encode())
+            h.update(self.raw(r).encode("utf-8"))
+        return "w-" + h.hexdigest()[:16]
 
 
 def query_id(groups: Sequence[Sequence[str]]) -> str:

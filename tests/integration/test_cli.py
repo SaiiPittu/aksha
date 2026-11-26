@@ -102,6 +102,27 @@ def test_the_default_agents_load_and_research_runs_offline_on_a_world(tmp_path: 
     assert reads, "the tools read the world's records through the configured source"
 
 
+def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: Path) -> None:
+    from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
+
+    sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
+    defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
+                "AKSHA_SOURCES": f"patent_sources={sources}"}  # fmt: skip
+    request = "Assess the four invention candidates and prepare the chosen one for counsel."
+    code, out = aksha(tmp_path, "run", request, "--agent", "patent", "--session", "S-1",
+                      **defaults)  # fmt: skip
+    assert code == wire.EXIT_WAITING_INPUT and "missing detail" in out, out
+    gap = re.search(r"aksha answer (I-\d+)", out)
+    assert gap is not None
+    detail = "0.5 m from the vent edge, so its air flow stays outside the footprint."
+    code, out = aksha(tmp_path, "answer", gap.group(1), detail, **defaults)
+    assert code == wire.EXIT_WAITING_INPUT and "candidate selection" in out, out
+    choice = re.search(r"aksha answer (I-\d+)", out)
+    assert choice is not None
+    code, out = aksha(tmp_path, "answer", choice.group(1), "C1", **defaults)
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+
+
 def test_stop_exits_six(tmp_path: Path) -> None:
     code, out = aksha(tmp_path, "run", "Ask first", "--session", "S-1")
     assert code == wire.EXIT_WAITING_INPUT

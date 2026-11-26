@@ -23,7 +23,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
@@ -244,8 +244,8 @@ def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
 def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
     """Answer an input, choice or route interrupt.
 
-    ``TEXT`` answers the interrupt's one question, by the ID it was asked under; with
-    several questions, each is answered with ``--answer ID=TEXT``.
+    ``TEXT`` answers the interrupt's one question (or its choice); the runtime files it
+    under the question's own ID. With several questions, each takes ``--answer ID=TEXT``.
     """
     answers: dict[str, str] = {}
     for item in args.answer or ():
@@ -253,30 +253,13 @@ def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
         if not sep or not qid:
             raise wire.WireInvalid(message=f"--answer {item!r}: use ID=TEXT")
         answers[qid] = text
-    if args.text is not None and args.agent is None:
-        ids = _question_ids(ctx, args.interrupt)
-        answers[ids[0] if len(ids) == 1 else DEFAULT_QUESTION] = args.text
+    text = args.text if args.agent is None else None
 
     def build(cid: str) -> n.NamedCommand:
-        return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt,
+        return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt, text=text,
                                  answers=answers, agent=args.agent, command_id=cid)  # fmt: skip
 
     return _mutate(ctx, build, _item_target(ctx, "interrupt", args.interrupt))
-
-
-DEFAULT_QUESTION = "q1"
-"""The question ID a bare ``TEXT`` answers when the interrupt lists no single question."""
-
-
-def _question_ids(ctx: Context, interrupt_id: str) -> tuple[str, ...]:
-    """The IDs of the questions ``interrupt_id`` asked, read from a read-only handle."""
-    store = open_reader(ctx.config)
-    try:
-        found = interrupts(load_view(store, ctx.owner)).get(interrupt_id)
-    finally:
-        store.close()
-    questions = () if found is None else found.payload.get("questions") or ()
-    return tuple(str(q["id"]) for q in questions if isinstance(q, Mapping) and "id" in q)
 
 
 def _full_signature(ctx: Context, approval_id: str, shown: str) -> str:

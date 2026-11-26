@@ -1228,3 +1228,7 @@ def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:
         ],
         "inputs": {k: v[0] for k, v in sorted(reads.items())},
     }
+
+
+ADAPTERS = {"generate": PatentFake()}
+"""The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""
