@@ -57,8 +57,9 @@ class SealedValue:
 
     ``ref`` is ``er_`` plus 32 random hex characters. ``commit`` is ``sha256:`` over the
     canonical bytes of ``{"salt": salt, "subject": subject, "value": value}``: the event's
-    hash covers it, so an edited value or subject breaks the chain, and the random salt (deleted with the value) means
-    a short value such as a name cannot be guessed back from the commitment.
+    hash covers it, so an edited value or subject breaks the chain, and the random salt
+    (deleted with the value) means a short value such as a name cannot be guessed back
+    from the commitment.
     """
 
     ref: str
