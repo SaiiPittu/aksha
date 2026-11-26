@@ -99,7 +99,7 @@ Facts go in through one writer and every view is computed from them by pure func
 
 ## Status and limitations
 
-As of 26 Nov 2026, 27 of the 30 primitives are built and tested. The three limits a first user meets:
+As of 26 Nov 2026, 28 of the 30 primitives are built and tested. The three limits a first user meets:
 
 1. **Offline models only.** `AKSHA_MODE` accepts only `fake`: every model is a rule-based fake or a replay, so results show the harness working, not model quality.
 2. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.

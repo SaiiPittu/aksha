@@ -21,7 +21,15 @@ from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.outbox import facts
 from aksha.runtime.outbox.errors import OutboxRefused
-from aksha.runtime.outbox.keys import Resolve, idempotency_key, request_hash
+from aksha.runtime.outbox.keys import (
+    Resolve,
+    artifact_sources,
+    idempotency_key,
+    key_values,
+    record_key,
+    record_values,
+    request_hash,
+)
 from aksha.runtime.outbox.ports import Authority
 from aksha.runtime.outbox.types import OUTCOME_UNKNOWN, EffectSpec, OutboxEntry, OutboxState
 from aksha.runtime.projections.project import rebuild
@@ -73,6 +81,7 @@ class Outbox:
 def _entry(event: Event) -> OutboxEntry:
     p = event.payload
     approval, command = p.get("approval_id"), p.get("command_id")
+    record = p.get("record")
     return OutboxEntry(
         key=str(p["key"]),
         owner=event.owner,
@@ -87,6 +96,9 @@ def _entry(event: Event) -> OutboxEntry:
         command_id=None if command is None else str(command),
         run=event.run,
         step=event.step,
+        record_key=None if record is None else str(record["key"]),
+        record=None if record is None else record["fields"],
+        sources=tuple(str(s) for s in p.get("sources", ())),
     )
 
 
@@ -131,13 +143,17 @@ def enqueue(
     ``step`` is the tool step whose intent the entry commits with (``StepExecutor.effect_step``);
     a command's entry has none.
 
-    Raises ``KeyFieldMissing`` when a key field is absent and :class:`OutboxRefused` with
+    A tool that declares ``record_fields`` also records which outside record the request
+    revises and the artifact versions among its key values (ADR-P29 D1).
+
+    Raises ``KeyFieldMissing`` when a key or record field is absent and :class:`OutboxRefused` with
     the authority's code when it no longer covers the entry. Pure: nothing is appended.
     """
     key = idempotency_key(tool, view.owner, args, spec, resolve=resolve)
     existing = entries(view).get(key)
     if existing is not None:
         return Enqueued(existing, None)
+    record = record_values(args, spec) if spec.record_fields else None
     entry = OutboxEntry(
         key=key,
         owner=view.owner,
@@ -152,6 +168,9 @@ def enqueue(
         command_id=command_id,
         run=step.run if step is not None else run,
         step=None if step is None else str(step),
+        record_key=None if record is None else record_key(tool, view.owner, args, spec),
+        record=None if record is None else freeze(record),
+        sources=() if record is None else artifact_sources(key_values(args, spec, resolve)),
     )
     if authority is not None:
         code = authority(entry, view)

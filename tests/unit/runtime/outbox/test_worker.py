@@ -6,8 +6,9 @@ which the store is closed and opened again, as a restarted process would.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -320,3 +321,31 @@ def test_recovery_with_nothing_dangling_writes_nothing(h: Harness) -> None:
     before = types(h.store)
     assert h.worker().recover() == ()
     assert types(h.store) == before
+
+
+def test_an_extension_system_asks_for_a_retry_through_the_api(h: Harness) -> None:
+    from aksha.runtime import api
+
+    class Flaky:
+        """A system written only against the extension API, busy on its first call."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def ledger_id(self) -> str:
+            return "flaky-ledger-1"
+
+        def apply(self, key: str, request: Mapping[str, Any]) -> api.SystemReceipt:
+            self.calls += 1
+            if self.calls == 1:
+                raise api.TransientEffectError(message="busy")
+            return api.SystemReceipt(key, self.ledger_id(), {"ok": True})
+
+        def lookup(self, key: str, request: Mapping[str, Any]) -> api.SystemReceipt | None:
+            return None
+
+    flaky = Flaky()
+    key = h.enqueue()
+    worker = OutboxWorker(h.store, "o", h.clock, {"mailer": flaky}, policies={"send": QUICK})
+    (done,) = worker.drain()
+    assert (done.key, done.state, done.attempts, flaky.calls) == (key, "completed", 2, 2)

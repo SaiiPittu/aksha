@@ -80,7 +80,9 @@ class OutboxEntry:
     ``receipt`` and ``ledger_id`` are set when completed; ``reason`` when abandoned or
     unknown. ``run`` and ``step`` name the tool step whose intent enqueued the entry (None
     for a command's entry, such as a handoff); the worker commits that step's result with
-    the entry's end.
+    the entry's end. ``record_key`` and ``record`` name the outside record the request
+    revises when its tool declares ``record_fields``, and ``sources`` the artifact versions
+    it was written from (ADR-P29 D1); both are recorded on ``outbox.enqueued``.
     """
 
     key: str
@@ -101,6 +103,9 @@ class OutboxEntry:
     reason: str | None = None
     run: str | None = None
     step: str | None = None
+    record_key: str | None = None
+    record: Mapping[str, Any] | None = None
+    sources: tuple[str, ...] = ()
 
     @property
     def target(self) -> str:

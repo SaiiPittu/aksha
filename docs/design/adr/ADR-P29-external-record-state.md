@@ -26,6 +26,16 @@ After the product requirements' change set, Aksha knows `disclosure/C1@v1` is in
 
 The first milestone's agent-side answer, with no core change: The Patent Agent's forms adapter keeps one record per form kind and candidate and stores each keyed request as a revision, which meets the product requirements.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+Built on 26 Nov 2026 in `runtime/outbox/records.py`, with record facts on `outbox.enqueued`; exported from `aksha.runtime.api` 2.4 as `ExternalRecord` and `external_records`.
+
+1. B1, the record facts ride on the outbox entry (D1, D2). `enqueue` records `record: {key, fields}` and `sources` on `outbox.enqueued` for a tool that declares `record_fields`, both or neither (the catalogue schema's `dependentRequired`); an entry of any other tool is unchanged. So the projection reads only the outbox facts, and the record key is fixed when the request is committed, not recomputed from a definition that may have changed. The key is `sha256` over the tool, the owner and the record-field values as given: record identity is never resolved to an exact artifact version, or two versions of one form would name two records.
+2. B2, sources are the artifact versions among the key values (D2, D3). The interface's single `source_artifact` becomes `sources`, every `kind/key@vN` reference found at any depth in the resolved key-field values, in order; `source_artifact` is a property naming the first. Key fields name what an effect means, so a version among them is what the request was written from. `freshness` is the stalest of their states in the invalidation view (`invalidated` over `dirty` over `current_by_cutoff` over `current`), and None when no source names a saved version; `stale` is true for `dirty` and `invalidated`.
+3. B3, every record field is a key field. The loader refuses a record field that is not a JSON pointer (`record_field_invalid`) and one outside `key_fields` (`record_field_not_keyed`): two records under one idempotency key would make the second write the first one's replay. `enqueue` still refuses a record field missing from the arguments (`record_field_missing`) for a spec built by hand.
+4. B4, revisions and their ends (D2). `ExternalRecord` adds `tool`, `fields`, `pending` and `unknown`. A completion, the worker's or reconciliation's, is a revision with the system's receipt, in completion order. An entry abandoned `outcome_unknown` is listed under `unknown`, since the outside system may hold a revision Aksha never recorded; a refused, stopped or retries-exhausted entry is no revision. A record is listed once it has a revision or an unknown one: a record with only pending entries has not reached the outside system. `system` filters on the entry's system, or the tool's name when it has none.
+5. B5, `TransientEffectError` is part of the extension API (ADR-P03, ADR-P20). A contributed system of record raises it, with a code matched to the tool's `retry_on`, to ask the worker for a retry; any other exception abandons the entry `effect_exception`.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
