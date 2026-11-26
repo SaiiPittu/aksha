@@ -53,13 +53,28 @@ def check_subject(subject: str) -> str:
     return subject
 
 
-def erasure_event(subject: str, refs: Sequence[str], reason: str) -> NewEvent:
-    """The ``erasure.performed`` event for erasing ``refs`` of ``subject`` (E4)."""
-    if not isinstance(reason, str) or not reason.strip() or len(reason) > REASON_MAX:
+def check_reason(reason: str) -> str:
+    """Return ``reason``, or refuse it (``erasure_reason_invalid``).
+
+    Both adapters call it before they look for values, so a bad reason is refused alike
+    whether or not anything is left to erase.
+    """
+    if (
+        not isinstance(reason, str)
+        or not reason.strip()
+        or NUL in reason
+        or len(reason) > REASON_MAX
+    ):
         raise ErasureError(
             "erasure_reason_invalid",
-            f"a reason is non-empty text of at most {REASON_MAX} characters",
+            f"a reason is non-empty text of at most {REASON_MAX} characters, without NUL",
         )
+    return reason
+
+
+def erasure_event(subject: str, refs: Sequence[str], reason: str) -> NewEvent:
+    """The ``erasure.performed`` event for erasing ``refs`` of ``subject`` (E4)."""
+    check_reason(reason)
     return NewEvent("erasure.performed", {"subject": subject, "refs": list(refs), "reason": reason})
 
 

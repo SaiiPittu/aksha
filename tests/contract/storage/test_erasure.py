@@ -14,7 +14,7 @@ from aksha.adapters.clock.fake import FakeClock
 from aksha.runtime.erasure.types import REDACTED, ErasureError, Personal
 from aksha.runtime.events.catalogue import Catalogue
 from aksha.runtime.events.envelope import NewEvent
-from aksha.runtime.events.errors import PayloadInvalid
+from aksha.runtime.events.errors import BoundaryNotAllowed, PayloadInvalid
 from aksha.runtime.storage.errors import AlreadyRecorded, NotWriter, StoreError
 from aksha.runtime.storage.ports import EventStore
 from tests.support.backends import Backend
@@ -218,3 +218,30 @@ def test_erasure_of_one_subject_in_a_boundary_of_many_events(store: EventStore) 
     texts = [e.payload["text"] for e in store.read("o1", types=frozenset({"probe.noted"}))]
     assert texts == [REDACTED, REDACTED, NAME]
     assert store.verify() is None
+
+
+def test_only_erase_writes_the_erasure_boundary(store: EventStore) -> None:
+    store.append("o1", "U2", [_personal_probe(1)])
+    forged = NewEvent(
+        "erasure.performed", {"subject": "person:p1", "refs": ["er_" + "0" * 32], "reason": "r"}
+    )
+    with pytest.raises(StoreError) as e:
+        store.append("o1", "U12", [forged])
+    assert e.value.code == "erasure_boundary_reserved"
+    with pytest.raises(BoundaryNotAllowed):
+        store.append("o1", "U2", [forged])
+    assert store.last_seq("o1") == 1
+
+
+@pytest.mark.parametrize("reason", ["", "   ", "r\x00", "r" * 201])
+def test_erase_refuses_a_bad_reason_before_it_looks_for_values(
+    store: EventStore, reason: str
+) -> None:
+    with pytest.raises(ErasureError) as e:
+        store.erase("o1", "person:p1", reason=reason)
+    assert e.value.code == "erasure_reason_invalid"
+    store.append("o1", "U2", [_personal_probe(1)])
+    with pytest.raises(ErasureError):
+        store.erase("o1", "person:p1", reason=reason)
+    assert next(iter(store.read("o1"))).payload["text"] == NAME
+    assert store.last_seq("o1") == 1

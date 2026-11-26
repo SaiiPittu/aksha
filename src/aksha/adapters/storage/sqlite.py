@@ -42,6 +42,7 @@ from aksha.runtime.storage.append import (
     SYSTEM_OWNER,
     PreparedBatch,
     check_owner,
+    check_reason,
     check_subject,
     erasure_event,
     prepare_append,
@@ -454,6 +455,7 @@ class SQLiteEventStore:
         """Delete the owner's values for ``subject`` and record it (ADR-P30 E4); see the port."""
         check_owner(owner)
         check_subject(subject)
+        check_reason(reason)
         if not self.is_writer:
             self._db()
             raise NotWriter()
