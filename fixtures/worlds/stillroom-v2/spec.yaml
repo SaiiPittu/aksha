@@ -291,6 +291,9 @@ rename_map:
   c5_new_dom:
   - corvane.example
   - orrin.example
+  c5_new_brand:
+  - Corvane
+  - Orrin
   a_A:
   - Thermosight Corp.
   - Calorix Imaging Inc.

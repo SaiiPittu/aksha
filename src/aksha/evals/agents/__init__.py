@@ -6,6 +6,7 @@ that reads the competitor pages and reviews of a world and saves research output
 reads the key: its rules work on the files' formats, so it behaves the same on a renamed
 world, which is what the invariance runs check.
 
-The real agents' adapters go here, one module each, and are registered in
-:func:`aksha.app.eval_agents`.
+``research`` and ``patent`` are the shipped agents' adapters, over ``runtime`` (the agent in a
+runtime session, the episode as its record reader and its system of record); they are
+registered in :func:`aksha.app.eval_agents`.
 """

@@ -92,6 +92,10 @@ Takeaway: durability is a fixed recovery order plus one rule per tool, and the o
 
 Agent-side rules the reviews added, with no core change: The Patent demo runs `aksha resume` after the restart, because resume is lazy (D10); fixtures and templates live outside the agent folder (ADR-P20 S3); and the coding agent puts the base tree's hash into `apply_patch`'s arguments so an `at_least_once` re-run applies to the recorded base.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, a run that cannot move in this process is not resumed (D10). `resume_owner` takes `skip`, the runs its caller knows cannot move here: they are recovered but neither driven nor given a resume record, so the restart limit (D8) never counts a resume that did not run. The session passes the runs that hold a granted, unused approval whose effect names a system of record the process has none for (ADR-P19 B14). Before this, an approved send with no system raised `effect_needs_outbox` inside the resume that precedes every embedded command, so every later command of that owner was refused the same way until the restart limit ended the run `failed`.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

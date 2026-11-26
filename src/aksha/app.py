@@ -47,6 +47,7 @@ from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
+from aksha.evals.agents.runtime import RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
 from aksha.evals.judge import Judge, RuleJudge
 from aksha.evals.ports import StoreOpener
@@ -753,20 +754,69 @@ def eval_store_opener() -> StoreOpener:
     return open_store
 
 
+class _RuntimeAdapter:
+    """Builds one runtime agent's eval adapter per episode, over sessions built here.
+
+    The adapter (``aksha.evals.agents.<name>``) drives a ``Session`` this factory builds in
+    the episode's ``runtime/`` folder: a SQLite store on the eval clock, a filesystem blob
+    store, the agent loaded from ``agents/<name>`` and bound to its fakes, the adapter's
+    reader over the episode and its systems of record. ``definition_hash`` is the loaded
+    definition's, so result rows name the agent definition, not the adapter's source.
+    """
+
+    def __init__(self, adapter: type[RuntimeUnderTest]) -> None:
+        """Load ``adapter``'s agent once."""
+        self.adapter = adapter
+        catalogue = Catalogue(CORE_EVENT_TYPES)
+        (self.loaded,) = load_agents([DEFAULT_AGENTS / adapter.agent], [], catalogue=catalogue)
+        self.catalogue = catalogue
+        self.definition_hash = self.loaded.definition_hash
+        self.bound = session_agent(self.loaded, "fake", commit=runtime_commit())
+
+    def __call__(self) -> RuntimeUnderTest:
+        """A fresh adapter for one episode."""
+        return self.adapter(self.session)
+
+    def session(self, folder: Path, reader: RecordReader, systems: Mapping[str, object]) -> Session:
+        """The writer session of one episode's runtime store in ``folder``."""
+        folder.mkdir(parents=True, exist_ok=True)
+        clock = FakeClock(EVAL_CLOCK_START)
+        store = sqlite.open_store(folder / "aksha.sqlite", clock, writer=True,
+                                  catalogue=self.catalogue)  # fmt: skip
+        return Session(store, clock, (self.bound,), blobs=FilesystemBlobStore(folder / "blobs"),
+                       systems=cast(Mapping[str, SystemOfRecord], systems),
+                       reader=reader)  # fmt: skip
+
+
 def eval_agents() -> AgentRegistry:
     """The agents an eval can run, by the name cases list them under.
 
-    The registration hook for the real agents: when an agent's eval adapter exists in
-    ``aksha/evals/agents/<name>.py``, register it here, for example
-    ``registry.register("research", ResearchUnderTest, mode="fake")``. A case naming an
-    agent that is not registered is refused with ``agent_not_registered``.
+    The registration hook for the real agents: each adapter in ``aksha/evals/agents/``
+    registers here. ``research`` and ``patent`` run the shipped agents on the runtime with
+    their fake models (:class:`_RuntimeAdapter`); ``scripted`` is the runner's own test
+    agent. A case naming an agent that is not registered is refused ``agent_not_registered``.
     """
+    from aksha.evals.agents.patent import PatentUnderTest
+    from aksha.evals.agents.research import ResearchUnderTest
+
     registry = AgentRegistry()
     registry.register(
         "scripted",
         ScriptedResearchAgent,
         mode="fake",
         description="small rule-based research agent over competitor pages and reviews",
+    )
+    registry.register(
+        "research",
+        _RuntimeAdapter(ResearchUnderTest),
+        mode="fake",
+        description="the research agent on the runtime, rule-based fake model",
+    )
+    registry.register(
+        "patent",
+        _RuntimeAdapter(PatentUnderTest),
+        mode="fake",
+        description="the patent agent on the runtime, rule-based fake model, mock counsel mail",
     )
     return registry
 

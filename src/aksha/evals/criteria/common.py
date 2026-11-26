@@ -112,6 +112,31 @@ def competitor_output(ctx: GradeContext, kid: str) -> list[Output]:
     return found
 
 
+def family_label(ctx: GradeContext, name: object) -> str:
+    """The key's label of the family an output names, upper case.
+
+    An agent names a patent family by what the sources give it, a priority number such
+    as ``SYN-PRI-2021-0412``; the key labels families ``A``, ``B``, ... A name that is one
+    of a keyed family's priority numbers reads as that family's label; any other name is
+    returned upper-cased, so the key's own labels still match.
+    """
+    wanted = str(name).upper()
+    for label, entry in dict(ctx.key.data.get("families", {})).items():
+        numbers = {str(p).upper() for p in dict(entry).get("priority_numbers", ())}
+        if wanted in numbers:
+            return str(label).upper()
+    return wanted
+
+
+def family_output(ctx: GradeContext, kind: str, label: str) -> Output | None:
+    """The latest ``<kind>/<family>`` output for the keyed family ``label`` (any naming)."""
+    direct = ctx.state.get(kind, label)
+    if direct is not None:
+        return direct
+    want = str(label).upper()
+    return next((o for o in ctx.state.of_kind(kind) if family_label(ctx, o.key) == want), None)
+
+
 def field_of(out: Output | None, name: str) -> Mapping[str, Any] | None:
     """A field of an extraction-style output (``content.fields.<name>``), or None."""
     if out is None:

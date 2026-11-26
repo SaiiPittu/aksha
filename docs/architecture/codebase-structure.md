@@ -385,7 +385,10 @@ src/aksha/
 │   │   ├── mutants.py                       one-defect copies of the oracle bundle
 │   │   └── run.py                           self_test, relation_self_test, mutation coverage
 │   └── agents/                              adapters that put an agent through an episode
-│       ├── __init__.py                      where the real agents' adapters go
+│       ├── __init__.py                      the adapters registered in aksha.app.eval_agents
+│       ├── patent.py                        PatentUnderTest: the patent agent's outputs as a bundle
+│       ├── research.py                      ResearchUnderTest: the research agent's outputs as a bundle
+│       ├── runtime.py                       RuntimeUnderTest, EpisodeReader, EpisodeMailbox
 │       ├── scripted.py                      ScriptedAgent, ScriptedResearchAgent
 │       └── tools.py                         episode_tools: runtime tool bodies over an episode
 └── interfaces/                              INTERFACES: how people reach the runtime

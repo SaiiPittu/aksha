@@ -31,7 +31,7 @@
     "sources/reviews/reviews.json": "sha256:f73e55e42bd39bf7b62e603e2d71c96b804bc85cc2be87426821952527d2c66f",
     "sources/templates/filing-information-worksheet.md": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2",
     "sources/templates/invention-disclosure-form.md": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451",
-    "spec.yaml": "sha256:8b5b8a60e5cc9daac33116a396cee5d2de886cb0e973f78665939d3158372049"
+    "spec.yaml": "sha256:af3a6792821a6dbed83526fd1d6c7fe23c267f598b3c6016d44d35fda1814a48"
   },
   "world": "stillroom-v2"
 }
