@@ -146,15 +146,18 @@ class SourceWorld:
         """Read from ``root`` from now on."""
         self.root = Path(root)
 
-    def over(self, reader: RecordReader | None) -> SourceWorld:
+    def over(self, reader: RecordReader | None, run_date: str | None = None) -> SourceWorld:
         """This world, or, when it has no ``root``, one reading through ``reader``.
 
         A session gives each tool call the record reader the composition root configured
         for :data:`SOURCE_NAME` (``AKSHA_SOURCES``); a world bound to a folder keeps it.
+        The reader-backed world counts days to ``today``, else to ``run_date`` (the run's
+        recorded start date, ``ToolContext.run_date``).
         """
         if self.root is not None or reader is None:
             return self
-        return ReaderWorld(today=self.today, reader=reader)
+        today = self.today or (date.fromisoformat(run_date) if run_date else None)
+        return ReaderWorld(today=today, reader=reader)
 
     # --- raw access -------------------------------------------------------------------
 

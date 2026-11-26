@@ -359,3 +359,6 @@ def test_a_world_with_no_folder_reads_the_same_views_through_the_record_reader()
     note = "notes/C1-self-calibration.md#note"
     assert read.record_version("o1", note) == folder.record_version("o1", note)
     assert SourceWorld().over(None).root is None
+    dated = SourceWorld().over(FolderSources({SOURCE_NAME: sources("stillroom")}), "2026-11-26")
+    assert dated.today == TODAY
+    assert dated.disclosure_rows("C1") == folder.disclosure_rows("C1")

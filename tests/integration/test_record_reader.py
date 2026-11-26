@@ -112,3 +112,22 @@ def test_an_answer_names_its_statement_span_in_the_next_context(tmp_path: Path) 
         f"(cite this answer as statement {span['span_id']})"
     ]
     b.close()
+
+
+def test_a_tool_body_is_given_the_runs_recorded_start_date(tmp_path: Path) -> None:
+    seen: list[str | None] = []
+
+    def dated(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        seen.append(ctx.run_date)
+        return _fetch(ctx, args)
+
+    model = Recorder([tools_reply(call("fetch", record="p/a.txt")), finish_reply()])
+    b = _bench(tmp_path, model)
+    decl = b.setup.registry.get("fetch")
+    listed = {t.spec.name: t for t in b.agent.tools if isinstance(t, ToolDecl)}
+    listed["fetch"] = ToolDecl(decl.spec, dated)
+    b.setup = replace(b.setup, registry=ToolRegistry(b.agent, listed, ()))
+    assert b.drive().outcome == "complete"
+    (started,) = b.events("run.started")
+    assert seen == [started.at[:10]] and len(started.at) > 10
+    b.close()

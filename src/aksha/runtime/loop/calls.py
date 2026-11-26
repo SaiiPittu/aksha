@@ -132,6 +132,12 @@ def _shown(
     return StepOutput(value, events=events)
 
 
+def _run_date(view: LogView, run: str) -> str | None:
+    """The ISO date of ``run``'s recorded ``run.started``; None before it is recorded."""
+    started = next((e for e in view.events if e.type == "run.started" and e.run == run), None)
+    return None if started is None else started.at[:10]
+
+
 def run_calls(
     setup: LoopSetup,
     executor: DurableStepExecutor,
@@ -211,10 +217,11 @@ def run_position(
     if decision.route == "dispatch":
         args = call.arguments
         attempt = attempt_number(view, str(step))
+        run_date = _run_date(view, ref.run)
 
         def ctx(reader: AttemptReader) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader)  # fmt: skip
+                               attempt, reader, run_date)  # fmt: skip
 
         # Each attempt reads through a fresh reader; its drafts are minted over what it returned.
         return record(

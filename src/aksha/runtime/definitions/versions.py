@@ -33,7 +33,8 @@ is None (the high watermark); ``Agent.requires_api`` defaults to ``">=2.0,<3"``.
 added the trailing field ``Ok.reads`` (a body's recorded reads, ADR-P04 D6). 2.1 added the
 record reader a tool body reads through (``RecordReader``, ``ReturnedText``) and the
 trailing field ``ToolContext.reader`` (ADR-P13 D1). 2.2 added what a contributed system
-of record implements and answers (``SystemOfRecord``, ``SystemReceipt``; ADR-P20 S2).
+of record implements and answers (``SystemOfRecord``, ``SystemReceipt``; ADR-P20 S2) and
+the trailing field ``ToolContext.run_date``, the run's recorded start date.
 """
 
 Version = tuple[int, int]

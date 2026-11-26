@@ -18,6 +18,7 @@ from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.storage.sqlite import open_store
 from aksha.interfaces import wire
 from aksha.interfaces.cli.main import main
+from aksha.runtime.canonical import thaw
 from tests.support.events import START
 from tests.support.session import env
 
@@ -121,6 +122,19 @@ def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: P
     assert choice is not None
     code, out = aksha(tmp_path, "answer", choice.group(1), "C1", **defaults)
     assert code == wire.EXIT_WAITING_APPROVAL, out
+    store = open_store(tmp_path / "var" / "aksha.sqlite", FakeClock(START), writer=False)
+    try:
+        events = list(store.read("o1"))
+    finally:
+        store.close()
+    started = next(e for e in events if e.type == "run.started")
+    shown = [json.loads(e.payload["value"]["view"]["text"])["data"] for e in events
+             if e.type == "step.completed" and e.payload.get("tool") == "read_disclosures"
+             and e.payload.get("outcome") == "ok"]  # fmt: skip
+    assert shown and all(d["as_of"] == started.at[:10] for d in shown)
+    assert all(r["elapsed_days"] is not None for d in shown for r in d["rows"] if r["date"])
+    questions = [e.payload for e in events if e.type == "interrupt.raised"]
+    assert "None days" not in json.dumps(thaw(questions))
 
 
 def test_stop_exits_six(tmp_path: Path) -> None:
