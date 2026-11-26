@@ -8,9 +8,11 @@ them with the versions the owner's log last knew, and records only what moved:
 
 1. A source whose version differs from the last recorded one (or that was never recorded)
    is checked record by record, for every record the owner has read from it. A source
-   never recorded before is recorded when one of its read records moved, or when the
-   owner has recorded queries to re-execute: a file no work read yet can still change
-   what a listing or a search returns (amendment from the ingestion build, 26 Nov 2026).
+   never recorded before is recorded when one of its read records moved, or when
+   a change applied by a command (an upload) gives one of the owner's recorded queries a
+   new result-set hash on re-execution: a file no work read yet can still change what a
+   listing or a search returns (amendment from the ingestion build, 26 Nov 2026).
+   Recovery's check does not re-execute queries for a source nothing read.
 2. A record whose version differs from the one last known (recorded by a change, or else
    the newest read of it) is recorded with its new version, or None when it is gone.
 3. Only when something is recorded are the owner's recorded queries re-executed, each
@@ -109,6 +111,7 @@ def record_source_changes(
     facts = source_facts(view)
     read = read_inputs(view, "record")
     queried = run_query is not None and bool(read_inputs(view, "query") or facts.queries)
+    unseen: dict[str, str] = {}  # never recorded, no read record moved: queries decide
     moved_sources: dict[str, str] = {}
     moved_records: dict[str, str | None] = {}
     for source in sources:
@@ -119,15 +122,25 @@ def record_source_changes(
         changed = _moved_records(source, owner, read, facts.records)
         if source.name == CLOCK_SOURCE:
             changed = {CLOCK_RECORD: source.record_version(owner, CLOCK_RECORD)}
-        if prior is not None or changed or (queried and source.name != CLOCK_SOURCE):
+        if prior is not None or changed:
             moved_sources[source.name] = now
             moved_records.update(changed)
+        elif queried and cause == "command" and source.name != CLOCK_SOURCE:
+            unseen[source.name] = now
     number = facts.source_version
     events: list[NewEvent] = []
+    hashes: dict[str, str] | None = None
+    if unseen and not moved_sources:
+        assert run_query is not None
+        hashes = {q: run_query(owner, q) for q in _queries(view, facts)}
+        if any(hashes[q] != prev for q, prev in _queries(view, facts).items()):
+            moved_sources.update(unseen)
+    elif unseen:
+        moved_sources.update(unseen)
     if moved_sources:
         number += 1
         events.extend(_changed(view, number, cause, moved_sources, moved_records, change_set,
-                               run_query, facts))  # fmt: skip
+                               run_query, facts, hashes))  # fmt: skip
     gone = sorted({r.id for r in expired if r.kind == "record"})
     versions = sorted({f"{r.id}@{r.version}" for r in expired if r.kind == "artifact"})
     if gone or versions:
@@ -147,6 +160,7 @@ def _changed(
     change_set: str | None,
     run_query: QueryRunner | None,
     facts: SourceFacts,
+    hashes: Mapping[str, str] | None = None,
 ) -> list[NewEvent]:
     owner = view.owner
     payload: dict[str, object] = {
@@ -159,9 +173,8 @@ def _changed(
         payload["change_set"] = change_set
     events = [NewEvent("source.changed", payload)]
     if run_query is not None:
-        queries = {**read_inputs(view, "query"), **facts.queries}
-        for query, previous in sorted(queries.items()):
-            new = run_query(owner, query)
+        for query, previous in sorted(_queries(view, facts).items()):
+            new = hashes[query] if hashes is not None else run_query(owner, query)
             events.append(
                 NewEvent(
                     "query.reexecuted",
@@ -175,6 +188,11 @@ def _changed(
                 )
             )
     return events
+
+
+def _queries(view: LogView, facts: SourceFacts) -> dict[str, str]:
+    """Every recorded query of the owner to the result-set hash last known for it."""
+    return {**read_inputs(view, "query"), **facts.queries}
 
 
 def _moved_records(
