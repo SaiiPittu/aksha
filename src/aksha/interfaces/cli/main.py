@@ -521,35 +521,48 @@ def cmd_inspect(ctx: Context, args: argparse.Namespace) -> int:
 
 
 def cmd_show(ctx: Context, args: argparse.Namespace) -> int:
-    """What the agents saved: every current output, or one output's content as JSON.
+    """What the agents saved: every latest output, or one output's content as JSON.
 
-    ``aksha show`` lists the owner's current artifact versions (``research.matrix@v2``);
+    ``aksha show`` lists the owner's latest artifact versions (``research.matrix@v2``);
     ``aksha show research.matrix`` or ``aksha show research.profile/c01-...`` prints that
-    output's current content. A read over a read-only store, beside a server too.
+    output's latest content. A version an input change has invalidated, or one waiting on
+    such a version, is marked stale (its freshness in the invalidation view, ADR-P05 D4)
+    until its rebuild saves a new one. A read over a read-only store, beside a server too.
     """
     from aksha.runtime.artifacts.versions import all_versions, current
     from aksha.runtime.canonical import thaw
+    from aksha.runtime.invalidation.types import STALE_STATES
+    from aksha.runtime.invalidation.view import invalidation_view
 
     store = open_reader(ctx.config)
     try:
         view = load_view(store, ctx.owner)
         blobs = open_blob_store(ctx.config.storage)
+        iv = invalidation_view(view, blobs=blobs)
+
+        def freshness(ref: object) -> str:
+            state = iv.versions.get(str(ref))
+            return "current" if state is None else str(state.freshness)
+
         if args.output is None:
             slots = sorted({(v.ref.kind, v.ref.key) for v in all_versions(view)},
                            key=lambda s: (s[0], s[1] or ""))  # fmt: skip
             for kind, key in slots:
                 found = current(view, kind, key)
                 if found is not None:
-                    ctx.say(str(found.ref))
+                    state = freshness(found.ref)
+                    mark = f" (stale: {state})" if state in STALE_STATES else ""
+                    ctx.say(f"{found.ref}{mark}")
             return wire.EXIT_OK
         kind, _, key = args.output.partition("/")
         found = current(view, kind, key or None, blobs=blobs)
+        shown = None if found is None else freshness(found.ref)
     finally:
         store.close()
     if found is None:
         ctx.say(f"no output {args.output}")
         return wire.EXIT_REFUSED
-    ctx.emit({"ref": str(found.ref), "content": thaw(found.content)})
+    ctx.emit({"ref": str(found.ref), "freshness": shown, "content": thaw(found.content)})
     return wire.EXIT_OK
 
 

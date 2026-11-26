@@ -11,9 +11,10 @@ Selectors:
 
 ``where:<column>=<value>[|<value>...]``
     The rows of a CSV record whose ``column`` holds one of the values, with the header
-    line. The part's text is the header line and each matching row's raw line, in file
-    order (a row is one line; a quoted line break inside a row is not supported). A
-    record that is not CSV, or has no such column, has no such part (None).
+    line. The part's text is the header row and each matching row's raw text, in file
+    order. A row is one logical CSV row: a quoted field may hold line breaks, and its
+    continuation lines belong to the row. A record that is not CSV, or has no such
+    column, has no such part (None).
 
 Any other fragment names the whole record: its version is the record's own.
 """
@@ -40,19 +41,37 @@ def part_text(text: str, fragment: str) -> str | None:
     if not sep:
         return None
     values = set(raw_values.split("|"))
-    lines = text.splitlines(keepends=True)
-    if not lines:
+    rows = _rows(text)
+    if not rows:
         return None
-    header = next(csv.reader(io.StringIO(lines[0])), [])
+    header = next(csv.reader(io.StringIO(rows[0])), [])
     if column not in header:
         return None
     at = header.index(column)
-    kept = [lines[0]]
-    for line in lines[1:]:
-        cells = next(csv.reader(io.StringIO(line)), [])
+    kept = [rows[0]]
+    for row in rows[1:]:
+        cells = next(csv.reader(io.StringIO(row)), [])
         if at < len(cells) and cells[at] in values:
-            kept.append(line)
+            kept.append(row)
     return "".join(kept)
+
+
+def _rows(text: str) -> list[str]:
+    """``text``'s logical CSV rows, each as its raw text.
+
+    A row ends at a line break outside quotes, so a quoted field's line breaks stay inside
+    it (an escaped quote is two quotes, which keeps the count's parity).
+    """
+    rows: list[str] = []
+    pending = ""
+    for line in text.splitlines(keepends=True):
+        pending += line
+        if pending.count('"') % 2 == 0:
+            rows.append(pending)
+            pending = ""
+    if pending:
+        rows.append(pending)
+    return rows
 
 
 def part_version(text: str, fragment: str, whole: str) -> str | None:

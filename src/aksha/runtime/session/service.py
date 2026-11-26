@@ -67,6 +67,7 @@ from aksha.runtime.interrupts.types import ApprovalView
 from aksha.runtime.invalidation.commands import (
     accept_review,
     apply_source_change,
+    check_sources,
     reject_review,
 )
 from aksha.runtime.invalidation.ports import InputWorkspace, QueryRunner, VersionedSource
@@ -250,6 +251,7 @@ class Session:
         self.run_query = run_query
         self.rebuilds = rebuilds
         self._executors: dict[str, StepExecutor] = {}
+        self._inputs_checked: set[str] = set()
         self._unavailable: dict[str, dict[str, str]] = {}
         startable = {
             a.name: Startable(a.routable(), a.run_fields())
@@ -277,6 +279,8 @@ class Session:
         """Commit ``command`` with its receipt, or return the stored receipt of a retry."""
         if type(command).__name__ not in self.commands():
             return self._unsupported(command)
+        if command.owner not in self._inputs_checked:
+            self.check_inputs(self.store, command.owner)
         if isinstance(command, n.SendMessage):
             return self._send(command)
         if isinstance(command, n.AnswerInterrupt):
@@ -326,6 +330,19 @@ class Session:
         if isinstance(command, n.UploadInputs):
             return self._upload(command)
         return self._unsupported(command)
+
+    def check_inputs(self, store: EventStore, owner: str) -> tuple[str, ...]:
+        """Recovery's source check over the owner's inputs (ADR-P05 S2, amendment G5).
+
+        An upload writes the files, then records what moved. A process that stops between
+        the two leaves files on disk the log has not seen; this records what they moved,
+        cause ``recovery``, so work built on the old inputs reopens. It runs in recovery and
+        before an owner's first command in this process. Returns the sources that moved.
+        """
+        self._inputs_checked.add(owner)
+        if self.inputs is None:
+            return ()
+        return check_sources(store, owner, (self.inputs,), run_query=self.run_query)
 
     def _versioned(self) -> tuple[VersionedSource, ...]:
         return (*self.sources, *(() if self.inputs is None else (self.inputs,)))
@@ -558,6 +575,7 @@ class Session:
         route = None if self.router is None else self.router.route_check
         outbox = None if not self.systems else self._worker
         return recover_on_startup(self.store, self.loaded(), outbox=outbox,
+                                  source_check=self.check_inputs,
                                   route_check=route)  # fmt: skip
 
     def resume(self, owner: str) -> tuple[str, ...]:
@@ -575,7 +593,8 @@ class Session:
         blocked = self._blocked(owner)
         self._unavailable.setdefault(owner, {}).update(blocked)
         return resume_owner(self.store, owner, driver, clock=self.clock, loaded=self.loaded(),
-                            outbox=self._outbox(owner), skip=blocked)  # fmt: skip
+                            outbox=self._outbox(owner), source_check=self.check_inputs,
+                            skip=blocked)  # fmt: skip
 
     def drive_rebuilds(self, owner: str) -> tuple[DriveResult, ...]:
         """Open and drive the rebuild runs each loaded agent needs, until none opens (ADR-P05 D8).

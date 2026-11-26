@@ -186,3 +186,87 @@ def test_an_upload_that_moves_a_file_back_is_recorded_even_with_a_derived_comman
         assert changes() == seen[2]
     finally:
         session.store.close()
+
+
+def test_files_written_without_their_record_are_recorded_by_recovery_and_reopen_work(
+    tmp_path: Path,
+) -> None:
+    """A process that stops between writing an upload and recording it leaves the change
+    unseen; recovery's source check records it, so the work built on the old file reopens.
+    """
+    from aksha.app import open_session
+    from aksha.runtime.canonical import thaw
+    from tests.support.session import config
+
+    code, out = aksha(tmp_path, "run", PROMPT, "--agent", "research", "--input", str(TILLDEW))
+    assert code == wire.EXIT_OK, out
+    path = "exports/farmer-reviews.csv"
+    edited = (
+        (TILLDEW / path)
+        .read_text(encoding="utf-8")
+        .replace("Too expensive for a two-acre plot.", "Too expensive.")
+    )
+
+    def recovered() -> list[dict[str, object]]:
+        return [
+            thaw(e.payload)
+            for e in session.store.read("o1")
+            if e.type == "source.changed" and thaw(e.payload).get("cause") == "recovery"
+        ]
+
+    session = open_session(
+        config(tmp_path, agent_paths=(DEFAULT_AGENTS,), extension_paths=(DEFAULT_EXTENSIONS,))
+    )
+    try:
+        assert session.inputs is not None
+        assert session.inputs.put("o1", {path: edited.encode("utf-8")})  # the crash: no record
+        assert recovered() == []
+        session.resume("o1")
+        (change,) = recovered()
+        assert f"input/{path}" in json.dumps(change)
+        session.resume("o1")  # nothing moved since: nothing more is recorded
+        assert len(recovered()) == 1
+    finally:
+        session.store.close()
+
+    # Until a rebuild saves new versions, show marks what the change invalidated.
+    code, out = aksha(tmp_path, "show")
+    assert code == wire.EXIT_OK, out
+    stale = [line for line in out.splitlines() if line.endswith("(stale: invalidated)")]
+    assert any(line.startswith("research.needs@") for line in stale), out
+    assert "research.scope@v1" in out.splitlines(), out  # the scope read no review row
+    code, out = aksha(tmp_path, "show", "research.needs")
+    assert code == wire.EXIT_OK and json.loads(out)["freshness"] == "invalidated", out
+
+
+def test_a_server_session_records_unseen_input_files_before_the_owners_first_command(
+    tmp_path: Path,
+) -> None:
+    from aksha.app import open_session
+    from aksha.runtime.canonical import thaw
+    from tests.support.session import config
+
+    code, out = aksha(tmp_path, "run", PROMPT, "--agent", "research", "--input", str(TILLDEW))
+    assert code == wire.EXIT_OK, out
+    path = "exports/farmer-reviews.csv"
+    edited = (
+        (TILLDEW / path)
+        .read_text(encoding="utf-8")
+        .replace("Too expensive for a two-acre plot.", "Too expensive.")
+    )
+    session = open_session(
+        config(tmp_path, agent_paths=(DEFAULT_AGENTS,), extension_paths=(DEFAULT_EXTENSIONS,))
+    )
+    try:
+        assert session.inputs is not None
+        session.inputs.put("o1", {path: edited.encode("utf-8")})
+        receipt = session.dispatch(n.UploadInputs(owner="o1", files={"other.md": "# Other\n"}))
+        assert receipt.accepted
+        causes = [
+            thaw(e.payload).get("cause")
+            for e in session.store.read("o1")
+            if e.type == "source.changed" and f"input/{path}" in json.dumps(thaw(e.payload))
+        ]
+        assert causes == ["recovery"], causes
+    finally:
+        session.store.close()
