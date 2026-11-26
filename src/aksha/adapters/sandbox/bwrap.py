@@ -20,6 +20,15 @@ What a box gets (decisions 3, 4, 7):
   namespace, not every process of the host user. The wall time is the host's: at the
   deadline the box's process group is killed, and bubblewrap's ``--die-with-parent`` and
   its PID namespace take every child with it.
+- **Budgets for the whole box while it runs.** ``prlimit`` limits are per process, and the
+  writable paths are host folders that bubblewrap's ``--size`` does not cap. A watcher on
+  the host samples the box every ``WATCH_INTERVAL_S``: the private memory of every process
+  in it (``RssAnon`` summed over bubblewrap's descendants) against ``memory_mb``, and the
+  space and entries under the writable paths against ``max_collect_bytes`` and
+  ``MAX_WORK_ENTRIES``. A breach kills the box at once: memory comes back ``exec_limit``,
+  storage ``output_rejected``, each with a denial. The bound is sampled, not exact: between
+  two samples a program can go over by what it allocates or writes in one interval, each
+  file still capped at ``max_file_bytes`` and each process at ``memory_mb``.
 
 After the program exits, every regular file under a writable path is collected, never
 following a symlink (each one skipped is a ``symlink`` denial), up to
@@ -70,6 +79,9 @@ PRLIMIT = "/usr/bin/prlimit"
 HOST_ENV = {"PATH": "/usr/bin:/bin"}
 """The environment bubblewrap itself starts with; ``--clearenv`` clears it for the box."""
 BASE_PATH = "/usr/local/bin:/usr/bin:/bin"
+WATCH_INTERVAL_S = 0.02
+MAX_WORK_ENTRIES = 10_000
+"""The most files and folders the writable paths may hold while a box runs."""
 SIGNAL_LIMITS = frozenset({128 + signal.SIGXCPU, 128 + signal.SIGXFSZ})
 _DENIALS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
     ("write", re.compile(rb"Read-only file system|Permission denied")),
@@ -136,6 +148,94 @@ class _Capped:
                     self.data.extend(chunk[:room])
                 if len(chunk) > max(room, 0):
                     self.truncated = True
+
+
+def _descendants(root: int) -> list[int]:
+    """``root`` and every process below it, from ``/proc``.
+
+    Orphans in the box reparent to the box's own init, which is below ``root``.
+    """
+    children: dict[int, list[int]] = {}
+    for entry in os.scandir("/proc"):
+        if not entry.name.isdigit():
+            continue
+        with contextlib.suppress(OSError, ValueError, IndexError):
+            stat_line = Path(entry.path, "stat").read_text()
+            ppid = int(stat_line[stat_line.rindex(")") + 2 :].split()[1])
+            children.setdefault(ppid, []).append(int(entry.name))
+    out, todo = [], [root]
+    while todo:
+        pid = todo.pop()
+        out.append(pid)
+        todo.extend(children.get(pid, ()))
+    return out
+
+
+def _anon_bytes(pid: int) -> int:
+    with contextlib.suppress(OSError, ValueError):
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("RssAnon:"):
+                return int(line.split()[1]) * 1024
+    return 0
+
+
+def _work_usage(roots: list[Path], max_entries: int) -> tuple[int, int]:
+    """Bytes allocated and entries under ``roots``, never following a symlink.
+
+    The walk stops early once it is past ``max_entries``.
+    """
+    used = entries = 0
+    for top in roots:
+        if top.is_symlink() or not top.is_dir():
+            continue
+        for folder, dirs, names in os.walk(top, followlinks=False):
+            for name in (*dirs, *names):
+                entries += 1
+                with contextlib.suppress(OSError):
+                    used += os.lstat(os.path.join(folder, name)).st_blocks * 512
+            if entries > max_entries:
+                return used, entries
+    return used, entries
+
+
+class _Watch:
+    """Samples a running box's memory and writable storage; kills it on a breach (module doc)."""
+
+    def __init__(self, box: _Box, pid: int, roots: list[Path], limits: Limits) -> None:
+        self.breach: Denial | None = None
+        self._box, self._pid, self._roots, self._limits = box, pid, roots, limits
+        self._stop = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def stop(self) -> None:
+        self._stop.set()
+        self.thread.join(5)
+
+    def _sample(self) -> Denial | None:
+        memory = self._limits.memory_mb * 1_048_576
+        anon = sum(_anon_bytes(pid) for pid in _descendants(self._pid))
+        if anon > memory:
+            return Denial("limit", f"box memory {anon} bytes over {memory}")
+        cap = self._limits.max_collect_bytes
+        used, entries = _work_usage(self._roots, MAX_WORK_ENTRIES)
+        if used > cap:
+            return Denial("output", f"writable paths hold {used} bytes, over {cap}")
+        if entries > MAX_WORK_ENTRIES:
+            return Denial("output", f"writable paths hold over {MAX_WORK_ENTRIES} entries")
+        return None
+
+    def _run(self) -> None:
+        while not self._stop.wait(WATCH_INTERVAL_S):
+            found = self._sample()
+            if found is not None:
+                self.breach = found
+                self._box.terminate()
+                return
+
+
+def _writable_roots(work: Path, policy: ExecPolicy) -> list[Path]:
+    return [work] if "." in policy.writable else [work / w for w in policy.writable]
 
 
 class BwrapSandbox:
@@ -276,6 +376,7 @@ class BwrapSandbox:
         box = _Box(proc)
         unit.attach(box)
         timed_out = False
+        watch = _Watch(box, proc.pid, _writable_roots(work, request.policy), limits)
         try:
             out = _Capped(_pipe(proc.stdout), limits.max_output_bytes)
             err = _Capped(_pipe(proc.stderr), limits.max_output_bytes)
@@ -290,12 +391,14 @@ class BwrapSandbox:
                 timed_out = True
                 box.terminate()
                 proc.wait()
+            watch.stop()
             if _group_alive(proc.pid):  # anything the program left running goes too
                 box.terminate()
             out.thread.join(5)
             err.thread.join(5)
             feeder.join(5)
         finally:
+            watch.stop()
             unit.detach()
             for stream in (proc.stdin, proc.stdout, proc.stderr):
                 if stream is not None:
@@ -304,9 +407,19 @@ class BwrapSandbox:
         code = proc.returncode
         stdout, stderr = bytes(out.data), bytes(err.data)
         denials = list(_denials(stderr))
-        collected, rejected = _collect(work, request.policy, denials)
+        breach = watch.breach
+        if breach is not None:
+            denials.append(breach)
+            timed_out = False  # the breach killed the box, not the deadline
+        collected: dict[str, bytes]
+        if breach is not None and breach.kind == "output":
+            collected, rejected = {}, True
+        else:
+            collected, rejected = _collect(work, request.policy, denials)
         status: ExecStatus
-        if timed_out:
+        if breach is not None:
+            status = "exec_limit" if breach.kind == "limit" else "output_rejected"
+        elif timed_out:
             status = "exec_timeout"
         elif rejected:
             status = "output_rejected"
@@ -380,8 +493,7 @@ def _collect(
     out: dict[str, bytes] = {}
     total = 0
     protected = policy.protected
-    roots = [work] if "." in policy.writable else [work / w for w in policy.writable]
-    for top in roots:
+    for top in _writable_roots(work, policy):
         if top.is_symlink() or not top.is_dir():
             continue
         for folder, dirs, names in os.walk(top, followlinks=False):

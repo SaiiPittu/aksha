@@ -217,6 +217,40 @@ def test_the_memory_limit_holds() -> None:
 
 
 @needs_box
+def test_the_memory_budget_is_for_the_whole_box_not_each_process() -> None:
+    """Decision 7: forked processes each under the per-process cap still meet the box budget."""
+    child = ("import time\nb = bytearray(120_000_000)\n"
+             "for i in range(0, len(b), 4096): b[i] = 1\ntime.sleep(8)")  # fmt: skip
+    script = f"for i in 1 2 3 4; do python3 -c '{child}' & done; wait"
+    started = time.monotonic()
+    got = _run(sh(script), policy=ExecPolicy.of(limits=Limits(wall_ms=20_000, memory_mb=200)))
+    assert got.status == "exec_limit" and time.monotonic() - started < 7
+    assert any(d.kind == "limit" and "box memory" in d.detail for d in got.denials)
+
+
+@needs_box
+def test_writable_storage_is_bounded_while_the_program_runs() -> None:
+    """Decision 7: the writable paths cannot grow past the collect cap before the exit."""
+    policy = ExecPolicy.of(limits=Limits(wall_ms=20_000, max_collect_bytes=4_000_000))
+    script = "for i in $(seq 10); do head -c 1000000 /dev/zero > out/f$i; done; sleep 9"
+    started = time.monotonic()
+    got = _run(sh(script), policy=policy)
+    assert got.status == "output_rejected" and got.collected == {}
+    assert time.monotonic() - started < 7
+
+
+@needs_box
+def test_writable_entries_are_bounded_while_the_program_runs() -> None:
+    script = ("import time\nfor i in range(20_000): open(f'out/e{i}', 'w').close()\n"
+              "time.sleep(9)")  # fmt: skip
+    started = time.monotonic()
+    got = _run(("python3", "-c", script),
+               policy=ExecPolicy.of(limits=Limits(wall_ms=20_000)))  # fmt: skip
+    assert got.status == "output_rejected" and time.monotonic() - started < 7
+    assert any(d.kind == "output" and "entries" in d.detail for d in got.denials)
+
+
+@needs_box
 def test_the_file_size_limit_holds() -> None:
     policy = ExecPolicy.of(limits=Limits(wall_ms=10_000, max_file_bytes=1_000))
     got = _run(sh("head -c 5000 /dev/zero > out/big"), policy=policy)

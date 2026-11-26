@@ -333,7 +333,7 @@ src/aksha/
 │   ├── sandbox/                             sandbox backends and kill units (tier 3)
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
-│   │   └── bwrap.py                         BwrapSandbox: os-jail, allowlisted root, no network, prlimit limits, group kill
+│   │   └── bwrap.py                         BwrapSandbox: os-jail, allowlisted root, no network, prlimit limits, sampled box budgets, group kill
 │   ├── egress/                              the network under the runtime's HTTP client (ADR-P26)
 │   │   ├── __init__.py                      what is built
 │   │   └── network.py                       SocketResolver, HttpTransport: connect to the checked address, TLS by host name
