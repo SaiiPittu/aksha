@@ -508,9 +508,10 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     """Run one command; returns its exit code (see :mod:`aksha.interfaces.wire`)."""
     stream = out or sys.stdout
     arguments = list(sys.argv[1:] if argv is None else argv)
+    first = _command_index(arguments)
+    if first < len(arguments) and arguments[first] == "eval":
+        return evals.main(arguments[first + 1 :])
     args = build_parser().parse_args(arguments)
-    if args.command == "eval":
-        return evals.main(args.rest)
     config = RuntimeConfig.from_env(os.environ if env is None else env)
     ctx = Context(config, args.user, stream, arguments)
     handler: Callable[[Context, argparse.Namespace], int] = args.handler
@@ -534,6 +535,19 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     except AkshaError as e:
         ctx.say(f"refused: {e.code}: {e.message}")
         return wire.EXIT_REFUSED
+
+
+def _command_index(arguments: Sequence[str]) -> int:
+    """Where the command word sits, past the global ``--user`` option."""
+    i = 0
+    while i < len(arguments):
+        if arguments[i] == "--user":
+            i += 2
+        elif arguments[i].startswith("--user="):
+            i += 1
+        else:
+            return i
+    return i
 
 
 def _server_exit(status: int) -> int:
