@@ -36,5 +36,9 @@ typecheck:
 check: lint typecheck test
 
 ## The change-and-recovery demo: offline, fake models, no keys, about 20 seconds. Writes var/demo/.
-demo:
+## On a fresh clone this creates the virtual environment first, so it is one command.
+demo: $(BIN)/python
 	$(BIN)/python -m aksha.interfaces.demo
+
+$(BIN)/python:
+	$(MAKE) venv
