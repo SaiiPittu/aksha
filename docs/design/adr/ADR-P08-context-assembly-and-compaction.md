@@ -76,6 +76,10 @@ These follow pattern P-5, the context window is a rendering, not a ledger: the e
 
 The cost: masking a position in the middle of a context changes every byte after it, so a provider's prefix cache is lost from the first masked point onward. Because a result once masked stays masked (decision 5), the loss is paid once per change, not on every turn. The compaction policy takes it as an input. My lean, Proposed: when the savings are close, mask later positions first, and group masking into one turn rather than spreading it across several.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, an effect step records its success view (D4). A tool step's model view is made once, at record time, and stored under `value["view"]`; a step with no view is shown to the model as `{"status": "error", "code": ...}`. A step that ran an external effect through the outbox (the `outbox` route, or the `approval` route once granted) recorded the key, ledger and receipt but no view, so a delivery that landed was shown to the model as an error with code `ok`. `step_result` (`outbox/worker.py`) now records the view of `{"key", "ledger_id", "receipt"}` as a success on `outbox.completed`, on every path that ends the step (a drain, a finish, recovery, and a step that ends on an equal entry already delivered). Abandoned and unknown outcomes still record no view and are shown their outcome and code. The view uses the default 8,000-character cap: a receipt is a system's short reference, and the outbox worker holds no agent's context policy.
+
 ## Alternatives considered
 
 | Option | For | Against |
