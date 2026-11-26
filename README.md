@@ -37,7 +37,8 @@ export AKSHA_SOURCES=corpus=fixtures/worlds/stillroom/sources   # the folder the
 aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research
 # session S-...
 # R-0001 research waiting
-#   waiting for input (question) I-0001: aksha answer I-0001 TEXT          (exit code 3)
+#   waiting for input (question) I-0001: aksha answer I-0001 TEXT
+#     asks: Which geography should this cover? Prices are listed in EUR and USD and ...  (exit code 3)
 
 aksha answer I-0001 EU       # the agent asked which geography to cover
 # R-0001 research ended complete                                          (exit code 0)
@@ -54,6 +55,39 @@ AKSHA_SANDBOX=bwrap:os-jail aksha run "Who sells camera-free occupancy sensing f
 ```
 
 `AKSHA_SANDBOX` is a declaration by the operator, not a probe: no sandbox backend is built yet, so setting it confines nothing (see the limitations). With `--agent` left out, the router picks the agent from the loaded agents' purposes. State lives in `var/`; delete it to start again.
+
+The patent agent runs end to end the same way, up to an approved send. Every waiting line says what is being asked:
+
+```sh
+rm -rf var                   # an empty store, so the IDs below match
+export AKSHA_SOURCES=patent_sources=fixtures/worlds/stillroom/sources
+
+aksha run "Assess the four invention candidates and prepare the chosen one for counsel." --agent patent
+#   waiting for input (missing detail) I-0001: aksha answer I-0001 TEXT
+#     asks: C2: the note leaves Minimum distance from a vent undecided. What is it?   (exit code 3)
+aksha answer I-0001 "0.5 m from the vent edge"
+#   waiting for choice (candidate selection) I-0002: aksha answer I-0002 TEXT
+#     options: C1, C2, C3, C4                                              (exit code 3)
+aksha answer I-0002 C1
+#   waiting for approval A-0001: aksha approve A-0001 --signature v1:...
+#     approves: send_packet
+#     packet: patent.packet/C1@v1
+#     recipient: counsel-primary                                           (exit code 4)
+
+aksha approve A-0001 --signature v1:<the first 12 or more digits shown>
+# refused: system_unavailable (...)                                       (exit code 7)
+```
+
+Nothing is set up to receive the packet by default, so the approval is refused `system_unavailable`: nothing is approved, the run keeps waiting on the same approval, and your other commands go on working. For development, bind the patent agent's `counsel_mail` to the mock mailbox `make demo` uses, a JSON file that delivers once per key and reaches no one; every command then says it is a mock:
+
+```sh
+export AKSHA_SYSTEMS=counsel_mail=mailbox:var/mock-counsel
+aksha approve A-0001 --signature v1:<the first 12 or more digits shown>
+# mock: counsel_mail is a development mailbox at var/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
+# R-0001 patent ended complete                                            (exit code 0)
+```
+
+`var/mock-counsel/mailbox.json` then holds one delivery; approving again is refused `already_decided` and delivers nothing.
 
 ## Architecture in one page
 
@@ -152,10 +186,12 @@ The eval runner (P22) treats each fixture world as an environment: an episode re
 aksha eval list              # suites, their cases and the registered agents
 aksha eval selftest          # the grader self-tests for every world
 aksha eval run scripted      # self-tests, then every case of the scripted suite
+aksha eval run research      # the research agent on the runtime, fake model, both worlds
+aksha eval run patent        # the patent agent on the runtime, fake model, both worlds
 aksha eval key-check         # recompute every answer key's anchors and counts
 ```
 
-In the run on 26 Nov 2026 the self-tests passed with 33 of 33 gradeable criteria killed by their mutants, and the scripted suite passed 7 of 7 cases. In fake model mode the rates are plumbing checks, not reliability, and the report says so on its second line. Results go to `var/evals/<suite>-<seed>/`. The research and patent suites are written and key-checked, but their agents are not registered for evals yet, so `aksha eval run research` is refused `agent_not_registered`. The details are in [docs/evals/README.md](docs/evals/README.md).
+In the run on 26 Nov 2026 the self-tests passed with 33 of 33 gradeable criteria killed by their mutants, and the scripted suite passed 7 of 7 cases. The research and patent agents run as they ship, with their own tools reading through the episode: the research suite passed 11 of 11 episodes (6 of 6 cases), and its verdict is still fail because `rel.same_calls` fails on every invariance pair (the agent profiles companies in name order, so a rename reorders its reads, though its outputs agree); the patent suite passed 16 of 17 episodes (8 of 9 cases), the miss being `s8b-injection-patent`, whose injected instruction sits on a competitor page the patent agent never reads. In fake model mode the rates are plumbing checks, not reliability, and the report says so on its second line. Results go to `var/evals/<suite>-<seed>/`. The details are in [docs/evals/README.md](docs/evals/README.md).
 
 ## The primitives
 
@@ -240,7 +276,7 @@ A hash chain is tamper-evident, not tamper-proof: anyone who can open the databa
 As of 26 Nov 2026:
 
 1. **No sandbox backend.** Nothing confines a tool call yet (P12). A headless run is refused `sandbox_required` unless `AKSHA_SANDBOX` declares one, and that variable is the operator's word, not a check: Aksha does not probe for or start the sandbox it names. Exec steps can be bounded and killed by process group, not confined.
-2. **The patent agent's send does not run from the command line.** `aksha run --agent patent` (with `AKSHA_SOURCES=patent_sources=...`) reaches its approval, but approving it is refused `effect_needs_outbox`: no extension contributes the mock mailbox to the CLI's session, so only the demo and the tests deliver the packet. A refused approval also leaves that run open, and later embedded commands for the same user are then refused the same way, so try it on a store of its own (`AKSHA_SQLITE_PATH`).
+2. **The only system of record is a mock.** An approved send from the command line goes to the development mailbox `AKSHA_SYSTEMS` binds (a JSON file); no real mail or document system is built. Without the setting the approval is refused `system_unavailable` and the run keeps waiting. A run that was approved by a process with the mailbox and resumed by one without it waits too, and says why, while the owner's other runs go on; recovery still refuses an owner with an unfinished send and no system for it.
 3. **OTLP/HTTP export is not built.** Traces go to local OTLP JSON Lines files only; sending them to a collector over HTTP is designed (P21) and not built.
 4. **Steering is unsupported.** The `Steer` command type exists, but the session API refuses it `unsupported` and the capability record does not list it (P27 is designed).
 5. **A rebuilt Task starts from a fresh context.** When invalidation rebuilds work, the rebuilt instance starts from a fresh context that opens with what changed (`rebuild_brief`); that is the default. Resuming the instance in its own recorded history, with stale tool results masked and a change notice, is built (decision 36) but off by default: a run opts in with `AKSHA_REENTRY=resume`, and a resume that hits a named trigger (a moved premise, a blocked or looping session, injected text, a changed definition, a session over budget) falls back to fresh. Resume becomes the default only if the measured comparison of the two shows it does better; that comparison has not run yet.
@@ -249,13 +285,13 @@ As of 26 Nov 2026:
 8. **Erasure is open.** An append-only, hash-chained store and erasing personal data pull in opposite directions; P30 lists options and picks none.
 9. **One Task instance at a time.** Concurrency above one and keyed children below the top level are refused by the loader.
 10. **Offline only, in practice.** `AKSHA_MODE` accepts only `fake`. A live generation adapter exists but is never tested against a live server, and there is no live extraction or classification adapter.
-11. **Evals cover the scripted agent only, and the coding agent has never run.** The research and patent agents have eval suites but no eval adapter yet; the rule of three is a reading for the third agent, not a run.
+11. **Evals run in fake model mode only, and the coding agent has never run.** The research and patent agents run their suites on the runtime with rule-based fakes, so the numbers are plumbing checks; replay and live modes are not built. The rule of three is a reading for the third agent, not a run.
 
 ## Roadmap
 
 [docs/design/05-future-directions.md](docs/design/05-future-directions.md) records what an unattended software factory needs on top of the first release, each item an extension of an existing primitive: a stronger isolation tier for untrusted code (X-1), a halt-everything stop (X-2), repeated denials that ask a person (X-3), per-agent identity and credentials (X-4), an untrusted-origin mark that follows lineage (X-5), a conversation view and a cross-run approval inbox (X-6), and runs started by incoming events (X-7). X-1 to X-7 are designed and not built; X-8, the hash-chained event store, is built, with external anchoring next.
 
-The nearer steps: a sandbox backend behind the P12 port, the example agents on the command line, OTLP/HTTP export, and the measured comparison of fresh and resumed rebuild contexts.
+The nearer steps: a sandbox backend behind the P12 port, a real system of record behind the outbox, OTLP/HTTP export, and the measured comparison of fresh and resumed rebuild contexts.
 
 ## Development
 
