@@ -112,7 +112,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P24 | Partial results and finalization | built | Explicit unknowns, the `blocked` outcome, finalize on a budget interrupt |
 | P25 | Durable timers and recorded time | built | Timers as facts that survive a crash, approval expiry, freshness rechecks, the date as a recorded read that a new day invalidates |
 | P26 | Egress policy | built | Deny by default; the runtime's HTTP client checks every resolved address and every redirect, and records each decision |
-| P27 | Steering and follow-up input | designed | The `Steer` command type exists and is refused `unsupported` |
+| P27 | Steering and follow-up input | built | `Steer` in three lanes (steer, follow-up, amend) as durable facts, through the session API, HTTP and `aksha steer` |
 | P28 | Execution environment image | built | Images keyed by a content hash of the spec and lock files, first build approved, packages fetched under egress and hash-checked, installed offline, recorded, mounted read-only at `/env` |
 | P29 | External record state | designed | |
 | P30 | Erasure in an append-only store | planned | |

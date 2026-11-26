@@ -38,12 +38,15 @@ from aksha.runtime.budgets.limits import turns_used
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.cancellation.ending import ending_facts
 from aksha.runtime.events.envelope import Event, NewEvent
+from aksha.runtime.execution.types import StepId
 from aksha.runtime.finalization.reserve import held_back
 from aksha.runtime.finalization.unknowns import unknowns_at_end
+from aksha.runtime.inputs.reducers import pending_input
+from aksha.runtime.inputs.types import INPUT_CONSUMED
 from aksha.runtime.interrupts.reducers import INTERRUPT_RAISED, INTERRUPT_VOIDED, pending_interrupts
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy import hold as holds
-from aksha.runtime.stop_policy.core import InterruptPolicy, TaskPolicy, run_ref
+from aksha.runtime.stop_policy.core import PERSON_INPUT, InterruptPolicy, TaskPolicy, run_ref
 from aksha.runtime.stop_policy.errors import StopRefused
 from aksha.runtime.stop_policy.ports import StopPolicy
 from aksha.runtime.stop_policy.stack import derive_stack, task_group
@@ -262,6 +265,18 @@ def _decide(
         else:
             turn = turns_used(log, run, deciding.instance) + 1
             record["turn"] = turn
+    if verdict.kind == "continue" and verdict.code == PERSON_INPUT and deciding is not None:
+        waiting = pending_input(log, deciding)
+        if waiting:
+            record["inputs"] = [i.input_id for i in waiting]
+        if turn is not None:  # ADR-P27 D4: a follow-up is read by the turn it authorises
+            at = str(StepId(run, deciding.instance, turn=turn))
+            out.extend(
+                NewEvent(INPUT_CONSUMED, {"input_id": i.input_id, "by": "stop_policy",
+                                          "step_id": at}, run=run, instance=deciding.instance)
+                for i in waiting
+                if i.lane == "follow_up"
+            )  # fmt: skip
     if verdict.kind == "stop" and verdict.outcome is not None:
         record["outcome"] = verdict.outcome
     if verdict.kind == "hold":

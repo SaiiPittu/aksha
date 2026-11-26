@@ -60,6 +60,8 @@ from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
 from aksha.runtime.execution.recovery import RecoveryReport, recover_on_startup, resume_owner
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.types import ReturnedText
+from aksha.runtime.inputs.commands import steer
+from aksha.runtime.interrupts.amend import amend
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.interrupts.commands import (
     answer,
@@ -284,7 +286,7 @@ class Session:
     def commands(self) -> frozenset[str]:
         """The named commands :meth:`dispatch` carries out here (the capability record's)."""
         out = {"SendMessage", "AnswerInterrupt", "Approve", "Reject", "GrantBudget",
-               "Finalize", "Stop", "AcceptReview", "RejectReview"}  # fmt: skip
+               "Finalize", "Stop", "AcceptReview", "RejectReview", "Steer"}  # fmt: skip
         if any(a.approval_specs() for a in self.agents.values()):
             out |= {"EditAction", "Handoff"}
         if self.sources or self.inputs is not None:
@@ -328,6 +330,12 @@ class Session:
                 return self._not_found(command, command.interrupt_id)
             return finalize(self.store, command.owner, command.interrupt_id, tree=agent.tree,
                             by=command.by, command_id=command.command_id)  # fmt: skip
+        if isinstance(command, n.Steer):
+            trees = {name: a.tree for name, a in self.agents.items()}
+            return steer(self.store, command.owner, command.run_id, command.text,
+                         trees=trees, ids=self.ids, lane=command.lane,
+                         instance=command.instance, by=command.by,
+                         command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.Stop):
             return stop(self.store, command.owner, command.run_id, reason=command.reason,
                         command_id=command.command_id, by=command.by)  # fmt: skip
@@ -349,7 +357,7 @@ class Session:
                                        command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.UploadInputs):
             return self._upload(command)
-        return self._unsupported(command)
+        raise AssertionError(f"{type(command).__name__} has no handler")  # pragma: no cover
 
     def check_inputs(self, store: EventStore, owner: str) -> tuple[str, ...]:
         """Recovery's source check over the owner's inputs (ADR-P05 S2, amendment G5).
@@ -418,6 +426,10 @@ class Session:
         return dispatch(self.store, cmd, self._start)
 
     def _answer(self, command: n.AnswerInterrupt) -> CommandReceipt:
+        if command.amend:
+            return amend(self.store, command.owner, command.interrupt_id, by=command.by,
+                         text=command.text, answers=dict(command.answers) or None,
+                         command_id=command.command_id)  # fmt: skip
         if command.agent is not None:
             if self.router is None:
                 return self._unsupported(command)

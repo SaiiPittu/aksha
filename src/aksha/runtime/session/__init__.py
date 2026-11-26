@@ -6,5 +6,6 @@ that carries them out and drives runs one pass at a time (``service.py``, with t
 command in ``start.py`` and the server's runtime thread in ``worker.py``); the session
 stream with a cursor, a resync and a catch-up marker (``streams.py``); the capability
 record (``capabilities.py``); and the run and session views with the run inspector
-(``views.py``). Planned: ``OpenSession``, ``Steer`` lanes (ADR-P27) and transient items.
+(``views.py``). ``Steer`` (ADR-P27) is dispatched to ``inputs.commands``. Planned:
+``OpenSession`` and transient items.
 """

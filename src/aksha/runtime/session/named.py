@@ -11,6 +11,8 @@ Amendments from the build (ADR-P19, 26 Nov 2026): ``OpenSession`` is not in the 
 because a session is the ID its first message names and no ``session.opened`` fact
 exists; ``SendMessage`` carries ``headless`` (ADR-P11 D12: fixed at the run's start);
 ``AcceptReview`` and ``RejectReview`` carry the shown ``card_hash`` (ADR-P05), not edits.
+Amendments from the build (ADR-P27, 26 Nov 2026): ``Steer`` carries ``instance`` and is
+built; ``AnswerInterrupt`` carries ``amend``.
 """
 
 from __future__ import annotations
@@ -44,12 +46,17 @@ class SendMessage(CommandBase):
 
 @dataclass(frozen=True, kw_only=True)
 class AnswerInterrupt(CommandBase):
-    """An answer to an input, choice or route interrupt (``agent`` for a route only)."""
+    """An answer to an input, choice or route interrupt (``agent`` for a route only).
+
+    ``amend`` corrects an answer already given to an instance's ``input`` interrupt
+    (ADR-P27 D5): the new statement supersedes the old one and reaches invalidation.
+    """
 
     interrupt_id: str
     text: str | None = None
     answers: Mapping[str, str] = field(default_factory=dict)
     agent: str | None = None
+    amend: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -142,10 +149,16 @@ class Finalize(CommandBase):
 
 @dataclass(frozen=True, kw_only=True)
 class Steer(CommandBase):
-    """Input for a running run in a lane (S2, ADR-P27). Reserved: no lane is built."""
+    """A person's message to an open run, in a lane (S2, ADR-P27 D1).
+
+    ``steer`` is rendered before the target instance's next model call, ``follow_up``
+    when it proposes to finish, and ``amend`` corrects the run's last answered question.
+    ``instance`` None targets the run's instance that reaches that point first.
+    """
 
     run_id: str
     text: str
+    instance: str | None = None
     lane: Literal["steer", "follow_up", "amend"] = "steer"
 
 

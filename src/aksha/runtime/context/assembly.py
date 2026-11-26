@@ -17,7 +17,11 @@ The order keeps the stable prefix first, so a provider's prefix cache stays warm
    turns, masked by the plan, then the re-entry notice (``reentry.reentry_notice``).
 4. The recorded summary that stands for the entry's older turns, then the instance's own
    turns since its entry: each reply, then each tool result, masked by the plan. A fresh
-   re-entry shows none of the turns before it.
+   re-entry shows none of the turns before it. The person's steer and follow-up inputs
+   (ADR-P27 D3) stand where they were read: before the reply of the turn whose step
+   consumed them, and the pending steers after the last turn, for this one. The step
+   consumes them (``input.consumed``) and records the person's answers as statement
+   reads, with its result.
 5. ``user``: the change notice (decision 32), the recitation (only once something is
    masked) and the reason the runtime refused the last finish.
 6. The tools the stop policies left (``Prep.tools``), and the ``tool_choice`` hint.
@@ -38,9 +42,11 @@ from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef
 from aksha.runtime.context.masking import plan_masking, stale_reads, turn_messages
 from aksha.runtime.context.notices import (
+    answer_reads,
     answers,
     change_notice,
     continue_reason,
+    person_messages,
     rebuild_at_entry,
     rebuild_brief_for,
     rebuild_notice,
@@ -72,6 +78,8 @@ from aksha.runtime.context.types import (
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.spans import span_index, spans_shown
+from aksha.runtime.inputs.reducers import consumed_by_step, pending_input
+from aksha.runtime.inputs.types import INPUT_CONSUMED, QueuedInput
 from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import GenerationRequest, Message
 from aksha.runtime.projections.view import LogView
@@ -102,6 +110,8 @@ class _Parts:
     tail: tuple[Message, ...]
     tools: tuple[ToolView, ...]
     tool_choice: str | None
+    said: Mapping[str, Message]
+    now: Message | None
 
 
 def _head(
@@ -173,7 +183,13 @@ def _request(
         messages.append(parts.notice)
     if parts.compaction is not None:
         messages.append(summary_message(parts.compaction))
-    messages += turn_messages(parts.turns, by_step)
+    for t in parts.turns:
+        said = parts.said.get(t.step)
+        if said is not None:
+            messages.append(said)
+        messages += turn_messages((t,), by_step)
+    if parts.now is not None:
+        messages.append(parts.now)
     segments = tuple(b.segment for b in parts.session)
     every = (*(t for b in parts.session for t in b.turns), *parts.turns)
     stale = _stale(view, instance, masks, every, blobs, segments)
@@ -220,6 +236,12 @@ def assemble_context(
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)
     reason = continue_reason(v, instance, turn)
+    steers = pending_input(v, instance, lane="steer")
+    said = {
+        at: Message("user", person_messages(found))
+        for at, found in consumed_by_step(v, instance).items()
+        if at != str(step)  # a follow-up of this turn is the tail's reason
+    }  # fmt: skip
     parts = _Parts(
         head=_head(v, instance, inputs, prep, policy, reads, blobs),
         session=session,
@@ -230,6 +252,8 @@ def assemble_context(
         tail=(Message("user", reason),) if reason else (),
         tools=kept,
         tool_choice=prep.tool_choice,
+        said=said,
+        now=Message("user", person_messages(steers)) if steers else None,
     )
 
     def sized(masks: tuple[Masked, ...]) -> int:
@@ -252,7 +276,7 @@ def assemble_context(
         plan=plan,
         compaction=compaction,
         stale=stale,
-        facts=_facts(v, instance, step, reads, notice_reads),
+        facts=_facts(v, instance, step, reads, notice_reads, steers),
     )
 
 
@@ -282,9 +306,10 @@ def _facts(
     step: StepId,
     reads: RenderedReads,
     notice_reads: tuple[InputRef, ...],
+    steers: tuple[QueuedInput, ...] = (),
 ) -> tuple[NewEvent, ...]:
-    """The reads and spans the context showed, to commit with the model step's result."""
-    inputs = (*reads.inputs, *notice_reads)
+    """The reads, spans and person's inputs the context showed, to commit with its step."""
+    inputs = (*reads.inputs, *notice_reads, *answer_reads(view, instance))
     recorded = reads_to_record(
         view, inputs, run=instance.run, instance=instance.instance, step=str(step), via="context"
     )
@@ -292,4 +317,9 @@ def _facts(
     shown = spans_shown(
         span_index(view), spans, run=instance.run, instance=instance.instance, step=str(step)
     )
-    return (*recorded, *shown)
+    consumed = tuple(
+        NewEvent(INPUT_CONSUMED, {"input_id": i.input_id, "by": "context", "step_id": str(step)},
+                 run=instance.run, instance=instance.instance, step=str(step))
+        for i in steers
+    )  # fmt: skip
+    return (*recorded, *shown, *consumed)

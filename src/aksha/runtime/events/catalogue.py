@@ -42,6 +42,9 @@ from aksha.runtime.events.errors import (
 )
 from aksha.runtime.events.stubs import Path, stub_paths, under
 
+_INPUT_ID = {"type": "string", "pattern": "^IN-[0-9]{4,}$"}
+"""An input ID (ADR-P27), used by ``input.*`` and ``stop.decided{inputs}``."""
+
 PAYLOAD_CAP_BYTES = 64 * 1024
 """The largest payload, in bytes of canonical JSON (ADR-P01 D7; a placeholder to measure)."""
 
@@ -604,6 +607,8 @@ STOP_DECIDED = EventTypeSpec(
             "replaced": _POLICY_VERDICT,
             "outcome": {"enum": ["complete", "partial", "blocked", "failed", "stopped"]},
             "interrupt": {"type": "string", "minLength": 1},
+            # ADR-P27 D4: the person's pending inputs a CONTINUE turned a finish into.
+            "inputs": {"type": "array", "items": _INPUT_ID, "minItems": 1},
         },
         "required": ["walk", "verdict"],
         "additionalProperties": False,
@@ -1497,6 +1502,69 @@ SOURCE_EXPIRED = EventTypeSpec(
     boundaries=frozenset({"U8"}),
 )
 
+# --- P27 steering and follow-up input (``inputs/``) -----------------------------------
+# A person's message to an open run commits ``input.queued`` with its command receipt
+# (U4). ``input.consumed`` commits with what rendered or applied it: a model step's
+# result (U2), the stop decision whose finish it vetoed (U3) or the amendment's own
+# transaction (U4). ``interrupt.amended`` records a corrected answer beside the statement
+# span that supersedes the old one.
+
+INPUT_QUEUED = EventTypeSpec(
+    name="input.queued",
+    schema={
+        "type": "object",
+        "properties": {
+            "input_id": _INPUT_ID,
+            "lane": {"enum": ["steer", "follow_up", "amend"]},
+            "text": {"type": "string", "minLength": 1},
+            "instance": {"type": ["string", "null"]},
+            "by": {"type": "string", "minLength": 1},
+            "command_id": {"type": "string", "minLength": 1},
+        },
+        "required": ["input_id", "lane", "text", "instance", "by", "command_id"],
+        "additionalProperties": False,
+    },
+    writer="inputs",
+    boundaries=frozenset({"U4"}),
+    dedup_key="input:{input_id}",
+)
+INPUT_CONSUMED = EventTypeSpec(
+    name="input.consumed",
+    schema={
+        "type": "object",
+        "properties": {
+            "input_id": _INPUT_ID,
+            "by": {"enum": ["context", "stop_policy", "amend"]},
+            "step_id": {"type": "string", "minLength": 1},
+            "interrupt": {"type": "string", "minLength": 1},
+        },
+        "required": ["input_id", "by"],
+        "additionalProperties": False,
+    },
+    writer="inputs",
+    boundaries=frozenset({"U2", "U3", "U4"}),
+)
+INTERRUPT_AMENDED = EventTypeSpec(
+    name="interrupt.amended",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            "by": {"type": "string", "minLength": 1},
+            "answers": {
+                "type": "object",
+                "additionalProperties": {"type": "string", "minLength": 1},
+                "minProperties": 1,
+            },
+            "input_id": _INPUT_ID,
+        },
+        "required": ["interrupt", "by", "answers"],
+        "additionalProperties": False,
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U4"}),
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -1548,6 +1616,9 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     TIMER_FIRED,
     TIMER_CANCELLED,
     SOURCE_EXPIRED,
+    INPUT_QUEUED,
+    INPUT_CONSUMED,
+    INTERRUPT_AMENDED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

@@ -11,8 +11,10 @@
    since. :func:`rebuild_brief_for` reads it from the log as it stood when the instance
    was re-entered, so it never changes mid-entry. A resumed re-entry gets none; its
    notice is ``reentry.reentry_notice``.
-4. :func:`answers` (interrupt answers for this instance, never reduced) and
-   :func:`continue_reason` (why the runtime refused the last finish).
+4. :func:`answers` (interrupt answers for this instance, never reduced, amendments
+   after what they correct) with :func:`answer_reads` (the statements it shows, as
+   lineage inputs), and :func:`continue_reason` (why the runtime refused the last finish).
+5. :func:`person_messages`: the steer and follow-up block (ADR-P27 D3).
 """
 
 from __future__ import annotations
@@ -20,12 +22,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from aksha.runtime.artifacts.ports import BlobStore
-from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
+from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, WriterId
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import ContextPolicy, Masked, StaleRead
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.grounding.types import STATEMENT_SOURCE
+from aksha.runtime.inputs.types import INTERRUPT_AMENDED, QueuedInput
 from aksha.runtime.invalidation.plan import rebuild_plan
 from aksha.runtime.invalidation.rebuild import rebuild_brief
 from aksha.runtime.invalidation.types import RebuildBrief
@@ -229,7 +232,7 @@ def rebuild_notice(
 
 
 def _statement_spans(view: LogView) -> dict[tuple[str, str], str]:
-    """The statement span minted for each answered question, by (interrupt, question ID)."""
+    """The statement span minted last for each answered question, by (interrupt, question ID)."""
     out: dict[tuple[str, str], str] = {}
     for e in view.events:
         if e.type != "excerpts.minted":
@@ -245,10 +248,12 @@ def answers(view: LogView, instance: InstanceRef) -> str:
     """The person's answers to this instance's interrupts, in order, never reduced.
 
     Each answer minted as a statement span (ADR-P13 D4) names that span, so the model can
-    cite the person's words with the statement form.
+    cite the person's words with the statement form. An amended answer (ADR-P27 D5) is
+    shown after the answer it corrects, and only the last word on a question names a span.
     """
     questions: dict[str, dict[str, str]] = {}
-    lines: list[str] = []
+    said: list[tuple[str, str, str, str]] = []  # interrupt, question, line, how
+    lines: list[str | tuple[str, str, str, str]] = []
     statements = _statement_spans(view)
     for e in view.events:
         if e.run != instance.run:
@@ -256,18 +261,76 @@ def answers(view: LogView, instance: InstanceRef) -> str:
         if e.type == "interrupt.raised" and e.instance == instance.instance:
             qs = {str(q["id"]): str(q["text"]) for q in e.payload.get("questions", ())}
             questions[str(e.payload["interrupt"])] = qs
-        elif e.type == "interrupt.resolved" and str(e.payload["interrupt"]) in questions:
+        elif e.type in ("interrupt.resolved", INTERRUPT_AMENDED) and (
+            str(e.payload["interrupt"]) in questions
+        ):
             ident = str(e.payload["interrupt"])
             qs = questions[ident]
+            how = "answer" if e.type == "interrupt.resolved" else "amended"
             for qid, answer in sorted(dict(e.payload.get("answers", {})).items()):
-                line = f"Q: {qs.get(qid, qid)}\nA: {answer}"
-                span = statements.get((ident, qid))
-                lines.append(f"{line}\n(cite this answer as statement {span})" if span else line)
+                item = (ident, qid, f"Q: {qs.get(qid, qid)}\nA: {answer}", how)
+                said.append(item)
+                lines.append(item)
             if "decision" in e.payload:
                 lines.append(f"Decision on {e.payload['interrupt']}: {e.payload['decision']}")
     if not lines:
         return ""
-    return "Answers from the person:\n" + "\n".join(lines)
+    last = {(i, q): k for k, (i, q, _, _) in enumerate(said)}
+    out: list[str] = []
+    seen = 0
+    for entry in lines:
+        if isinstance(entry, str):
+            out.append(entry)
+            continue
+        ident, qid, line, how = entry
+        if how == "amended":
+            line = f"The person amended this answer (it replaces the one before):\n{line}"
+        span = statements.get((ident, qid))
+        if last[(ident, qid)] == seen and span:
+            line = f"{line}\n(cite this answer as statement {span})"
+        elif last[(ident, qid)] != seen:
+            line = f"{line}\n(amended below)"
+        out.append(line)
+        seen += 1
+    return "Answers from the person:\n" + "\n".join(out)
+
+
+def answer_reads(view: LogView, instance: InstanceRef) -> tuple[InputRef, ...]:
+    """The person's current statements :func:`answers` shows ``instance``, as lineage inputs.
+
+    One ``statement`` input per question of each interrupt the instance raised, named by
+    the interrupt and the answer (its span's version), so a version saved after reading
+    the answer has the answer in its lineage and an amendment invalidates it (ADR-P27 D5).
+    """
+    raised = {
+        str(e.payload["interrupt"])
+        for e in view.events
+        if e.type == "interrupt.raised" and e.run == instance.run
+        and e.instance == instance.instance
+    }  # fmt: skip
+    if not raised:
+        return ()
+    current: dict[tuple[str, str], str] = {}
+    for e in view.events:
+        if e.type != "excerpts.minted":
+            continue
+        for s in e.payload.get("spans", ()):
+            if s.get("source") == STATEMENT_SOURCE and str(s["record_id"]) in raised:
+                version = str(s["version"])
+                current[(str(s["record_id"]), version.rsplit("/", 1)[-1])] = version
+    return tuple(InputRef("statement", i, v) for (i, _), v in sorted(current.items()))
+
+
+def person_messages(inputs: Iterable[QueuedInput]) -> str:
+    """Steer and follow-up texts as the person's block (ADR-P27 D3), in queue order."""
+    parts: list[str] = []
+    for i in inputs:
+        if i.lane == "follow_up":
+            parts.append(f"A follow-up from the person, given when you proposed to finish:\n"
+                         f"{i.text}")  # fmt: skip
+        else:
+            parts.append(f"A message from the person while you work:\n{i.text}")
+    return "\n\n".join(parts)
 
 
 def continue_reason(view: LogView, instance: InstanceRef, turn: int) -> str:

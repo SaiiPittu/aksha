@@ -19,7 +19,12 @@ Task           one per Task instance on the stack. A leaf: entry (DONE when its 
                supervisor follows the supervisor rule (ADR-P15 D7). A re-entry of a leaf
                records its re-entry mode, resume or fresh (decision 36). Its limit fails the
                instance at the turn limit and at the stop-veto limit (the retry cap: the
-               ``max_finish_vetoes``-th refused finish since entry is FAIL).
+               ``max_finish_vetoes``-th refused finish since entry is FAIL). A finish
+               while a person's follow-up or steer for the instance is pending is a
+               CONTINUE whose reason is the person's text (ADR-P27 D4), before the
+               completion check, and no veto: the stop-veto limit does not count it.
+               A supervisor whose check passes with such input pending takes one more
+               turn the same way, instead of finishing.
 interrupt      one per open interrupt, innermost: HOLD until a person closes it.
 =============  ==========================================================================
 
@@ -34,6 +39,8 @@ from aksha.runtime.budgets.limits import limit_reached, turns_used, vetoes_since
 from aksha.runtime.context.reentry import choose_reentry
 from aksha.runtime.context.types import effective_policy
 from aksha.runtime.finalization.state import finalizing
+from aksha.runtime.inputs.reducers import pending_input
+from aksha.runtime.inputs.types import QueuedInput
 from aksha.runtime.interrupts.reducers import pending_interrupts
 from aksha.runtime.stop_policy import hold as holds
 from aksha.runtime.stop_policy.types import (
@@ -73,6 +80,20 @@ def run_ref(run: str) -> str:
 def task_ref(ref: InstanceRef) -> str:
     """A Task policy's ID."""
     return f"task:{ref.instance}"
+
+
+PERSON_INPUT = "person_input"
+"""The code of a CONTINUE a person's pending follow-up or steer turned a finish into."""
+
+
+def person_reason(waiting: tuple[QueuedInput, ...]) -> str:
+    """Why a finish waits for a person's pending input: their words, in queue order."""
+    parts = [
+        f"the person added a follow-up:\n{i.text}" if i.lane == "follow_up"
+        else "the person sent a message, shown above"
+        for i in waiting
+    ]  # fmt: skip
+    return "; ".join(parts)
 
 
 @dataclass(frozen=True)
@@ -212,11 +233,14 @@ class TaskPolicy:
         if node.is_leaf:
             return self._leaf(view, c, state)
         if is_supervisor(node.task):
-            return self._supervisor(c, state)
+            return self._supervisor(view, c, state)
         return self._parent(state)
 
     def _leaf(self, view: StopView, c: StopCandidate, state: RunState) -> Verdict:
         ref = self.instance
+        waiting = pending_input(view.log, ref) if c.kind == "finish" else ()
+        if waiting:
+            return Verdict("continue", person_reason(waiting), code=PERSON_INPUT)
         if c.kind == "finish":
             evaluation = evaluate_in(state, ref)
             fact = (evaluated_fact(ref, evaluation, on="finish"),)
@@ -245,10 +269,13 @@ class TaskPolicy:
             return Verdict("done", facts=fact)
         return Verdict("fail", evaluation.message, facts=fact, code=evaluation.code)
 
-    def _supervisor(self, c: StopCandidate, state: RunState) -> Verdict:
+    def _supervisor(self, view: StopView, c: StopCandidate, state: RunState) -> Verdict:
         ref = self.instance
         if c.kind in ("tools", "finish", "malformed"):
             evaluation = evaluate_in(state, ref)
+            waiting = pending_input(view.log, ref) if evaluation.ok else ()
+            if waiting:  # ADR-P27 B4: a supervisor takes turns, so it reads the input
+                return Verdict("continue", person_reason(waiting), code=PERSON_INPUT)
             if evaluation.ok:
                 return Verdict("done", facts=(evaluated_fact(ref, evaluation, on="parent"),))
             return PASS  # its turn ended; the scheduler picks what runs next
@@ -258,6 +285,9 @@ class TaskPolicy:
         if move.move == "fail":
             return Verdict("fail", move.reason, code=move.reason)
         if move.move == "done":
+            waiting = pending_input(view.log, ref)
+            if waiting:  # ADR-P27 B4, as above
+                return Verdict("continue", person_reason(waiting), code=PERSON_INPUT)
             passed = evaluate_in(state, ref)
             return Verdict("done", facts=(evaluated_fact(ref, passed, on="parent"),))
         return PASS
@@ -273,7 +303,7 @@ class TaskPolicy:
             reason = f"turn limit {task.turn_limit} reached"
             counts = (("turns", turns), ("allowed", task.turn_limit))
             return Verdict("fail", reason, code="turn_limit", counts=counts)
-        if c.kind == "finish" and c.instance == ref:
+        if c.kind == "finish" and c.instance == ref and proposed.code != PERSON_INPUT:
             vetoes = vetoes_since_entry(view.log, ref.run, ref.instance) + 1
             if vetoes >= task.max_finish_vetoes:
                 reason = f"{vetoes} finish requests refused: {proposed.reason}".rstrip(": ")
