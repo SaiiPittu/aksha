@@ -75,6 +75,10 @@ Takeaway: The harness, not the model, owns what work exists (the tree), what run
 3. S3, a withdrawn key can return. The status diagram had no arrow out of `withdrawn`, so a candidate dropped on the selection review and added back restarted nothing. `withdrawn` now goes to `new` when the key returns to its key source; re-entry uses the writer key and a fresh turn number (ADR-P02 S3), and a withdrawn writer's versions read as `gone` meanwhile (ADR-P05 S3).
 4. S4, `Read(kind, keys="own")` reads one row. A coding `fix[S1]` instance reads only its own plan row, recorded as a path-scoped read (ADR-P04 S3), so adding step S5 to the plan does not invalidate finished steps (about 90 turns re-spent, estimate, without it). Completion checks that read a test report also check the report's freshness (D4); ADR-P20's sample check is corrected to do so.
 
+### Amendment from the build: the re-entry record (26 Nov 2026, decision 36)
+
+`task.entered{cause: rebuild}` of a leaf instance carries `reentry`: the mode (`fresh` or `resume`), the fresh reason, the run's setting, `from_turn` (turn numbers continue within a run, so step keys never depend on the mode), `as_of_seq`, the session's segments, `read_runs`, `new_reads` and the measured session sizes. The Task stop policy computes it once, in the stop decision that re-enters the instance. F2 is unchanged in both modes.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
