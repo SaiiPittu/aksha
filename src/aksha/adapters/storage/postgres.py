@@ -494,6 +494,17 @@ class PostgresEventStore:
         )
         return tuple(r[0] for r in rows)
 
+    def owners_with_pending_timers(self) -> tuple[str, ...]:
+        """Owners with a scheduled timer no ``tclose:`` key closed yet, sorted (ADR-P25 D1)."""
+        rows = self._query(
+            "SELECT DISTINCT s.owner FROM events s WHERE s.type = 'timer.scheduled'"
+            " AND s.owner <> %s AND NOT EXISTS (SELECT 1 FROM events c"
+            " WHERE c.owner = s.owner AND c.uniq = 'tclose:' || substr(s.uniq, 7))"
+            " ORDER BY s.owner",
+            (SYSTEM_OWNER,),
+        )
+        return tuple(r[0] for r in rows)
+
     def subscribe(self, owner: str, *, after_seq: int = 0) -> PostgresSubscription:
         """Follow the owner's events after ``after_seq`` on a listening connection."""
         check_owner(owner)

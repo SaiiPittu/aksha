@@ -26,6 +26,12 @@ run keeps waiting on the same approval. A run that reaches such an effect anyway
 approved by a process that had the system) cannot move, and only that run waits: driving
 skips it and :meth:`Session.unavailable` says why, so the owner's other runs and commands
 go on. Nothing about the skip is stored; the next process with the system drives it.
+
+Timers (ADR-P25): every :meth:`Session.step` and :meth:`Session.resume` first ticks the
+owner (``timers.firing.tick``): it records the date when a run open across midnight or a
+read of an earlier date makes it matter, then fires the owner's due timers, before any
+stop-policy evaluation can decide to reuse anything. A reminder opens a run of a loaded
+agent with the fields a person's start would record.
 """
 
 from __future__ import annotations
@@ -39,12 +45,14 @@ from typing import Any
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
+from aksha.runtime.budgets.types import Limits
 from aksha.runtime.cancellation.command import stop
 from aksha.runtime.cancellation.ending import honour_stop
 from aksha.runtime.cancellation.requests import runs_to_resume_for_stop
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.definitions.types import Agent
+from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.execution.errors import EffectNeedsOutbox
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
@@ -101,6 +109,7 @@ from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
+from aksha.runtime.timers.firing import FiringReport, tick
 from aksha.runtime.tools.registry import ToolRegistry
 
 UNSUPPORTED = "unsupported"
@@ -140,6 +149,7 @@ class SessionAgent:
     context_policy: ContextPolicy | None = None
     run_extra: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     reentry: ReentrySetting | None = None
+    lifetimes: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
 
     @property
     def name(self) -> str:
@@ -182,6 +192,7 @@ class SessionAgent:
             blobs=blobs,
             reader=reader,
             tier=tier or ExecutionTier(),
+            lifetimes=self.lifetimes,
             **extra,
         )
 
@@ -258,6 +269,15 @@ class Session:
             for a in agents
         }  # fmt: skip
         self._start = start_spec(startable, self.ids, self.sandbox)
+        self._timed: dict[str, Mapping[str, Any]] = {
+            a.name: {"api_version": API_VERSION, **a.run_fields(),
+                     **({"definition_hash": a.definition_hash} if a.definition_hash else {}),
+                     "reentry": a.reentry or "fresh"}
+            for a in agents
+        }  # fmt: skip
+        self._timer_limits: dict[str, Limits] = {
+            a.name: a.agent.limits for a in agents if a.agent.limits is not None
+        }
 
     # --- what this runtime accepts --------------------------------------------------------
 
@@ -520,13 +540,20 @@ class Session:
         runs = rebuild(RUNS, load_view(self.store, owner))
         return tuple(r for r in open_runs(runs) if runs[r].agent in self.agents)
 
+    def tick(self, owner: str) -> FiringReport:
+        """Record the date if it matters and fire ``owner``'s due timers (module doc)."""
+        return tick(self.store, owner, self.clock, ids=self.ids, agents=self._timed,
+                    agent_limits=self._timer_limits)  # fmt: skip
+
     def step(self, owner: str) -> bool:
         """One pass of the first open run of ``owner`` that can move; False if none can.
 
-        A run that waits on a person and has a pending stop gets the one ``resume``
-        candidate ADR-P18 D3 gives it, so a stop sent while a run is held ends it
-        ``stopped`` without waiting for an answer that will never come.
+        The owner is ticked first (module doc); a tick that wrote counts as moving. A run
+        that waits on a person and has a pending stop gets the one ``resume`` candidate
+        ADR-P18 D3 gives it, so a stop sent while a run is held ends it ``stopped`` without
+        waiting for an answer that will never come.
         """
+        ticked = self.tick(owner).wrote
         blocked = self._blocked(owner)
         self._unavailable.setdefault(owner, {}).update(blocked)
         for run in self.runnable(owner):
@@ -544,7 +571,8 @@ class Session:
             )
             if stopping and honour_stop(self.store, owner, run, STOP_CANDIDATE):
                 return True
-        return self.rebuilds and self._open_rebuilds(owner)
+        opened = bool(self.rebuilds and self._open_rebuilds(owner))
+        return opened or ticked
 
     def _open_rebuilds(self, owner: str) -> bool:
         """Open the rebuild runs the owner's log calls for, per agent; whether any opened."""
@@ -590,6 +618,7 @@ class Session:
             except EffectNeedsOutbox as e:
                 self._unavailable.setdefault(owner, {})[run.run] = f"{e.code}: {e.message}"
 
+        self.tick(owner)
         blocked = self._blocked(owner)
         self._unavailable.setdefault(owner, {}).update(blocked)
         return resume_owner(self.store, owner, driver, clock=self.clock, loaded=self.loaded(),
@@ -688,10 +717,14 @@ def _plain(value: object) -> Any:
 def _request(view: LogView, run: str) -> str:
     """The text of the message that opened ``run``.
 
-    A rebuild run no message opened has the request of the first run it rebuilds for
+    A reminder's run (ADR-P25 D2) states its request on its ``run.started``. A rebuild run
+    no message opened has the request of the first run it rebuilds for
     (``run.started{for_runs}``), so every pass of it shows the model the same request; a run
-    with neither is empty.
+    with none of these is empty.
     """
+    for e in view.events:
+        if e.type == "run.started" and e.run == run and e.payload.get("request"):
+            return str(e.payload["request"])
     message: str | None = None
     for e in view.events:
         if e.type == "route.decided" and e.payload.get("run") == run:

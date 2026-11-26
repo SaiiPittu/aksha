@@ -14,6 +14,15 @@ them with the versions the owner's log last knew, and records only what moved:
    writing ``query.reexecuted`` with its new result-set hash and whether it ``changed``.
    An unchanged source re-executes nothing.
 
+ADR-P25 adds two inputs, through the same writer:
+
+4. The clock source (``CLOCK_SOURCE``, D4) is the current date. Its one record,
+   ``time/clock``, is checked against the owner's ``time:clock`` reads, and it is recorded
+   even when nothing read it yet: its caller (``timers.clock.date_change``) asks only when
+   an open run or an older read makes the new date matter.
+5. ``expired`` (D3) lists the records and artifact versions whose freshness lifetime ran
+   out: one ``source.expired`` fact names them, counted as a source change.
+
 ``source_facts`` is the projection over those facts that the invalidation view reads.
 """
 
@@ -25,10 +34,16 @@ from types import MappingProxyType
 from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
-from aksha.runtime.invalidation.types import SourceCause, SourceFacts
+from aksha.runtime.invalidation.types import (
+    CLOCK_RECORD,
+    CLOCK_SOURCE,
+    SourceCause,
+    SourceFacts,
+)
 from aksha.runtime.projections.view import LogView
 
 SOURCE_CHANGE_BOUNDARY = "U8"
+SOURCE_EXPIRED = "source.expired"
 
 
 def source_facts(view: LogView) -> SourceFacts:
@@ -37,6 +52,8 @@ def source_facts(view: LogView) -> SourceFacts:
     sources: dict[str, str] = {}
     records: dict[str, str | None] = {}
     queries: dict[str, str] = {}
+    expired: dict[str, int] = {}
+    artifacts: set[str] = set()
     for e in view.events:
         p = e.payload
         if e.type == "source.changed":
@@ -45,9 +62,14 @@ def source_facts(view: LogView) -> SourceFacts:
             records.update({str(k): None if v is None else str(v) for k, v in p["records"].items()})
         elif e.type == "query.reexecuted":
             queries[str(p["query"])] = str(p["hash"])
+        elif e.type == SOURCE_EXPIRED:
+            n, last = int(p["source_version"]), e.seq
+            expired.update({str(r): e.seq for r in p.get("records", ())})
+            artifacts.update(str(a) for a in p.get("artifacts", ()))
     return SourceFacts(
-        n, MappingProxyType(sources), MappingProxyType(records), MappingProxyType(queries), last
-    )
+        n, MappingProxyType(sources), MappingProxyType(records), MappingProxyType(queries), last,
+        MappingProxyType(expired), frozenset(artifacts),
+    )  # fmt: skip
 
 
 def read_inputs(view: LogView, kind: str) -> Mapping[str, str]:
@@ -61,6 +83,11 @@ def read_inputs(view: LogView, kind: str) -> Mapping[str, str]:
     return MappingProxyType(newest)
 
 
+def record_key(read: InputRef) -> str:
+    """The record ID ``source.changed`` keeps ``read`` under: a time read's is ``time/<id>``."""
+    return f"{CLOCK_SOURCE}/{read.id}" if read.kind == "time" else read.id
+
+
 def record_source_changes(
     view: LogView,
     sources: Iterable[VersionedSource],
@@ -68,10 +95,12 @@ def record_source_changes(
     cause: SourceCause,
     run_query: QueryRunner | None = None,
     change_set: str | None = None,
+    expired: Iterable[InputRef] = (),
 ) -> tuple[NewEvent, ...]:
-    """The ``source.changed`` and ``query.reexecuted`` facts for ``view``'s owner (module doc).
+    """The source facts for ``view``'s owner (module doc): what moved, then what expired.
 
-    Returns nothing when no source moved. Only reads the sources; never appends.
+    Returns nothing when no source moved and nothing expired. Only reads the sources;
+    never appends.
     """
     owner = view.owner
     facts = source_facts(view)
@@ -84,12 +113,38 @@ def record_source_changes(
         if prior == now:
             continue
         changed = _moved_records(source, owner, read, facts.records)
+        if source.name == CLOCK_SOURCE:
+            changed = {CLOCK_RECORD: source.record_version(owner, CLOCK_RECORD)}
         if prior is not None or changed:
             moved_sources[source.name] = now
             moved_records.update(changed)
-    if not moved_sources:
-        return ()
-    number = facts.source_version + 1
+    number = facts.source_version
+    events: list[NewEvent] = []
+    if moved_sources:
+        number += 1
+        events.extend(_changed(view, number, cause, moved_sources, moved_records, change_set,
+                               run_query, facts))  # fmt: skip
+    gone = sorted({r.id for r in expired if r.kind == "record"})
+    versions = sorted({f"{r.id}@{r.version}" for r in expired if r.kind == "artifact"})
+    if gone or versions:
+        number += 1
+        payload: dict[str, object] = {"source_version": number, "cause": cause,
+                                      "records": gone, "artifacts": versions}  # fmt: skip
+        events.append(NewEvent(SOURCE_EXPIRED, payload))
+    return tuple(events)
+
+
+def _changed(
+    view: LogView,
+    number: int,
+    cause: SourceCause,
+    moved_sources: Mapping[str, str],
+    moved_records: Mapping[str, str | None],
+    change_set: str | None,
+    run_query: QueryRunner | None,
+    facts: SourceFacts,
+) -> list[NewEvent]:
+    owner = view.owner
     payload: dict[str, object] = {
         "source_version": number,
         "cause": cause,
@@ -115,7 +170,7 @@ def record_source_changes(
                     },
                 )
             )
-    return tuple(events)
+    return events
 
 
 def _moved_records(

@@ -173,5 +173,9 @@ EVENT_MAP: Mapping[str, tuple[Role, str]] = {
     "keys.listed": ("span_event", "aksha.keys.listed"),
     "user.message": ("span_event", "aksha.user.message"),
     "route.decided": ("span_event", "aksha.route.decided"),
+    "timer.scheduled": ("span_event", "aksha.timer.scheduled"),
+    "timer.fired": ("span_event", "aksha.timer.fired"),
+    "timer.cancelled": ("span_event", "aksha.timer.cancelled"),
+    "source.expired": ("span_event", "aksha.source.expired"),
 }
 """Every core event type and what it becomes in the trace (D9)."""

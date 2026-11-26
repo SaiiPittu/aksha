@@ -43,7 +43,7 @@ from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
 from aksha.runtime.artifacts.lineage import reads_to_record
-from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
+from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
@@ -79,6 +79,11 @@ from aksha.runtime.sandbox.exec import BoxedExec, ExecUnit
 from aksha.runtime.storage.rows import ArtifactRow
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
+from aksha.runtime.timers.clock import recorded_date
+from aksha.runtime.timers.facts import scheduled
+from aksha.runtime.timers.freshness import recheck_timers
+from aksha.runtime.timers.reads import TimeReads
+from aksha.runtime.timers.types import ApprovalRef, TimerSet
 from aksha.runtime.tools.bodies import call_body
 from aksha.runtime.tools.results import VIEW_FIELD, render_result, view_json
 from aksha.runtime.tools.types import Err, Ok, ToolCall, ToolContext, ToolOutcome, ToolSpec
@@ -138,12 +143,6 @@ def _shown(
     if isinstance(outcome.result, Err):
         return StepOutput(value, outcome="error", code=outcome.result.code, events=events)
     return StepOutput(value, events=events)
-
-
-def _run_date(view: LogView, run: str) -> str | None:
-    """The ISO date of ``run``'s recorded ``run.started``; None before it is recorded."""
-    started = next((e for e in view.events if e.type == "run.started" and e.run == run), None)
-    return None if started is None else started.at[:10]
 
 
 def run_calls(
@@ -226,21 +225,25 @@ def run_position(
     if decision.route == "dispatch":
         args = call.arguments
         attempt = attempt_number(view, str(step))
-        run_date = _run_date(view, ref.run)
+        run_date = recorded_date(view, ref.run)
         unit = ExecUnit() if spec.effect == "exec" else None
 
-        def ctx(reader: AttemptReader, http: HttpFor, exe: BoxedExec | None) -> ToolContext:
+        def ctx(
+            reader: AttemptReader, http: HttpFor, exe: BoxedExec | None, dates: TimeReads
+        ) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader, run_date, http, exe)  # fmt: skip
+                               attempt, reader, run_date, http, exe, dates)  # fmt: skip
 
         def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
             # Each attempt reads through a fresh reader (its drafts are minted over what it
-            # returned) and reaches the network and the sandbox through its own handles.
+            # returned), records its dates in a fresh time-read collector (its dates are the
+            # reads it made), and reaches the network and the sandbox through its own handles.
             reader = AttemptReader(setup.reader)
+            dates = TimeReads()
             http = http_for(setup, spec)
             exe = None if unit is None else exec_for(setup, spec, str(step), attempt, unit)
-            out = _dispatched(setup, ref, step, spec, body(ctx(reader, http, exe)),
-                              reader.returned)  # fmt: skip
+            outcome = body(ctx(reader, http, exe, dates))
+            out = _dispatched(setup, ref, step, spec, outcome, reader.returned, dates.reads)
             return with_records(out, http, exe)
 
         return record(lambda: dispatched(lambda c: call_body(decl, c, args)), unit)
@@ -265,6 +268,7 @@ def _dispatched(
     spec: ToolSpec,
     outcome: ToolOutcome,
     returned: tuple[ReturnedText, ...] = (),
+    dates: tuple[InputRef, ...] = (),
 ) -> StepOutput:
     """A body's outcome as its step records it: saves, minted spans and the capped view.
 
@@ -273,6 +277,10 @@ def _dispatched(
     draft order, under ``value["spans"]``, so the model can cite what it was shown. A
     refused save or mint turns the whole result into the error the model reads, and
     nothing it asked for commits.
+
+    ``dates`` are the attempt's time reads (ADR-P25 D4): recorded with the body's own
+    reads, after them. Each record read from a source with a lifetime, and each saved
+    version of a kind with one, schedules its recheck in the same result (ADR-P25 D3).
     """
     cap = setup.policy().result_cap_chars
     if outcome.saves and spec.effect not in SAVING_EFFECTS:
@@ -282,7 +290,9 @@ def _dispatched(
     events: list[NewEvent] = []
     rows: list[ArtifactRow] = []
     saved_versions: list[ArtifactVersion] = []
-    read = outcome.result.reads if isinstance(outcome.result, Ok) else ()
+    read: tuple[InputRef, ...] = ()
+    if isinstance(outcome.result, Ok):
+        read = (*outcome.result.reads, *(d for d in dates if d not in outcome.result.reads))
     if read:
         events.extend(reads_to_record(view, read, run=ref.run, instance=ref.instance,
                                       step=str(step)))  # fmt: skip
@@ -317,6 +327,14 @@ def _dispatched(
                 run=ref.run, instance=ref.instance, step=str(step),
             )
         )  # fmt: skip
+    kinds = setup.artifacts.kinds if setup.artifacts is not None else setup.kinds
+    events.extend(
+        recheck_timers(
+            view, read, [v.ref for v in saved_versions], setup.record_lifetimes(), kinds,
+            WriterId(setup.agent.name, ref.task_path, ref.key),
+            run=ref.run, instance=ref.instance, step=str(step),
+        )
+    )  # fmt: skip
     try:
         minted = mint_for_result(
             outcome, returned, spec=spec, index=span_index(view), run=ref.run,
@@ -384,6 +402,12 @@ def _approval(
                                  run=ref.run, instance=ref.instance, step=str(step))  # fmt: skip
         if isinstance(facts, Refusal):
             return _shown(ToolOutcome(Err(facts.code, facts.message)), cap)
+        rule = spec.approval
+        if rule is not None and rule.expires_after_s is not None:  # ADR-P25 D5
+            expiry = TimerSet(f"approval_expiry:{ident}", ApprovalRef(ident), "approval_expiry",
+                              after_ms=rule.expires_after_s * 1000)  # fmt: skip
+            facts = (*facts, scheduled(expiry, run=ref.run, instance=ref.instance,
+                                       step=str(step)))  # fmt: skip
         shown = ToolOutcome(Ok({"approval": ident, "status": "waiting"}))
         return _shown(shown, cap, signal="approval", events=facts, extra={"approval": ident})
 

@@ -165,6 +165,20 @@ def test_the_audit_lets_a_person_command_continue() -> None:
     assert held_auto_starts(log.view()) == ()
 
 
+def test_the_audit_catches_a_timer_run_opened_while_its_session_is_held() -> None:
+    """ADR-P25 D2: a reminder's ``run.started`` is judged against its session's questions."""
+    log = _log()
+    raised = {"interrupt": "I-0009", "kind": "route", "options": ["a", "b"]}
+    log.add("interrupt.raised", raised, run=None, session="S-1")
+    timed = {"agent": "a", "cause": "timer", "timer": "T-1", "request": "again"}
+    log.add("run.started", timed, run="R-0002", session="S-2")
+    assert held_auto_starts(log.view()) == ()
+    log.add("run.started", timed, run="R-0003", session="S-1")
+    assert [(h.type, h.reason) for h in held_auto_starts(log.view())] == [
+        ("run.started", "interrupt_open")
+    ]
+
+
 def test_hold_guard_mutation_fails_the_audit(monkeypatch: pytest.MonkeyPatch) -> None:
     """D7: with the predicate gone from evaluation, a held instance is continued and caught."""
     monkeypatch.setattr(holds, "hold_reason", lambda view, scope: None)

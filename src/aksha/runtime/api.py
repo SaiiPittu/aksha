@@ -17,8 +17,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    names: ``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``, ``SELF``.
 5. Tools (P10): ``ToolSpec``, ``ToolDecl``, ``ToolUse``, ``ToolBody``, ``RetryPolicy``,
    ``EffectClass``; what a body sees and returns: ``ToolContext``, ``ToolOutcome``, ``Ok``,
-   ``Err``. A tool spec's parts owned elsewhere: ``EffectSpec`` (P03), ``ApprovalRule``
-   (P17), ``SandboxNeeds``, ``SandboxPolicy``, ``ExecLimits`` and ``TreeManifest`` (P12).
+   ``Err``; ``observe_time``, the date a body counts to as a recorded read (P25). A tool
+   spec's parts owned elsewhere: ``EffectSpec`` (P03), ``ApprovalRule`` (P17),
+   ``SandboxNeeds``, ``SandboxPolicy``, ``ExecLimits`` and ``TreeManifest`` (P12).
    What a body's handles answer: ``ExecOutcome`` (``ToolContext.exec``, P12),
    ``HttpResponse`` and ``EgressRefused`` (``ToolContext.http``, P26).
 6. Stop policies (P16): ``StopPolicyOptIn``, ``Goal``, ``Plan``, ``ForcedTool``,
@@ -133,6 +134,7 @@ from aksha.runtime.tasks.types import (
     source_keys,
 )
 from aksha.runtime.tasks.view import TaskView
+from aksha.runtime.timers.clock import observe_time
 from aksha.runtime.tools.types import (
     EffectClass,
     Err,
@@ -244,6 +246,7 @@ __all__ = [
     "distribution_ppm",
     "from_field",
     "maybe_unknown",
+    "observe_time",
     "part_version",
     "ppm",
     "source_keys",

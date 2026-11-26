@@ -31,6 +31,15 @@ RebuildMode = Literal["regenerate", "propose", "copy_choice", "rebase"]
 SourceCause = Literal["command", "recovery", "clock"]
 """Who recorded a source change (S2): the session command, recovery's check, the clock."""
 
+CLOCK_SOURCE = "time"
+"""The source the runtime records the current date as (ADR-P25 D4); its version is the date."""
+
+CLOCK_RECORD = "time/clock"
+"""The record ``source.changed`` keeps the date under; a ``time:clock`` read is checked on it."""
+
+EXPIRED = "expired"
+"""What a read moved to when its freshness lifetime ran out (ADR-P25 D3, ``source.expired``)."""
+
 STALE_STATES: frozenset[Freshness] = frozenset({"invalidated", "dirty"})
 """The states that refuse effects (D9) and hold readers."""
 
@@ -193,7 +202,10 @@ class SourceFacts:
 
     ``sources`` maps a source to its last recorded version, ``records`` a record ID to its
     last recorded version (None: the record is gone), and ``queries`` a recorded query to
-    its latest result-set hash. ``source_version`` counts the owner's source changes.
+    its latest result-set hash. ``source_version`` counts the owner's source changes and
+    expiries. ``expired_records`` maps a record to the seq of its last ``source.expired``
+    (ADR-P25 D3): a version saved before it read the record too long ago.
+    ``expired_artifacts`` are the versions whose own lifetime ran out.
     """
 
     source_version: int = 0
@@ -201,3 +213,5 @@ class SourceFacts:
     records: Mapping[str, str | None] = field(default_factory=lambda: MappingProxyType({}))
     queries: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
     last_change_seq: int = 0
+    expired_records: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
+    expired_artifacts: frozenset[str] = frozenset()

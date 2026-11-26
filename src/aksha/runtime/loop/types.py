@@ -137,6 +137,9 @@ class LoopSetup:
     reads versioned sources through (ADR-P13 D1); without it a body's span drafts are refused.
     ``reentry`` is the re-entry setting the rebuild runs it opens record (decision 36); None
     inherits it from the runs rebuilt for, which is ``fresh`` unless they chose ``resume``.
+    ``lifetimes`` maps a record collection to its source's freshness lifetime in seconds
+    (ADR-P25 D3); a step that reads such a record schedules its recheck. Empty by default:
+    the agent's own sources' lifetimes are added to it (:meth:`record_lifetimes`).
     """
 
     store: EventStore
@@ -162,6 +165,15 @@ class LoopSetup:
     tier: ExecutionTier = field(default_factory=ExecutionTier)
     """Tier 3: the sandbox backend, the network under the HTTP client, egress policies and
     environment specs (ADR-P12, P26, P28). The default runs nothing and reaches nothing."""
+    lifetimes: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
+
+    def record_lifetimes(self) -> Mapping[str, int]:
+        """The agent's sources' lifetimes by collection, then ``lifetimes`` over them."""
+        out: dict[str, int] = {}
+        for spec in self.agent.sources:
+            if spec.max_age_s is not None:
+                out.update(dict.fromkeys(spec.collections, spec.max_age_s))
+        return MappingProxyType({**out, **self.lifetimes})
 
     def view(self) -> LogView:
         """The owner's log as it stands now."""

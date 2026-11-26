@@ -51,8 +51,12 @@ from aksha.runtime.context.reentry import ReentrySetting, inherited_setting
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
-from aksha.runtime.invalidation.types import ReadStatus, RebuildBrief, RebuildEntry
-from aksha.runtime.invalidation.view import InvalidationView, invalidation_view
+from aksha.runtime.invalidation.types import EXPIRED, ReadStatus, RebuildBrief, RebuildEntry
+from aksha.runtime.invalidation.view import (
+    InvalidationView,
+    invalidation_view,
+    is_expiry_read,
+)
 from aksha.runtime.policy.headless import headless_start_refusal, started_headless
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
@@ -166,7 +170,10 @@ def rebuild_brief(view: LogView, iv: InvalidationView, entry: RebuildEntry) -> R
     if old is None:
         raise KeyError(f"{entry.invalidated} is not in {view.owner}'s log")
     state = iv.state(entry.invalidated)
-    current = tuple(_now(r) for r in state.reads if r.state != "gone")
+    # An expired version's ``time:expiry`` marker says why it is stale; it is not a read.
+    current = tuple(
+        _now(r) for r in state.reads if r.state != "gone" and not is_expiry_read(r.input)
+    )
     statements = tuple(r for r in old.reads if r.kind == "statement")
     return RebuildBrief(
         old=old.ref,
@@ -179,9 +186,12 @@ def rebuild_brief(view: LogView, iv: InvalidationView, entry: RebuildEntry) -> R
 
 
 def _now(status: ReadStatus) -> InputRef:
-    """The input a rebuilt instance reads in place of ``status.input``."""
+    """The input a rebuilt instance reads in place of ``status.input``.
+
+    An expired read (ADR-P25 D3) names no newer version: the instance reads it again.
+    """
     read = status.input
-    if status.now is None or status.state in ("same", "unsettled"):
+    if status.now is None or status.now == EXPIRED or status.state in ("same", "unsettled"):
         return read
     if read.kind == "artifact":
         return ArtifactRef.parse(status.now).as_input()

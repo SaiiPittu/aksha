@@ -34,7 +34,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Final
 
-from aksha.runtime.budgets.records import AUTOMATIC_CAUSES
+from aksha.runtime.budgets.records import AUTOMATIC_CAUSES, TIMER_CAUSE
 from aksha.runtime.cancellation.hold import held_auto_starts as stop_held_starts
 from aksha.runtime.cancellation.hold import stop_hold
 from aksha.runtime.cancellation.requests import pending_stop
@@ -155,6 +155,9 @@ def _interrupt_starts(view: LogView) -> Iterator[HeldStart]:
 
 
 def _held_by_interrupt(opened: _Open, e: Event) -> bool:
+    if e.type == "run.started" and e.payload.get("cause") == TIMER_CAUSE:
+        # ADR-P25 D2: a reminder's run is held by an open question of its session.
+        return e.session is not None and opened.in_session(e.session) is not None
     if e.run is None or e.instance is None:
         return False
     p = e.payload
@@ -174,8 +177,8 @@ def held_auto_starts(view: LogView) -> tuple[HeldStart, ...]:
 
     The stop's half is ``cancellation.hold.held_auto_starts``; the interrupt half judges
     a continuing stop decision with an automatic cause, a ``task.entered`` and a model
-    ``step.started``, each on the instance it names, against the interrupts open just
-    before it. Sorted by seq.
+    ``step.started``, each on the instance it names, and a timer's ``run.started`` on its
+    session (ADR-P25 D2), against the interrupts open just before it. Sorted by seq.
     """
     found = {(h.seq, h.reason): h for h in stop_held_starts(view)}
     for h in _interrupt_starts(view):

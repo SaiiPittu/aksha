@@ -141,6 +141,14 @@ class EventStore(Protocol):
         """Owners with a ``run.started`` and no ``run.ended`` for it, sorted; recovery only."""
         ...
 
+    def owners_with_pending_timers(self) -> tuple[str, ...]:
+        """Owners with a timer not yet fired or cancelled (ADR-P25 D1), sorted.
+
+        Operator use only, like ``owners_with_open_runs``: the runtime thread finds the
+        owners whose timers it must fire while they have no open run.
+        """
+        ...
+
     def subscribe(self, owner: str, *, after_seq: int = 0) -> Subscription:
         """A subscription to the owner's events after ``after_seq``."""
         ...
