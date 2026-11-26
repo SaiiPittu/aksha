@@ -387,7 +387,9 @@ def search_skipped(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
 
     def edit(events: Events) -> Events:
         def searched(e: dict[str, Any]) -> bool:
-            return e["type"] == "episode.tool_called" and e["payload"].get("tool") == "web_search"
+            return bool(
+                e["type"] == "episode.tool_called" and e["payload"].get("tool") == "web_search"
+            )
 
         return [e for e in events if not searched(e)]
 

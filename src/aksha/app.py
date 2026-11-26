@@ -54,7 +54,7 @@ from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.egress.network import HttpTransport, SocketResolver
-from aksha.adapters.recording.models import recording_adapters
+from aksha.adapters.recording.models import Recorded, recorded_adapters, recording_adapters
 from aksha.adapters.recording.sink import JsonlSink, Sink, read_stream
 from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.sandbox import e2b
@@ -92,6 +92,7 @@ from aksha.runtime.definitions.names import qualify, resolve_kind
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.egress.ports import Network
 from aksha.runtime.egress.types import EgressPolicy
+from aksha.runtime.errors import AkshaError
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.execution.executor import StepExecutor
@@ -115,6 +116,7 @@ from aksha.runtime.models.routing import live_model_name as model_for
 from aksha.runtime.models.types import RunMode
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
+from aksha.runtime.projections.view import load_view
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
 from aksha.runtime.sandbox.errors import SandboxRefused
@@ -1451,3 +1453,247 @@ def eval_agents() -> AgentRegistry:
 def eval_judge() -> Judge:
     """The fake judge for fake model mode: rule-based, offline, annotate-only."""
     return Judge(model=RuleJudge(), model_id="fake:RuleJudge")
+
+
+# --- Record and replay (ADR-P22 A1) ---------------------------------------------------------
+#
+# ``aksha run ... --record <folder>`` runs one agent to its end in a store of its own inside
+# the folder, with ``AKSHA_RECORD`` set to it: every model call (generation and every
+# fast-class call a tool body makes), every search and every fetch is appended as it is
+# answered (``adapters.recording``). The person's part is recorded too: the message, the
+# uploaded inputs (copied to ``inputs/``) and the answers and approvals given
+# (``recording.json``), then the outputs (``outputs.json``) and the run's trace as OTLP
+# JSON (``trace/``). ``aksha replay <folder>`` runs the same agent again in a fresh store,
+# fully offline: each model call is answered from the recording (``replay`` run mode, a
+# mismatch is ``replay_mismatch``), each search and fetch from the recorded answers
+# (``ReplayWeb``), on a clock fixed at the recorded start, and the outputs are compared
+# with the recorded ones.
+
+RECORDING_FORMAT = "aksha-recording/1"
+RECORDING_FILE = "recording.json"
+OUTPUTS_FILE = "outputs.json"
+RECORDING_INPUTS = "inputs"
+RECORD_SESSION = "S-record"
+MAX_ANSWER_ROUNDS = 50
+
+
+@dataclass(frozen=True)
+class RunScript:
+    """The person's part of a recorded run: the agent, the message, inputs and answers.
+
+    ``answers`` are by question ID (a choice by ``choice``); ``approve`` grants every
+    approval the run asks for. A question with no answer ends the recording waiting on it.
+    """
+
+    agent: str
+    text: str
+    answers: Mapping[str, str] = field(default_factory=dict)
+    approve: bool = False
+    owner: str = "local"
+
+    def as_json(self) -> dict[str, Any]:
+        """The script as ``recording.json`` keeps it."""
+        return {"agent": self.agent, "text": self.text, "answers": dict(self.answers),
+                "approve": self.approve, "owner": self.owner}  # fmt: skip
+
+
+@dataclass(frozen=True)
+class ScriptedRun:
+    """Where a scripted run ended: its run, its state or outcome, what it still waits on."""
+
+    run: str | None
+    outcome: str
+    waiting: tuple[str, ...]
+    outputs: Mapping[str, Any]
+    trace: tuple[Path, ...]
+
+
+def _outputs(session: Session, owner: str) -> dict[str, Any]:
+    """Every latest output of ``owner``, by slot (``research.matrix``, ``kind/key``)."""
+    from aksha.runtime.artifacts.versions import all_versions, current
+    from aksha.runtime.canonical import thaw
+
+    view = load_view(session.store, owner)
+    out: dict[str, Any] = {}
+    for kind, key in sorted({(v.ref.kind, v.ref.key) for v in all_versions(view)},
+                            key=lambda s: (s[0], s[1] or "")):  # fmt: skip
+        found = current(view, kind, key, blobs=session.blobs)
+        if found is not None:
+            out[kind if key is None else f"{kind}/{key}"] = thaw(found.content)
+    return out
+
+
+def drive_script(session: Session, script: RunScript, files: Mapping[str, str]) -> ScriptedRun:
+    """Upload ``files``, send the message, answer from the script until the run ends."""
+    from aksha.runtime.session import named as n
+    from aksha.runtime.session.views import session_status
+
+    owner = script.owner
+
+    def dispatch(command: n.NamedCommand) -> None:
+        receipt = session.dispatch(command)
+        if not receipt.accepted:
+            raise StoreError("script_refused", f"{type(command).__name__}: {receipt.refused}")
+
+    if files:
+        dispatch(n.UploadInputs(owner=owner, files=dict(files), command_id="script-upload"))
+    dispatch(n.SendMessage(owner=owner, session=RECORD_SESSION, text=script.text,
+                           agent=script.agent, command_id="script-message"))  # fmt: skip
+    waiting: tuple[str, ...] = ()
+    status = None
+    for round_no in range(MAX_ANSWER_ROUNDS):
+        session.run_until_yield(owner)
+        status = session_status(load_view(session.store, owner), RECORD_SESSION)
+        if status.run is None or status.run.state != "waiting":
+            break
+        moved, missing = False, []
+        for i, w in enumerate(status.waiting_on):
+            cid = f"script-{round_no}-{i}"
+            if w.kind == "approval" and w.approval_id and w.signature:
+                if script.approve:
+                    dispatch(n.Approve(owner=owner, approval_id=w.approval_id,
+                                       shown_signature=w.signature, by="person",
+                                       command_id=cid))  # fmt: skip
+                    moved = True
+                else:
+                    missing.append(f"approval {w.approval_id}")
+                continue
+            ids = [q for q, _ in w.questions] or ["choice"]
+            given = {q: script.answers[q] for q in ids if q in script.answers}
+            if len(given) < len(ids):
+                missing += [f"{w.kind} {q}" for q in ids if q not in given]
+                continue
+            if len(given) == 1:
+                command = n.AnswerInterrupt(owner=owner, interrupt_id=w.interrupt_id,
+                                            text=next(iter(given.values())), by="person",
+                                            command_id=cid)  # fmt: skip
+            else:
+                command = n.AnswerInterrupt(owner=owner, interrupt_id=w.interrupt_id,
+                                            answers=given, by="person",
+                                            command_id=cid)  # fmt: skip
+            dispatch(command)
+            moved = True
+        if not moved:
+            waiting = tuple(missing)
+            break
+    run = None if status is None or status.run is None else status.run
+    outcome = "waiting" if waiting else (run.outcome or run.state) if run else "not_started"
+    return ScriptedRun(run.run if run else None, str(outcome), waiting,
+                       _outputs(session, owner), ())  # fmt: skip
+
+
+def _trace(session: Session, owner: str, run: str | None, out: Path) -> tuple[Path, ...]:
+    """The run's trace as OTLP JSON files in ``out``; none without the ``otel`` extra."""
+    if run is None:
+        return ()
+    try:
+        return export_trace(session.store, owner, run, out)
+    except AkshaError:
+        return ()
+
+
+def _local_store(folder: Path) -> StorageConfig:
+    return StorageConfig(sqlite_path=folder / "aksha.sqlite", blob_path=folder / "blobs")
+
+
+def record_run(
+    config: RuntimeConfig,
+    folder: Path,
+    script: RunScript,
+    files: Mapping[str, str],
+    *,
+    clock: Clock | None = None,
+) -> ScriptedRun:
+    """Run ``script`` to its end with every answer recorded into ``folder`` (section doc).
+
+    The folder must be new or empty. The run's store sits in ``folder/store``, so the
+    recording holds everything the replay needs and the person's own store is untouched.
+    """
+    if folder.exists() and any(folder.iterdir()):
+        raise StoreError("recording_exists", f"{folder} is not empty: record into a new folder")
+    folder.mkdir(parents=True, exist_ok=True)
+    for rel, text in files.items():
+        target = folder / RECORDING_INPUTS / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    clock = clock or SystemClock()
+    started = clock.now()
+    cfg = replace(config, storage=_local_store(folder / "store"), record=folder, server_url=None)
+    session = open_session(cfg, clock)
+    try:
+        ended = drive_script(session, script, files)
+        trace = _trace(session, script.owner, ended.run, folder / "trace")
+        binding = {a.agent.name: a.table.mode for a in session.agents.values()}
+    finally:
+        session.store.close()
+    manifest = {
+        "format": RECORDING_FORMAT,
+        "synthetic_notice": "A recording of one run: what the person gave, every model "
+        "answer, every search and fetch. Replay it with aksha replay.",
+        "started_at": started.isoformat(),
+        "mode": config.mode,
+        "modes": binding,
+        "search": (config.search or "none").partition(":")[0],
+        "script": script.as_json(),
+        "inputs": sorted(files),
+        "run": ended.run,
+        "outcome": ended.outcome,
+        "waiting": list(ended.waiting),
+    }
+    (folder / RECORDING_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                                         encoding="utf-8")  # fmt: skip
+    (folder / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True)
+                                       + "\n", encoding="utf-8")  # fmt: skip
+    return replace(ended, trace=trace)
+
+
+@dataclass(frozen=True)
+class Replayed:
+    """A replay's end: the run, whether its outputs equal the recorded ones, and the trace."""
+
+    run: ScriptedRun
+    same: bool
+    differing: tuple[str, ...]
+    out: Path
+
+
+def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
+    """Run a recording again fully offline in ``out`` and compare its outputs (section doc)."""
+    path = folder / RECORDING_FILE
+    if not path.is_file():
+        raise StoreError("recording_missing", f"{folder} holds no {RECORDING_FILE}")
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest.get("format") != RECORDING_FORMAT:
+        raise StoreError("recording_invalid", f"{path}: format {manifest.get('format')!r}")
+    if out.exists() and any(out.iterdir()):
+        raise StoreError("replay_exists", f"{out} is not empty: replay into a new folder")
+    script_raw = manifest["script"]
+    script = RunScript(str(script_raw["agent"]), str(script_raw["text"]),
+                       dict(script_raw.get("answers", {})), bool(script_raw.get("approve")),
+                       str(script_raw.get("owner", "local")))  # fmt: skip
+    inputs = folder / RECORDING_INPUTS
+    files = {
+        p.relative_to(inputs).as_posix(): p.read_text(encoding="utf-8")
+        for p in sorted(inputs.rglob("*")) if p.is_file()
+    } if inputs.is_dir() else {}  # fmt: skip
+    recorded = Recorded(read_stream(folder, "models"))
+    cfg = replace(config, storage=_local_store(out / "store"), mode="replay", record=None,
+                  search=f"replay:{folder}", network="off", server_url=None,
+                  live_env={}, search_env={})  # fmt: skip
+    loaded = load_definitions(cfg)
+    adapters = {d.agent.name: recorded_adapters(d.model_aliases.values(), recorded)
+                for d in loaded}  # fmt: skip
+    clock = FakeClock(datetime.fromisoformat(str(manifest["started_at"])))
+    out.mkdir(parents=True, exist_ok=True)
+    session = open_session(cfg, clock, adapters=adapters)
+    try:
+        ended = drive_script(session, script, files)
+        trace = _trace(session, script.owner, ended.run, out / "trace")
+    finally:
+        session.store.close()
+    (out / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True) + "\n",
+                                    encoding="utf-8")  # fmt: skip
+    want = json.loads((folder / OUTPUTS_FILE).read_text(encoding="utf-8"))
+    differing = tuple(sorted(k for k in set(want) | set(ended.outputs)
+                             if want.get(k) != ended.outputs.get(k)))  # fmt: skip
+    return Replayed(replace(ended, trace=trace), not differing, differing, out)

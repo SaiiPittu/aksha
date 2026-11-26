@@ -56,6 +56,7 @@ class BraveSearch:
             with urllib.request.urlopen(request, timeout=self.timeout_s) as response:
                 body = response.read(5 * 1024 * 1024)
         except urllib.error.HTTPError as e:
+            e.close()
             if e.code == 429 or e.code >= 500:
                 raise TransientStepError("transient", f"brave answered {e.code}") from e
             raise WebError(SEARCH_FAILED, f"brave answered {e.code}") from e
