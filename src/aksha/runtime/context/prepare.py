@@ -105,7 +105,8 @@ def prepare_context(
     choice = recorded_choice(before, instance)
     start = 1 if choice is None else choice.from_turn
     turns = tuple(
-        t for t in instance_turns(before, instance.run, instance.instance, blobs=blobs)
+        t
+        for t in instance_turns(before, instance.run, instance.instance, blobs=blobs)
         if t.number >= start
     )  # a summary covers the entry's own turns only (decision 36)
     through = summary_through(before, step, turns, plan, policy)

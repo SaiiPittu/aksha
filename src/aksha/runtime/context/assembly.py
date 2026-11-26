@@ -11,8 +11,8 @@ The order keeps the stable prefix first, so a provider's prefix cache stays warm
 1. ``system``: the agent's instructions; each stop-policy brief, outer to inner; the
    fixed data rule.
 2. ``user``: the read block (declared reads, rendered or by ref); the rebuild summary
-   of a fresh re-entry; the request with the Task brief and the person's answers (never
-   reduced).
+   of a fresh re-entry; the request with the Task's goal text and the person's answers
+   (never reduced).
 3. A resumed re-entry's session (decision 36): each segment's recorded summary and
    turns, masked by the plan, then the re-entry notice (``reentry.reentry_notice``).
 4. The recorded summary that stands for the entry's older turns, then the instance's own
@@ -120,11 +120,11 @@ def _head(
     out.append(Message("system", DATA_RULE))
     if reads.text:
         out.append(Message("user", reads.text))
-    brief = rebuild_brief_for(view, instance, blobs=blobs)
-    if brief is not None:
+    summary = rebuild_brief_for(view, instance, blobs=blobs)
+    if summary is not None:
         choice = recorded_choice(view, instance)
         added = () if choice is None else choice.new_reads
-        out.append(Message("user", rebuild_notice(brief, policy, added)))
+        out.append(Message("user", rebuild_notice(summary, policy, added)))
     request = "\n\n".join(
         p for p in (inputs.request, inputs.brief and f"Task: {inputs.brief}") if p
     )
@@ -216,7 +216,7 @@ def assemble_context(
         for t in instance_turns(v, instance.run, instance.instance, blobs=blobs)
         if max(covered, first - 1) < t.number < turn
     )
-    session = _session(v, instance, choice)
+    session = _session(v, instance, choice, blobs)
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)
     reason = continue_reason(v, instance, turn)
@@ -257,12 +257,12 @@ def assemble_context(
 
 
 def _session(
-    view: LogView, instance: InstanceRef, choice: ReentryChoice | None
+    view: LogView, instance: InstanceRef, choice: ReentryChoice | None, blobs: BlobStore | None
 ) -> tuple[SessionBlock, ...]:
     """A resumed entry's session as recorded on its ``task.entered`` (decision 36)."""
     if choice is None or choice.mode != "resume":
         return ()
-    return session_blocks(view, choice.session)
+    return session_blocks(view, choice.session, blobs=blobs)
 
 
 def _notice(

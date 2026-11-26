@@ -131,17 +131,22 @@ def change_notice(
 
 
 def rebuild_entry(view: LogView, instance: InstanceRef) -> Event | None:
-    """The instance's latest ``task.entered{cause: rebuild}`` in its run, or None."""
+    """The instance's current entry when it is a ``task.entered{cause: rebuild}``, or None.
+
+    Only the latest ``task.entered`` of the instance in its run counts: a rebuild summary
+    belongs to its own entry, and a later entry of any cause ends it.
+    """
     found: Event | None = None
     for e in view.events:
         if (
             e.type == "task.entered"
             and e.run == instance.run
-            and e.payload.get("cause") == "rebuild"
             and e.payload.get("task") == instance.task_path
             and e.payload.get("key") == instance.key
         ):
             found = e
+    if found is None or found.payload.get("cause") != "rebuild":
+        return None
     return found
 
 
@@ -194,28 +199,28 @@ def _rebuild_run(view: LogView, run: str) -> bool:
 
 
 def rebuild_notice(
-    brief: RebuildBrief, policy: ContextPolicy, new_reads: Iterable[str] = ()
+    summary: RebuildBrief, policy: ContextPolicy, new_reads: Iterable[str] = ()
 ) -> str:
-    """The rebuild brief as the first message of a fresh context (module doc, point 3).
+    """The rebuild summary as the first message of a fresh context (module doc, point 3).
 
     ``new_reads`` (decision 36) are the inputs that entered a read of every key since the
     old version was written; they are listed so the instance knows they are new.
     """
-    body, _ = cap_text(canonical_json(brief.content), policy.read_cap_chars)
+    body, _ = cap_text(canonical_json(summary.content), policy.read_cap_chars)
     lines = [
-        f"Rebuild: your earlier version {brief.old} is out of date. It was:",
+        f"Rebuild: your earlier version {summary.old} is out of date. It was:",
         body,
         "What changed:",
     ]
-    for r in brief.changed:
+    for r in summary.changed:
         now = r.now if r.now is not None else "gone"
         lines.append(f"- {r.input} ({r.state}) is now {now}")
-    if brief.current_reads:
-        lines += ["Read these instead:", *(f"- {r}" for r in brief.current_reads)]
-    if brief.statements:
+    if summary.current_reads:
+        lines += ["Read these instead:", *(f"- {r}" for r in summary.current_reads)]
+    if summary.statements:
         lines += [
             "The person already answered these; do not ask again:",
-            *(f"- {r}" for r in brief.statements),
+            *(f"- {r}" for r in summary.statements),
         ]
     added = list(new_reads)
     if added:

@@ -50,6 +50,7 @@ def stop_view(setup: LoopSetup, run: str, log: LogView | None = None) -> StopVie
     return StopView(
         setup.view() if log is None else log, setup.tree, run, setup.limits,
         agent_policies=setup.agent.stop_policies, context_policy=setup.policy(),
+        blobs=setup.blobs,
     )  # fmt: skip
 
 

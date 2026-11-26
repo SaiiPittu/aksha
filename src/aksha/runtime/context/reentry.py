@@ -10,17 +10,19 @@ back to fresh on any named trigger. The checks run in this order; the first that
 decides, and the reason is recorded:
 
 1. ``resume_disabled``: the run's setting is ``fresh``.
-2. ``session_missing``: no recorded session, or fewer turns than ``min_prior_turns``;
-   ``sessions_split``: the invalidated versions were written by more than one instance
+2. ``sessions_split``: the invalidated versions were written by more than one instance
    (a rebuild run serving two runs), so a session would merge runs. It never does.
+   ``session_missing``: no recorded session, or fewer turns than ``min_prior_turns``.
 3. ``definition_changed``: a session run started under another definition hash.
-4. ``prior_failed``, ``prior_looping``, ``prior_overflow``: the session's instance ended
-   blocked; at the turn or stop-veto limit, or repeating one call ``loop_repeats`` times;
-   or its last turn overflowed the context.
+4. ``prior_overflow``, ``prior_looping``, ``prior_failed``: the stop decision after the
+   session's last turn judged a context overflow; or the instance ended blocked at the
+   turn or stop-veto limit, or repeated one call ``loop_repeats`` times; or it ended
+   blocked for another reason.
 5. ``tainted_session``: a result in the session carried instruction-like text
    (:func:`instruction_text`) or a recorded ``instruction_text`` flag.
 6. ``premise_changed``: a premise of the session moved: a declared read its context
-   rendered, or a person's statement it read, unless the kind is ``premise_exempt``.
+   rendered (unless the kind is ``premise_exempt``), or a person's statement it read or
+   was shown that a later answer corrected (a statement span another one ``supersedes``).
 7. ``mostly_stale``: the stale marks would hide more than ``max_stale_permille`` of the
    session's characters.
 8. ``budget_exceeded``: the session, after its own recorded masks and summaries, plus
@@ -34,7 +36,8 @@ inside the stop decision that re-enters the instance, and recorded on
 events the context reads, so a replay loads them all), the inputs new since the session
 (``new_reads``, F5) and the measured sizes. Assembly reads the record and never
 recomputes the choice, so a restart sends the same bytes; :func:`reentry_divergences`
-recomputes it to check a replay.
+recomputes it to check a replay. Step payloads are read through the blob store
+(``blobs``), so an offloaded reply or result is sized, checked and shown whole.
 """
 
 from __future__ import annotations
@@ -45,6 +48,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Final, Literal, get_args
 
+from aksha.runtime.artifacts.blobs import inflate
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactRef, InputRef, WriterId
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.budgets.limits import turns_used
@@ -64,8 +69,10 @@ from aksha.runtime.context.types import (
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.execution.errors import StepIdInvalid
 from aksha.runtime.execution.types import StepId
+from aksha.runtime.grounding.spans import span_index
+from aksha.runtime.grounding.types import STATEMENT_SOURCE
 from aksha.runtime.invalidation.plan import plan_of
-from aksha.runtime.invalidation.types import RebuildBrief
+from aksha.runtime.invalidation.types import RebuildBrief, RebuildEntry
 from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.errors import TaskUnknown
@@ -120,7 +127,6 @@ session only loses resume. A tool may also flag its own result (``INSTRUCTION_FL
 """
 
 _LIMIT_CODES = frozenset({"turn_limit", "stop_veto_limit"})
-_OVERFLOW = "context_overflow"
 
 
 def instruction_text(text: str) -> bool:
@@ -253,7 +259,9 @@ class SessionBlock:
     turns: tuple[Turn, ...]
 
 
-def session_blocks(view: LogView, session: Iterable[Segment]) -> tuple[SessionBlock, ...]:
+def session_blocks(
+    view: LogView, session: Iterable[Segment], *, blobs: BlobStore | None = None
+) -> tuple[SessionBlock, ...]:
     """Each segment's turns and the newest summary made inside it, oldest segment first."""
     out: list[SessionBlock] = []
     for s in session:
@@ -263,20 +271,23 @@ def session_blocks(view: LogView, session: Iterable[Segment]) -> tuple[SessionBl
         covered = c.through_turn if c is not None else s.from_turn - 1
         turns = tuple(
             t
-            for t in instance_turns(view, s.run, s.instance)
+            for t in instance_turns(view, s.run, s.instance, blobs=blobs)
             if max(covered, s.from_turn - 1) < t.number <= s.through_turn
         )
         out.append(SessionBlock(s, c, turns))
     return tuple(out)
 
 
-def _origins(view: LogView, tree: CompiledTree, ref: InstanceRef) -> tuple[tuple[str, str], ...]:
-    """The instances that wrote the versions the plan re-enters ``ref`` for (F1)."""
+def _entries(view: LogView, tree: CompiledTree, ref: InstanceRef) -> tuple[RebuildEntry, ...]:
+    """The plan's entries that re-enter ``ref``'s writer, from one plan computation."""
     writer = WriterId(tree.agent, ref.task_path, ref.key)
+    return tuple(e for e in plan_of(view) if e.writer == writer)
+
+
+def _origins(view: LogView, entries: Iterable[RebuildEntry]) -> tuple[tuple[str, str], ...]:
+    """The instances that wrote the versions the plan re-enters an instance for (F1)."""
     out: list[tuple[str, str]] = []
-    for entry in plan_of(view):
-        if entry.writer != writer:
-            continue
+    for entry in entries:
         found = version(view, entry.invalidated)
         if found is None or found.step is None:
             continue
@@ -289,14 +300,16 @@ def _origins(view: LogView, tree: CompiledTree, ref: InstanceRef) -> tuple[tuple
     return tuple(out)
 
 
-def _session_of(view: LogView, run: str, instance: str) -> tuple[Segment, ...]:
+def _session_of(
+    view: LogView, run: str, instance: str, *, blobs: BlobStore | None = None
+) -> tuple[Segment, ...]:
     """The session an instance's context showed through its last turn.
 
     What it resumed itself (if it did), then its own turns since its entry.
     """
     ref = InstanceRef.parse(run, instance)
     prior = recorded_choice(view, ref)
-    turns = instance_turns(view, run, instance)
+    turns = instance_turns(view, run, instance, blobs=blobs)
     start = 1 if prior is None else prior.from_turn
     own = [t.number for t in turns if t.number >= start]
     segments: list[Segment] = []
@@ -319,7 +332,13 @@ def _prior_end(
     view: LogView, tree: CompiledTree, run: str, instance: str, pairs: Iterable[ToolPair],
     loop_repeats: int,
 ) -> FreshReason | None:  # fmt: skip
-    """``prior_failed``, ``prior_looping`` or ``prior_overflow`` for the session's instance."""
+    """``prior_overflow``, ``prior_looping`` or ``prior_failed`` for the session's instance.
+
+    An overflow is read from the stop decision's candidate, not its ``reason``: the leaf's
+    FAIL pops it and the walk goes on, so the record's reason is the final verdict's.
+    """
+    if _last_turn_overflowed(view, run, instance):
+        return "prior_overflow"
     ref = InstanceRef.parse(run, instance)
     last_fail: Event | None = None
     for e in view.events:
@@ -333,11 +352,8 @@ def _prior_end(
     except TaskUnknown:  # a Task the tree no longer has: definition_changed judges it
         blocked = False
     if blocked and last_fail is not None:
-        p = last_fail.payload
-        if p.get("limit") in _LIMIT_CODES:
+        if last_fail.payload.get("limit") in _LIMIT_CODES:
             return "prior_looping"
-        if p.get("reason") == _OVERFLOW:
-            return "prior_overflow"
         return "prior_failed"
     if blocked:
         return "prior_failed"
@@ -347,11 +363,11 @@ def _prior_end(
     return None
 
 
-def _tainted(view: LogView, pairs: Iterable[ToolPair]) -> bool:
+def _tainted(view: LogView, pairs: Iterable[ToolPair], blobs: BlobStore | None) -> bool:
     steps = {p.step: p for p in pairs}
     for e in view.events:
         if e.type == "step.completed" and e.step in steps:
-            value = e.payload.get("value")
+            value = inflate(e.payload, blobs).get("value")
             if isinstance(value, Mapping) and INSTRUCTION_FLAG in (value.get("flags") or ()):
                 return True
     return any(instruction_text(p.text) for p in steps.values())
@@ -378,23 +394,51 @@ def _session_reads(
 
 
 def _premise_moved(
-    view: LogView, run: str, session: tuple[Segment, ...], exempt: frozenset[str]
+    view: LogView,
+    run: str,
+    session: tuple[Segment, ...],
+    exempt: frozenset[str],
+    check: ReadChecker,
 ) -> bool:
     """Whether a declared read the session's context rendered, or a statement, moved."""
-    check = ReadChecker(view)
     rendered = [r for r in _session_reads(view, session, via="context") if r.kind == "artifact"]
-    statements = [r for r in _session_reads(view, session) if r.kind == "statement"]
-    for read in (*rendered, *statements):
-        if read.kind == "artifact" and ArtifactRef.from_input(read).kind in exempt:
+    for read in rendered:
+        if ArtifactRef.from_input(read).kind in exempt:
             continue
         if check.status(run, read).state in ("moved", "gone"):
             return True
-    return False
+    return bool(corrected_statements(view, session))
+
+
+def corrected_statements(view: LogView, session: Iterable[Segment]) -> tuple[str, ...]:
+    """The person's statements the session read or was shown that a later answer corrected.
+
+    A statement is a span of source ``statement`` (an interrupt answer, ADR-P13). The
+    session read it when a ``read.recorded`` of kind ``statement`` inside one of its
+    turns names the span (its ID, or its interrupt and answer as ``id`` and ``version``),
+    or was shown it when the span's ``shown_to`` holds a segment's instance. It moved
+    when a later statement span ``supersedes`` it. Returns the moved span IDs, sorted.
+    """
+    segments = tuple(session)
+    if not segments:
+        return ()
+    index = span_index(view)
+    replaced = index.superseded()
+    if not replaced:
+        return ()
+    owners = {(s.run, s.instance) for s in segments}
+    statements = [sp for sp in index.spans.values() if sp.source == STATEMENT_SOURCE]
+    by_answer = {(sp.record_id, sp.version): sp.span_id for sp in statements}
+    seen = {sp.span_id for sp in statements if sp.shown_to & owners}
+    for read in _session_reads(view, segments):
+        if read.kind == "statement":
+            seen.add(by_answer.get((read.id, read.version), read.id))
+    return tuple(sorted(seen & replaced))
 
 
 def _sizes(
     view: LogView, run: str, instance: str, blocks: tuple[SessionBlock, ...],
-    session: tuple[Segment, ...],
+    session: tuple[Segment, ...], checker: ReadChecker,
 ) -> tuple[int, int]:  # fmt: skip
     """The session's characters, and the part a resumed context would hide as stale.
 
@@ -402,7 +446,6 @@ def _sizes(
     result's body is counted whole.
     """
     prior = recorded_masks(view, run, instance, session)
-    checker = ReadChecker(view)
     total = 0
     stale = 0
     for block in blocks:
@@ -448,22 +491,32 @@ def new_reads(
 
 
 def choose_reentry(
-    view: LogView, tree: CompiledTree, ref: InstanceRef, policy: ContextPolicy
+    view: LogView,
+    tree: CompiledTree,
+    ref: InstanceRef,
+    policy: ContextPolicy,
+    *,
+    blobs: BlobStore | None = None,
 ) -> ReentryChoice:
-    """The re-entry mode of ``ref`` now (module doc). Pure: it reads only ``view``."""
+    """The re-entry mode of ``ref`` now (module doc). Pure: it reads only ``view``.
+
+    ``blobs`` inflates offloaded step payloads, so the session is read as it was sent.
+    """
     setting = reentry_setting(view, ref.run)
     from_turn = turns_used(view, ref.run, ref.instance) + 1
-    origins = _origins(view, tree, ref)
+    entries = _entries(view, tree, ref)
+    origins = _origins(view, entries)
     session: tuple[Segment, ...] = ()
     if len(origins) == 1:
-        session = _session_of(view, *origins[0])
-    blocks = session_blocks(view, session)
+        session = _session_of(view, *origins[0], blobs=blobs)
+    blocks = session_blocks(view, session, blobs=blobs)
     pairs = tuple(p for b in blocks for t in b.turns for p in t.pairs)
     count = sum(len(b.turns) for b in blocks)
-    seen = (*_session_reads(view, session), *_old_reads(view, tree, ref))
+    seen = (*_session_reads(view, session), *_old_reads(view, entries))
     runs = tuple(sorted({ref.run, *(r for r, _ in origins), *(s.run for s in session)}))
     fresh_runs = tuple(sorted({ref.run, *(r for r, _ in origins)}))
-    chars, stale = _sizes(view, ref.run, ref.instance, blocks, session)
+    checker = ReadChecker(view, blobs=blobs)
+    chars, stale = _sizes(view, ref.run, ref.instance, blocks, session, checker)
     rp = policy.resume
 
     def made(reason: FreshReason | None) -> ReentryChoice:
@@ -492,13 +545,11 @@ def choose_reentry(
         return made("definition_changed")
     last = session[-1]
     ended = _prior_end(view, tree, last.run, last.instance, pairs, rp.loop_repeats)
-    if ended is None and _last_turn_overflowed(view, last):
-        ended = "prior_overflow"
     if ended is not None:
         return made(ended)
-    if _tainted(view, pairs):
+    if _tainted(view, pairs, blobs):
         return made("tainted_session")
-    if _premise_moved(view, ref.run, session, rp.premise_exempt):
+    if _premise_moved(view, ref.run, session, rp.premise_exempt, checker):
         return made("premise_changed")
     if chars and stale * 1000 > rp.max_stale_permille * chars:
         return made("mostly_stale")
@@ -507,26 +558,24 @@ def choose_reentry(
     return made(None)
 
 
-def _old_reads(view: LogView, tree: CompiledTree, ref: InstanceRef) -> tuple[InputRef, ...]:
-    """The reads of the versions the plan re-enters ``ref`` for: what a fresh context knew."""
-    writer = WriterId(tree.agent, ref.task_path, ref.key)
+def _old_reads(view: LogView, entries: Iterable[RebuildEntry]) -> tuple[InputRef, ...]:
+    """The reads of the versions the plan re-enters an instance for: what fresh knew."""
     out: list[InputRef] = []
-    for entry in plan_of(view):
-        if entry.writer == writer:
-            found = version(view, entry.invalidated)
-            if found is not None:
-                out.extend(found.reads)
+    for entry in entries:
+        found = version(view, entry.invalidated)
+        if found is not None:
+            out.extend(found.reads)
     return tuple(out)
 
 
-def _last_turn_overflowed(view: LogView, last: Segment) -> bool:
-    """Whether the stop decision after the session's last turn judged an overflow."""
+def _last_turn_overflowed(view: LogView, run: str, instance: str) -> bool:
+    """Whether the stop decision after the instance's last turn judged an overflow."""
     for e in reversed(view.events):
         p = e.payload
         if (
             e.type == "stop.decided"
-            and e.run == last.run
-            and p.get("candidate_instance") == last.instance
+            and e.run == run
+            and p.get("candidate_instance") == instance
             and p.get("after_turn") is not None
         ):
             return bool(p.get("candidate") == "overflow")
@@ -615,13 +664,19 @@ class Divergence:
 
 
 def reentry_divergences(
-    view: LogView, tree: CompiledTree, policy: ContextPolicy
+    view: LogView,
+    tree: CompiledTree,
+    policy: ContextPolicy,
+    *,
+    blobs: BlobStore | None = None,
 ) -> tuple[Divergence, ...]:
     """Every recorded choice of ``tree``'s agent that differs when recomputed (F10).
 
     Each ``task.entered{reentry}`` is recomputed over ``view`` as it stood at the
-    recorded ``as_of_seq``; a different mode, reason or session is a divergence. Run it
-    over a view that holds :func:`runs_to_load` of the run being replayed.
+    recorded ``as_of_seq``. Any field that changes what is sent or what a replay must
+    load is compared: the mode, reason, setting, first turn, session, read runs and new
+    reads (the measured sizes are not, they only describe the session). Run it over a
+    view that holds :func:`runs_to_load` of the run being replayed.
     """
     agents = {
         e.run: e.payload.get("agent") for e in view.events if e.type == "run.started" and e.run
@@ -634,11 +689,11 @@ def reentry_divergences(
             continue
         recorded = ReentryChoice.from_json(e.payload["reentry"])
         ref = InstanceRef.parse(e.run, e.instance)
-        again = choose_reentry(view.upto(recorded.as_of_seq), tree, ref, policy)
-        if (again.mode, again.reason, again.session) != (
-            recorded.mode,
-            recorded.reason,
-            recorded.session,
-        ):
+        again = choose_reentry(view.upto(recorded.as_of_seq), tree, ref, policy, blobs=blobs)
+        if _compared(again) != _compared(recorded):
             out.append(Divergence(e.run, e.instance, recorded, again))
     return tuple(out)
+
+
+def _compared(c: ReentryChoice) -> tuple[object, ...]:
+    return (c.mode, c.reason, c.setting, c.from_turn, c.session, c.read_runs, c.new_reads)

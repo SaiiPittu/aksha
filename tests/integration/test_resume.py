@@ -80,7 +80,7 @@ def test_fresh_is_the_default_and_is_recorded(make: Any) -> None:
     extract = choice(r, run, "extract[C1]")
     # The session is measured even when it is not resumed, so an evaluation can compare.
     assert (extract["session_turns"], extract["session"]) == (2, ())
-    assert extract["read_runs"] == ("R-0001", run)  # the brief reads the old version
+    assert extract["read_runs"] == ("R-0001", run)  # the rebuild summary reads the old version
     first = r.requests_of(run, "extract[C1]")[0]
     assert texts(first)[2].startswith("Rebuild: your earlier version demo.extract/C1@v1")
     assert [m.role for m in first.messages].count("assistant") == 0  # no earlier turn
@@ -113,7 +113,7 @@ def test_resume_continues_the_writers_own_session(make: Any) -> None:
     assert "demo.extract/C1@v1 is out of date" in notice
     assert "record refs/K-C1@1 (moved) is now 2" in notice
     assert sum("Change notice:" in t for t in said) == 1
-    assert not any(t.startswith("Rebuild:") for t in said)  # no fresh brief
+    assert not any(t.startswith("Rebuild:") for t in said)  # no rebuild summary
 
     # compare and bundle read their input through their context: a premise, so fresh.
     for instance in ("compare[C1]", "bundle[C1]"):
@@ -172,6 +172,7 @@ def test_new_inputs_are_listed_in_the_notice(make: Any) -> None:
         ({"repeat": True}, "prior_looping"),
         ({"extract_turn_limit": 2}, "prior_looping"),
         ({"boom": True}, "prior_failed"),
+        ({"overflow": True}, "prior_overflow"),
         ({"resume": replace(LENIENT, max_stale_permille=0)}, "mostly_stale"),
         ({"resume": replace(LENIENT, headroom_chars=10**6)}, "budget_exceeded"),
     ],
@@ -186,12 +187,60 @@ def test_each_trigger_falls_back_to_fresh(
     said = texts(r.requests_of(run, "extract[C1]")[0])
     if reason is None:
         assert not any(t.startswith("Rebuild:") for t in said)
-    else:  # a fresh context: the brief, and none of the session's turns
+    else:  # a fresh context: the rebuild summary, and none of the session's turns
         assert any(t.startswith("Rebuild:") for t in said)
         assert c["session"] == ()
         assert [m.role for m in r.requests_of(run, "extract[C1]")[0].messages].count(
             "assistant"
         ) == 0
+
+
+def test_an_overflow_is_read_from_the_candidate_not_the_final_reason(make: Any) -> None:
+    """The leaf's FAIL pops on overflow and the walk goes on: the record's reason is not it."""
+    r = make(overflow=True)
+    run = settle(r, "resume")
+    (overflowed,) = [
+        e.payload
+        for e in r.events("stop.decided", "R-0001")
+        if e.payload.get("candidate") == "overflow"
+    ]
+    assert overflowed["candidate_instance"] == "extract[C1]"
+    assert ["extract[C1]", "fail"] in [list(p) for p in overflowed["pops"]]
+    assert overflowed.get("reason") != "context_overflow"  # the final verdict's reason
+    assert choice(r, run, "extract[C1]")["reason"] == "prior_overflow"
+
+
+def test_an_offloaded_session_turn_is_resumed_whole(make: Any) -> None:
+    """Decision 25: a session reply over the payload cap is read through the blob store."""
+    from aksha.runtime.context.reentry import choose_reentry
+    from aksha.runtime.tasks.types import InstanceRef
+    from tests.support.resume import BIG_TEXT
+
+    roomy = ContextPolicy(
+        high_water_chars=300_000, low_water_chars=200_000, context_limit_chars=400_000
+    )
+    r = make(big=True, context=roomy)
+    run = settle(r, "resume")
+    stubbed = [
+        e
+        for e in r.events("step.completed", "R-0001")
+        if e.step == "R-0001/extract[C1]/t01" and BIG_TEXT not in str(e.payload)
+    ]
+    assert stubbed  # the reply really was offloaded
+    c = choice(r, run, "extract[C1]")
+    assert (c["mode"], [dict(s) for s in c["session"]]) == ("resume", [RESUMED_SESSION])
+    assert c["session_chars"] > len(BIG_TEXT)  # sized from the reply, not its stub
+    first = r.requests_of(run, "extract[C1]")[0]
+    (reply,) = [m for m in first.messages if m.role == "assistant" and m.text]
+    assert reply.text == BIG_TEXT
+    # Without the blob store the session cannot be read at all, never read as stubs.
+    from aksha.runtime.artifacts.errors import BlobError
+
+    ref = InstanceRef(run, "extract", "C1")
+    with pytest.raises(BlobError):
+        choose_reentry(r.view().upto(c["as_of_seq"]), r.setup.tree, ref, r.setup.policy())
+    view = r.view()
+    assert reentry_divergences(view, r.setup.tree, r.setup.policy(), blobs=r.setup.blobs) == ()
 
 
 def test_definition_changed_falls_back_to_fresh(make: Any) -> None:
@@ -324,6 +373,23 @@ def test_replay_loads_the_read_runs(make: Any) -> None:
     assert (flipped.instance, flipped.recomputed.reason) == ("extract[C1]", "mostly_stale")
 
 
+def test_a_divergence_in_what_is_sent_is_reported(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mode, reason and session agree, but ``new_reads`` differs: still a divergence."""
+    import aksha.runtime.context.reentry as reentry
+
+    r = make()
+    settle(r, "resume")
+    view = r.view()
+    policy = r.setup.policy()
+    assert reentry_divergences(view, r.setup.tree, policy) == ()
+    monkeypatch.setattr(reentry, "new_reads", lambda *_: ("demo.extract/C9@v1",))
+    found = reentry_divergences(view, r.setup.tree, policy)
+    assert {d.instance for d in found} == {"extract[C1]", "compare[C1]", "bundle[C1]"}
+    assert all(d.recorded.mode == d.recomputed.mode for d in found)
+
+
 def test_the_choice_is_recorded_once_and_never_recomputed(make: Any) -> None:
     """Assembly reads the record: a policy changed after entry changes no request."""
     from aksha.runtime.context.assembly import assemble_context
@@ -386,3 +452,15 @@ def test_sigkill_at_every_commit_of_a_resumed_rebuild_recovers(tmp_path: Path) -
     else:
         raise AssertionError("the rebuild phase made 80 or more commits")
     assert killed >= 10
+
+
+def test_a_corrected_statement_is_a_moved_premise(
+    make: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A person's answer the session relied on was corrected: the session goes fresh."""
+    import aksha.runtime.context.reentry as reentry
+
+    monkeypatch.setattr(reentry, "corrected_statements", lambda *_: ("EX-0001",))
+    r = make(resume=replace(LENIENT, premise_exempt=frozenset({"demo.extract"})))
+    run = settle(r, "resume")
+    assert choice(r, run, "compare[C1]")["reason"] == "premise_changed"  # it resumed before

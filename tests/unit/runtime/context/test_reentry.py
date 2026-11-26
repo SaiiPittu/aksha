@@ -12,6 +12,7 @@ from aksha.runtime.context.reentry import (
     DEFAULT_SETTING,
     FRESH_REASONS,
     ReentryChoice,
+    corrected_statements,
     inherited_setting,
     instruction_text,
     reentry_setting,
@@ -161,3 +162,68 @@ def test_the_events_record_the_setting_and_the_choice() -> None:
 
 def test_the_catalogue_names_every_fresh_reason() -> None:
     assert frozenset(_FRESH_REASONS) == FRESH_REASONS
+
+
+def statement(span: str, interrupt: str, answer: str, *, supersedes: str | None = None,
+              shown_to: tuple[str, str] | None = None) -> Event:  # fmt: skip
+    s: dict[str, object] = {
+        "span_id": span, "source": "statement", "record_id": interrupt, "version": answer,
+        "start": 0, "end": 3, "text": "yes", "tool": "ask",
+    }  # fmt: skip
+    if supersedes is not None:
+        s["supersedes"] = supersedes
+    run, instance = shown_to or (None, None)
+    payload = {"tool": "ask", "spans": [s], "shown": [span] if shown_to else []}
+    return Event(
+        "excerpts.minted", payload, run=run, instance=instance, seq=1, owner="o", at=AT,
+        boot=0, schema_version=1,
+    )  # fmt: skip
+
+
+def statement_read(step: str, interrupt: str, answer: str) -> Event:
+    run, instance, _ = step.split("/", 2)
+    payload = {"input": InputRef("statement", interrupt, answer).as_json(), "via": "tool"}
+    return Event(
+        "read.recorded", payload, run=run, instance=instance, step=step, seq=1, owner="o",
+        at=AT, boot=0, schema_version=1,
+    )  # fmt: skip
+
+
+SESSION = (Segment("R-0001", "extract[C1]", 1, 2),)
+
+
+def test_a_statement_the_session_was_shown_moves_when_a_later_answer_corrects_it() -> None:
+    shown = statement("EX-0001", "I-0001", "A-1", shown_to=("R-0001", "extract[C1]"))
+    assert corrected_statements(log(shown), SESSION) == ()  # nothing corrects it yet
+    fixed = statement("EX-0002", "I-0001", "A-2", supersedes="EX-0001")
+    assert corrected_statements(log(shown, fixed), SESSION) == ("EX-0001",)
+    other = (Segment("R-0001", "extract[C2]", 1, 2),)
+    assert corrected_statements(log(shown, fixed), other) == ()  # another instance's
+
+
+def test_a_statement_the_session_read_moves_when_a_later_answer_corrects_it() -> None:
+    minted = statement("EX-0001", "I-0001", "A-1")
+    fixed = statement("EX-0002", "I-0001", "A-2", supersedes="EX-0001")
+    inside = statement_read("R-0001/extract[C1]/t02/c01", "I-0001", "A-1")
+    assert corrected_statements(log(minted, inside, fixed), SESSION) == ("EX-0001",)
+    after = statement_read("R-0001/extract[C1]/t03/c01", "I-0001", "A-1")
+    assert corrected_statements(log(minted, after, fixed), SESSION) == ()  # not the session's
+
+
+def entered(cause: str, **extra: object) -> Event:
+    payload = {"cause": cause, "task": "extract", "key": "C1", **extra}
+    return Event(
+        "task.entered", payload, run="R-0002", instance="extract[C1]", seq=1, owner="o", at=AT,
+        boot=0, schema_version=1,
+    )  # fmt: skip
+
+
+def test_the_rebuild_summary_belongs_to_the_current_entry_only() -> None:
+    from aksha.runtime.context.notices import rebuild_entry
+    from aksha.runtime.tasks.types import InstanceRef
+
+    ref = InstanceRef("R-0002", "extract", "C1")
+    rebuilt = entered("rebuild")
+    assert rebuild_entry(log(rebuilt), ref) is not None
+    later = entered("scheduler")
+    assert rebuild_entry(log(rebuilt, later), ref) is None  # a later entry ends it

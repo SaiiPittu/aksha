@@ -193,7 +193,8 @@ class TaskPolicy:
             choice = None
             if node.is_leaf:  # decision 36: the mode is chosen once, here, and recorded
                 policy = effective_policy(view.context_policy)
-                choice = choose_reentry(view.log, view.tree, ref, policy).as_json()
+                found = choose_reentry(view.log, view.tree, ref, policy, blobs=view.blobs)
+                choice = found.as_json()
             writer = writer_of(view.tree, ref)
             facts = reentry(view.log, view.tree, ref.run, writer, choice=choice)
             if node.is_leaf:
