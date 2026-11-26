@@ -19,7 +19,13 @@ Bundle output            From the run's artifacts
 ``review_summary/all``   ``needs.sample`` (rows, unique, duplicate pairs) and each need's
                          theme count over the unique reviews
 ``flag``                 each ``instruction-like`` finding, with the text it quotes
+``scope/all``            the ``scope`` artifact's geography (its words, the regions they name
+                         and where they came from, cited when a note gave them) and segment;
+                         saved last, so a change step can follow a finished export
 =======================  ===================================================================
+
+``review_summary/all`` also carries each theme's count of unique reviews inside the
+scope's geography (``themes_in_scope``, the ``needs`` artifact's ``in_scope_geography``).
 
 The adapter computes nothing a grader checks: it renames fields and resolves span IDs.
 """
@@ -40,6 +46,8 @@ from aksha.runtime.session.views import Waiting
 
 AGENT = "research"
 SOURCE = "corpus"
+COLLECTIONS = ("competitors", "reviews", "priorities")
+"""The agent's collections of ``corpus``, which a change set may move."""
 ANSWERS: Mapping[str, str] = {"segment": "offices", "geography": "EU"}
 """The scripted user's answers to the agent's scope questions, by question ID."""
 
@@ -50,6 +58,7 @@ class ResearchUnderTest(RuntimeUnderTest):
     name = AGENT
     agent = AGENT
     sources = (SOURCE,)
+    collections = COLLECTIONS
     request = "Who sells camera-free occupancy sensing for offices, and at what price?"
 
     def answer(self, w: Waiting, question: str, text: str) -> str:
@@ -87,6 +96,25 @@ class ResearchUnderTest(RuntimeUnderTest):
                     c = _cite(spans, e.get("cite"))
                     if c is not None:
                         episode.flag("instruction_like", c["exact"], c["file"])
+        self._scope(episode, spans, content("scope"))
+
+    def _scope(self, ep: Episode, spans: SpanIndex, scope: Mapping[str, Any]) -> None:
+        if not scope:
+            return
+        geo = scope.get("geography", {})
+        region = geo.get("normalised")
+        cite = _cite(spans, geo.get("cite"))
+        ep.save(
+            "scope",
+            "all",
+            {
+                "geography": geo.get("value"),
+                "regions": [] if region is None else str(region).split("+"),
+                "basis": geo.get("basis"),
+                "segment": scope.get("segment", {}).get("value"),
+            },
+            [] if cite is None else [cite],
+        )
 
     def _company(
         self,
@@ -159,6 +187,10 @@ class ResearchUnderTest(RuntimeUnderTest):
             if c is not None
         ]
         themes = {str(x.get("theme")): x.get("count") for x in needs.get("needs", ())}
+        in_scope = {
+            str(x.get("theme")): x.get("in_scope_geography", {}).get("count")
+            for x in needs.get("needs", ())
+        }
         ep.save(
             "review_summary",
             "all",
@@ -167,6 +199,7 @@ class ResearchUnderTest(RuntimeUnderTest):
                 "reviews_unique": sample.get("unique"),
                 "duplicates": [[d.get("review"), d.get("duplicate_of")] for d in duplicates],
                 "themes": themes,
+                "themes_in_scope": in_scope,
                 "statements": [
                     f"{x.get('phrase')} mention {x.get('need', x.get('theme'))}."
                     for x in needs.get("needs", ())

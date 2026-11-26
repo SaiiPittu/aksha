@@ -10,13 +10,19 @@
    ``value["view"]``, the artifacts it saved, the inputs it read, the spans it minted and
    the span ID of each of its drafts (``value["spans"]``).
    A call whose step has no ``step.completed`` is shown as ``no_result``, so the call and
-   its result stay paired. A step's payload is inflated from ``blobs`` first, so a reply
-   or a view moved to the blob store (decision 25) reads as it was recorded.
+   its result stay paired. A step's inputs are the reads it recorded, plus each source
+   record its cited spans quote when the instance recorded that version at an earlier
+   step: a read is recorded once per instance (``artifacts.lineage.reads_to_record``), so a
+   second tool that returned the same version recorded none, and without this its result
+   would never be found stale when the record moves (decision 32, decision 36). A step's
+   payload is inflated from ``blobs`` first, so a reply or a view moved to the blob store
+   (decision 25) reads as it was recorded.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
 from aksha.runtime.artifacts.blobs import inflate
@@ -26,6 +32,7 @@ from aksha.runtime.context.types import ToolPair, Turn
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.execution.errors import StepIdInvalid
 from aksha.runtime.execution.types import StepId
+from aksha.runtime.grounding.types import STATEMENT_SOURCE
 from aksha.runtime.models.codec import generation_result
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tools.results import VIEW_FIELD, view_from_json
@@ -68,7 +75,15 @@ def instance_turns(
     saved: dict[str, list[str]] = {}
     reads: dict[str, list[InputRef]] = {}
     spans: dict[str, list[str]] = {}
+    quoted: dict[str, InputRef] = {}
+    mine: set[InputRef] = set()
     for e in view.events:
+        if e.type == "excerpts.minted":
+            for span in e.payload["spans"]:
+                if span.get("source") != STATEMENT_SOURCE:
+                    quoted[str(span["span_id"])] = InputRef(
+                        "record", str(span["record_id"]), str(span["version"])
+                    )
         if e.step is None:
             continue
         if e.type == "step.completed":
@@ -82,7 +97,10 @@ def instance_turns(
         elif e.type == "artifact.saved":
             saved.setdefault(e.step, []).append(str(e.payload["ref"]))
         elif e.type == "read.recorded" and e.payload.get("via") == "tool":
-            reads.setdefault(e.step, []).append(InputRef.from_json(e.payload["input"]))
+            read = InputRef.from_json(e.payload["input"])
+            reads.setdefault(e.step, []).append(read)
+            if _mine(_parse(e.step), run, instance):
+                mine.add(read)
         elif e.type == "excerpts.minted":
             spans.setdefault(e.step, []).extend(str(s["span_id"]) for s in e.payload["spans"])
     out: list[Turn] = []
@@ -108,8 +126,21 @@ def instance_turns(
                     spans=tuple(spans.get(step, ())),
                 )
             )
+            pairs[-1] = _with_quoted_reads(pairs[-1], quoted, mine)
         out.append(Turn(number, str(event.step), result.text, result.tool_calls, tuple(pairs)))
     return tuple(out)
+
+
+def _with_quoted_reads(
+    pair: ToolPair, quoted: Mapping[str, InputRef], mine: set[InputRef]
+) -> ToolPair:
+    """``pair`` with the instance's recorded reads its cited spans quote (module doc, 2)."""
+    extra = [
+        r
+        for r in dict.fromkeys(quoted[c] for c in pair.cites if c in quoted)
+        if r in mine and r not in pair.reads
+    ]
+    return replace(pair, reads=(*pair.reads, *extra)) if extra else pair
 
 
 def _pair(

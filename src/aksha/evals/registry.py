@@ -23,9 +23,13 @@ import hashlib
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from aksha.evals.errors import EvalError
 from aksha.evals.ports import AgentUnderTest
+
+if TYPE_CHECKING:
+    from aksha.evals.case import Arm
 
 
 @dataclass(frozen=True)
@@ -38,6 +42,16 @@ class Registration:
     description: str = ""
     definition_hash: str = ""
     definition_basis: str = ""
+    armed: Callable[[Arm], AgentUnderTest] | None = None
+    """Builds the agent for one arm of a comparison case; None when it runs no arms."""
+
+    def build(self, arm: Arm | None = None) -> AgentUnderTest:
+        """A fresh agent for one episode, under ``arm`` when the case has arms."""
+        if arm is None:
+            return self.factory()
+        if self.armed is None:
+            raise EvalError("arms_unsupported", f"agent {self.name!r} cannot run arm {arm.name}")
+        return self.armed(arm)
 
 
 class AgentRegistry:
@@ -54,12 +68,18 @@ class AgentRegistry:
         *,
         mode: str = "fake",
         description: str = "",
+        armed: Callable[[Arm], AgentUnderTest] | None = None,
     ) -> None:
-        """Register ``name``; a second registration of one name is refused."""
+        """Register ``name``; a second registration of one name is refused.
+
+        ``armed`` builds the agent for one arm of a comparison case (its own re-entry
+        setting and context policy); an agent registered without it runs no arms.
+        """
         if name in self._by_name:
             raise EvalError("agent_registered", f"agent {name!r} is registered twice")
         digest, basis = definition_hash(factory)
-        self._by_name[name] = Registration(name, factory, mode, description, digest, basis)
+        self._by_name[name] = Registration(name, factory, mode, description, digest, basis,
+                                           armed)  # fmt: skip
 
     def get(self, name: str) -> Registration:
         """The registration of ``name``, or ``agent_not_registered``."""

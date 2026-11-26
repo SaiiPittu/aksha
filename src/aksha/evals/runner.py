@@ -42,6 +42,8 @@ from aksha.evals.selftest.run import relation_self_test, self_test
 from aksha.evals.state import fold
 from aksha.evals.world import World, load_change_set, load_world, lock_digest, renaming
 
+ARMS_FOLDER = "_arms"
+"""Where the episodes of a comparison case's arms go: ``<out>/_arms/<arm>/<case>/...``."""
 RUN_MARKER = ".aksha-eval-run"
 """The file that marks a folder as an eval run's output, safe to clear for the next run."""
 
@@ -100,12 +102,13 @@ def _conditions(
     mode: str,
     agent: Registration,
     extra: Mapping[str, Any],
+    definition_hash: str = "",
 ) -> dict[str, Any]:
     faults = suite.faults.get(case.faults) if case.faults else None
     versions = {c: REGISTRY[c].version for c in episode_criteria(case, REGISTRY)[0]}
     return {
         "mode": mode,
-        "agent_definition_hash": agent.definition_hash,
+        "agent_definition_hash": definition_hash or agent.definition_hash,
         "agent_definition_basis": agent.definition_basis,
         "seed": seed,
         "k": k,
@@ -165,14 +168,20 @@ def run_suite(
             name = agent_override or case.agents[0]
             reg = agents.get(name)
             rollouts = k or case.k or suite.k
-            for wname in case.worlds:
+            for arm, wname in [(a, w) for a in case.arms or (None,) for w in case.worlds]:
                 world = worlds[wname]
                 env = Environment(
-                    world, open_store=open_store, out=out, seed=seed, faults=dict(suite.faults)
+                    world,
+                    open_store=open_store,
+                    out=out if arm is None else out / ARMS_FOLDER / arm.name,
+                    seed=seed,
+                    faults=dict(suite.faults),
                 )
+                label = case.id if arm is None else f"{case.id}[{arm.name}]"
                 for r in range(rollouts):
                     h = env.reset(case, r, agent=name, mode=reg.mode)
-                    env.run(h, reg.factory())
+                    agent = reg.build(arm)
+                    env.run(h, agent)
                     rec = env.finalize(h)
                     v = grade(
                         rec,
@@ -182,10 +191,21 @@ def run_suite(
                         REGISTRY,
                         judge=judge,
                     )
-                    records[(case.id, wname, r)] = rec
-                    verdicts[(case.id, wname, r)] = v
+                    records[(label, wname, r)] = rec
+                    verdicts[(label, wname, r)] = v
+                    measured = getattr(agent, "metrics", None)
+                    extra_row: dict[str, Any] = {}
+                    if arm is not None:
+                        extra_row["arm"] = {
+                            **arm.as_json(),
+                            "compare": [list(pair) for pair in case.compare],
+                        }
+                    if callable(measured):
+                        extra_row["metrics"] = dict(measured())
+                    digest = getattr(agent, "definition_hash", "") or reg.definition_hash
                     writer.episode(
                         {
+                            **extra_row,
                             "case": case.id,
                             "world": wname,
                             "cluster": world.cluster,
@@ -213,6 +233,7 @@ def run_suite(
                                 mode=reg.mode,
                                 agent=reg,
                                 extra=conditions or {},
+                                definition_hash=digest,
                             ),
                         }
                     )

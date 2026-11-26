@@ -221,6 +221,8 @@ EVAL_TYPES: tuple[EventTypeSpec, ...] = (
             "bundle_path": _STR,
             "trace_path": _STR,
             "conditions": {"type": "object"},
+            "arm": {"type": "object"},
+            "metrics": {"type": "object"},
         },
         ["case", "world", "rollout", "agent", "verdict", "criteria", "steps", "trace_hash"],
     ),

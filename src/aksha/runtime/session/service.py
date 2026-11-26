@@ -68,8 +68,8 @@ from aksha.runtime.invalidation.commands import (
     reject_review,
 )
 from aksha.runtime.invalidation.ports import VersionedSource
-from aksha.runtime.loop.drive import drive, drive_pass
-from aksha.runtime.loop.types import LoopSetup
+from aksha.runtime.loop.drive import drive, drive_pass, drive_rebuilds
+from aksha.runtime.loop.types import DriveResult, LoopSetup
 from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.types import OutboxEntry
@@ -502,6 +502,30 @@ class Session:
         return resume_owner(self.store, owner, driver, clock=self.clock, loaded=self.loaded(),
                             outbox=self._outbox(owner), skip=blocked)  # fmt: skip
 
+    def drive_rebuilds(self, owner: str) -> tuple[DriveResult, ...]:
+        """Open and drive the rebuild runs each loaded agent needs, until none opens (ADR-P05 D8).
+
+        After a source change (``ApplySourceChange``) this is what regenerates the work it
+        invalidated: per agent, ``loop.drive.drive_rebuilds`` opens one run per set of
+        runnable work, never for held work, and drives it until it ends or waits on a
+        person; a waiting run is driven on by :meth:`run_until_yield` once answered. Each
+        run's request is the one its rebuilt-for run was opened with. Returns every drive's
+        result, agents in name order.
+        """
+        out: list[DriveResult] = []
+        for name in sorted(self.agents):
+            agent = self.agents[name]
+            view = load_view(self.store, owner)
+            setup = agent.setup(self.store, owner, _latest_request(view, name),
+                                sandbox=self.sandbox(), blobs=self.blobs,
+                                reader=self.reader)  # fmt: skip
+            try:
+                out.extend(drive_rebuilds(setup, self._executor(owner), self.ids))
+            except EffectNeedsOutbox as e:
+                why = f"{e.code}: {e.message}"
+                self._unavailable.setdefault(owner, {})[f"rebuilds of {name}"] = why
+        return tuple(out)
+
     def unavailable(self, owner: str) -> Mapping[str, str]:
         """``owner``'s runs this process skipped, each with why (an effect with no system)."""
         return MappingProxyType(dict(self._unavailable.get(owner, {})))
@@ -561,18 +585,37 @@ def _plain(value: object) -> Any:
 
 
 def _request(view: LogView, run: str) -> str:
-    """The text of the message that opened ``run`` (empty for a run no message opened)."""
+    """The text of the message that opened ``run``.
+
+    A rebuild run no message opened has the request of the first run it rebuilds for
+    (``run.started{for_runs}``), so every pass of it shows the model the same request; a run
+    with neither is empty.
+    """
     message: str | None = None
     for e in view.events:
         if e.type == "route.decided" and e.payload.get("run") == run:
             message = str(e.payload.get("message"))
             break
     if message is None:
+        for e in view.events:
+            if e.type == "run.started" and e.run == run:
+                for_runs = [str(r) for r in e.payload.get("for_runs", ()) if r != run]
+                return _request(view, for_runs[0]) if for_runs else ""
         return ""
     for e in view.events:
         if e.type == "user.message" and e.payload.get("message") == message:
             return str(e.payload.get("text", ""))
     return ""
+
+
+def _latest_request(view: LogView, agent: str) -> str:
+    """The request of ``agent``'s latest run a message opened (empty when it has none)."""
+    latest = ""
+    for e in view.events:
+        if e.type == "run.started" and e.payload.get("agent") == agent and e.run is not None:
+            text = _request(view, e.run)
+            latest = text or latest
+    return latest
 
 
 def derive_id(command: n.NamedCommand) -> str:

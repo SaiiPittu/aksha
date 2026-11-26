@@ -1,0 +1,44 @@
+id = "change-scope-resume-vs-fresh"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: resume against fresh on the scope-change scenario (decision 36)"
+category = "change"
+agents = ["research"]
+worlds = ["stillroom"]
+description = """
+The person amends the research scope after a finished request run: the geography widens
+from the European Union to the European Union and the United Kingdom (change set
+scope-eu-uk, one dated line added to the priorities note the scope reads). The runtime
+rebuilds every output that read the scope, once per arm, and each arm is graded against the
+change set's derived key and measured on model turns, tool calls, tokens and context size
+in the rebuild runs. In fake model mode the measures are a property of the rule-based fake;
+the comparison that decides the default needs a live model. Fresh stays the default.
+"""
+opening = "Research the market for a camera-free ceiling occupancy sensor for facilities and workplace teams in 200 to 2,000 person offices."
+expect = ["change.stale", "change.unchanged", "scope_change.regions", "scope_change.in_scope_themes"]
+criteria = ["change.stale_set", "change.unchanged_set", "research.scope_change", "citation.exists", "inv.one_row_per_key", "no_unbound_send"]
+should = ["research.competitor_count", "research.prices", "research.unique_reviews"]
+compare = [["resume", "fresh"], ["resume_scope_exempt", "fresh"]]
+
+[[change_steps]]
+# The first export ends with scope/all, so the change lands after a finished request run.
+after = "episode.output_saved:scope/all"
+change_set = "scope-eu-uk"
+restart = true
+
+[[arms]]
+name = "fresh"
+reentry = "fresh"
+
+[[arms]]
+# Direct readers of the scope see their premise move and fall back to fresh
+# (premise_changed); Tasks that read the scope only through a tool may resume.
+name = "resume"
+reentry = "resume"
+
+[[arms]]
+# The scope kind is premise-exempt, so its direct readers may resume too. This changes the
+# agent definition hash, so this arm is reported beside the other two, never pooled.
+name = "resume_scope_exempt"
+reentry = "resume"
+premise_exempt = ["research.scope"]

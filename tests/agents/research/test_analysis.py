@@ -19,11 +19,29 @@ def test_pages_merge_only_on_a_relationship_sentence() -> None:
     new = _page("p/b", "2026-09-15", "Presence P1", "Corvane Group", said)
     other = _page("p/c", "2026-01-01", "Kelvra TS-32", "Kelvra Systems")
     companies = analysis.resolve([old, new, other])
-    assert [c.key for c in companies] == ["brightfield-analytics", "kelvra-systems"]
+    assert [c.key for c in companies] == ["c01-brightfield-analytics", "c02-kelvra-systems"]
     merged = companies[0]
     assert merged.canonical == "Brightfield Analytics"  # the earliest page's company
     assert merged.aliases == ("OccuPoint", "Corvane Group", "Presence P1")
     assert [(a.record, b.record) for a, b, _ in merged.merges] == [("p/b", "p/a")]
+
+
+def test_companies_come_in_page_discovery_order_whatever_their_names() -> None:
+    """A rename must not reorder the companies: their order is their first page's position."""
+    pages = [
+        _page("p/01", "2026-01-01", "Zeta One", "Zeta Labs"),
+        _page("p/02", "2026-01-01", "Alpha One", "Alpha Labs"),
+        _page("p/03", "2026-01-01", "Mid One", "Mid Labs"),
+    ]
+    renamed = [
+        _page("p/01", "2026-01-01", "Able One", "Able Labs"),
+        _page("p/02", "2026-01-01", "Yonder One", "Yonder Labs"),
+        _page("p/03", "2026-01-01", "Bravo One", "Bravo Labs"),
+    ]
+    order = [[p.record for c in analysis.resolve(ps) for p in c.pages] for ps in (pages, renamed)]
+    assert order[0] == order[1] == ["p/01", "p/02", "p/03"]
+    keys = [c.key for c in analysis.resolve(renamed)]
+    assert keys == sorted(keys)  # the runtime fans out by sorted key, so keys sort that way too
 
 
 def test_names_that_look_alike_are_never_merged() -> None:

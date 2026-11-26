@@ -108,3 +108,35 @@ def test_a_case_naming_an_undefined_fault_profile_is_refused(tmp_path: Path) -> 
     )
     with pytest.raises(CaseInvalid):
         load_suite(tmp_path)
+
+
+def test_arms_are_named_once_and_set_a_runtime_reentry_setting() -> None:
+    from aksha.evals.case import Arm
+    from aksha.runtime.context.reentry import REENTRY_SETTINGS
+
+    c = case(arms=(Arm("fresh", "fresh"), Arm("resume", "resume", ("research.scope",))),
+             compare=(("resume", "fresh"),))  # fmt: skip
+    assert [a.name for a in c.arms] == ["fresh", "resume"]
+    with pytest.raises(CaseInvalid):
+        case(arms=(Arm("a", "fresh"), Arm("a", "resume")))
+    with pytest.raises(CaseInvalid):
+        case(arms=(Arm("a", "sometimes"),))
+    with pytest.raises(CaseInvalid):
+        case(arms=(Arm("a", "fresh"),), compare=(("a", "b"),))
+    with pytest.raises(CaseInvalid):
+        case(arms=(Arm("a", "fresh"),), relation="invariance")
+    from aksha.evals.case import ARM_REENTRY
+
+    assert set(ARM_REENTRY) == set(REENTRY_SETTINGS)
+
+
+def test_the_resume_against_fresh_case_loads_from_the_change_suite() -> None:
+    """Decision 36's comparison is a TOML case of the runner's format, with its three arms."""
+    suite = load_suite(SUITES / "change")
+    c = suite.case("change-scope-resume-vs-fresh")
+    arms = {a.name: a for a in c.arms}
+    assert (arms["fresh"].reentry, arms["resume"].reentry) == ("fresh", "resume")
+    assert arms["resume_scope_exempt"].premise_exempt == ("research.scope",)
+    assert c.compare == (("resume", "fresh"), ("resume_scope_exempt", "fresh"))
+    assert [s.change_set for s in c.change_steps] == ["scope-eu-uk"]
+    assert {"change.stale_set", "change.unchanged_set", "research.scope_change"} <= set(c.criteria)

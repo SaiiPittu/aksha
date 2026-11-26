@@ -7,6 +7,12 @@ picks the next calls of its Task by fixed rules, so a run in ``fake`` mode is of
 writes the same bytes twice. The judgement it applies is in ``analysis.py``; this module
 only turns tool results into calls and saved content.
 
+The scope's geography comes from the request, else the person's answer; a line of a note
+that starts ``Scope amendment`` and names geographies is the person's later written word
+and wins over both (``basis: note``, cited to that line), and no geography question is
+asked then. Several regions normalise to one joined name (``EU+UK``); the reviews counted
+inside the scope are those whose country is in any of them.
+
 Text inside a fetched page is data: a passage flagged ``instruction_like`` is recorded as
 a flag and never changes a call. :class:`ObedientModel` is the counter-example for tests:
 it does what such a passage says, and the policy gate refuses it.
@@ -61,6 +67,8 @@ ASK_GEOGRAPHY = (
     "Which geography should this cover? Prices are listed in EUR and USD and reviews come "
     "from several countries, so it changes what counts."
 )
+AMENDMENT = "scope amendment"
+"""How a note line that amends the scope starts (case folded); its geography words win."""
 BOUNDARY_IN = "products that do the job the question names, and the manual ways buyers use today"
 
 _ARTIFACT = re.compile(r"^\[artifact ([^,\]]+), (full|summary)\]\n(.*)$", re.S)
@@ -219,6 +227,38 @@ def _found_word(text: str, table: Sequence[str] | Mapping[str, str]) -> str | No
     return None
 
 
+def _found_all(text: str, table: Mapping[str, str]) -> list[str]:
+    """Every value of ``table`` whose word ``text`` holds, in table order, each once."""
+    low = text.lower()
+    out: list[str] = []
+    for word, value in table.items():
+        if re.search(rf"\b{re.escape(word)}\b", low) and value not in out:
+            out.append(value)
+    return out
+
+
+def members(region: object) -> frozenset[str]:
+    """The countries a normalised region names: ``EU+UK`` is the EU's members and ``UK``."""
+    out: set[str] = set()
+    for part in str(region).split("+"):
+        out |= REGION_MEMBERS.get(part, frozenset({part}))
+    return frozenset(out)
+
+
+def _amendment(notes: Sequence[Result]) -> dict[str, Any] | None:
+    """The latest scope amendment a note states (a line ``Scope amendment ...``), if any."""
+    found: dict[str, Any] | None = None
+    for r in notes:
+        assert r.data is not None
+        for line in r.data["lines"]:
+            text = str(line["text"])
+            regions = _found_all(text, GEOGRAPHIES)
+            if text.lower().startswith(AMENDMENT) and regions:
+                found = {"value": text, "normalised": "+".join(regions), "basis": "note",
+                         "cite": r.cite(line["n"], text)}  # fmt: skip
+    return found
+
+
 def _scope(seen: Seen) -> GenerationResult:
     if not seen.of("search"):
         return _calls(seen, [("search", {"collection": NOTES, "terms": ["priorit"]})])
@@ -230,6 +270,7 @@ def _scope(seen: Seen) -> GenerationResult:
     answered = {q: (a, s) for q, a, s in seen.answers}
     segment = _found_word(seen.request, SEGMENTS)
     region = _found_word(seen.request, GEOGRAPHIES)
+    amended = _amendment(notes)
     questions = []
     if segment is None and not any("buyers" in q for q in answered):
         questions.append(
@@ -238,7 +279,7 @@ def _scope(seen: Seen) -> GenerationResult:
                 "text": ASK_SEGMENT,
             }
         )
-    if region is None and not any("geography" in q for q in answered):
+    if region is None and amended is None and not any("geography" in q for q in answered):
         questions.append(
             {
                 "id": "geography",
@@ -265,6 +306,8 @@ def _scope(seen: Seen) -> GenerationResult:
     geography = basis(region, "geography", GEOGRAPHIES)
     if region is not None:
         geography["normalised"] = region
+    if amended is not None:
+        geography = amended  # the person's later written amendment wins over all else
     out: list[dict[str, Any]] = []
     for r in notes:
         assert r.data is not None
@@ -567,12 +610,12 @@ def _voice(seen: Seen) -> GenerationResult:
     sample = analysis.review_sample(rows)
     scope = seen.artifact("research.scope")
     region = scope[1]["geography"].get("normalised") if scope else None
-    members = REGION_MEMBERS.get(str(region), frozenset({str(region)}))
+    countries = members(region)
     by_id = {r["fields"]["review_id"]: r for r in rows}
     needs = []
     for theme, hits in sample.themes.items():
         dates = sorted(str(h["fields"]["date"]) for h in hits)
-        in_scope = [h for h in hits if h["fields"].get("geography") in members]
+        in_scope = [h for h in hits if h["fields"].get("geography") in countries]
         needs.append(
             {
                 "theme": theme,

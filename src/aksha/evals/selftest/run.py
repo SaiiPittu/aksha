@@ -24,7 +24,7 @@ from aksha.evals.case import EvalCase
 from aksha.evals.criteria.forbidden import NEGATIVE_SETS, violations
 from aksha.evals.environment import Environment
 from aksha.evals.grade import Criterion, Verdict, grade
-from aksha.evals.key import AnswerKey
+from aksha.evals.key import AnswerKey, load_key
 from aksha.evals.ports import AgentUnderTest, StoreOpener
 from aksha.evals.relations import directional, key_delta
 from aksha.evals.selftest.bundles import (
@@ -37,7 +37,7 @@ from aksha.evals.selftest.bundles import (
 )
 from aksha.evals.selftest.mutants import MUTANTS
 from aksha.evals.state import fold
-from aksha.evals.world import Renaming, World
+from aksha.evals.world import Renaming, World, load_change_set
 
 LISTER_MUST_FAIL = ("research.competitor_count", "patent.matrix", "trap.T-DUP")
 HEDGER_MUST_FAIL = ("precision.known_values",)
@@ -96,6 +96,20 @@ def selftest_case(world: World, key: AnswerKey, registry: Mapping[str, Criterion
         expect=tuple(expect),
         criteria=tuple(registry),
     )
+
+
+def case_key(world: World, key: AnswerKey, case: EvalCase) -> AnswerKey:
+    """The key ``case`` is meant to be graded with: its last change set's derived key, if any.
+
+    The null bundle applies no change, so the runner would grade it with the world's key;
+    a change case's criteria read the derived key's change section, so the null bundle is
+    graded with that key here, and must still fail.
+    """
+    for step in case.change_steps:
+        cs = load_change_set(world, step.change_set)
+        if cs.key is not None:
+            key = load_key(world, cs.key)
+    return key
 
 
 def _run(env: Environment, case: EvalCase, agent: AgentUnderTest, name: str) -> EpisodeRecord:
@@ -174,7 +188,7 @@ def self_test(
     if cases:
         problems = []
         for c in cases:
-            outcome = grade(null_rec, c, key, world, registry).outcome
+            outcome = grade(null_rec, c, case_key(world, key, c), world, registry).outcome
             if c.needs_action and outcome != "fail":
                 problems.append(f"{c.id}: the null bundle is {outcome}, want fail (needs_action)")
             elif not c.needs_action and outcome == "fail":
