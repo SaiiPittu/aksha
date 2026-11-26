@@ -205,7 +205,8 @@ class SessionAgent:
 
     def routable(self) -> RoutableAgent:
         """The agent as the router and a request run's ``run.started`` see it (decision 36)."""
-        return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry)
+        return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry,
+                             self.agent.invalidation)  # fmt: skip
 
     def run_fields(self) -> dict[str, Any]:
         """What ``run.started`` records for this agent beyond its name and cause."""

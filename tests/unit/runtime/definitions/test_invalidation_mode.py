@@ -139,3 +139,22 @@ def test_a_tool_that_edits_nothing_keeps_its_registry_hash() -> None:
     assert "edits" not in entry["spec"]
     edited = ToolSpec("w", "coder", "store", "Write.", ARGS, edits=EditSpec("files", "/path"))
     assert registry(edited).canonical_hash() != registry(plain).canonical_hash()
+
+
+def test_a_routed_run_of_a_loaded_agent_records_its_mode(plugins: Plugins) -> None:
+    """A run the router opens records the declared mode; without it the run reads ``rebuild``."""
+    from aksha.runtime.router.facts import run_opened
+    from aksha.runtime.session.service import SessionAgent
+    from aksha.runtime.tasks.tree import compile_tree
+
+    _declare(plugins, "edit_guard")
+    (loaded,) = load_agents([plugins.toy], [plugins.extensions])
+    agent = SessionAgent(
+        agent=loaded.agent,
+        tree=compile_tree(loaded.agent.name, loaded.agent.tasks),
+        registry=loaded.registry,
+        table=None,  # type: ignore[arg-type]  # routing reads no model binding
+        definition_hash=loaded.definition_hash,
+    )
+    event = run_opened("S-0001", "R-0001", agent.routable())
+    assert event.payload["invalidation"] == "edit_guard"
