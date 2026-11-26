@@ -64,16 +64,37 @@ def next_action(extraction: Mapping[str, Any], comparison: Mapping[str, Any]) ->
 
 
 def family_of(publications: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]:
-    """Families: publications joined when they share a ``SYN-PRI`` priority number."""
+    """Families: publications joined when they share a priority number (any office's).
+
+    A family is named by its earliest priority: the earliest-dated claim that is a priority
+    claim proper (not a ``relation`` such as "continuation of", which still joins the
+    family). A publication that claims no priority is its own family, named by its number.
+    """
+    parent: dict[str, str] = {}
+
+    def find(x: str) -> str:
+        while parent.setdefault(x, x) != x:
+            x = parent[x]
+        return x
+
+    for p in publications:
+        numbers = [str(c["number"]) for c in p.get("priority_claims", ()) if c.get("number")]
+        find(str(p["id"]))
+        for n in numbers:
+            a, b = find(str(p["id"])), find("prio:" + n)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
     families: dict[str, list[str]] = {}
     for p in publications:
-        numbers = [
-            c["number"]
-            for c in p.get("priority_claims", ())
-            if str(c["number"]).startswith("SYN-PRI")
-        ]
-        head = numbers[0] if numbers else str(p["id"])
-        families.setdefault(head, []).append(str(p["id"]))
+        root = find(str(p["id"]))
+        names = sorted(
+            (bool(c.get("relation")), str(c.get("date") or "9999"), str(c["number"]))
+            for q in publications
+            if find(str(q["id"])) == root
+            for c in q.get("priority_claims", ())
+            if c.get("number")
+        )
+        families.setdefault(names[0][2] if names else str(p["id"]), []).append(str(p["id"]))
     return {k: sorted(v) for k, v in sorted(families.items())}
 
 

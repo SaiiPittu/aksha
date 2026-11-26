@@ -49,7 +49,8 @@ def render(report: Report, work: str) -> str:
         f"   added {', '.join(c['added'])} (a new publication family)",
         f"   edited {', '.join(c['edited'])} (the outside suggestion, now dated earlier)",
         f"   one command recorded {len(c['records_moved'])} moved records and re-ran "
-        f"{c['queries_rerun']} recorded searches: {c['queries_changed']} found new hits",
+        f"{c['queries_rerun']} recorded searches and listings: {c['queries_changed']} found "
+        "new hits",
         "",
         f"3. Invalidation reopens only what depends on the change ({acts['rebuild']} s)",
         f"   reached {len(c['invalidated'])} invalidated + {len(c['dirty'])} downstream: "
@@ -58,7 +59,7 @@ def render(report: Report, work: str) -> str:
         f"   kept {len(kept_patent)} patent outputs: "
         f"{_slots(report.first['patent'][s] for s in kept_patent)}",
         f"   kept all {len(kept_research)} research outputs: nothing they read moved",
-        f"   early cutoff: the {c['queries_rerun'] - c['queries_changed']} searches that "
+        f"   early cutoff: the {c['queries_rerun'] - c['queries_changed']} queries that "
         f"found the same hits stopped the cascade; "
         f"{len(report.cutoff)} rebuilt version came out equal",
         f"   C1 next action: {n['before']} -> {n['after']} "

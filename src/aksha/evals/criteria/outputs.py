@@ -244,13 +244,26 @@ def _candidate_facts(ctx: GradeContext, cand: str, kinds: frozenset[str]) -> lis
 
 
 def c1_extraction(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
-    """C1's gates, window, conception date and rejected alternative, each cited."""
-    out = ctx.state.get("extraction", "C1")
-    if out is None:
-        return failed("no extraction/C1 output")
+    """The first keyed candidate's gates, window, conception date and rejected alternative.
+
+    The candidate is the one the key's first mechanism-step fact is about (``C1`` in the
+    stillroom worlds); each of its stated facts must come back as a cited value.
+    """
     kinds = frozenset({"mechanism_step", "parameter", "conception_record", "alternative_rejected"})
+    first = next(
+        (
+            f
+            for f in ctx.key.facts.values()
+            if f.kind == "mechanism_step" and f.about.get("candidate")
+        ),
+        None,
+    )
+    cand = str(first.about["candidate"]) if first is not None else "C1"
+    out = ctx.state.get("extraction", cand)
+    if out is None:
+        return failed(f"no extraction/{cand} output")
     bad = []
-    for fact in _candidate_facts(ctx, "C1", kinds):
+    for fact in _candidate_facts(ctx, cand, kinds):
         name = FIELD_FOR_KIND[fact.kind]
         f = field_of(out, name)
         if f is None or is_unknown(f.get("value")):
@@ -262,7 +275,7 @@ def c1_extraction(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Chec
             bad.append(f"{fact.id}: {name} is {f.get('value')!r}, key {fact.value}")
         if not cites(ctx, list(f.get("citations", ())) + list(all_citations(out)), fact):
             bad.append(f"{fact.id}: {name} not cited at its anchor")
-    return failed(*bad) if bad else passed("C1 extraction matches")
+    return failed(*bad) if bad else passed(f"{cand} extraction matches")
 
 
 def _same_quantity(got: Any, want: Any) -> bool:

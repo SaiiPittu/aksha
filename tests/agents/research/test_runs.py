@@ -29,7 +29,7 @@ class Reader:
     def __init__(
         self, *, failing: tuple[str, ...] = (), after: int = 0, crash_on: str | None = None
     ) -> None:
-        self.inner = FolderSource("corpus", SOURCES)
+        self.inner = FolderSource("inputs", SOURCES, "input")
         self.failing = failing
         self.after = after  # reads of a failing record that still succeed first
         self.crash_on = crash_on
@@ -80,8 +80,10 @@ def test_a_model_that_obeys_page_text_is_refused_and_nothing_changes(tmp_path: P
 
 def test_a_blocked_source_ends_the_run_partial_with_the_gap_named(tmp_path: Path) -> None:
     key = world_key("stillroom")
-    (page,) = key["competitors"]["K4"]["pages"]
-    # Discovery reads the page three times (two searches, one fetch); every later read fails.
+    (file,) = key["competitors"]["K4"]["pages"]
+    page = f"input/{file}"
+    # Discovery reads the page three times (its listing, the manual search, the fetch); every
+    # later read fails.
     b = ResearchBench(tmp_path, ResearchModel(), reader=Reader(failing=(page,), after=3))
     b.start()
     result = b.run_to_end(**ANSWER)
@@ -90,7 +92,7 @@ def test_a_blocked_source_ends_the_run_partial_with_the_gap_named(tmp_path: Path
                    if page in [p["record"] for p in c["pages"]])  # fmt: skip
     assert b.latest("profile", company["key"]) is None
     (row,) = [r for r in b.content("matrix")["rows"] if r["key"] == company["key"]]
-    (cell,) = row["unit_price"]
+    (cell,) = row["prices"]
     unknown = cell["unknown"]
     assert unknown["reason"] == "unverified" and "value" not in cell
     assert unknown["failed_step"].startswith(f"R-0001/evidence[{company['key']}]/t01/c")
@@ -125,7 +127,7 @@ def test_a_crash_mid_evidence_resumes_and_repeats_no_recorded_step(tmp_path: Pat
     expected = _outputs(whole)
     whole.close()
 
-    page = world_key("stillroom")["competitors"]["K3"]["pages"][0]
+    page = "input/" + world_key("stillroom")["competitors"]["K3"]["pages"][0]
     reader = Reader(crash_on=page)
     b = ResearchBench(tmp_path / "crash", ResearchModel(), reader=reader)
     b.start()

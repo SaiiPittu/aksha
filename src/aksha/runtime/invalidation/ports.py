@@ -8,7 +8,10 @@ result-set hashes, and records what they answered as ``source.changed`` and
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol
+
+from aksha.runtime.grounding.ports import RecordReader
 
 
 class VersionedSource(Protocol):
@@ -45,4 +48,40 @@ class QueryRunner(Protocol):
 
     def __call__(self, owner: str, query: str, /) -> str:
         """The result-set hash of ``query`` for ``owner`` now."""
+        ...
+
+
+class InputWorkspace(Protocol):
+    """Each owner's uploaded inputs: a versioned source that uploads write (ADR-P05 D6).
+
+    ``put`` writes files for one owner and returns the record IDs whose bytes changed;
+    ``reader`` is that owner's record reader over them. The session records what an upload
+    moved with the same source-change fact as any other change, so only the work built on
+    a changed record reopens.
+    """
+
+    @property
+    def name(self) -> str:
+        """The source's declared name."""
+        ...
+
+    @property
+    def collections(self) -> tuple[str, ...]:
+        """The record collections it serves."""
+        ...
+
+    def version(self, owner: str) -> str:
+        """The owner's current version of the whole source."""
+        ...
+
+    def record_version(self, owner: str, record_id: str) -> str | None:
+        """The record's current version for the owner; None when the record is gone."""
+        ...
+
+    def put(self, owner: str, files: Mapping[str, bytes]) -> tuple[str, ...]:
+        """Write ``files`` (relative path to bytes) for ``owner``; the record IDs that changed."""
+        ...
+
+    def reader(self, owner: str) -> RecordReader:
+        """``owner``'s inputs as a record reader."""
         ...

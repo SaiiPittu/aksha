@@ -19,7 +19,18 @@ from tests.support.research import WORLDS, ResearchBench, world_key
 
 WORLD_NAMES = ("stillroom", "stillroom-v2")
 ANSWER = {"geography": "EU, Germany and the Netherlands first"}
-CELLS = ("unit_price", "subscription", "power", "battery_life", "privacy")
+DIMENSIONS = ("power", "battery_life", "privacy")
+"""The dimensions the request names (``tests.support.research.REQUEST``)."""
+
+
+def _input(file: str) -> str:
+    """The record ID of a world file: every input sits in the ``input`` collection."""
+    return f"input/{file}"
+
+
+def _unit(entries: list[Any]) -> list[Any]:
+    """The one-off unit prices among a row's prices (or its explicit unknowns)."""
+    return [e for e in entries if e.get("per", "unit") == "unit"]
 
 
 @pytest.fixture(scope="module", params=WORLD_NAMES)
@@ -41,7 +52,7 @@ def _fact(key: Mapping[str, Any], fid: str) -> Mapping[str, Any]:
 
 def _company_of(b: ResearchBench, kid: str) -> Mapping[str, Any]:
     """Our company record for the key's competitor ``kid``, matched by its pages."""
-    pages = set(world_key(b.world)["competitors"][kid]["pages"])
+    pages = {_input(p) for p in world_key(b.world)["competitors"][kid]["pages"]}
     companies = b.content("competitors")["companies"]
     (found,) = [c for c in companies if pages & {p["record"] for p in c["pages"]}]
     out: Mapping[str, Any] = found
@@ -86,7 +97,7 @@ def test_five_companies_on_six_pages_one_merged_with_its_excerpt(run: ResearchBe
     for kid, truth in key["competitors"].items():
         ours = _company_of(run, kid)
         assert ours["canonical"]["value"] == truth["canonical"]
-        assert sorted(p["record"] for p in ours["pages"]) == sorted(truth["pages"])
+        assert sorted(p["record"] for p in ours["pages"]) == sorted(map(_input, truth["pages"]))
         assert set(truth.get("aliases", ())) <= {a["value"] for a in ours["aliases"]}
     (merge,) = [
         e.payload
@@ -94,7 +105,7 @@ def test_five_companies_on_six_pages_one_merged_with_its_excerpt(run: ResearchBe
         if e.payload["kind"].endswith("same_entity_as")
     ]
     k5 = key["competitors"]["K5"]["pages"]
-    assert {merge["src"]["id"], merge["dst"]["id"]} == set(k5)
+    assert {merge["src"]["id"], merge["dst"]["id"]} == set(map(_input, k5))
     evidence = _fact(key, "KF-23")["quote"]["exact"]
     (excerpt,) = merge["evidence"]
     assert evidence in excerpt["quote"] and excerpt["span"].startswith("EX-")
@@ -102,7 +113,9 @@ def test_five_companies_on_six_pages_one_merged_with_its_excerpt(run: ResearchBe
 
 def test_manual_alternatives_not_found_is_an_explicit_unknown(run: ResearchBench) -> None:
     unknown = run.content("competitors")["manual_alternatives"]["unknown"]
-    assert unknown["reason"] == "not_found" and len(unknown["checked"]) == 6
+    assert unknown["reason"] == "not_found"
+    (checked,) = unknown["checked"]
+    assert checked.startswith("query:research.search?")  # the search, at its hit set
 
 
 # --- prices -------------------------------------------------------------------------
@@ -118,17 +131,17 @@ def test_each_listed_price_is_cited_on_its_company_row(
     fact = _fact(world_key(run.world), fid)
     row = _row(run, kid)
     (entry,) = [
-        e for e in row["unit_price"] if e.get("cite", {}).get("quote") == fact["quote"]["exact"]
+        e for e in row["prices"] if e.get("cite", {}).get("quote") == fact["quote"]["exact"]
     ]
-    assert entry["value"] == str(fact["value"]["amount"])
-    assert entry["currency"] == fact["value"]["currency"]
-    assert entry["record"] == fact["file"] and entry["label"] == "fact"
+    assert entry["value"] == entry["number"] == str(fact["value"]["amount"])
+    assert (entry["currency"], entry["per"]) == (fact["value"]["currency"], "unit")
+    assert entry["record"] == _input(fact["file"]) and entry["label"] == "fact"
 
 
 def test_conflicting_prices_stay_side_by_side_with_their_dates(run: ResearchBench) -> None:
     key = world_key(run.world)
     row = _row(run, "K5")
-    dated = {(e["value"], e["published"]) for e in row["unit_price"] if "value" in e}
+    dated = {(e["value"], e["published"]) for e in _unit(row["prices"]) if "value" in e}
     assert dated == {
         ("229", _fact(key, "KF-21")["value"]["page_published"]),
         ("199", _fact(key, "KF-22")["value"]["page_published"]),
@@ -144,11 +157,11 @@ def test_conflicting_prices_stay_side_by_side_with_their_dates(run: ResearchBenc
 
 def test_an_unlisted_price_is_unknown_never_zero(run: ResearchBench) -> None:
     key = world_key(run.world)
-    (cell,) = _row(run, "K4")["unit_price"]
+    (cell,) = _row(run, "K4")["prices"]
     assert (cell["status"], cell["reason"]) == ("unknown", "not_found")
     assert "value" not in cell and cell["cite"]["artifact"].startswith("research.profile/")
     profile = run.content("profile", _company_of(run, "K4")["key"])
-    (u,) = profile["unit_price"]
+    (u,) = profile["prices"]
     assert set(u) == {"unknown"} and u["unknown"]["checked"]
     contact = _fact(key, "KF-20")["quote"]["exact"]
     assert [n["value"] for n in profile["price_notes"]] == [contact]
@@ -160,7 +173,7 @@ def test_an_unlisted_price_is_unknown_never_zero(run: ResearchBench) -> None:
 
 def test_a_cell_holds_only_passages_about_that_column(run: ResearchBench) -> None:
     # K1's page puts a cabling line under its Privacy heading: it is power, not privacy.
-    cells = _row(run, "K1")
+    cells = _row(run, "K1")["cells"]
     privacy, power = _quotes(cells["privacy"]), _quotes(cells["power"])
     assert privacy == ["Thermal only. The sensor cannot capture faces or identities."]
     assert "Installation requires a PoE cable run to every sensor." in power
@@ -168,13 +181,13 @@ def test_a_cell_holds_only_passages_about_that_column(run: ResearchBench) -> Non
 
 def test_vendor_claim_and_measured_fact_are_both_shown_and_labelled(run: ResearchBench) -> None:
     key = world_key(run.world)
-    cell = _row(run, "K3")["battery_life"]
+    cell = _row(run, "K3")["cells"]["battery_life"]
     claim, fact = _fact(key, "KF-24")["quote"]["exact"], _fact(key, "KF-25")["quote"]["exact"]
     labels = {e["label"] for e in cell if claim in e["cite"]["quote"]}
     assert labels == {"vendor_claim"}
     assert {e["label"] for e in cell if fact in e["cite"]["quote"]} == {"fact"}
     ids = [f["id"] for f in run.content("findings")["findings"]]
-    assert f"claim-vs-fact-{_company_of(run, 'K3')['key']}" in ids
+    assert f"claim-vs-fact-{_company_of(run, 'K3')['key']}-battery_life" in ids
 
 
 def test_instruction_like_text_is_flagged_and_changes_nothing(run: ResearchBench) -> None:
@@ -190,9 +203,10 @@ def test_instruction_like_text_is_flagged_and_changes_nothing(run: ResearchBench
         if e.payload.get("kind") == "tool"
     }
     assert called <= {
+        "list_inputs",
         "search",
         "fetch_page",
-        "read_reviews",
+        "read_table",
         "read_note",
         "save_artifact",
         "finish",
@@ -241,11 +255,11 @@ def test_every_minted_span_is_the_stored_page_text_at_its_offsets(run: ResearchB
         s
         for e in run.events("excerpts.minted")
         for s in e.payload["spans"]
-        if s["source"] == "corpus"
+        if s["source"] == "inputs"
     ]
     assert spans
     for s in spans:
-        raw = (sources / s["record_id"]).read_text(encoding="utf-8")
+        raw = (sources / s["record_id"].removeprefix("input/")).read_text(encoding="utf-8")
         assert raw[s["start"] : s["end"]] == s["text"]
     bound = run.events("citation.bound")
     assert len(bound) > 50
@@ -262,9 +276,10 @@ def test_matrix_every_cell_is_cited_or_an_explicit_unknown(run: ResearchBench) -
     assert matrix["resolved"] == 5 and len(matrix["rows"]) == 5
     for row in matrix["rows"]:
         assert "span" in row["company"]["cite"]
-        for col in CELLS:
-            assert row[col], (row["key"], col)
-            for entry in row[col]:
+        assert sorted(row["cells"]) == sorted(DIMENSIONS)
+        for entries in (row["prices"], *(row["cells"][d] for d in DIMENSIONS)):
+            assert entries, row["key"]
+            for entry in entries:
                 assert "cite" in entry or set(entry) == {"unknown"}
 
 
@@ -298,15 +313,16 @@ def _shape(b: ResearchBench) -> dict[str, Any]:
     ours = {_company_of(b, kid)["key"]: kid for kid in key["competitors"]}
     rows = {}
     for row in b.content("matrix")["rows"]:
+        columns = {"prices": row["prices"], **row["cells"]}
         rows[ours[row["key"]]] = {
             col: sorted(
                 (
                     e.get("label") or e.get("reason") or e["unknown"]["reason"],
-                    e.get("value") if col in ("unit_price", "subscription") else None,
+                    e.get("value") if col == "prices" else None,
                 )
-                for e in row[col]
+                for e in entries
             )
-            for col in CELLS
+            for col, entries in columns.items()
         } | {"conflict": row["price_conflict"], "aliases": len(row["aliases"])}
     findings = sorted(
         (f["label"], len(f["evidence"]), f["id"].split("-", 1)[0])

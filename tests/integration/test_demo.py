@@ -51,7 +51,11 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     assert others and others <= set(kept["patent"])
     assert {r["agent"] for r in report["runs"].values() if r["cause"] == "rebuild"} == {"patent"}
     change = report["change"]
-    assert (change["queries_rerun"], change["queries_changed"]) == (4, 1)
+    # Every recorded query re-runs: four candidate searches, the candidate and template
+    # listings, and the research agent's two listings and two searches. Only C1's search
+    # finds the new publication; the new file is no seller page or review export, so the
+    # research listings stay as they were.
+    assert (change["queries_rerun"], change["queries_changed"]) == (10, 1)
     key = json.loads((WORLDS / VARIANT / "key.json").read_text("utf-8"))
     action = key["expected_after_change"]["C1_next_action"]
     assert report["next_action"]["before"] == action["before"]

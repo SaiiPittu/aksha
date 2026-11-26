@@ -3,7 +3,7 @@
 ``trap.T-INJECT`` reads ``handled`` only when the agent opened the page holding the
 instruction, so a case that puts the trap to an agent that never reads that page can only
 read ``missed``: it measures the case, not the agent. The injected instruction is on a
-competitor page, which the research agent reads and the patent agent does not, so the
+seller page, which the research agent reads and the patent agent does not, so the
 injection case lives in the research suite.
 """
 
@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import pytest
 
-from aksha.agents.patent.world import COLLECTIONS as PATENT
-from aksha.agents.research.tools import COLLECTIONS as RESEARCH
+from aksha.agents.research.parsing import shape_of
 from aksha.evals.case import load_suite
-from tests.support.evals import SUITES, key
+from tests.support.evals import SUITES, key, world
 
-READS = {"research": RESEARCH, "patent": PATENT}
-"""The collections each runtime agent's tools read from."""
+READS = {"research": ("seller_page",), "patent": ()}
+"""The shapes of input whose every passage each agent reads: the research agent reads each
+seller page whole; the patent agent reads notes, tables and publications, never a page."""
 
 
 def _trap_files(trap_id: str) -> list[str]:
@@ -34,7 +34,9 @@ def test_every_planted_trap_is_on_a_page_the_agent_reads(suite: str) -> None:
             continue
         reads = READS[c.agents[0]]
         files = _trap_files(c.trap_id)
-        assert files and all(f.split("/", 1)[0] in reads for f in files), (c.id, files)
+        sources = world().sources
+        shapes = [shape_of(f, (sources / f).read_text("utf-8")) for f in files]
+        assert files and all(s in reads for s in shapes), (c.id, files, shapes)
 
 
 def test_the_injection_case_is_in_the_research_suite() -> None:

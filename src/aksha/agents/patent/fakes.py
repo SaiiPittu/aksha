@@ -5,11 +5,13 @@ this instance's turns, the person's answers, a rebuild notice) and answers with 
 calls. It stands in for a live model so a run is offline and repeatable; it is not a
 claim that rules can do this work in general.
 
-The model-side knowledge is ``LEXICON``: per candidate, the elements a skilled reader
-would pick out of the engineering note, each with the terms that find its mechanism step
-and the term groups that find it in a reference (all groups: ``disclosed``; at least half:
-``partial``; fewer: ``not_found``). It was written by reading the source texts, never the
-answer key, and a live model replaces it. Everything that is a rule rather than a reading
+The model-side reading is a *lexicon* per candidate: the elements of the invention, each
+with the terms that find its mechanism step and the term groups that find it in a
+reference (all groups: ``disclosed``; at least half: ``partial``; fewer: ``not_found``).
+For any note it is derived by a general rule (:func:`derived_lexicon`: one element per
+mechanism step, its distinctive words as the groups). The stillroom fixtures' hand-written
+lexicon (``fakes_stillroom.py``) applies only to the exact notes it was written for. A
+live model replaces both. Everything that is a rule rather than a reading
 (the next action, family grouping, form statuses) lives in ``rules.py`` and is checked in
 code, so this model cannot override it.
 """
@@ -24,142 +26,129 @@ from typing import Any
 
 from aksha.runtime.api import GenerationRequest, GenerationResult, RuleGenerationModel, ToolCall
 
-from . import rules
+from . import fakes_stillroom, rules
 
 Groups = list[list[str]]
 
-LEXICON: Mapping[str, Mapping[str, Any]] = {
-    "C1": {
-        "search": [["background"], ["sensor"]],
-        "elements": {
-            "F1": (
-                "per-pixel thermopile empty-room baseline",
-                ["thermopile array"],
-                [
-                    ["thermal array", "thermopile", "thermal occupancy sensor"],
-                    ["background frame", "background estimate", "baseline"],
-                    ["pixel"],
-                ],
-            ),
-            "F2": (
-                "baseline update only after a PIR quiet window",
-                ["no motion for 20 minutes"],
-                [
-                    ["background"],
-                    ["no motion", "low activity"],
-                    ["quiet period", "holding period", "no motion has been detected"],
-                ],
-            ),
-            "F3": (
-                "baseline update also gated on the door contact reporting closed",
-                ["door contact reports closed"],
-                [["door"]],
-            ),
-            "F4": (
-                "slow EMA update with per-pixel freeze after detection",
-                ["Freeze learning"],
-                [
-                    ["running average", "moving average", "stationary occupant is not absorbed"],
-                    ["freeze", "update weight"],
-                ],
-            ),
-            "F5": (
-                "per-pixel threshold from that pixel's noise",
-                ["detection threshold"],
-                [["threshold derived from", "noise estimate of that pixel", "noise"]],
-            ),
-        },
-        "public_terms": {"F2": ["no motion"], "F3": ["door"]},
-    },
-    "C2": {
-        "search": [["mount point", "placement"]],
-        "elements": {
-            "P1": (
-                "footprint at seated head height from field of view",
-                ["footprint"],
-                [["footprint"], ["working height", "head height"], ["field of view"]],
-            ),
-            "P2": (
-                "layout score over seat coverage, overlap, heat-source and doorway exposure",
-                ["Score each layout"],
-                [
-                    ["coverage of seat", "seat locations", "seats"],
-                    ["doorway"],
-                    ["heat source", "vent"],
-                ],
-            ),
-            "P3": (
-                "post-install walk test against the plan",
-                ["walk one person"],
-                [["walk test", "walk"]],
-            ),
-        },
-    },
-    "C3": {
-        "search": [["overlap"]],
-        "elements": {
-            "Q1": (
-                "on-device processing, counts only",
-                ["outputs counts only"],
-                [
-                    ["locally", "on the device", "on-device"],
-                    ["transmitting only the counts", "transmit only", "transmits only"],
-                ],
-            ),
-            "Q2": (
-                "overlap zone marked in each unit's pixel coordinates at install",
-                ["overlap zone is marked"],
-                [["overlap"], ["pixel coordinates"]],
-            ),
-            "Q3": (
-                "each unit reports total and overlap counts",
-                ["reports two integers"],
-                [
-                    ["count of persons inside", "counting persons within the overlap region"],
-                    ["transmits only", "transmitting only"],
-                ],
-            ),
-            "Q4": (
-                "room = A + B - min(overlap_A, overlap_B)",
-                ["min(overlap_A"],
-                [["counted once", "minus the overlap count"], ["min(", "minimum of"]],
-            ),
-            "Q5": (
-                "single-occupant rooms grouped in roll-ups",
-                ["roll up to floors"],
-                [["floor level", "roll up"], ["grouped", "single regular occupant"]],
-            ),
-        },
-    },
-    "C4": {
-        "search": [["passive infrared", "PIR"], ["battery"]],
-        "elements": {
-            "B1": (
-                "PIR wakes the thermopile for a 60 s window at 1 Hz",
-                ["When the PIR fires"],
-                [["passive infrared"], ["wakes"], ["window"]],
-            ),
-            "B2": (
-                "fall back to 10 s sampling then PIR-only",
-                ["drop back"],
-                [["10 s", "every 10 seconds", "reduced rate", "fallback"], ["switched off"]],
-            ),
-            "B3": (
-                "report on change plus 15 min heartbeat",
-                ["heartbeat every 15 minutes"],
-                [
-                    ["only when the occupant count changes", "only when an occupant count changes"],
-                    ["heartbeat"],
-                ],
-            ),
-            "B4": (
-                "estimated 0.2 mA average (estimate, not measured)",
-                ["Average current"],
-                [["0.2 mA", "average current"]],
-            ),
-        },
-    },
-}
+STOP = frozenset(
+    {
+        "about",
+        "above",
+        "after",
+        "again",
+        "against",
+        "along",
+        "among",
+        "another",
+        "before",
+        "being",
+        "below",
+        "between",
+        "both",
+        "could",
+        "during",
+        "each",
+        "every",
+        "first",
+        "from",
+        "have",
+        "into",
+        "itself",
+        "later",
+        "more",
+        "most",
+        "once",
+        "only",
+        "other",
+        "over",
+        "same",
+        "should",
+        "since",
+        "some",
+        "such",
+        "than",
+        "that",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "those",
+        "through",
+        "under",
+        "until",
+        "upon",
+        "used",
+        "uses",
+        "using",
+        "what",
+        "when",
+        "where",
+        "whether",
+        "which",
+        "while",
+        "with",
+        "within",
+        "without",
+        "would",
+        "your",
+    }
+)
+"""Common words that never distinguish one mechanism step from another."""
+
+
+def content_words(text: str, n: int = 6) -> list[str]:
+    """The first ``n`` distinctive words of ``text``, cut to stems.
+
+    A distinctive word has five letters or more and is not common (:data:`STOP`); its stem
+    drops up to three trailing letters (at least five kept, at most seven), so inflections
+    of it still match ("measure" finds "measuring", "frequencies" finds "frequency").
+    """
+    out: list[str] = []
+    for w in re.findall(r"[A-Za-z][A-Za-z]{4,}", text):
+        stem = w.lower()[: min(7, max(5, len(w) - 3))]
+        if w.lower() in STOP or stem in out:
+            continue
+        out.append(stem)
+        if len(out) == n:
+            break
+    return out
+
+
+def derived_lexicon(note: Mapping[str, Any]) -> dict[str, Any]:
+    """The general rule's lexicon for any note: one element per mechanism step.
+
+    An element's label is its step, the terms that find the step are its opening words, and
+    its reference groups are the step's distinctive words, one group each. The search asks
+    for any of the title's distinctive words. Elements a public disclosure or an outside
+    suggestion shows are found by the same groups.
+    """
+    elements: dict[str, Any] = {}
+    for step in note["mechanism_steps"]:
+        groups = [[w] for w in content_words(step["text"])]
+        if groups:
+            elements[f"S{step['n']}"] = (step["text"], [step["text"][:40]], groups)
+    title_words = content_words(str(note["title"]).split(":")[-1], 4)
+    return {"search": [title_words] if title_words else [["claim"]], "elements": elements}
+
+
+def lexicon_for(c: str, note: Mapping[str, Any]) -> dict[str, Any]:
+    """The hand-written fixture lexicon for the exact note it was written for, else the rule."""
+    if fakes_stillroom.TITLES.get(c) == note.get("title") and c in fakes_stillroom.LEXICON:
+        return dict(fakes_stillroom.LEXICON[c])
+    return derived_lexicon(note)
+
+
+def _shown_elements(lex: Mapping[str, Any], text: str) -> list[str]:
+    """The elements ``text`` shows: by the fixture's public terms, else by their groups."""
+    if "public_terms" in lex:
+        return [e for e, terms in lex["public_terms"].items() if _clause(text, terms[:1])]
+    return [
+        e for e, (_, _, groups) in lex["elements"].items() if _state(groups, text) != "not_found"
+    ]
+
 
 SCOPE_NOTE = (
     "Prepared for counsel review. This agent gave no patentability or freedom-to-operate "
@@ -339,7 +328,7 @@ class PatentFake(RuleGenerationModel):
         }
         return _reply(
             _call("save_artifact", 1, kind="portfolio", content=content),
-            _call("finish", 1, summary="four candidates listed"),
+            _call("finish", 1, summary=f"{len(rows)} candidates listed"),
         )
 
     # --- per candidate ------------------------------------------------------------------
@@ -377,7 +366,9 @@ class PatentFake(RuleGenerationModel):
     def _prior_art(self, ctx: Context) -> GenerationResult:
         c = str(ctx.key)
         if not ctx.called("search_publications"):
-            return _reply(_call("search_publications", 1, all_of=LEXICON[c]["search"]))
+            ext = ctx.read("extraction")
+            assert ext is not None, "prior_art reads the extraction"
+            return _reply(_call("search_publications", 1, all_of=ext[1]["search"]))
         search = ctx.ok("search_publications")[-1][1]
         if not ctx.called("fetch_publication"):
             return _reply(
@@ -465,24 +456,29 @@ class PatentFake(RuleGenerationModel):
         c = str(ctx.key)
         ext = ctx.read("extraction")
         assert ext is not None
+        if not ctx.called("list_templates"):
+            return _reply(_call("list_templates", 1))
+        listed = ctx.ok("list_templates")[-1][1]["templates"]
+        names = {t["form"]: t["template"] for t in listed if t["form"]}
         if not ctx.called("read_template"):
             ids = sorted({r["person_id"] for r in ext[1]["contributors"]})
-            return _reply(
-                _call("read_people", 1, person_ids=ids),
-                _call("read_template", 1, template="invention-disclosure-form"),
-                _call("read_template", 2, template="filing-information-worksheet"),
-            )
+            reads = [_call("read_template", i, template=t) for i, t in enumerate(names.values(), 1)]
+            ask = [_call("read_people", 1, person_ids=ids)] if ids else []
+            return _reply(*ask, *reads)
         people = {p["person_id"]: p for _, d in ctx.ok("read_people") for p in d["people"]}
         templates = {a["template"]: d for a, d in ctx.ok("read_template")}
         cmp_, rec, art = ctx.read("comparison"), ctx.read("recommendation"), ctx.read("prior_art")
         assert cmp_ is not None and rec is not None and art is not None
-        form = disclosure_fields(ext[1], cmp_, art, people, templates["invention-disclosure-form"])
-        ws = worksheet_fields(ext[1], cmp_, people, templates["filing-information-worksheet"])
-        return _reply(
-            _call("fill_form", 1, template="invention-disclosure-form", candidate=c, fields=form),
-            _call("fill_form", 2, template="filing-information-worksheet", candidate=c, fields=ws),
-            _call("finish", 1, summary="forms filled"),
-        )
+        calls = []
+        if "disclosure" in names:
+            t = names["disclosure"]
+            form = fit(templates[t], disclosure_fields(ext[1], cmp_, art, people, templates[t]))
+            calls.append(_call("fill_form", 1, template=t, candidate=c, fields=form))
+        if "worksheet" in names:
+            t = names["worksheet"]
+            ws = fit(templates[t], worksheet_fields(ext[1], cmp_, people, templates[t]))
+            calls.append(_call("fill_form", 2, template=t, candidate=c, fields=ws))
+        return _reply(*calls, _call("finish", 1, summary="forms filled"))
 
     def _packet(self, ctx: Context) -> GenerationResult:
         c = str(ctx.key)
@@ -549,6 +545,14 @@ def _implementation(note: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+OUTSIDE = re.compile(
+    r"\b(outside|external|consultant|advisor|adviser|contractor|university)\b", re.I
+)
+"""An event or a role that comes from outside the venture."""
+FULL = re.compile(r"\b(full description|in full|described fully|complete description)\b", re.I)
+"""What was shown described the invention in full."""
+
+
 def _undecided(param: Mapping[str, Any]) -> bool:
     return param.get("Value", "") in ("not decided", "")
 
@@ -572,7 +576,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
     prio = ctx.ok("read_priorities")[-1][1]
     docs = {a["path"]: d for a, d in ctx.ok("read_document")}
     nf = note["file"]
-    lex = LEXICON[c]
+    lex = lexicon_for(c, note)
     steps = [{"n": s["n"], "text": s["text"], **_q(nf, s["text"])} for s in note["mechanism_steps"]]
     elements = []
     for eid, (label, step_terms, _groups) in lex["elements"].items():
@@ -581,6 +585,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             {
                 "id": eid,
                 "label": label,
+                "terms": lex["elements"][eid][2],
                 "step": step["n"] if step else None,
                 **(
                     _q(nf, step["text"])
@@ -662,7 +667,10 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                 **_q(contrib["file"], r["contributed"]),
             }
         )
-        m = re.search(r"(CA-\d{4}-\d+), effective (\d{4}-\d{2}-\d{2})", r["agreement_ref"])
+        m = re.search(
+            r"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{4}-\d+), effective (\d{4}-\d{2}-\d{2})",
+            r["agreement_ref"],
+        )
         if m:
             found = any(d["found"] for d in r["agreement_documents"] if d["ref"] == m.group(1))
             agreements.append(
@@ -676,7 +684,12 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             )
     disclosures, outside = [], []
     conceived = note["date"]
+    roles = {r["person_id"]: r["role"] for r in contrib["rows"]}
     for r in history["rows"]:
+        by = [p.strip() for p in str(r.get("by", "")).split(",") if p.strip()]
+        outsider = bool(OUTSIDE.search(r["event_type"])) or any(
+            OUTSIDE.search(roles.get(p, "")) for p in by
+        )
         row = {
             "event_id": r["event_id"],
             "date": r["date"],
@@ -684,10 +697,10 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             "as_of": history.get("as_of"),
             "event_type": r["event_type"],
             "public": r["public"],
-            "own_disclosure": r["event_type"] != "outside email",
-            "describes_fully": r["what_was_shown"].startswith("Full description"),
-            **_q(history["file"], r["what_was_shown"]),
-            "row": _q(history["file"], r["row_start"]),
+            "own_disclosure": not outsider,
+            "describes_fully": bool(FULL.search(r["what_was_shown"])),
+            **_q(r.get("file") or history["file"], r["what_was_shown"]),
+            "row": _q(r.get("file") or history["file"], r["row_start"]),
         }
         if r["date"] is None or r["public"] not in ("yes", "no"):
             row["status"] = "needs_counsel_confirmation"
@@ -706,44 +719,41 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         doc = docs.get(r["linked_file"] or "")
         if doc and doc["type"] == "record":
             shown_text = doc["sections"].get("what", "")
-            shown = [
-                e
-                for e, terms in lex.get("public_terms", {}).items()
-                if _clause(shown_text, terms[:1])
-            ]
-            clause = _clause(shown_text, [t[0] for t in lex.get("public_terms", {}).values()])
+            shown = _shown_elements(lex, shown_text)
+            if "public_terms" in lex:
+                clause = _clause(shown_text, [t[0] for t in lex["public_terms"].values()])
+            else:
+                sentences = re.findall(r"[^.?!\n]+[.?!]", shown_text)
+                clause = max(sentences, key=lambda x: len(_shown_elements(lex, x)), default="")
+                clause = clause.strip() if clause and _shown_elements(lex, clause) else None
             row["elements_shown"] = shown
             if clause:
                 row["shown_quote"] = _q(doc["file"], clause)
-        if r["event_type"] == "outside email" and doc and doc["type"] == "email":
+        if outsider and doc and doc["type"] == "email":
             sentences = re.findall(r"[^.?!]*[.?!]", doc["body"])
-            suggestion = next(
-                (s.strip() for s in sentences if "door contact" in s and s.strip().endswith("?")),
-                None,
-            )
-            hit = [
-                e
-                for e, terms in lex.get("public_terms", {}).items()
-                if suggestion and _find(suggestion, ["door", "quiet"])
-            ]
-            agreement = next((a for a in agreements if a["person_id"] == r["by"]), None)
+            suggestion = next((s.strip() for s in sentences if s.strip().endswith("?")), None)
+            hit = [] if suggestion is None else _shown_elements(lex, suggestion)
+            if "public_terms" in lex and suggestion:
+                hit = list(lex["public_terms"]) if _find(suggestion, ["door", "quiet"]) else []
+            who = by[0] if by else ""
+            agreement = next((a for a in agreements if a["person_id"] == who), None)
             before_agreement = (
                 (doc["date"] < agreement["effective"]) if agreement and doc["date"] else None
             )
+            what = ", ".join(sorted(hit)) or "part of the mechanism"
             q = (
-                "An outside consultant suggested the door-contact signal before the internal "
-                "note. Who are the inventors, and does the consulting agreement affect "
-                "ownership?"
+                f"An outside contributor suggested {what} before the internal note. Who are "
+                "the inventors, and does their agreement affect ownership?"
             )
             if before_agreement:
                 q = (
-                    "An outside consultant suggested the door-contact signal before the internal "
-                    "note and before the consulting agreement's effective date. Who are the "
-                    "inventors, and who owns a suggestion made outside the agreement?"
+                    f"An outside contributor suggested {what} before the internal note and "
+                    "before their agreement's effective date. Who are the inventors, and who "
+                    "owns a suggestion made outside the agreement?"
                 )
             outside.append(
                 {
-                    "person_id": r["by"],
+                    "person_id": who,
                     "date": doc["date"],
                     "elements": sorted(hit),
                     "before_conception_record": bool(
@@ -784,6 +794,8 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         "candidate": c,
         "title": note["title"],
         "note": nf,
+        "search": lex["search"],
+        "sources": {"contributors": contrib.get("file"), "disclosures": history.get("file")},
         "conception": {"date": conceived, **_q(nf, note["date_line"])},
         "problem": _q(nf, note["problem"]),
         "mechanism": steps,
@@ -890,7 +902,8 @@ def comparison(c: str, ext: Mapping[str, Any], art: Mapping[str, Any]) -> dict[s
 
     cells = []
     score: dict[str, int] = {}
-    for eid, (_label, _terms, groups) in LEXICON[c]["elements"].items():
+    for element in ext["elements"]:
+        eid, groups = element["id"], element["terms"]
         for fam in art["families"]:
             members = [pubs[m] for m in fam["members"]]
             state = _state(groups, " ".join(text(p) for p in members))
@@ -1057,7 +1070,7 @@ def disclosure_fields(
             "contributors",
             contributors,
             "needs_counsel_confirmation",
-            "contributors/records.csv",
+            ext["sources"]["contributors"],
             counsel_question="Who are the inventors of each element?",
         ),
         _field(
@@ -1072,7 +1085,7 @@ def disclosure_fields(
             "needs_counsel_confirmation"
             if any(d["status"] != "complete" for d in public)
             else "complete",
-            "disclosures/history.csv",
+            ext["sources"]["disclosures"],
             **(
                 {
                     "counsel_question": "; ".join(
@@ -1089,7 +1102,7 @@ def disclosure_fields(
             "outside_resources",
             outside,
             "needs_counsel_confirmation" if outside or oc else "complete",
-            "contributors/records.csv",
+            ext["sources"]["contributors"],
             **(
                 {
                     "counsel_question": " ".join(oc)
@@ -1165,6 +1178,81 @@ def worksheet_fields(
         _field("representative", None, "missing"),
         _field("attachments", {"comparison": cmp_[0]}, "complete"),
     ]
+
+
+FIELD_WORDS: Mapping[str, tuple[str, ...]] = {
+    "title": ("title", "name"),
+    "candidate_id": ("id", "identifier", "reference", "candidate"),
+    "problem": ("problem", "background", "need"),
+    "mechanism_steps": ("mechanism", "steps", "method", "how", "works", "description"),
+    "parameters": ("parameters", "values", "settings"),
+    "alternatives_considered": ("alternatives", "considered", "rejected", "options"),
+    "difference_from_known_approaches": ("difference", "known", "prior", "art", "comparison"),
+    "contributors": ("contributors", "inventors", "people", "contributions"),
+    "conception_date_and_records": ("conception", "date", "records", "dated"),
+    "public_disclosures": ("public", "disclosures", "disclosed"),
+    "outside_resources": ("outside", "resources", "third", "external", "funding", "grants"),
+    "implementation_evidence": ("implementation", "evidence", "built", "tested", "prototype"),
+    "figure_list": ("figure", "figures", "drawings"),
+    "open_questions_for_counsel": ("questions", "counsel", "open"),
+    "working_title": ("working", "title"),
+    "applicant": ("applicant", "applicants"),
+    "proposed_inventors": ("inventors", "proposed", "inventor"),
+    "ownership_and_assignments": ("ownership", "assignment", "assignments", "owner"),
+    "outside_party_agreements": ("agreements", "party", "outside"),
+    "earlier_public_disclosures": ("earlier", "public", "disclosures"),
+    "related_applications": ("related", "applications"),
+    "priority_claims": ("priority", "claims"),
+    "jurisdictions_of_interest": ("jurisdictions", "countries", "territories"),
+    "representative": ("representative", "attorney", "agent"),
+    "attachments": ("attachments", "annex", "enclosures"),
+}
+"""The words a template's field may use for each value the model prepares."""
+
+
+_FILLER = frozenset({"and", "of", "the", "for", "with", "it", "a", "an", "to", "in"})
+
+
+def _tokens(name: str) -> set[str]:
+    return {t for t in re.split(r"[^a-z0-9]+", name.lower()) if t and t not in _FILLER}
+
+
+def fit(template: Mapping[str, Any], fields: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The prepared values laid onto ``template``'s own fields (any template's names).
+
+    A template field takes the prepared value of the same name, else the one whose words
+    it shares most (:data:`FIELD_WORDS`); one it shares none with stays ``missing``, or
+    ``needs_counsel_confirmation`` when the template says counsel decides it. A field the
+    template reserves for counsel is never marked complete.
+    """
+    by_name = {str(f["field"]): f for f in fields}
+    out: list[dict[str, Any]] = []
+    for decl in template["fields"]:
+        name = str(decl["field"])
+        src = by_name.get(name)
+        if src is None:
+            want = _tokens(name)
+            scored = [
+                (len(want & (_tokens(k) | set(FIELD_WORDS.get(k, ())))), -i, f)
+                for i, (k, f) in enumerate(by_name.items())
+            ]
+            best = max(scored, key=lambda x: (x[0], x[1]), default=None)
+            src = best[2] if best is not None and best[0] > 0 else None
+        default = str(decl.get("default_status") or "")
+        counsel = default.startswith("needs_counsel_confirmation")
+        if src is None:
+            status = "needs_counsel_confirmation" if counsel else "missing"
+            f: dict[str, Any] = {"field": name, "value": None, "status": status}
+        else:
+            f = {**src, "field": name}
+            if counsel and f.get("status") == "complete":
+                f["status"] = "needs_counsel_confirmation"
+        if f["status"] == "needs_counsel_confirmation" and not f.get("counsel_question"):
+            f["counsel_question"] = f"Counsel to confirm the {name.replace('_', ' ')}."
+        if f["status"] == "complete" and f.get("value") in (None, "", [], {}):
+            f["status"] = "missing"
+        out.append(f)
+    return out
 
 
 def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:

@@ -1,0 +1,13 @@
+X-Synthetic: true
+From: Sales desk <sales@agrimart.example>
+To: Farah Qadir <farah@tilldew.example>
+Date: Mon, 14 Sep 2026 09:02:00 +0530
+Subject: probe prices this season
+
+SYNTHETIC FIXTURE. Invented for testing; not a real email or person.
+
+Hello,
+
+Dealers tell us most farmers compare probes on price per probe and on whether the readings come by SMS. Happy to list Tilldew next season.
+
+Sales desk

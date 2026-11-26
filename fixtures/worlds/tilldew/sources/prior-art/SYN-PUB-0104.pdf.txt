@@ -1,0 +1,29 @@
+SYNTHETIC FIXTURE - text rendered from a PDF-like layout. Invented for testing; not a real patent.
+
+SYN-Office-4                                   (11) SYN-PUB-0104 B1
+(54) Weather-driven irrigation controller
+(73) Proprietor: Nimbus Irrigation Ltd
+(22) Filing date: 2022-08-19        (30) Priority: SYN-PRI-2021-0820, 2021-08-20
+(45) Date of grant: 2024-11-05
+Status: Granted
+
+Description
+
+The controller forecasts the next day's crop evapotranspiration from a weather feed and
+schedules the pump to cover the evapotranspiration deficit, cancelling the run when forecast
+rainfall exceeds a threshold.
+
+Page 1 of 2 - SYNTHETIC FIXTURE
+
+Claims
+
+1. A controller configured to forecast crop evapotranspiration from a weather feed and to
+schedule a pump to cover the evapotranspiration deficit.
+
+2. The controller of claim 1, wherein a scheduled pump run is cancelled when forecast rainfall
+exceeds a threshold.
+
+Legal status (register extract, 2026-09-14): Ceased - annual fee not paid (2026-05-31).
+The legal status is an assumption and is not a legal conclusion.
+
+Page 2 of 2 - SYNTHETIC FIXTURE

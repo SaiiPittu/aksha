@@ -56,6 +56,8 @@ class RuntimeThread:
         self._thread = threading.Thread(target=self._main, name="aksha-runtime", daemon=True)
         self.faults: list[Fault] = []
         self._faulted: set[str] = set()
+        self._commanded: set[str] = set()
+        """Owners a command was dispatched for since the last pass (runtime thread only)."""
 
     def start(self, timeout_s: float | None = 30.0) -> None:
         """Start the thread and wait until its session is open; re-raise its opening error."""
@@ -63,8 +65,17 @@ class RuntimeThread:
         self._ready.result(timeout=timeout_s)
 
     def submit(self, command: NamedCommand) -> Future[CommandReceipt]:
-        """Queue ``command``; the future resolves with its receipt at its commit."""
-        return self.call(lambda s: s.dispatch(command))
+        """Queue ``command``; the future resolves with its receipt at its commit.
+
+        Its owner gets the next pass even with no open run, so the rebuild runs a recorded
+        source change calls for (an upload) open and move without another command.
+        """
+
+        def run(s: Session) -> CommandReceipt:
+            self._commanded.add(command.owner)
+            return s.dispatch(command)
+
+        return self.call(run)
 
     def call[T](self, fn: Callable[[Session], T]) -> Future[T]:
         """Run ``fn`` on the runtime thread between passes; the future holds its result."""
@@ -133,7 +144,9 @@ class RuntimeThread:
 
     def _pass(self, session: Session) -> bool:
         moved = False
-        for owner in session.store.owners_with_open_runs():
+        owners = sorted(set(session.store.owners_with_open_runs()) | self._commanded)
+        self._commanded.clear()
+        for owner in owners:
             if owner in self._faulted:
                 continue
             moved = bool(self._guard(owner, partial(session.step, owner))) or moved

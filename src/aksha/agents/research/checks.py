@@ -2,9 +2,18 @@
 
 A check names what is missing in its message, so the model reads why its finish was
 refused. Grounding (every cite verified, unknowns only where declared) is the runtime's,
-at save; these checks hold the agent's own rules on top: one record per company with its
-merge evidence, a conflict kept with both values, "N of M in this sample", every row of
-the matrix present, every proposed threshold marked ``proposal``.
+at save; these checks hold the agent's own rules on top. What to compare is the scope's,
+taken from the request: the scope lists its ``dimensions`` (the matrix columns besides
+price) and its ``themes`` (what to read the reviews for), and every later check holds the
+work to that list, so no column or theme is fixed in code.
+
+The competitors carry the scope's dimensions on, so each company's evidence reads only the
+competitors: a scope change that leaves the dimensions as they were rebuilds the
+competitors equal and stops there (early cutoff, ADR-P05).
+
+The rules: one record per company with its merge evidence; a price conflict kept with
+both values; "N of M reviews in this sample"; every company in the matrix with every
+dimension cited or an explicit unknown; every proposed threshold marked ``proposal``.
 """
 
 from __future__ import annotations
@@ -19,7 +28,6 @@ from . import analysis
 
 PHRASE = re.compile(r"^(\d+) of (\d+) reviews in this sample$")
 OUTPUTS = ("matrix", "needs", "findings", "tests")
-CELLS = ("unit_price", "subscription", "power", "battery_life", "privacy")
 
 
 def _content(view: Any, kind: str, key: str | None = None) -> Mapping[str, Any] | None:
@@ -27,8 +35,15 @@ def _content(view: Any, kind: str, key: str | None = None) -> Mapping[str, Any] 
     return None if found is None else found.content
 
 
+def dimension_ids(scope: Mapping[str, Any] | None) -> list[str]:
+    """The comparison dimensions of a scope (or of the competitors, which carry them on)."""
+    if not scope:
+        return []
+    return [str(d.get("id")) for d in scope.get("dimensions", ()) if isinstance(d, Mapping)]
+
+
 def scope_done(view: Any) -> CheckResult:
-    """The scope names a segment, a geography and a boundary, each with where it came from."""
+    """The scope names a segment, a geography, a boundary and what to compare, with sources."""
     scope = _content(view, "scope")
     if scope is None:
         return CheckResult(False, "save the scope")
@@ -41,6 +56,18 @@ def scope_done(view: Any) -> CheckResult:
     boundary = scope.get("boundary")
     if not isinstance(boundary, Mapping) or not boundary.get("in") or "out" not in boundary:
         return CheckResult(False, "the scope needs a boundary: what is in and what is out")
+    dims = scope.get("dimensions")
+    if not isinstance(dims, list | tuple):
+        return CheckResult(False, "list the dimensions to compare (an empty list compares price)")
+    bad = [d for d in dims if not isinstance(d, Mapping) or not d.get("id") or not d.get("terms")]
+    ids = dimension_ids(scope)
+    if bad or len(ids) != len(set(ids)):
+        return CheckResult(False, "each dimension has a unique id and the terms that find it")
+    themes = scope.get("themes")
+    if not isinstance(themes, list | tuple) or any(
+        not isinstance(t, Mapping) or not t.get("id") or not t.get("terms") for t in themes
+    ):
+        return CheckResult(False, "list the review themes, each with an id and its terms")
     return CheckResult(True)
 
 
@@ -98,24 +125,37 @@ def discover_done(view: Any) -> CheckResult:
     return CheckResult(True)
 
 
+def _missing_cells(entry: Mapping[str, Any], dims: list[str]) -> list[str]:
+    cells = entry.get("cells", {})
+    out = [] if entry.get("prices") else ["prices"]
+    return out + [d for d in dims if not isinstance(cells, Mapping) or not cells.get(d)]
+
+
 def profile_done(view: Any) -> CheckResult:
-    """The company's profile has every cell, and differing unit prices are kept as a conflict."""
+    """The company's profile has prices and every scope dimension; a conflict is kept open."""
     profile = _content(view, "profile", view.key)
     if profile is None:
         return CheckResult(False, f"save the profile of {view.key}")
-    empty = [c for c in CELLS if not profile.get(c)]
+    empty = _missing_cells(profile, dimension_ids(_content(view, "competitors")))
     if empty:
         return CheckResult(False, f"cells {empty} need a cited entry or an explicit unknown")
-    prices = [e for e in profile["unit_price"] if isinstance(e, Mapping) and "value" in e]
-    points = [{"per": "unit", "currency": e.get("currency"), "value": e["value"]} for e in prices]
-    conflicted = any(c.get("field") == "unit_price" for c in profile.get("conflicts", []))
-    if analysis.price_conflict(points) and not conflicted:
-        return CheckResult(False, "the unit prices differ: record the conflict with both values")
+    points = [
+        {"record": e.get("record"), "per": e.get("per"), "currency": e.get("currency"),
+         "value": e["value"]}
+        for e in profile["prices"]
+        if isinstance(e, Mapping) and "value" in e
+    ]  # fmt: skip
+    recorded = {
+        str(c.get("per")) for c in profile.get("conflicts", []) if c.get("field") == "price"
+    }
+    open_ = [b for b in analysis.price_conflict(points) if b not in recorded]
+    if open_:
+        return CheckResult(False, f"prices per {open_} differ across pages: record the conflict")
     return CheckResult(True)
 
 
 def needs_done(view: Any) -> CheckResult:
-    """Every need counts its evidence as "N of M reviews in this sample", M the unique rows."""
+    """Every scope theme is counted as "N of M reviews in this sample", M the unique rows."""
     found = _content(view, "needs")
     if found is None:
         return CheckResult(False, "save the needs")
@@ -123,6 +163,11 @@ def needs_done(view: Any) -> CheckResult:
     unique, rows = sample.get("unique"), sample.get("rows")
     if not isinstance(unique, int) or rows != unique + len(sample.get("duplicates", [])):
         return CheckResult(False, "rows must equal unique reviews plus duplicates")
+    scope = _content(view, "scope") or {}
+    want = {str(t.get("id")) for t in scope.get("themes", ()) if isinstance(t, Mapping)}
+    have = {str(n.get("theme")) for n in found.get("needs", [])}
+    if want - have:
+        return CheckResult(False, f"themes {sorted(want - have)} have no need saved")
     bad = []
     for need in found.get("needs", []):
         m = PHRASE.match(str(need.get("phrase", "")))
@@ -137,7 +182,7 @@ def needs_done(view: Any) -> CheckResult:
 
 
 def report_done(view: Any) -> CheckResult:
-    """The matrix has a row per company (or its unknown); findings and tests are saved."""
+    """The matrix has a row per company with every dimension; findings and tests are saved."""
     matrix = _content(view, "matrix")
     companies = _content(view, "competitors") or {}
     if matrix is None:
@@ -146,14 +191,15 @@ def report_done(view: Any) -> CheckResult:
     have = sorted(str(r.get("key")) for r in matrix.get("rows", []))
     if want != have:
         return CheckResult(False, f"matrix rows {have} are not the companies {want}")
-    empty = [f"{r.get('key')}/{c}" for r in matrix.get("rows", []) for c in CELLS if not r.get(c)]
+    dims = dimension_ids(_content(view, "scope"))
+    empty = [f"{r.get('key')}/{c}" for r in matrix.get("rows", []) for c in _missing_cells(r, dims)]
     if empty:
         return CheckResult(False, f"cells {empty} need a cited entry or an explicit unknown")
     findings = _content(view, "findings")
     if findings is None:
         return CheckResult(False, "save the findings")
     tests = _content(view, "tests")
-    if tests is None or not tests.get("tests"):
+    if tests is None or "tests" not in tests:
         return CheckResult(False, "save what to test next")
     unmarked = [
         t.get("id") for t in tests["tests"] if t.get("threshold", {}).get("status") != "proposal"

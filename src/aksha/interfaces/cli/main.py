@@ -8,6 +8,11 @@ dispatches the command, drives the owner's runs until they yield, and exits. Rea
 commands (``status``, ``inspect``, ``verify``, ``trace``) open a read-only handle and work
 beside a server.
 
+``aksha run --input PATH`` (repeatable: a folder, or files) first uploads those files to
+the owner's inputs (``UploadInputs``), then sends the message; ``aksha upload PATH`` uploads
+alone. Uploading a file again with other bytes records what moved, and only the work built
+on it reopens: the command drives the rebuild runs that opens and reports them.
+
 ``aksha run --headless`` starts a headless run (ADR-P11 D12, option B): no approval is
 asked, every deny still holds, and the start is refused ``sandbox_required`` unless a
 sandbox backend probes available (``AKSHA_SANDBOX``) or an outer box is declared. The
@@ -264,8 +269,112 @@ def _recent(client: Client) -> str | None:
 # --- commands ------------------------------------------------------------------------------
 
 
+SKIPPED_PARTS = frozenset({".git", "__pycache__", ".venv", "node_modules"})
+"""Folders an input folder's upload never walks into."""
+
+
+def collect_inputs(paths: Sequence[str]) -> tuple[dict[str, str], list[str]]:
+    """The files under ``paths`` as ``{relative path: text}``, and what was skipped and why.
+
+    A folder contributes every file below it, at its path relative to the folder; a file
+    contributes itself, under its name. Hidden files, and files that are not UTF-8 text
+    (a PDF: extract its text first), are skipped and reported. Raises ``FileNotFoundError``
+    for a path that does not exist.
+    """
+    files: dict[str, str] = {}
+    skipped: list[str] = []
+    for raw in paths:
+        path = Path(raw).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(raw)
+        found = (
+            [(p, p.relative_to(path).as_posix()) for p in sorted(path.rglob("*")) if p.is_file()]
+            if path.is_dir()
+            else [(path, path.name)]
+        )
+        for file, rel in found:
+            parts = rel.split("/")
+            if any(x.startswith(".") or x in SKIPPED_PARTS for x in parts):
+                continue
+            try:
+                files[rel] = file.read_bytes().decode("utf-8")
+            except UnicodeDecodeError:
+                skipped.append(f"{rel}: not UTF-8 text (extract a PDF's text to .txt first)")
+    return files, skipped
+
+
+def _upload(ctx: Context, paths: Sequence[str]) -> int | None:
+    """Upload ``paths`` to the owner's inputs; None when it went through, else an exit code."""
+    try:
+        files, skipped = collect_inputs(paths)
+    except FileNotFoundError as e:
+        ctx.say(f"no such input: {e}")
+        return wire.EXIT_USAGE
+    for why in skipped:
+        ctx.say(f"skipped {why}")
+    if not files:
+        ctx.say("no input files to upload")
+        return wire.EXIT_USAGE
+    command = n.UploadInputs(owner=ctx.owner, files=files, command_id=ctx.command_id())
+    client = ctx.server()
+    if client is not None:
+        receipt = client.dispatch(command)
+    else:
+        session = _embedded(ctx)
+        try:
+            receipt = session.dispatch(command)
+        finally:
+            session.store.close()
+    ctx.received()
+    if not receipt.accepted:
+        return _refused(ctx, receipt)
+    ctx.say(f"uploaded {len(files)} input files")
+    return None
+
+
+def cmd_upload(ctx: Context, args: argparse.Namespace) -> int:
+    """Upload files to the owner's inputs, then drive the rebuild runs a change opens."""
+    before = _run_ids(ctx)
+    failed = _upload(ctx, args.paths)
+    if failed is not None:
+        return failed
+    client = ctx.server()
+    if client is not None:
+        return wire.EXIT_OK  # the server's runtime thread drives the rebuild runs
+    session = _embedded(ctx)
+    try:
+        session.run_until_yield(ctx.owner)
+        view = load_view(session.store, ctx.owner)
+    finally:
+        session.store.close()
+    opened = [r for r in run_statuses(view) if r.run not in before]
+    if not opened:
+        ctx.say("nothing built on the changed inputs; no work reopened")
+    code = wire.EXIT_OK
+    for run in opened:
+        code = _report(ctx, run)
+    return code
+
+
+def _run_ids(ctx: Context) -> set[str]:
+    store = open_reader(ctx.config)
+    try:
+        return {r.run for r in run_statuses(load_view(store, ctx.owner))}
+    except AkshaError:
+        return set()
+    finally:
+        store.close()
+
+
 def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
-    """Send a message; with ``--agent`` it starts that agent's run, else the router picks."""
+    """Send a message; with ``--agent`` it starts that agent's run, else the router picks.
+
+    With ``--input``, the files are uploaded to the owner's inputs first.
+    """
+    if args.input:
+        failed = _upload(ctx, args.input)
+        if failed is not None:
+            return failed
     session_id = args.session or ctx.pending.take(ctx.key + "/session", wire.new_session_id)
     ctx.say(f"session {session_id}")
 
@@ -492,7 +601,17 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="never ask: asks become allows, denies hold; needs AKSHA_SANDBOX",
     )
+    s.add_argument(
+        "--input",
+        action="append",
+        metavar="PATH",
+        help="a folder or file to upload to your inputs first (repeat for several)",
+    )
     s.set_defaults(handler=cmd_run)
+
+    s = sub.add_parser("upload", help="upload files to your inputs; reopens only changed work")
+    s.add_argument("paths", nargs="+", metavar="PATH", help="folders or files")
+    s.set_defaults(handler=cmd_upload)
 
     s = sub.add_parser("answer", help="answer an input, choice or route interrupt")
     s.add_argument("interrupt")

@@ -1,0 +1,25 @@
+id,platform,product,posted_on,region,stars,comment,synthetic
+SYN-RV-01,agrimart.example,AquaSense S2,2026-01-14,IN,4,"Readings were right in our tomato beds, and the SMS came every morning.",true
+SYN-RV-02,agrimart.example,AquaSense S2,2026-01-29,IN,2,The app said water while the field was still wet from the canal; a false alert in salty soil.,true
+SYN-RV-03,farmforum.example,KhetiMeter,2026-02-11,IN,3,"Cheap, but we change the AA cells every few weeks in summer.",true
+SYN-RV-04,farmforum.example,KhetiMeter,2026-02-20,KE,4,SMS works even where there is no data network.,true
+SYN-RV-05,agrimart.example,FurrowPulse,2026-03-03,IN,2,"Needs a gateway on the pump house roof, and the signal drops in the monsoon.",true
+SYN-RV-06,agrimart.example,FurrowPulse,2026-03-17,IN,5,Solar panel kept it running all season without charging.,true
+SYN-RV-07,farmforum.example,Dripwise Root,2026-03-30,IN,3,Too expensive for a two-acre plot.,true
+SYN-RV-08,agrimart.example,Dripwise Root,2026-04-09,BD,2,Showed wet soil after fertiliser; wrong reading for days.,true
+SYN-RV-09,farmforum.example,AquaSense S2,2026-04-22,IN,4,Good accuracy once we calibrated it for our black soil.,true
+SYN-RV-10,agrimart.example,KhetiMeter,2026-05-05,IN,1,"No signal in the lower field, so no readings at all.",true
+SYN-RV-11,farmforum.example,FurrowPulse,2026-05-19,IN,3,The price doubled when we added the gateway.,true
+SYN-RV-12,agrimart.example,Hydrafield Root,2026-06-02,IN,4,Same probe as before under a new name; still accurate in red soil.,true
+SYN-RV-13,agrimart.example,AquaSense S2,2026-06-16,IN,2,"Battery died in the second season, far short of five years.",true
+SYN-RV-14,farmforum.example,Hydrafield Root,2026-06-30,KE,3,"Readings fine, but the cost per probe adds up across plots.",true
+SYN-RV-15,agrimart.example,KhetiMeter,2026-07-14,IN,4,Simple to use; my father reads the SMS himself.,true
+SYN-RV-16,agrimart.example,Dripwise Root,2026-07-28,IN,2,False alert after every irrigation with salty borewell water.,true
+SYN-RV-17,farmforum.example,FurrowPulse,2026-08-11,IN,4,Solar charging works even on cloudy days.,true
+SYN-RV-18,agrimart.example,AquaSense S2,2026-08-25,IN,3,Paid for the advisory app but the network is weak here.,true
+SYN-RV-19,farmforum.example,Hydrafield Root,2026-09-08,IN,5,Cheap at the launch offer.,true
+SYN-RV-20,agrimart.example,KhetiMeter,2026-09-22,BD,2,Readings jump around; I stopped trusting them.,true
+SYN-RV-21,farmforum.example,FurrowPulse,2026-10-06,IN,3,Stopped sending data when the gateway lost power.,true
+SYN-RV-22,agrimart.example,AquaSense S2,2026-10-20,IN,4,Works without charging in the dry months.,true
+SYN-RV-23,farmforum.example,Dripwise Root,2026-08-02,IN,2,False alert after every irrigation with salty borewell water.,true
+SYN-RV-24,farmforum.example,FurrowPulse,2026-04-01,IN,5,Solar panel kept it running all season without charging.,true

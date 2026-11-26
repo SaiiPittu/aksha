@@ -79,6 +79,7 @@ def rebuild_starts(
     agents: Iterable[str] | None = None,
     sandbox: Availability | None = None,
     reentry: ReentrySetting | None = None,
+    budgets: Mapping[str, Mapping[str, int]] | None = None,
 ) -> tuple[NewEvent, ...]:
     """The ``run.started{cause: rebuild}`` facts the owner's log calls for now (module doc).
 
@@ -86,6 +87,9 @@ def rebuild_starts(
     those agents (a loop that drives one agent); ``sandbox`` is the sandbox backend's
     availability, asked for a headless rebuild (rule 6). ``reentry`` is the re-entry
     setting the runs record (rule 7); None inherits it from the runs rebuilt for.
+    ``budgets`` holds each agent's declared budget as a ``run.started`` records it: a
+    rebuild run of that agent records it too, so it is metered like the agent's request
+    runs, not by the runtime's default.
     """
     only = None if agents is None else frozenset(agents)
     iv = invalidation_view(view)
@@ -125,6 +129,8 @@ def rebuild_starts(
         payload["reentry"] = reentry or inherited_setting(view, for_runs)
         if definition_hashes and agent in definition_hashes:
             payload["definition_hash"] = definition_hashes[agent]
+        if budgets and agent in budgets:
+            payload["budget"] = dict(budgets[agent])
         out.append(NewEvent("run.started", payload, run=ids.next(view.owner, "R")))
     return tuple(out)
 
@@ -138,6 +144,7 @@ def open_rebuild_runs(
     agents: Iterable[str] | None = None,
     sandbox: Availability | None = None,
     reentry: ReentrySetting | None = None,
+    budgets: Mapping[str, Mapping[str, int]] | None = None,
 ) -> tuple[str, ...]:
     """Open the rebuild runs the owner's log calls for; return their run IDs (module doc).
 
@@ -146,7 +153,7 @@ def open_rebuild_runs(
     """
     starts = rebuild_starts(
         load_view(store, owner), ids, definition_hashes=definition_hashes, agents=agents,
-        sandbox=sandbox, reentry=reentry,
+        sandbox=sandbox, reentry=reentry, budgets=budgets,
     )  # fmt: skip
     for start in starts:
         store.append(owner, REBUILD_BOUNDARY, (start,))

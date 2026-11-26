@@ -1,8 +1,10 @@
 """The patent agent's own tools: typed reads over the sources, the form tool and the send.
 
-Every read returns a view and names it in ``Ok.reads`` as a record at the view's
-version (``world.py``), so the lineage of what the agent saves reaches the source text.
-The search is a recorded query: its read is the query ID at the hash of its hit set.
+Every read returns a view and names what it read in ``Ok.reads``: the whole record at its
+version, or the table rows of one candidate as a record part at that part's version
+(``world.py``), so the lineage of what the agent saves reaches the source text. The
+search and the two listings are recorded queries: each read is the query ID at the hash
+of its hit set.
 
 ``fill_form`` is a store tool: it checks the fields against the blank template in code
 (``rules.form_refusal``) and saves the form, so a model cannot mark a counsel field
@@ -26,27 +28,19 @@ from aksha.runtime.api import (
     ToolDecl,
     ToolOutcome,
     ToolSpec,
+    part_version,
+    where_part,
 )
 
 from . import rules
-from .world import (
-    NotInWorld,
-    SourceWorld,
-    days_between,
-    query_id,
-    query_version,
-    view_version,
-)
+from .world import NotInWorld, SourceWorld, days_between, query_id, query_version
 
 AGENT = "patent"
 RECIPIENTS = ("counsel-primary",)
 """The configured recipients: the only addresses ``send_packet`` takes."""
 
-FORMS = {
-    "invention-disclosure-form": "disclosure",
-    "filing-information-worksheet": "worksheet",
-}
-"""Each blank template and the artifact kind its filled form is saved as."""
+FORM_KINDS = ("disclosure", "worksheet")
+"""The two forms a counsel packet carries; which template is which is read from the template."""
 
 
 def _obj(props: Mapping[str, Any], required: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -58,12 +52,29 @@ def _obj(props: Mapping[str, Any], required: tuple[str, ...] = ()) -> dict[str, 
     }
 
 
-CANDIDATE = _obj({"candidate": {"type": "string", "pattern": "^C[0-9]+$"}}, ("candidate",))
+CANDIDATE = _obj({"candidate": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}},
+                 ("candidate",))  # fmt: skip
 STRING = {"type": "string", "minLength": 1}
 
 
-def _record(record_id: str, data: Any) -> InputRef:
-    return InputRef("record", record_id, view_version(data))
+def _whole(world: SourceWorld, record: str) -> InputRef:
+    """A read of the whole record at its version."""
+    return InputRef("record", record, world.found(record).version)
+
+
+def _parts(world: SourceWorld, parts: Any) -> tuple[InputRef, ...]:
+    """Reads of the table rows a view used: each a record part at that part's version."""
+    out = []
+    for record, column, value in parts:
+        part = where_part(record, column, str(value).split(","))
+        found = world.found(record)
+        version = part_version(found.text, part.partition("#")[2], found.version)
+        out.append(InputRef("record", part, version or found.version))
+    return tuple(out)
+
+
+def _shown(data: Mapping[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in data.items() if k != "parts"}
 
 
 def _guard(body: Callable[[ToolContext, Mapping[str, Any]], ToolOutcome]) -> Any:
@@ -79,90 +90,99 @@ def _guard(body: Callable[[ToolContext, Mapping[str, Any]], ToolOutcome]) -> Any
 
 
 def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
-    """The agent's own tools, reading ``bound``.
+    """The agent's own tools, reading the inputs through the call's record reader.
 
-    A world with no folder reads through the call's record reader (``SourceWorld.over``).
+    ``bound`` carries the date elapsed days count to, when a caller fixes it.
     """
 
     def list_candidates(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         data = world.candidates()
-        return ToolOutcome(Ok(data, reads=(_record("notes/index#portfolio", data),)))
+        read = InputRef("query", query_id("list_candidates", args),
+                        query_version(data["candidates"]))  # fmt: skip
+        return ToolOutcome(Ok(data, reads=(read,)))
 
     def read_note(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         data = world.note(str(args["candidate"]))
-        return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#note", data),)))
+        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
 
     def read_contributors(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
-        c = str(args["candidate"])
-        data = world.contributor_rows(c)
-        return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#rows:{c}", data),)))
+        data = world.contributor_rows(str(args["candidate"]))
+        return ToolOutcome(Ok(_shown(data), reads=_parts(world, data["parts"])))
 
     def read_people(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         ids = sorted(str(p) for p in args["person_ids"])
         data = world.people(ids)
-        rid = f"{data['file']}#people:{','.join(ids)}"
-        return ToolOutcome(Ok(data, reads=(_record(rid, data),)))
+        return ToolOutcome(Ok(_shown(data), reads=_parts(world, data["parts"])))
 
     def read_disclosures(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
-        c = str(args["candidate"])
-        data = world.disclosure_rows(c)
-        read = _record(f"{data['file']}#rows:{c}", data)
-        shown = dict(data)
+        data = world.disclosure_rows(str(args["candidate"]))
+        reads = _parts(world, data["parts"])
+        shown = _shown(data)
         if world.today is not None:  # derived from the dates; not part of the record
             shown["as_of"] = world.today.isoformat()
             shown["rows"] = [
                 {**r, "elapsed_days": days_between(r["date"], world.today) if r["date"] else None}
                 for r in data["rows"]
             ]
-        return ToolOutcome(Ok(shown, reads=(read,)))
+        return ToolOutcome(Ok(shown, reads=reads))
 
     def read_document(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         path = str(args["path"])
-        if not path.startswith("disclosures/") or ".." in path.split("/"):
-            return ToolOutcome(Err("not_allowed", "read_document reads disclosure records only"))
+        if ".." in path.split("/") or path not in world.records():
+            return ToolOutcome(Err("not_found", f"{path} is not among the inputs"))
         data = world.document(path)
-        return ToolOutcome(Ok(data, reads=(_record(f"{path}#doc", data),)))
+        return ToolOutcome(Ok(data, reads=(_whole(world, path),)))
 
     def read_priorities(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         data = world.priorities()
-        return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#items", data),)))
+        reads = () if data["file"] is None else (_whole(world, data["file"]),)
+        return ToolOutcome(Ok(data, reads=reads))
+
+    def list_templates(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        world = bound.over(ctx.reader, ctx.run_date)
+        data = world.templates()
+        read = InputRef("query", query_id("list_templates", args),
+                        query_version(data["templates"]))  # fmt: skip
+        return ToolOutcome(Ok(data, reads=(read,)))
 
     def read_template(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
-        name = str(args["template"])
-        data = world.template(name)
-        return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#template:{name}", data),)))
+        data = world.template(str(args["template"]))
+        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
 
     def search_publications(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         groups = [[str(t) for t in g] for g in args["all_of"]]
         hits = world.search(groups)
-        qid = query_id(groups)
+        qid = query_id("search_publications", {"all_of": groups})
         data = {"query": qid, "hits": hits}
-        return ToolOutcome(Ok(data, reads=(InputRef("query", qid, query_version(hits)),)))
+        read = InputRef("query", qid, query_version([h["id"] for h in hits]))
+        return ToolOutcome(Ok(data, reads=(read,)))
 
     def fetch_publication(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         data = world.publication(str(args["id"]))
-        return ToolOutcome(Ok(data, reads=(_record(f"{data['file']}#publication", data),)))
+        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
 
     def fill_form(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date)
         name, candidate = str(args["template"]), str(args["candidate"])
-        kind = FORMS.get(name)
-        if kind is None:
-            return ToolOutcome(Err("unknown_template", f"no blank template {name!r}"))
+        listed = {t["template"]: t["form"] for t in world.templates()["templates"]}
+        kind = listed.get(name)
+        if kind not in FORM_KINDS:
+            return ToolOutcome(Err("unknown_template", f"{name!r} is no disclosure form or "
+                                   f"filing worksheet among the inputs"))  # fmt: skip
         if ctx.key is not None and ctx.key != candidate:
             return ToolOutcome(Err("wrong_candidate", f"this instance prepares {ctx.key}"))
         template = world.template(name)
-        read = _record(f"{template['file']}#template:{name}", template)
+        read = _whole(world, template["file"])
         fields = [dict(f) for f in args["fields"]]
         refused = rules.form_refusal(template, fields)
         if refused is not None:
@@ -192,16 +212,18 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
     def _targets(args: Mapping[str, object]) -> tuple[str, ...]:
         return (str(args["packet"]),)
 
-    rec = frozenset({"notes"})
+    rec = frozenset({"input"})
     specs: list[tuple[ToolSpec, Any]] = [
         (
             ToolSpec(
                 "list_candidates",
                 AGENT,
                 "read",
-                "List the invention candidates (one per engineering note).",
+                "List the invention candidates (one per invention note among the inputs).",
                 _obj({}),
                 collections=rec,
+                recorded_query=True,
+                result_key="/candidate",
             ),
             list_candidates,
         ),
@@ -210,7 +232,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "read_note",
                 AGENT,
                 "read",
-                "Read one candidate's engineering note: dated "
+                "Read one candidate's invention note: dated "
                 "record, problem, mechanism steps, parameters, alternatives, evidence, open "
                 "points and referenced files.",
                 CANDIDATE,
@@ -226,7 +248,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "Read the contributor records for one "
                 "candidate (who contributed what, when, under which agreement).",
                 CANDIDATE,
-                collections=frozenset({"contributors"}),
+                collections=rec,
             ),
             read_contributors,
         ),
@@ -240,7 +262,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                     {"person_ids": {"type": "array", "items": STRING, "minItems": 1}},
                     ("person_ids",),
                 ),
-                collections=frozenset({"contributors"}),
+                collections=rec,
             ),
             read_people,
         ),
@@ -252,7 +274,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "Read the dated disclosure history rows "
                 "for one candidate, with elapsed days to today. Dates only; no legal view.",
                 CANDIDATE,
-                collections=frozenset({"disclosures"}),
+                collections=rec,
             ),
             read_disclosures,
         ),
@@ -261,9 +283,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "read_document",
                 AGENT,
                 "read",
-                "Read a disclosure record linked from the history (an email or an event record).",
+                "Read a record linked from the disclosure history (an email or an event record).",
                 _obj({"path": STRING}, ("path",)),
-                collections=frozenset({"disclosures"}),
+                collections=rec,
             ),
             read_document,
         ),
@@ -274,9 +296,23 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "read",
                 "Read the ranked business priorities.",
                 _obj({}),
-                collections=frozenset({"priorities"}),
+                collections=rec,
             ),
             read_priorities,
+        ),
+        (
+            ToolSpec(
+                "list_templates",
+                AGENT,
+                "read",
+                "List the blank form templates among the inputs, each with the form it is "
+                "(disclosure or worksheet).",
+                _obj({}),
+                collections=rec,
+                recorded_query=True,
+                result_key="/template",
+            ),
+            list_templates,
         ),
         (
             ToolSpec(
@@ -284,8 +320,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 AGENT,
                 "read",
                 "Read a blank form template's fields.",
-                _obj({"template": {"enum": sorted(FORMS)}}, ("template",)),
-                collections=frozenset({"templates"}),
+                _obj({"template": STRING}, ("template",)),
+                collections=rec,
             ),
             read_template,
         ),
@@ -294,7 +330,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "search_publications",
                 AGENT,
                 "read",
-                "Search the publication fixtures: a "
+                "Search the publications among the inputs: a "
                 "hit matches every group (any one term of each group).",
                 _obj(
                     {
@@ -306,7 +342,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                     },
                     ("all_of",),
                 ),
-                collections=frozenset({"publications"}),
+                collections=rec,
                 recorded_query=True,
                 result_key="/id",
             ),
@@ -319,8 +355,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "read",
                 "Fetch one publication: identifiers, "
                 "dates, URL, every status wording as written, claims and text.",
-                _obj({"id": {"type": "string", "pattern": "^SYN-PUB-[0-9]{4}$"}}, ("id",)),
-                collections=frozenset({"publications"}),
+                _obj({"id": STRING}, ("id",)),
+                collections=rec,
             ),
             fetch_publication,
         ),
@@ -334,14 +370,14 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "cannot be marked complete.",
                 _obj(
                     {
-                        "template": {"enum": sorted(FORMS)},
+                        "template": STRING,
                         "candidate": STRING,
                         "fields": {"type": "array", "items": {"type": "object"}},
                     },
                     ("template", "candidate", "fields"),
                 ),
-                collections=frozenset({"templates"}),
-                writes_kinds=frozenset({"patent.disclosure", "patent.worksheet"}),
+                collections=rec,
+                writes_kinds=frozenset(f"patent.{k}" for k in FORM_KINDS),
             ),
             fill_form,
         ),

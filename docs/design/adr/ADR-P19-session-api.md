@@ -107,6 +107,11 @@ Built on 26 Nov 2026 in `src/aksha/runtime/session/`, `src/aksha/interfaces/` an
 15. B15, what an interrupt asks (D3). `views.Waiting` carries the interrupt's questions as `(id, text)` pairs, a choice's options, and for an approval the tool it would run and the facts its approval rule showed (the target and recipient of a send). `aksha run`, `answer`, `status` and `resume` print them under each waiting line, and the wire form carries them.
 16. B16, rebuilds through the session (ADR-P05 D8). `Session.drive_rebuilds(owner)` opens and drives, per loaded agent, the rebuild runs a source change left runnable (`loop.drive.drive_rebuilds`: one run per set of work, never for held work), so a caller with only a `Session` can settle an `ApplySourceChange`; a run that waits on a person is driven on by `run_until_yield` once answered. A rebuild run that no message opened takes the request of the first run it rebuilds for (`run.started{for_runs}`), so every pass shows the model the same request. The eval adapters use it (ADR-P22 B20); B11's demo script still drives the loop itself. Proposed.
 
+### Amendments from the general agents (26 Nov 2026, Proposed)
+
+1. G1, `UploadInputs(files)` joins the closed union of named commands: `files` maps relative paths to UTF-8 text, written to the owner's input workspace and recorded as one source change (ADR-P05 G1); a path that is not clean or text that is not UTF-8 is refused `upload_refused` with a stored receipt, before anything is written. It is in the capability record only when a loaded agent declares the inputs source. Over HTTP it is `POST /inputs` (body `{"files": {...}}`) or `POST /commands`.
+2. G2, the command line: `aksha run --input PATH` (repeatable: a folder, at its relative paths, or files, under their names) uploads before the message is sent; `aksha upload PATH...` uploads alone, then drives and reports the rebuild runs the change opened. Hidden files are skipped; a file that is not UTF-8 text is reported skipped (extract a PDF's text first).
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |

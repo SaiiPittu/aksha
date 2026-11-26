@@ -1,12 +1,13 @@
 """A rig for the patent agent's episodes: a SQLite store, a fixture world and the real loop.
 
-``PatentRig`` builds the agent over a :class:`SourceWorld` pointed at one fixture world's
-``sources/`` folder (the only folder a tool reads), drives runs through
+``PatentRig`` builds the agent with its tools reading one fixture world's ``sources/``
+folder as the inputs source (the only folder a tool reads), drives runs through
 ``loop.drive.drive`` with the agent's rule-based model, and sends through the outbox to a
-ledgered mock counsel mailbox. ``switch`` points the world at another fixture world and
-records the change through ``apply_source_change``, with the world as the versioned
-source and its search as the query runner; ``restart`` closes the store and opens it
-again, as a new process would. Graders read ``key.json``; nothing the agent runs does.
+ledgered mock counsel mailbox. ``switch`` points the inputs at another fixture world and
+records the change through ``apply_source_change``, with the folder as the versioned
+source and the agent's own tools re-executing its recorded queries; ``restart`` closes the
+store and opens it again, as a new process would. Graders read ``key.json``; nothing the
+agent runs does.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from aksha.adapters.clock.fake import FakeClock
+from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage.sqlite import open_store
 from aksha.agents.patent.agent import KINDS, build_agent
 from aksha.agents.patent.fakes import PatentFake
@@ -29,6 +31,7 @@ from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.recovery import recover_on_startup, resume_owner
+from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority, approvals
 from aksha.runtime.interrupts.commands import answer, approve, handoff
 from aksha.runtime.interrupts.reducers import interrupts
@@ -43,7 +46,7 @@ from aksha.runtime.session.types import CommandReceipt
 from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.tools.registry import ToolRegistry
-from aksha.runtime.tools.types import ToolDecl
+from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl
 from tests.support.systems import Ledger
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -79,13 +82,39 @@ def sources(world: str) -> Path:
     return WORLDS / world / "sources"
 
 
+class Inputs:
+    """A fixture world's sources as the inputs source, re-pointable at another world."""
+
+    name = "inputs"
+    collections = ("input",)
+
+    def __init__(self, world: str) -> None:
+        self.folder = FolderSource("inputs", sources(world), "input")
+
+    def use(self, world: str) -> None:
+        self.folder = FolderSource("inputs", sources(world), "input")
+
+    def read(self, source: str, record_id: str) -> ReturnedText | None:
+        return self.folder.read(source, record_id)
+
+    def records(self, source: str, collection: str) -> tuple[str, ...]:
+        return self.folder.records(source, collection)
+
+    def version(self, owner: str) -> str:
+        return self.folder.version(owner)
+
+    def record_version(self, owner: str, record_id: str) -> str | None:
+        return self.folder.record_version(owner, record_id)
+
+
 class PatentRig:
     """One owner's store, the patent agent over one world, and the loop's setup."""
 
     def __init__(self, path: Path, world: str = "stillroom") -> None:
         self.path = path
         self.clock = FakeClock(START)
-        self.world = SourceWorld(sources(world), TODAY)
+        self.world = SourceWorld(TODAY)
+        self.inputs = Inputs(world)
         self.world_name = world
         self.model = PatentFake()
         self.ledger = Ledger("counsel_mail")
@@ -108,7 +137,9 @@ class PatentRig:
             kinds=FULL,
             definition_hash=DEFINITION,
             context_policy=self.agent.context_policy,
+            reader=self.inputs,
         )
+        self.listed = listed
         self.send_tool = {"send_packet": ApprovalTool(listed["send_packet"].spec)}
         self.worker = self._worker()
         self.executor = StepExecutor(self.store, OWNER, self.clock, outbox=self.worker)
@@ -160,12 +191,39 @@ class PatentRig:
     ) -> CommandReceipt:
         return approve(self.store, OWNER, approval, signature, by="founder", command_id=command_id)
 
+    def run_query(self, owner: str, query: str) -> str:
+        """Re-execute a recorded query with the agent's own tool (``patent.<tool>?<args>``)."""
+        head, _, raw = query.partition("?")
+        decl = self.listed[head.partition(".")[2]]
+        assert decl.body is not None
+        ctx = ToolContext(owner, AGENT, "requery", None, "requery", 1, reader=self.inputs)
+        result = decl.body(ctx, json.loads(raw) if raw else {}).result
+        assert isinstance(result, Ok)
+        return next(r.version for r in result.reads if r.kind == "query" and r.id == query)
+
+    def change(self, root: Path) -> CommandReceipt:
+        """Apply the demo's change set to a copy of the base world at ``root``; record it.
+
+        The same two edits and one new publication ``make demo`` applies: a later
+        consultant email date (and its history row) and family E's publication.
+        """
+        import shutil
+
+        from aksha.interfaces.demo.world import apply_change
+
+        shutil.copytree(sources(self.world_name), root)
+        apply_change(root)
+        self.inputs.folder = FolderSource("inputs", root, "input")
+        return apply_source_change(
+            self.store, OWNER, [self.inputs], "stillroom-v2", run_query=self.run_query
+        )
+
     def switch(self, world: str) -> CommandReceipt:
-        """Point the world at ``world`` and record the change set (one command)."""
-        self.world.use(sources(world))
+        """Point the inputs at ``world`` and record the change set (one command)."""
+        self.inputs.use(world)
         self.world_name = world
         return apply_source_change(
-            self.store, OWNER, [self.world], f"switch:{world}", run_query=self.world.run_query
+            self.store, OWNER, [self.inputs], f"switch:{world}", run_query=self.run_query
         )
 
     def accept(self, interrupt: str, card: str) -> CommandReceipt:

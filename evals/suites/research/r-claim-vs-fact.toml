@@ -6,6 +6,6 @@ category = "capability"
 agents = ["research"]
 worlds = ["stillroom", "stillroom-v2"]
 relation = "invariance"
-opening = "How long do competitors' batteries last?"
+opening = "How long do competitors' batteries last? Compare battery life (battery life, years of battery, months at)."
 expect = ["facts.KF-24", "facts.KF-25", "traps.T-CLAIM"]
 criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]

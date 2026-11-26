@@ -14,7 +14,7 @@ change set's derived key and measured on model turns, tool calls, tokens and con
 in the rebuild runs. In fake model mode the measures are a property of the rule-based fake;
 the comparison that decides the default needs a live model. Fresh stays the default.
 """
-opening = "Research the market for a camera-free ceiling occupancy sensor for facilities and workplace teams in 200 to 2,000 person offices."
+opening = "Research the market for a camera-free ceiling occupancy sensor for facilities and workplace teams in 200 to 2,000 person offices. What do customers say about: battery (batter*, not battery powered); stillness (sit*, sat, seated, still, do not move, barely move); setup (cabl*, electrician, socket*, wiring, install*, setup); privacy (privacy, works council, image)?"
 expect = ["change.stale", "change.unchanged", "scope_change.regions", "scope_change.in_scope_themes"]
 criteria = ["change.stale_set", "change.unchanged_set", "research.scope_change", "citation.exists", "inv.one_row_per_key", "no_unbound_send"]
 should = ["research.competitor_count", "research.prices", "research.unique_reviews"]

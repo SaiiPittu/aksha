@@ -1,0 +1,10 @@
+id = "g-research-price"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-PRICE"
+category = "capability"
+agents = ["research"]
+worlds = ["tilldew"]
+opening = "What does each competitor charge smallholder farmers in India for a soil-moisture probe?"
+expect = ["facts.TF-03", "facts.TF-04", "facts.TF-05", "traps.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE"]

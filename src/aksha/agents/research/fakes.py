@@ -1,11 +1,24 @@
 """The research agent's offline model: a rule-based generation policy (ADR-P07 fakes).
 
-:class:`ResearchModel` reads only what its request carries: the request text, the read
-block of the artifacts its Task declares, the person's answers, and its own earlier tool
-calls with their results (each result followed by the span IDs it may cite). From that it
-picks the next calls of its Task by fixed rules, so a run in ``fake`` mode is offline and
-writes the same bytes twice. The judgement it applies is in ``analysis.py``; this module
-only turns tool results into calls and saved content.
+A test double, not agent logic: no module of the agent imports it, and the agent works the
+same with a live model. :class:`ResearchModel` reads only what its request carries: the
+request text, the read block of the artifacts its Task declares, the person's answers, and
+its own earlier tool calls with their results (each result followed by the span IDs it
+may cite). From that it picks the next calls of its Task by fixed, general rules, so a run
+in ``fake`` mode is offline and writes the same bytes twice. It knows no fixture: what to
+compare and what to read the reviews for come from the request, in a small grammar a
+person can write (a live model reads free text instead):
+
+* ``Compare <dimension>, <dimension> (<term>, <term>) and <dimension>.``: the matrix's
+  dimensions besides price. A dimension's terms find it in a page; with none given, its
+  name is its term. ``not <phrase>`` excludes text the other terms would match, and
+  ``batter*`` is a prefix (``analysis.term_hits``). Price-like dimensions (price, fee,
+  cost, commission, subscription) are the structural price column, not a text one.
+* ``What do customers say about: <theme> (<terms>); <theme> (<terms>)?``: the review
+  themes. Items are separated by ``;`` when any item has terms, else by commas and "and".
+* ``for <segment>`` (not "for the ...", "for our ..." or a possessive, which name the
+  venture or its product; one followed by "in <place>" first) and a named geography (a
+  country or region) fix the segment and the geography; a missing one is asked for.
 
 The scope's geography comes from the request, else the person's answer; a line of a note
 that starts ``Scope amendment`` and names geographies is the person's later written word
@@ -13,9 +26,11 @@ and wins over both (``basis: note``, cited to that line), and no geography quest
 asked then. Several regions normalise to one joined name (``EU+UK``); the reviews counted
 inside the scope are those whose country is in any of them.
 
-Text inside a fetched page is data: a passage flagged ``instruction_like`` is recorded as
-a flag and never changes a call. :class:`ObedientModel` is the counter-example for tests:
-it does what such a passage says, and the policy gate refuses it.
+The judgement it applies is in ``analysis.py``; this module only turns tool results into
+calls and saved content. Text inside an input is data: a passage flagged
+``instruction_like`` is recorded as a flag and never changes a call.
+:class:`ObedientModel` is the counter-example for tests: it does what such a passage says,
+and the policy gate refuses it.
 """
 
 from __future__ import annotations
@@ -36,11 +51,11 @@ from aksha.runtime.api import (
 
 from . import analysis
 
-PAGES, REVIEWS, NOTES = "competitors", "reviews", "priorities"
-CELLS = ("unit_price", "subscription", "power", "battery_life", "privacy")
-DISCOVER_TERMS = ("occupancy", "presence", "people counter")
-MANUAL_TERMS = ("spreadsheet", "manual count", "walk-round", "badge data", "clipboard")
-SEGMENTS = ("care homes", "offices", "office", "homes", "retail", "hospitals", "schools")
+MANUAL_TERMS = ("spreadsheet", "manual count", "by hand", "walk-round", "clipboard", "paper log")
+"""Words for doing the job without a product, in any market."""
+PRICE_WORDS = re.compile(
+    r"\b(price|prices|pricing|cost|costs|fee|fees|commission|subscription|charge|charges)\b", re.I
+)
 GEOGRAPHIES: Mapping[str, str] = {
     "eu": "EU",
     "europe": "EU",
@@ -49,28 +64,35 @@ GEOGRAPHIES: Mapping[str, str] = {
     "netherlands": "NL",
     "france": "FR",
     "spain": "ES",
+    "italy": "IT",
     "uk": "UK",
     "united kingdom": "UK",
+    "britain": "UK",
     "us": "US",
     "usa": "US",
     "united states": "US",
+    "canada": "CA",
     "india": "IN",
+    "kenya": "KE",
+    "nigeria": "NG",
+    "brazil": "BR",
+    "australia": "AU",
+    "japan": "JP",
     "global": "global",
     "worldwide": "global",
 }
+"""Place names a request may give, to the code reviews carry."""
 EU = frozenset({"DE", "NL", "FR", "ES", "IT", "BE", "AT", "IE", "PL", "SE", "DK", "FI", "PT"})
 REGION_MEMBERS: Mapping[str, frozenset[str]] = {"EU": EU}
-ASK_SEGMENT = (
-    "Which buyers is this for: offices, homes or retail? It decides which competitors count."
-)
+ASK_SEGMENT = "Which buyers is this for? It decides which competitors and reviews count."
 ASK_GEOGRAPHY = (
-    "Which geography should this cover? Prices are listed in EUR and USD and reviews come "
-    "from several countries, so it changes what counts."
+    "Which geography should this cover? Prices and reviews can come from several countries, "
+    "so it changes what counts."
 )
 AMENDMENT = "scope amendment"
 """How a note line that amends the scope starts (case folded); its geography words win."""
 BOUNDARY_IN = "products that do the job the question names, and the manual ways buyers use today"
-
+PRICE_SECTION = re.compile(r"\b(pric\w*|plans?|costs?|fees?)\b", re.I)
 _ARTIFACT = re.compile(r"^\[artifact ([^,\]]+), (full|summary)\]\n(.*)$", re.S)
 _UNKNOWN = re.compile(r"^\[unknown (\S+): (\w+)(?:, blocked by (.+?))?(?:, failed steps (.+?))?\]$")
 _ANSWER = re.compile(
@@ -216,14 +238,105 @@ def _unknown(
     return {"unknown": inner}
 
 
-# --- scope --------------------------------------------------------------------------
+# --- the request grammar ------------------------------------------------------------
 
 
-def _found_word(text: str, table: Sequence[str] | Mapping[str, str]) -> str | None:
+def _split_top(text: str, seps: str) -> list[str]:
+    """``text`` split at any of ``seps`` outside parentheses."""
+    out: list[str] = []
+    cur: list[str] = []
+    depth = 0
+    for ch in text:
+        depth += ch == "("
+        depth -= ch == ")"
+        if ch in seps and depth == 0:
+            out.append("".join(cur))
+            cur = []
+        else:
+            cur.append(ch)
+    out.append("".join(cur))
+    return [p for p in (x.strip() for x in out) if p]
+
+
+def _sentence_after(text: str, at: int) -> str:
+    """From ``at`` to the end of its sentence (a ``.``, ``?`` or ``!`` outside parentheses)."""
+    depth = 0
+    for i in range(at, len(text)):
+        ch = text[i]
+        depth += ch == "("
+        depth -= ch == ")"
+        if ch in ".?!\n" and depth == 0 and (i + 1 == len(text) or not text[i + 1].isalnum()):
+            return text[at:i]
+    return text[at:]
+
+
+def parse_list(text: str) -> list[tuple[str, list[str]]]:
+    """``a, b (t1, t2) and c`` as ``[(name, terms)]`` (module doc)."""
+    text = text.strip().strip(":").strip()
+    items = _split_top(text, ";") if ";" in text else _split_top(text, ",")
+    out: list[tuple[str, list[str]]] = []
+    for raw in items:
+        for item in re.split(r"\s+and\s+(?![^(]*\))", raw) if ";" not in text else [raw]:
+            item = re.sub(r"^(and|or)\s+", "", item.strip())
+            m = re.match(r"^(.*?)\s*\((.*)\)\s*$", item)
+            name, terms = (m.group(1), _split_top(m.group(2), ",")) if m else (item, [])
+            name = name.strip().strip('"')
+            if name:
+                out.append((name, [t.strip().strip('"') for t in terms if t.strip()] or [name]))
+    return out
+
+
+def dimensions_of(request: str) -> tuple[list[dict[str, Any]], list[str]]:
+    """The request's comparison dimensions, and the price-like ones it named."""
+    m = re.search(r"\bcompare\b(?:\s+(?:them|each|competitors|vendors|products))?"
+                  r"(?:\s+(?:on|by|across|for))?\s*:?", request, re.I)  # fmt: skip
+    if m is None:
+        return [], []
+    dims, prices = [], []
+    for name, terms in parse_list(_sentence_after(request, m.end())):
+        if PRICE_WORDS.search(name) and terms == [name]:
+            prices.append(name)
+            continue
+        dims.append({"id": analysis.slug(name).replace("-", "_"), "name": name, "terms": terms,
+                     "basis": "request"})  # fmt: skip
+    return dims, prices
+
+
+def themes_of(request: str) -> list[dict[str, Any]]:
+    """The request's review themes (module doc)."""
+    found = list(re.finditer(r"\b(?:says?|said|mention)\s+about\s*(:?)", request, re.I))
+    if not found:
+        return []
+    m = next((f for f in found if f.group(1)), found[0])  # a list after a colon first
+    return [
+        {"id": analysis.slug(name).replace("-", "_"), "name": name, "terms": terms,
+         "basis": "request"}
+        for name, terms in parse_list(_sentence_after(request, m.end()))
+    ]  # fmt: skip
+
+
+def segment_of(request: str) -> str | None:
+    """The segment a request names: ``segment: X``, or ``for X`` (not "for the ...")."""
+    m = re.search(r"\b(?:segment|buyers)\s*:\s*([^.;\n?]+)", request, re.I)
+    if m:
+        return m.group(1).strip()
+    found = []
+    for f in re.finditer(r"\bfor\s+([a-z][\w' -]*?)(?=\s+in\s|\s+across\s|,|\.|\?|;|:|\s+and\s"
+                         r"|\s+who\s|\s+with\s|$)", request, re.I):  # fmt: skip
+        words = f.group(1).strip()
+        first = words.split()[0].lower()
+        if "'s" in words or first in ("the", "a", "an", "our", "my", "its", "this", "their"):
+            continue  # a product or the venture, not a buyer
+        placed = request[f.end() :].lstrip().lower().startswith("in ")
+        found.append((not placed, f.start(), words))
+    return min(found)[2] if found else None
+
+
+def _found_word(text: str, table: Mapping[str, str]) -> str | None:
     low = text.lower()
     for word in table:
         if re.search(rf"\b{re.escape(word)}\b", low):
-            return table[word] if isinstance(table, Mapping) else word
+            return table[word]
     return None
 
 
@@ -259,43 +372,38 @@ def _amendment(notes: Sequence[Result]) -> dict[str, Any] | None:
     return found
 
 
+# --- scope --------------------------------------------------------------------------
+
+
 def _scope(seen: Seen) -> GenerationResult:
     if not seen.of("search"):
-        return _calls(seen, [("search", {"collection": NOTES, "terms": ["priorit"]})])
+        return _calls(
+            seen, [("search", {"terms": ["priorities"], "formats": ["markdown", "text"]})]
+        )
     notes = [r for r in seen.of("read_note") if r.data]
-    if not seen.of("read_note"):
-        hits = [h["record"] for r in seen.of("search") if r.data for h in r.data["hits"]]
-        if hits:
-            return _calls(seen, [("read_note", {"record": h}) for h in hits])
+    hits = [h["record"] for r in seen.of("search") if r.data for h in r.data["hits"]]
+    unread = [h for h in hits if h not in {str(r.data["record"]) for r in notes if r.data}]
+    if unread and len(seen.of("read_note")) < 2 * len(hits):  # a stale read is read again
+        return _calls(seen, [("read_note", {"record": h}) for h in unread])
     answered = {q: (a, s) for q, a, s in seen.answers}
-    segment = _found_word(seen.request, SEGMENTS)
+    segment = segment_of(seen.request)
     region = _found_word(seen.request, GEOGRAPHIES)
     amended = _amendment(notes)
     questions = []
     if segment is None and not any("buyers" in q for q in answered):
-        questions.append(
-            {
-                "id": "segment",
-                "text": ASK_SEGMENT,
-            }
-        )
+        questions.append({"id": "segment", "text": ASK_SEGMENT})
     if region is None and amended is None and not any("geography" in q for q in answered):
-        questions.append(
-            {
-                "id": "geography",
-                "text": ASK_GEOGRAPHY,
-            }
-        )
+        questions.append({"id": "geography", "text": ASK_GEOGRAPHY})
     if questions and not seen.of("ask"):
         return _calls(seen, [("ask", {"questions": questions})])
 
-    def basis(value: str | None, keyword: str, words: Any) -> dict[str, Any]:
+    def basis(value: str | None, keyword: str, words: Mapping[str, str] | None) -> dict[str, Any]:
         if value is not None:
             return {"value": value, "basis": "request"}
         for q, (a, span) in answered.items():
             if keyword in q:
                 out: dict[str, Any] = {"value": a.strip(), "basis": "answer"}
-                found = _found_word(a, words)
+                found = _found_word(a, words) if words else None
                 if found is not None:
                     out["normalised"] = found
                 if span:
@@ -314,14 +422,15 @@ def _scope(seen: Seen) -> GenerationResult:
         for line in r.data["lines"]:
             if line["text"].lower().startswith("not a priority"):
                 out.append({"value": line["text"], "cite": r.cite(line["n"], line["text"])})
+    dims, prices = dimensions_of(seen.request)
     content = {
         "question": seen.request.strip(),
-        "segment": basis(segment, "buyers", SEGMENTS),
+        "segment": basis(segment, "buyers", None),
         "geography": geography,
-        "boundary": {
-            "in": BOUNDARY_IN,
-            "out": out,
-        },
+        "boundary": {"in": BOUNDARY_IN, "out": out},
+        "dimensions": dims,
+        "prices_named": prices,
+        "themes": themes_of(seen.request),
         "asked": [q["text"] for r in seen.of("ask") for q in r.args.get("questions", [])],
     }
     return _calls(seen, [_save("scope", content), _finish("scope saved")])
@@ -340,11 +449,16 @@ def _identity(r: Result) -> analysis.PageIdentity:
             names[p["kind"]] = {"name": p["fields"]["name"], **r.cite(p["n"], p["text"])}
         if p["kind"] == "relationship":
             relations.append({"text": p["text"], "span": r.cites[p["n"]]})
+    if not names and d.get("title"):
+        title = next((p for p in d["passages"] if p["kind"] in ("title", "heading")), None)
+        if title is not None:
+            names["product"] = {"name": title["text"], **r.cite(title["n"], title["text"])}
+    product = names.get("product", {}).get("name", d.get("product") or "")
     return analysis.PageIdentity(
         record=str(d["record"]),
         version=str(d["version"]),
         published=str(d["published"] or ""),
-        product=str(d["product"] or ""),
+        product=str(product or ""),
         brand=str(d["brand"] or ""),
         url=d.get("url"),
         relations=tuple(relations),
@@ -353,19 +467,24 @@ def _identity(r: Result) -> analysis.PageIdentity:
 
 
 def _discover(seen: Seen) -> GenerationResult:
-    searches = seen.of("search")
-    if not searches:
+    listed = seen.of("list_inputs")
+    if not listed:
         return _calls(
             seen,
             [
-                ("search", {"collection": PAGES, "terms": list(DISCOVER_TERMS)}),
-                ("search", {"collection": PAGES, "terms": list(MANUAL_TERMS)}),
+                ("list_inputs", {"shapes": ["seller_page"]}),
+                (
+                    "search",
+                    {"terms": list(MANUAL_TERMS), "formats": ["html", "markdown", "text", "email"]},
+                ),
             ],
         )
-    found, manual = searches[0], searches[-1]
+    searches = seen.of("search")
+    manual = searches[-1] if searches else None
     if not seen.of("fetch_page"):
-        hits = [h["record"] for h in (found.data or {}).get("hits", [])]
-        return _calls(seen, [("fetch_page", {"record": h}) for h in hits])
+        hits = [i["record"] for i in (listed[0].data or {}).get("inputs", [])]
+        if hits:
+            return _calls(seen, [("fetch_page", {"record": h}) for h in hits])
     pages = [_identity(r) for r in seen.of("fetch_page") if r.data]
     companies = analysis.resolve(pages)
     rows: list[dict[str, Any]] = []
@@ -420,9 +539,11 @@ def _discover(seen: Seen) -> GenerationResult:
             }
         )
     failed = [r.args["record"] for r in seen.of("fetch_page") if r.error]
-    manual_hits = (manual.data or {}).get("hits", [])
+    manual_hits = [] if manual is None else (manual.data or {}).get("hits", [])
+    scope = seen.artifact("research.scope")
     content = {
         "companies": rows,
+        "dimensions": list(scope[1].get("dimensions", [])) if scope else [],
         "pages_found": sum(len(c.pages) for c in companies),
         "resolved": len(companies),
         "unfetched": failed,
@@ -434,9 +555,9 @@ def _discover(seen: Seen) -> GenerationResult:
             for r in searches
         ],
         "manual_alternatives": _unknown(
-            "Which manual ways (walk-round counts, spreadsheets, badge data) do buyers use today, and what do they cost?",  # noqa: E501
+            "Which manual ways (counts by hand, spreadsheets, paper logs) do buyers use today, and what do they cost?",  # noqa: E501
             "not_found",
-            checked=(manual.data or {}).get("checked", []),
+            checked=[str(r.data["query"]) for r in searches if r.data],
         )
         if not manual_hits
         else _unknown(
@@ -455,20 +576,23 @@ def _discover(seen: Seen) -> GenerationResult:
 
 # --- evidence -----------------------------------------------------------------------
 
-_POWER = re.compile(r"\b(PoE|Ethernet|mains|USB-C|battery powered|battery thermal|AA)\b", re.I)
-_BATTERY_LIFE = re.compile(r"\b(battery life|years? of battery|months at)\b", re.I)
-_PRIVACY = re.compile(r"\b(privacy|camera|faces|identities|image)\b", re.I)
-
 
 def _entry(r: Result, p: Mapping[str, Any], value: str, label: str) -> dict[str, Any]:
     assert r.data is not None
     return {
         "value": value,
         "label": label,
+        "passage": p["kind"],
         "record": r.data["record"],
         "published": r.data["published"],
         "cite": r.cite(p["n"], p["text"]),
     }
+
+
+def _terms_text(p: Mapping[str, Any]) -> str:
+    """What a passage says, with a table row's label, which names what its value is."""
+    label = str(p.get("fields", {}).get("label", ""))
+    return f"{label}: {p['text']}" if label else str(p["text"])
 
 
 def _evidence(seen: Seen) -> GenerationResult:
@@ -478,6 +602,7 @@ def _evidence(seen: Seen) -> GenerationResult:
     company = next((c for c in companies if c["key"] == key), None)
     if company is None:
         return _calls(seen, [_finish(f"{key} is not a resolved company")])
+    dims = list(found[1].get("dimensions", [])) if found else []
     fetched = seen.of("fetch_page")
     if not fetched:
         return _calls(seen, [("fetch_page", {"record": p["record"]}) for p in company["pages"]])
@@ -488,7 +613,8 @@ def _evidence(seen: Seen) -> GenerationResult:
             seen, [_finish(f"could not fetch {failed}; nothing is saved without its page")]
         )
     name = company["canonical"]["value"]
-    cells: dict[str, list[dict[str, Any]]] = {c: [] for c in CELLS}
+    prices: list[dict[str, Any]] = []
+    cells: dict[str, list[dict[str, Any]]] = {str(d["id"]): [] for d in dims}
     notes: list[dict[str, Any]] = []
     flags: list[dict[str, Any]] = []
     for r in ok:
@@ -508,52 +634,49 @@ def _evidence(seen: Seen) -> GenerationResult:
                 continue
             if kind == "price":
                 f = p["fields"]
-                terms = str(f["row"].get("Terms", ""))
+                row = f.get("row", {})
+                terms = "; ".join(str(v) for k, v in row.items() if v not in (text, f.get("label")))
                 e = _entry(r, p, str(f["amount"]), "fact")
-                e.update(
-                    currency=f["currency"], per=f["per"], item=f["row"].get("Item", ""), terms=terms
-                )
-                cells["unit_price" if f["per"] == "unit" else "subscription"].append(e)
+                e.update(currency=f["currency"], number=f["number"], per=f["per"],
+                         item=f.get("label", ""), terms=terms)  # fmt: skip
+                prices.append(e)
                 continue
-            if p.get("section") == "Pricing" and kind == "text":
+            if PRICE_SECTION.search(str(p.get("section", ""))) and kind == "text":
                 notes.append(_entry(r, p, text, "fact"))
             if kind not in ("text", "claim", "spec", "relationship"):
                 continue
             label = analysis.claim_label(kind, text)
-            if _BATTERY_LIFE.search(text):
-                cells["battery_life"].append(_entry(r, p, text, label))
-            if _POWER.search(text):
-                cells["power"].append(_entry(r, p, text, label))
-            if _PRIVACY.search(text):  # by what it says, never by the heading it sits under
-                cells["privacy"].append(_entry(r, p, text, "vendor_claim"))
+            for d in dims:  # by what it says, never by the heading it sits under
+                if analysis.term_hits(_terms_text(p), d["terms"]):
+                    cells[str(d["id"])].append(_entry(r, p, text, label))
     checked = [f"record:{r.data['record']}@{r.data['version']}" for r in ok if r.data]
-    questions = {
-        "unit_price": f"What does {name} charge per unit? No unit price is listed on its pages.",
-        "subscription": f"Does {name} charge a recurring fee? None is listed on its pages.",
-        "power": f"How is {name}'s sensor powered? Its pages do not say.",
-        "battery_life": f"What battery life does {name} state or measure? Its pages give none.",
-        "privacy": f"What can {name}'s sensor capture, and does any image leave it? Its pages do not say.",  # noqa: E501
-    }
-    for c in CELLS:
-        if not cells[c]:
-            cells[c] = [_unknown(questions[c], "not_found", checked=checked)]
-    units = [e for e in cells["unit_price"] if "value" in e]
+    if not prices:
+        prices = [_unknown(f"What does {name} charge? No price is listed on its pages.",
+                           "not_found", checked=checked)]  # fmt: skip
+    for d in dims:
+        if not cells[str(d["id"])]:
+            question = f"What does {name} state about {d['name']}? Its pages do not say."
+            cells[str(d["id"])] = [_unknown(question, "not_found", checked=checked)]
+    stated = [e for e in prices if "value" in e]
     conflicts = []
     relations = []
-    if analysis.price_conflict(units):
+    by_record = {r.data["record"]: r.data for r in ok if r.data}
+    for basis in analysis.price_conflict(stated):
+        on = [e for e in stated if " ".join(str(e["per"]).lower().split()) == basis]
         conflicts.append(
             {
-                "field": "unit_price",
+                "field": "price",
+                "per": basis,
                 "values": [
                     f"{e['currency']} {e['value']} per {e['per']} ({e['terms']}), "
                     f"page dated {e['published']}"
-                    for e in units
+                    for e in on
                 ],
                 "status": "open",
             }
         )
-        by_record = {r.data["record"]: r.data for r in ok if r.data}
-        a, b = units[0], units[1]
+        a = on[0]
+        b = next(e for e in on if e["record"] != a["record"])
         ra, rb = _record_ref(by_record[a["record"]]), _record_ref(by_record[b["record"]])
         relations.append(
             {
@@ -575,7 +698,8 @@ def _evidence(seen: Seen) -> GenerationResult:
             for r in ok
             if r.data
         ],
-        **cells,
+        "prices": prices,
+        "cells": cells,
         "price_notes": notes,
         "flags": flags,
         "conflicts": conflicts,
@@ -593,33 +717,38 @@ def _evidence(seen: Seen) -> GenerationResult:
 
 
 def _voice(seen: Seen) -> GenerationResult:
-    if not seen.of("search"):
-        return _calls(seen, [("search", {"collection": REVIEWS, "terms": ["review"]})])
-    if not seen.of("read_reviews"):
-        found = [h["record"] for r in seen.of("search") if r.data for h in r.data["hits"]]
-        return _calls(seen, [("read_reviews", {"record": h}) for h in found])
+    if not seen.of("list_inputs"):
+        return _calls(seen, [("list_inputs", {"shapes": ["review_table"]})])
+    if not seen.of("read_table"):
+        found = [i["record"] for r in seen.of("list_inputs") if r.data for i in r.data["inputs"]]
+        if found:
+            return _calls(seen, [("read_table", {"record": h}) for h in found])
     rows: list[dict[str, Any]] = []
-    for r in seen.of("read_reviews"):
+    for r in seen.of("read_table"):
         if r.data is None:
             continue
         for row in r.data["rows"]:
-            fields = {k: v for k, v in row.items() if k not in ("n", "text")}
+            fields = {k: v for k, v in row.items() if k not in ("n", "text", "columns")}
             rows.append(
                 {"fields": fields, "text": row["text"], "cite": r.cite(row["n"], row["text"])}
             )
-    sample = analysis.review_sample(rows)
     scope = seen.artifact("research.scope")
+    themes = list(scope[1].get("themes", [])) if scope else []
+    sample = analysis.review_sample(rows, {str(t["id"]): t["terms"] for t in themes})
     region = scope[1]["geography"].get("normalised") if scope else None
     countries = members(region)
-    by_id = {r["fields"]["review_id"]: r for r in rows}
+    by_id = {r["fields"]["id"]: r for r in rows}
     needs = []
-    for theme, hits in sample.themes.items():
-        dates = sorted(str(h["fields"]["date"]) for h in hits)
+    for t in themes:
+        theme = str(t["id"])
+        hits = sample.themes[theme]
+        dates = sorted(str(h["fields"].get("date", "")) for h in hits if h["fields"].get("date"))
         in_scope = [h for h in hits if h["fields"].get("geography") in countries]
         needs.append(
             {
                 "theme": theme,
-                "need": analysis.NEEDS[theme],
+                "need": f"What buyers say about {t['name']}",
+                "terms": list(t["terms"]),
                 "phrase": sample.phrase(theme),
                 "count": len(hits),
                 "of": len(sample.unique),
@@ -630,17 +759,21 @@ def _voice(seen: Seen) -> GenerationResult:
                 "products": analysis.tally(hits, "product"),
                 "evidence": [
                     {
-                        "review": h["fields"]["review_id"],
-                        "date": h["fields"]["date"],
-                        "geography": h["fields"]["geography"],
-                        "product": h["fields"]["product"],
+                        "review": h["fields"]["id"],
+                        "date": h["fields"].get("date"),
+                        "geography": h["fields"].get("geography"),
+                        "product": h["fields"].get("product"),
                         "cite": h["cite"],
                     }
                     for h in hits
                 ],
             }
         )
-    dates = sorted(str(r["fields"]["date"]) for r in sample.unique)
+    dates = sorted(str(r["fields"]["date"]) for r in sample.unique if r["fields"].get("date"))
+    scales = {
+        str(r["fields"].get("rating_unit") or r["fields"].get("rating_scale_max") or "")
+        for r in sample.unique
+    } - {""}
     content = {
         "sample": {
             "rows": len(sample.rows),
@@ -658,7 +791,7 @@ def _voice(seen: Seen) -> GenerationResult:
             "last": dates[-1] if dates else None,
             "geographies": analysis.tally(sample.unique, "geography"),
             "sites": analysis.tally(sample.unique, "site"),
-            "rating_scales": sorted({str(r["fields"]["rating_unit"]) for r in sample.unique}),
+            "rating_scales": sorted(scales),
             "note": "counts describe this sample only, never a market",
         },
         "needs": needs,
@@ -672,7 +805,7 @@ def _voice(seen: Seen) -> GenerationResult:
 # --- report -------------------------------------------------------------------------
 
 
-def _cell(entries: list[Any], ref: str, column: str) -> list[dict[str, Any]]:
+def _cell(entries: list[Any], ref: str, path: str) -> list[dict[str, Any]]:
     out = []
     for i, e in enumerate(entries):
         if "unknown" in e:
@@ -682,17 +815,23 @@ def _cell(entries: list[Any], ref: str, column: str) -> list[dict[str, Any]]:
                     "status": "unknown",
                     "reason": u["reason"],
                     "question": u["question"],
-                    "cite": {"artifact": ref, "path": f"/{column}/{i}"},
+                    "cite": {"artifact": ref, "path": f"{path}/{i}"},
                 }
             )
         else:
-            out.append({k: v for k, v in e.items()})
+            out.append(dict(e))
     return out
+
+
+def _basis(entry: Mapping[str, Any]) -> str:
+    return " ".join(str(entry.get("per", "")).lower().split())
 
 
 def _report(seen: Seen) -> GenerationResult:
     comp = seen.artifact("research.competitors")
     needs = seen.artifact("research.needs")
+    scope = seen.artifact("research.scope")
+    dims = list(scope[1].get("dimensions", [])) if scope else []
     companies = comp[1]["companies"] if comp else []
     rows = []
     unknowns: list[dict[str, Any]] = []
@@ -710,61 +849,68 @@ def _report(seen: Seen) -> GenerationResult:
             u = blocked.get(key, {})
             step = (u.get("failed") or "").split(" ")[0] or None
             reason = "unverified" if step else "not_checked"
-            for col in CELLS:
-                row[col] = [
+            who = c["canonical"]["value"]
+            row["prices"] = [_unknown(f"prices of {who}: its pages could not be read", reason,
+                                      failed_step=step)]  # fmt: skip
+            row["cells"] = {
+                str(d["id"]): [
                     _unknown(
-                        f"{col} for {c['canonical']['value']}: its pages could not be read",
+                        f"{d['name']} for {who}: its pages could not be read",
                         reason,
                         failed_step=step,
                     )
                 ]
+                for d in dims
+            }
             row["price_conflict"] = False
             row["blocker"] = u.get("blocker")
             unknowns.append(
                 _unknown(
-                    f"Everything about {c['canonical']['value']}: its pages could not be read",
-                    reason,
-                    failed_step=step,
+                    f"Everything about {who}: its pages could not be read", reason, failed_step=step
                 )
             )
             rows.append(row)
             continue
         ref, profile = found
-        for col in CELLS:
-            row[col] = _cell(profile[col], ref, col)
-            for i, e in enumerate(profile[col]):
-                if "unknown" in e and col == "unit_price":
-                    unknowns.append(
-                        {
-                            "question": e["unknown"]["question"],
-                            "reason": e["unknown"]["reason"],
-                            "cite": {"artifact": ref, "path": f"/{col}/{i}"},
-                        }
-                    )
+        row["prices"] = _cell(profile["prices"], ref, "/prices")
+        row["cells"] = {
+            col: _cell(entries, ref, f"/cells/{col}") for col, entries in profile["cells"].items()
+        }
+        for i, e in enumerate(profile["prices"]):
+            if "unknown" in e:
+                unknowns.append(
+                    {
+                        "question": e["unknown"]["question"],
+                        "reason": e["unknown"]["reason"],
+                        "cite": {"artifact": ref, "path": f"/prices/{i}"},
+                    }
+                )
         row["price_conflict"] = bool(profile["conflicts"])
         rows.append(row)
         for i, conflict in enumerate(profile["conflicts"], start=1):
+            on = [e for e in profile["prices"] if "cite" in e and _basis(e) == conflict["per"]]
             findings.append(
                 {
                     "id": f"price-conflict-{key}-{i}",
                     "label": "fact",
-                    "statement": f"{profile['name']} lists two unit prices: "
+                    "statement": f"{profile['name']} lists differing prices per {conflict['per']}: "
                     + "; ".join(conflict["values"])
                     + ". The conflict is left open.",
-                    "evidence": [{"cite": e["cite"]} for e in profile["unit_price"] if "cite" in e],
+                    "evidence": [{"cite": e["cite"]} for e in on],
                 }
             )
-        claims = [e for e in profile["battery_life"] if e.get("label") == "vendor_claim"]
-        facts = [e for e in profile["battery_life"] if e.get("label") == "fact"]
-        if claims and facts:
-            findings.append(
-                {
-                    "id": f"claim-vs-fact-{key}",
-                    "label": "fact",
-                    "statement": f"{profile['name']}: '{claims[0]['value']}' is a vendor claim; its own specification states '{facts[0]['value']}'.",  # noqa: E501
-                    "evidence": [{"cite": claims[0]["cite"]}, {"cite": facts[0]["cite"]}],
-                }
-            )
+        for col, entries in profile["cells"].items():
+            claims = [e for e in entries if e.get("label") == "vendor_claim"]
+            facts = [e for e in entries if e.get("passage") == "spec"]
+            if claims and facts:
+                findings.append(
+                    {
+                        "id": f"claim-vs-fact-{key}-{col}",
+                        "label": "fact",
+                        "statement": f"{profile['name']}: '{claims[0]['value']}' is a vendor claim; its own specification states '{facts[0]['value']}'.",  # noqa: E501
+                        "evidence": [{"cite": claims[0]["cite"]}, {"cite": facts[0]["cite"]}],
+                    }
+                )
         for i, flag in enumerate(profile["flags"], start=1):
             held = "hidden text" if flag.get("hidden") else "text"
             findings.append(
@@ -775,8 +921,7 @@ def _report(seen: Seen) -> GenerationResult:
                     "evidence": [{"cite": flag["text"]["cite"]}],
                 }
             )
-    merged = [c for c in companies if c["merge_evidence"]]
-    for c in merged:
+    for c in (c for c in companies if c["merge_evidence"]):
         findings.append(
             {
                 "id": f"same-company-{c['key']}",
@@ -785,24 +930,30 @@ def _report(seen: Seen) -> GenerationResult:
                 "evidence": [{"cite": m["cite"]} for m in c["merge_evidence"]],
             }
         )
-    priced: dict[str, list[tuple[float, dict[str, Any]]]] = {}
+    priced: dict[tuple[str, str], list[tuple[float, dict[str, Any]]]] = {}
     for row in rows:
-        for e in row["unit_price"]:
+        for e in row["prices"]:
             if "value" in e and "currency" in e:
-                priced.setdefault(e["currency"], []).append((float(e["value"]), e))
-    for cur, points in sorted(priced.items()):
+                basis = " ".join(str(e.get("per", "")).lower().split())
+                number = float(str(e.get("number", e["value"])).replace(",", ""))
+                priced.setdefault((e["currency"], basis), []).append((number, e))
+    for (cur, basis), points in sorted(priced.items()):
+        if len({id(p[1]["record"]) for p in points}) < 2 and len(points) < 2:
+            continue
         points.sort(key=lambda x: x[0])
         lo, hi = points[0], points[-1]
         findings.append(
             {
-                "id": f"price-range-{cur.lower()}",
+                "id": f"price-range-{analysis.slug(cur + ' ' + basis)}",
                 "label": "inference",
-                "statement": f"Listed one-off unit prices in {cur} run from {lo[1]['value']} to {hi[1]['value']} (as listed, not converted, not including subscriptions).",  # noqa: E501
+                "statement": f"Listed prices in {cur} per {basis} run from {lo[1]['value']} to {hi[1]['value']} (as listed, not converted).",  # noqa: E501
                 "evidence": [{"cite": lo[1]["cite"]}, {"cite": hi[1]["cite"]}],
             }
         )
     themes = needs[1]["needs"] if needs else []
     for n in themes:
+        if not n["evidence"]:
+            continue
         findings.append(
             {
                 "id": f"need-{n['theme']}",
@@ -829,26 +980,26 @@ def _report(seen: Seen) -> GenerationResult:
             }
         )
     matrix = {
-        "columns": ["company", *CELLS],
+        "columns": ["company", "prices", *(str(d["id"]) for d in dims)],
+        "dimensions": [{"id": d["id"], "name": d["name"]} for d in dims],
         "rows": rows,
         "resolved": len(companies),
         "pages_found": comp[1]["pages_found"] if comp else 0,
         "note": "each cell lists its entries with their page and date; prices are as listed, never converted or averaged",  # noqa: E501
     }
-    by_theme = {n["theme"]: n for n in themes}
-    ranked = sorted(themes, key=lambda n: (-n["count"], n["theme"]))
+    ranked = sorted((n for n in themes if n["evidence"]), key=lambda n: (-n["count"], n["theme"]))
     tests = []
     for i, n in enumerate(ranked[:3], start=1):
         tests.append(
             {
                 "id": f"T{i}",
                 "theme": n["theme"],
-                "hypothesis": f"Buyers choose a sensor that meets this need: {n['need'].lower()}.",
-                "method": _METHODS[n["theme"]],
-                "metric": _METRICS[n["theme"]],
-                "threshold": {"value": _THRESHOLDS[n["theme"]], "status": "proposal"},
+                "hypothesis": f"Buyers choose the product that does best on {n['need'][len('What buyers say about ') :]}.",  # noqa: E501
+                "method": f"Run five buyer interviews and one side-by-side trial on {n['need'][len('What buyers say about ') :]}, the reviews' own words as prompts.",  # noqa: E501
+                "metric": "buyers who name it among their top two reasons to choose",
+                "threshold": {"value": "3 of 5 buyers", "status": "proposal"},
                 "why": f"{n['phrase']} raise it.",
-                "evidence": [{"cite": e["cite"]} for e in by_theme[n["theme"]]["evidence"][:2]],
+                "evidence": [{"cite": e["cite"]} for e in n["evidence"][:2]],
             }
         )
     finding_unknowns = []
@@ -869,25 +1020,6 @@ def _report(seen: Seen) -> GenerationResult:
         ],
     )
 
-
-_METHODS = {
-    "battery": "Log battery drain of two units for four weeks at one report per minute, the typical office rate.",  # noqa: E501
-    "stillness": "Seat one still occupant in a meeting room for 30 minutes per session and log every empty report.",  # noqa: E501
-    "setup": "Time five first-time installs on a ceiling tile with no electrician and no new cable.",  # noqa: E501
-    "privacy": "Ask three works councils what written proof of counts-only output they accept.",
-}
-_METRICS = {
-    "battery": "projected months to replacement at the measured drain",
-    "stillness": "sessions with a false empty report",
-    "setup": "minutes per install, and installs that needed a revisit",
-    "privacy": "councils that accept the proof as written",
-}
-_THRESHOLDS = {
-    "battery": "24 months or more",
-    "stillness": "0 of 20 sessions",
-    "setup": "15 minutes or less",
-    "privacy": "3 of 3 councils",
-}
 
 _HANDLERS = {
     "scope": _scope,

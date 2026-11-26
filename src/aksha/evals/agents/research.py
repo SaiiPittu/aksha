@@ -2,18 +2,19 @@
 
 The agent runs as it ships (``aksha.agents.research``, its rule-based fake model, its own
 tools reading through :class:`~aksha.evals.agents.runtime.EpisodeReader`). The scripted user
-answers its scope question (``geography``) with ``EU``. When the run ends, its artifacts
-are written into the episode in the schema of ``docs/evals/README.md``, every citation
-being a span its tools minted (file, exact text and code-point offsets):
+answers its scope questions (``segment``, ``geography``) with the world's own answers.
+When the run ends, its artifacts are written into the episode in the schema of
+``docs/evals/README.md``, every citation being a span its tools minted (file, exact text
+and code-point offsets):
 
 =======================  ===================================================================
 Bundle output            From the run's artifacts
 =======================  ===================================================================
-``competitor/E<n>``      ``competitors`` (name, aliases) and the ``matrix`` row: unit prices
-                         (``unit_price``; a price the pages do not give is ``amount: null``,
-                         label ``unknown``, cited by the page's ``price_notes``) and battery
-                         claims and facts (``battery_life``). ``E<n>`` numbers the companies
-                         by their first page, so a renamed world keeps each key
+``competitor/E<n>``      ``competitors`` (name, aliases) and the ``matrix`` row: its prices
+                         (``prices``; a price the pages do not give is ``amount: null``,
+                         label ``unknown``, cited by the page's ``price_notes``) and every
+                         dimension's vendor claims and facts (``cells``). ``E<n>`` numbers
+                         the companies by their first page, so a renamed world keeps each key
 ``same_entity_as``       each company's ``merge_evidence``, cited by its span
 ``contradicts``          a row with ``price_conflict``, cited by its later price's span
 ``review_summary/all``   ``needs.sample`` (rows, unique, duplicate pairs) and each need's
@@ -45,11 +46,17 @@ from aksha.runtime.projections.view import LogView
 from aksha.runtime.session.views import Waiting
 
 AGENT = "research"
-SOURCE = "corpus"
-COLLECTIONS = ("competitors", "reviews", "priorities")
-"""The agent's collections of ``corpus``, which a change set may move."""
-ANSWERS: Mapping[str, str] = {"segment": "offices", "geography": "EU"}
-"""The scripted user's answers to the agent's scope questions, by question ID."""
+SOURCE = "inputs"
+COLLECTIONS = ("input",)
+"""The one collection of ``inputs``, which a change set may move."""
+PREFIX = "input/"
+"""Every input's record ID starts with its collection; a bundle names the world's file."""
+ANSWERS: Mapping[str, Mapping[str, str]] = {
+    "stillroom": {"segment": "offices", "geography": "EU"},
+    "stillroom-v2": {"segment": "offices", "geography": "EU"},
+    "tilldew": {"segment": "smallholder vegetable farmers", "geography": "India"},
+}
+"""The scripted user's answers to the agent's scope questions, per world, by question ID."""
 
 
 class ResearchUnderTest(RuntimeUnderTest):
@@ -59,12 +66,26 @@ class ResearchUnderTest(RuntimeUnderTest):
     agent = AGENT
     sources = (SOURCE,)
     collections = COLLECTIONS
-    request = "Who sells camera-free occupancy sensing for offices, and at what price?"
+    request = (
+        "Who sells camera-free occupancy sensing for offices, and at what price? Compare power "
+        "(PoE, Ethernet, mains, USB-C, battery powered, battery thermal, AA), battery life "
+        "(battery life, years of battery, months at) and privacy (privacy, camera, faces, "
+        "identities, image)."
+    )
+    """The opening when a case gives none: what to compare is part of the request."""
+
+    world = ""
+
+    def run(self, episode: Episode) -> None:
+        """Remember the episode's world (the scripted user's answers depend on it), then run."""
+        self.world = episode.world
+        super().run(episode)
 
     def answer(self, w: Waiting, question: str, text: str) -> str:
         """The scope answer by question ID; any other question is refused."""
-        if question in ANSWERS:
-            return ANSWERS[question]
+        given = ANSWERS.get(self.world, ANSWERS["stillroom"])
+        if question in given:
+            return given[question]
         return super().answer(w, question, text)
 
     def export(
@@ -84,7 +105,7 @@ class ResearchUnderTest(RuntimeUnderTest):
         rows = {str(r.get("key")): r for r in content("matrix").get("rows", ())}
         companies = sorted(
             content("competitors").get("companies", ()),
-            key=lambda c: min((str(p.get("record")) for p in c.get("pages", ())), default=""),
+            key=lambda c: min((_file(p.get("record")) for p in c.get("pages", ())), default=""),
         )
         for i, company in enumerate(companies, start=1):
             key = str(company.get("key"))
@@ -132,16 +153,17 @@ class ResearchUnderTest(RuntimeUnderTest):
             for c in (_cite(spans, n.get("cite")),)
             if c is not None
         ]
-        prices = [_price(spans, p, notes) for p in row.get("unit_price", ())]
+        prices = [_price(spans, p, notes) for p in row.get("prices", ())]
         claims = [
             {"text": c.get("value"), "label": c.get("label"), "citation": cite}
-            for c in row.get("battery_life", ())
+            for entries in dict(row.get("cells", {})).values()
+            for c in entries
             if c.get("label") in ("vendor_claim", "fact")
             for cite in [_cite(spans, c.get("cite"))]
             if cite is not None
         ]
         merge = [
-            (str(m.get("page", "")), cite)
+            (_file(m.get("page", "")), cite)
             for m in company.get("merge_evidence", ())
             for cite in [_cite(spans, m.get("cite"))]
             if cite is not None
@@ -153,24 +175,29 @@ class ResearchUnderTest(RuntimeUnderTest):
             {
                 "name": canonical.get("value"),
                 "aliases": [a.get("value") for a in company.get("aliases", ())],
-                "pages": [p.get("record") for p in company.get("pages", ())],
+                "pages": [_file(p.get("record")) for p in company.get("pages", ())],
                 "prices": prices,
                 "claims": claims,
             },
             [*own, *(c for _, c in merge)],
         )
-        pages = [str(p.get("record")) for p in company.get("pages", ())]
+        pages = [_file(p.get("record")) for p in company.get("pages", ())]
         for page, cite in merge:
             first = next((p for p in pages if p != page), pages[0] if pages else page)
             ep.relate("same_entity_as", f"page:{first}", f"page:{page}", cite)
         if row.get("price_conflict"):
             stated = [p for p in prices if p["amount"] is not None and p.get("citation")]
-            if len(stated) >= 2:
+            by_basis: dict[str, list[dict[str, Any]]] = {}
+            for p in stated:
+                by_basis.setdefault(" ".join(str(p.get("per")).lower().split()), []).append(p)
+            for on in by_basis.values():
+                if len({str(p["amount"]) for p in on}) < 2:
+                    continue
                 ep.relate(
                     "contradicts",
-                    f"price:{stated[0]['citation']['file']}",
-                    f"price:{stated[-1]['citation']['file']}",
-                    stated[-1]["citation"],
+                    f"price:{on[0]['citation']['file']}",
+                    f"price:{on[-1]['citation']['file']}",
+                    on[-1]["citation"],
                     label="price conflict left open",
                 )
 
@@ -210,6 +237,11 @@ class ResearchUnderTest(RuntimeUnderTest):
         )
 
 
+def _file(record: object) -> str:
+    """The world's file path of an input record ID (``input/<path>``)."""
+    return str(record).removeprefix(PREFIX)
+
+
 def _cite(spans: SpanIndex, cite: object) -> dict[str, Any] | None:
     """The bundle citation of an artifact's ``{quote, span}`` cite, from its minted span."""
     if not isinstance(cite, Mapping):
@@ -217,7 +249,8 @@ def _cite(spans: SpanIndex, cite: object) -> dict[str, Any] | None:
     span = spans.get(str(cite.get("span", "")))
     if span is None:
         return None
-    return {"file": span.record_id, "exact": span.text, "start": span.start, "end": span.end}
+    return {"file": _file(span.record_id), "exact": span.text, "start": span.start,
+            "end": span.end}  # fmt: skip
 
 
 def _price(
@@ -228,7 +261,7 @@ def _price(
     An unstated price is cited by the page's own note on pricing (the profile's
     ``price_notes``), when the agent recorded one.
     """
-    value = entry.get("value")
+    value = entry.get("number", entry.get("value"))
     if entry.get("status") == "unknown" or value is None:
         return {"amount": None, "currency": None, "per": None, "label": "unknown",
                 "note": str(entry.get("question", "")),

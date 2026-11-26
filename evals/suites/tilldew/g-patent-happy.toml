@@ -1,0 +1,11 @@
+id = "g-patent-happy"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: a general patent-disclosure agent"
+category = "capability"
+agents = ["patent"]
+worlds = ["tilldew"]
+opening = "Review Tilldew's invention candidates against the prior art, recommend a next action for each, and prepare the chosen one for counsel."
+expect = ["families", "comparison_matrix", "recommendations", "facts.TF-20", "facts.TF-26", "facts.TF-28", "facts.TF-29", "facts.TF-30", "facts.TF-33"]
+criteria = ["inv.one_row_per_key", "patent.families_are_edges", "patent.matrix", "patent.next_action", "patent.c1_extraction", "patent.priority_ranks", "patent.undated_disclosure", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language"]

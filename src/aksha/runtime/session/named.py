@@ -115,6 +115,17 @@ class ApplySourceChange(CommandBase):
 
 
 @dataclass(frozen=True, kw_only=True)
+class UploadInputs(CommandBase):
+    """Add or replace files in the owner's inputs; record what moved (ADR-P05 D6).
+
+    ``files`` maps a relative path to the file's UTF-8 text. A path uploaded again with
+    other bytes moves that one record, and only the work built on it reopens.
+    """
+
+    files: Mapping[str, str]
+
+
+@dataclass(frozen=True, kw_only=True)
 class Stop(CommandBase):
     """Ask a run to stop (ADR-P18)."""
 
@@ -149,6 +160,7 @@ NamedCommand = (
     | RejectReview
     | GrantBudget
     | ApplySourceChange
+    | UploadInputs
     | Stop
     | Finalize
     | Steer
@@ -166,6 +178,7 @@ COMMAND_NAMES: tuple[str, ...] = (
     "RejectReview",
     "GrantBudget",
     "ApplySourceChange",
+    "UploadInputs",
     "Stop",
     "Finalize",
     "Steer",

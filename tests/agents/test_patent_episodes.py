@@ -8,9 +8,10 @@ The graders read the worlds' answer keys; the agent's tools read only ``sources/
    trap is handled, the matrix, families and recommendations equal the key, the selection
    is saved before any form, the packet opens with the counsel section, and the send runs
    once, only after an approval bound to the packet version's signature.
-2. Change and recovery (scenario 4): switching to stillroom-v2 invalidates exactly C1's
-   chain, revokes the approval on C1's packet, moves C1's recommendation as the key says,
-   raises a diff review for the packet, and sends nothing twice.
+2. Change and recovery (scenario 4): the variant's change set (the two edits and the new
+   publication ``make demo`` applies to the base world) invalidates exactly C1's chain,
+   revokes the approval on C1's packet, moves C1's recommendation as the key says, raises a
+   diff review for the packet, and sends nothing twice.
 """
 
 from __future__ import annotations
@@ -64,13 +65,13 @@ def _fresh(tmp_path: Path, world: str = "stillroom") -> PatentRig:
 def test_every_graded_fact_is_found_with_its_exact_quote(sent: PatentRig) -> None:
     found = [q for c in saved_contents(sent) for q in quotes(c)]
     for file, quote in found:  # every recorded quote is the source's own text
-        raw = (sources(sent.world_name) / file).read_text(encoding="utf-8")
+        raw = (sources(sent.world_name) / file.removeprefix("input/")).read_text(encoding="utf-8")
         assert norm(quote) in norm(raw), (file, quote)
     for fact in patent_facts(sent.world_name):
         raw = (sources(sent.world_name) / fact["file"]).read_text(encoding="utf-8")
         exact = fact["quote"]["exact"]
         assert raw[fact["position"]["start"] : fact["position"]["end"]] == exact  # key sanity
-        hits = [q for f, q in found if f == fact["file"] and norm(exact) in norm(q)]
+        hits = [q for f, q in found if f == f"input/{fact['file']}" and norm(exact) in norm(q)]
         assert hits, f"{fact['id']} {exact!r} not quoted from {fact['file']}"
 
 
@@ -83,7 +84,7 @@ def test_families_are_grouped_by_priority_with_exact_identifiers(sent: PatentRig
         for fam in art["families"]:
             got[(fam["family"],)] = sorted(fam["members"])
         for p in art["publications"]:
-            raw = (sources(sent.world_name) / p["file"]).read_text(encoding="utf-8")
+            raw = (sources(sent.world_name) / p["file"].removeprefix("input/")).read_text("utf-8")
             assert p["id"] in raw and all(d in raw for d in p["dates"].values()), p["id"]
             if isinstance(p["url"], str):
                 assert p["url"] in raw
@@ -329,13 +330,13 @@ C1_CHAIN = (
 )
 
 
-def test_switching_worlds_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None:
+def test_the_change_set_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None:
     r = _fresh(tmp_path)
     try:
         a = r.run_to_approval("C1")
         assert r.approve(a.approval_id, a.signature).accepted  # approved, not yet sent
         before = {e.payload["ref"] for e in r.events("artifact.saved")}
-        assert r.switch("stillroom-v2").accepted
+        assert r.change(tmp_path / "changed").accepted
         iv = invalidation_view(r.view())
         touched = set(iv.refs("invalidated")) | set(iv.refs("dirty"))
         expected = {f"patent.{k}/C1@v1" for k in C1_CHAIN} | {
@@ -408,7 +409,7 @@ def test_the_fresh_approval_for_the_new_packet_sends_it_once(tmp_path: Path) -> 
     try:
         a = r.run_to_approval("C1")
         assert r.approve(a.approval_id, a.signature).accepted
-        r.switch("stillroom-v2")
+        r.change(tmp_path / "changed")
         r.drive()
         (review,) = r.reviews().values()
         assert r.accept(review.interrupt, review.card_hash).accepted

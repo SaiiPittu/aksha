@@ -191,6 +191,8 @@ def drive_rebuilds(
         opened = open_rebuild_runs(
             setup.store, setup.owner, ids, definition_hashes=hashes, agents=(agent,),
             sandbox=setup.sandbox, reentry=setup.reentry,
+            budgets=None if setup.agent.budget is None else {
+                agent: setup.agent.budget.as_payload()},
         )  # fmt: skip
         if not opened:
             return tuple(out)

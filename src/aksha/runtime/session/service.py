@@ -30,6 +30,7 @@ go on. Nothing about the skip is stored; the next process with the system drives
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -50,6 +51,7 @@ from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
 from aksha.runtime.execution.recovery import RecoveryReport, recover_on_startup, resume_owner
 from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.interrupts.commands import (
     answer,
@@ -67,7 +69,8 @@ from aksha.runtime.invalidation.commands import (
     apply_source_change,
     reject_review,
 )
-from aksha.runtime.invalidation.ports import VersionedSource
+from aksha.runtime.invalidation.ports import InputWorkspace, QueryRunner, VersionedSource
+from aksha.runtime.invalidation.rebuild import open_rebuild_runs
 from aksha.runtime.loop.drive import drive, drive_pass, drive_rebuilds
 from aksha.runtime.loop.types import DriveResult, LoopSetup
 from aksha.runtime.models.routing import AliasTable
@@ -116,6 +119,8 @@ SYSTEM_UNAVAILABLE = "system_unavailable"
 
 DEFAULT_MAX_PASSES = 100_000
 """More passes than any run needs: a bound on a runtime bug, never a run limit."""
+UPLOAD_REFUSED = "upload_refused"
+"""An upload names a path or content the input workspace does not take; nothing changed."""
 
 
 @dataclass(frozen=True)
@@ -217,10 +222,18 @@ class Session:
         reader: RecordReader | None = None,
         ids: IdSource | None = None,
         tier: ExecutionTier | None = None,
+        inputs: InputWorkspace | None = None,
+        run_query: QueryRunner | None = None,
+        rebuilds: bool = False,
     ) -> None:
         """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads.
 
         ``tier`` is tier 3 every run's tools use (ADR-P12, P26, P28); None runs nothing.
+        ``inputs`` is the owners' input workspace: ``UploadInputs`` writes to it, and each
+        run of an owner reads that owner's inputs through it (the other sources through
+        ``reader``). ``run_query`` re-executes a recorded query when a source change is
+        recorded. With ``rebuilds``, :meth:`step` opens the rebuild runs a recorded change
+        calls for (ADR-P05 D8) once no open run can move, so an upload reaches its work.
         """
         self.store = store
         self.clock = clock
@@ -233,6 +246,9 @@ class Session:
         self.reader = reader
         self.tier = tier or ExecutionTier()
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
+        self.inputs = inputs
+        self.run_query = run_query
+        self.rebuilds = rebuilds
         self._executors: dict[str, StepExecutor] = {}
         self._unavailable: dict[str, dict[str, str]] = {}
         startable = {
@@ -249,8 +265,10 @@ class Session:
                "Finalize", "Stop", "AcceptReview", "RejectReview"}  # fmt: skip
         if any(a.approval_specs() for a in self.agents.values()):
             out |= {"EditAction", "Handoff"}
-        if self.sources:
+        if self.sources or self.inputs is not None:
             out.add("ApplySourceChange")
+        if self.inputs is not None:
+            out.add("UploadInputs")
         return frozenset(out)
 
     # --- dispatch ---------------------------------------------------------------------------
@@ -302,10 +320,36 @@ class Session:
                                  command.card_hash, self.ids,
                                  command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.ApplySourceChange):
-            return apply_source_change(self.store, command.owner, self.sources,
-                                       command.change_set,
+            return apply_source_change(self.store, command.owner, self._versioned(),
+                                       command.change_set, run_query=self.run_query,
                                        command_id=command.command_id)  # fmt: skip
+        if isinstance(command, n.UploadInputs):
+            return self._upload(command)
         return self._unsupported(command)
+
+    def _versioned(self) -> tuple[VersionedSource, ...]:
+        return (*self.sources, *(() if self.inputs is None else (self.inputs,)))
+
+    def _upload(self, command: n.UploadInputs) -> CommandReceipt:
+        """Write the files, then record what moved as one source change (ADR-P05 D6).
+
+        The change set's name is a hash of the uploaded paths and texts, so a retry of the
+        same upload derives the same command ID and returns the stored receipt.
+        """
+        assert self.inputs is not None
+        files = {str(p): str(t).encode("utf-8") for p, t in command.files.items()}
+        try:
+            self.inputs.put(command.owner, files)
+        except ValueError as e:
+            return self._refuse(command, "upload_inputs", command.owner,
+                                {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
+        named = hashlib.sha256()
+        for p in sorted(files):
+            named.update(p.encode("utf-8") + b"\0" + hashlib.sha256(files[p]).hexdigest().encode())
+        return apply_source_change(self.store, command.owner, self._versioned(),
+                                   "upload:" + named.hexdigest()[:16],
+                                   run_query=self.run_query,
+                                   command_id=command.command_id)  # fmt: skip
 
     def _send(self, command: n.SendMessage) -> CommandReceipt:
         agent = command.agent
@@ -474,7 +518,20 @@ class Session:
             )
             if stopping and honour_stop(self.store, owner, run, STOP_CANDIDATE):
                 return True
-        return False
+        return self.rebuilds and self._open_rebuilds(owner)
+
+    def _open_rebuilds(self, owner: str) -> bool:
+        """Open the rebuild runs the owner's log calls for, per agent; whether any opened."""
+        opened = False
+        for agent in self.agents.values():
+            started = open_rebuild_runs(
+                self.store, owner, self.ids, definition_hashes={agent.name: agent.definition_hash},
+                agents=(agent.name,), sandbox=self.sandbox(), reentry=agent.reentry,
+                budgets=None if agent.agent.budget is None else {
+                    agent.name: agent.agent.budget.as_payload()},
+            )  # fmt: skip
+            opened = opened or bool(started)
+        return opened
 
     def run_until_yield(self, owner: str, *, max_passes: int = DEFAULT_MAX_PASSES) -> int:
         """Passes until every open run of ``owner`` waits on a person or ends; their count."""
@@ -527,7 +584,7 @@ class Session:
             view = load_view(self.store, owner)
             setup = agent.setup(self.store, owner, _latest_request(view, name),
                                 sandbox=self.sandbox(), blobs=self.blobs,
-                                reader=self.reader)  # fmt: skip
+                                reader=self._reader(owner))  # fmt: skip
             try:
                 out.extend(drive_rebuilds(setup, self._executor(owner), self.ids))
             except EffectNeedsOutbox as e:
@@ -548,7 +605,14 @@ class Session:
         agent = self._agent_of_run(view, run)
         assert agent is not None, f"{run} is not a run of a loaded agent"
         return agent.setup(self.store, owner, _request(view, run), sandbox=self.sandbox(),
-                           blobs=self.blobs, reader=self.reader, tier=self.tier)  # fmt: skip
+                           blobs=self.blobs, reader=self._reader(owner),
+                           tier=self.tier)  # fmt: skip
+
+    def _reader(self, owner: str) -> RecordReader | None:
+        """The owner's inputs through the workspace, every other source through ``reader``."""
+        if self.inputs is None:
+            return self.reader
+        return _Overlay(self.inputs.name, self.inputs.reader(owner), self.reader)
 
     def _executor(self, owner: str) -> StepExecutor:
         held = self._executors.get(owner)
@@ -625,6 +689,25 @@ def _latest_request(view: LogView, agent: str) -> str:
             text = _request(view, e.run)
             latest = text or latest
     return latest
+
+
+class _Overlay:
+    """One source's records from its own reader, every other source's from the fallback."""
+
+    def __init__(self, name: str, own: RecordReader, fallback: RecordReader | None) -> None:
+        self.name, self.own, self.fallback = name, own, fallback
+
+    def read(self, source: str, record_id: str) -> ReturnedText | None:
+        """The record from the reader that serves ``source``."""
+        if source == self.name:
+            return self.own.read(source, record_id)
+        return None if self.fallback is None else self.fallback.read(source, record_id)
+
+    def records(self, source: str, collection: str) -> tuple[str, ...]:
+        """The collection's record IDs from the reader that serves ``source``."""
+        if source == self.name:
+            return self.own.records(source, collection)
+        return () if self.fallback is None else self.fallback.records(source, collection)
 
 
 def derive_id(command: n.NamedCommand) -> str:

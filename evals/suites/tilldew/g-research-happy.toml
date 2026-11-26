@@ -1,0 +1,11 @@
+id = "g-research-happy"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: a general competitor-research agent"
+category = "capability"
+agents = ["research"]
+worlds = ["tilldew"]
+opening = "Research the competitors for Tilldew's solar soil-moisture probe, for smallholder vegetable farmers in India: who they are, what they charge, and what farmers say. Compare power (solar, battery, AA, supercapacitor, cells), battery life (battery life, years of battery) and connectivity (SMS, 2G, LoRa, gateway, app). What do farmers say about: accuracy (accura*, wrong reading*, false alert*, still wet, trust*); power (solar*, charg*, batter*, AA cells); connectivity (sms, signal, network, gateway); price (price*, expensive, cost*, cheap*, paid)?"
+expect = ["counts.competitors_resolved", "counts.review_themes_unique", "competitors.K4", "facts.TF-01", "facts.TF-02", "facts.TF-03", "facts.TF-04", "facts.TF-05", "facts.TF-06"]
+criteria = ["inv.one_row_per_key", "research.competitor_count", "research.duplicates_are_edges", "research.prices", "research.conflicts_are_edges", "research.unique_reviews", "research.theme_counts", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+should = ["no_market_percentage"]

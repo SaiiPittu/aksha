@@ -1,0 +1,31 @@
+{
+  "files": {
+    "key.json": "sha256:db13b5c55f6d171c8c9b5917b0b68c82ddbf3ed6d003f22fd540f9f39e1f769f",
+    "manifest.json": "sha256:53f833eb10ef63686a1ecdfb788335b16487d3eef9dfdf144699d7d259b31561",
+    "sources/exports/farmer-reviews.csv": "sha256:5c3b68a061b45437518676656de80864fea276893454cec3c10789e1992850e3",
+    "sources/forms/filing-sheet.md": "sha256:4a183c62a94ef55c29cbb7adddc0aac9577335aeee31d8a3840232f97974a571",
+    "sources/forms/idf-blank.md": "sha256:0bbf06474e2c8dbe73f470f8e955d305b8e26bb1f423253a65e8f146e0ae277b",
+    "sources/log/2026-03-21-field-day.md": "sha256:1c65989e1b6dd26a694459ca3b6debf8db262b30db319751cab92aa5446ad21d",
+    "sources/log/disclosure-log.csv": "sha256:a0f0b564806d7c36c822b555a16818fac798ff29147407a8b1b73b6280e90d1e",
+    "sources/mail/advisor-email.eml.txt": "sha256:00374139b3e141422e9d542db7826e08f13702285a39103bbdd654aba67c9877",
+    "sources/mail/dealer-note.eml.txt": "sha256:9447675999dfbb2caf43babb4d205c6f5877dfa59a803be7733c2a75ff593a42",
+    "sources/notes/priorities.md": "sha256:7a274fd9075c2be9f66e227f7c3e1ec5e2082cfa6f1f8707dfb12c49bef4dfd9",
+    "sources/people/contributions.csv": "sha256:2d56418d092f2156d5d3a43f96774125e36ea1edb748b4420ceebcc609194bf9",
+    "sources/prior-art/SYN-PUB-0101.json": "sha256:4dec9a03774f6a1c6653c7a073b89f5bad2c5f3dbcfb21b65f7bbf92269bb64e",
+    "sources/prior-art/SYN-PUB-0102.json": "sha256:ef71dd0ddbb9158628353b4a15ee38a99e9e1a34363364e3a6e56695123a344a",
+    "sources/prior-art/SYN-PUB-0103.json": "sha256:ed692a56c0fd9eb6f8c98cffcbe730ef7b9bd9ee50053e1010d3ba8520f18ef5",
+    "sources/prior-art/SYN-PUB-0104.pdf.txt": "sha256:935bb6c0350164af01918e4c7882c971302a07b49bd621d7e790d2dbcc5cfa57",
+    "sources/prior-art/SYN-PUB-0105.json": "sha256:3587eee460430dd39f55f7244d298dcb52eb0de11d80a45f93b0cfc0d176f905",
+    "sources/reports/district-irrigation-survey.pdf.txt": "sha256:eb89a16f7a3e19b2b66219e38b3d487323bf18150f31411b7e372aa8180b376c",
+    "sources/rnd/td1-salinity-compensated-moisture.md": "sha256:de0f6c1abe18c88b2ef128e7d09b024ac1fe8f11f9533a3a95bf66aa78939ecf",
+    "sources/rnd/td2-tariff-aware-irrigation.md": "sha256:107efa72fc1d094dc8f4fdd215edc3299d155610b84234ce42b1c08c0286d810",
+    "sources/rnd/td3-electrode-self-cleaning.md": "sha256:ff19ecbed378150f872f2d6ae5d428efd4ee20676ad9b428e9247fbd97dc29d6",
+    "sources/vendors/aquasense-s2.html": "sha256:2f6efa64d218810e33ec48b4ba1e2d16f61c43f11cce2514b83b8b4e89cd4b5a",
+    "sources/vendors/dripwise-root-2025.html": "sha256:f5f2fa0b2eae2a46e6c467ce4263e069657ad33c44b63693e4a24b1d5294985b",
+    "sources/vendors/furrowpulse.html": "sha256:0c600bcb6aaff3f5d8ec92fe7425104ba36f2092895ff3cc7bd38b6bf5417e35",
+    "sources/vendors/hydrafield-root.html": "sha256:f0004780e2efb9fb46bf62254496598994e98e96e5d30b4702b6fa1002b47f94",
+    "sources/vendors/khetimeter.md": "sha256:d517a8d2ebf3615be5f3ffa23295a837f016baa4d0d2cbc29690891d96100aba",
+    "spec.yaml": "sha256:d507c5a94680feb00a34a32ef5184fb01ed26dfe461942cde01909f12394f5ee"
+  },
+  "world": "tilldew"
+}

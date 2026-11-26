@@ -1,1 +1,1 @@
-Read the customer reviews. Count cross-posted duplicates once, note dates, geographies, sites and rating scales, and save the customer needs, each with "N of M reviews in this sample" and the reviews that support it.
+Find the review exports among the inputs and read them. Count cross-posted duplicates once, note dates, geographies, sites and rating scales, and save the customer needs, one per theme of the scope, each with "N of M reviews in this sample" and the reviews that support it.
