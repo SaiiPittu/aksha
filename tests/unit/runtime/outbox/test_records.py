@@ -23,7 +23,7 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.records import EXTERNAL_RECORDS, external_records, record_key
 from aksha.runtime.outbox.types import EffectSpec
 from aksha.runtime.outbox.worker import OutboxWorker
-from aksha.runtime.projections.project import rebuild
+from aksha.runtime.projections.project import apply_events, rebuild
 from tests.support.invalidation import OWNER, Bench, FakeSource, record
 from tests.support.systems import Ledger, NoLedger
 
@@ -228,4 +228,32 @@ def test_the_projection_rebuilt_upto_a_seq_equals_the_log_as_it_stood(f: Forms) 
     view = f.b.view()
     (old,) = external_records(view.upto(at))
     assert len(old.revisions) == 1
-    assert rebuild(EXTERNAL_RECORDS, view) == rebuild(EXTERNAL_RECORDS, view)
+    # ADR-P01 D3: continuing from the state at ``at`` equals a full rebuild.
+    later = (e for e in view.events if e.seq > at)
+    resumed = apply_events(EXTERNAL_RECORDS, rebuild(EXTERNAL_RECORDS, view.upto(at)), later,
+                           view.artifacts)  # fmt: skip
+    assert resumed == rebuild(EXTERNAL_RECORDS, view)
+    assert resumed != rebuild(EXTERNAL_RECORDS, view.upto(at))
+
+
+BRIEFED = EffectSpec(
+    system="forms",
+    key_fields=("/form", "/brief", "/candidate"),
+    semantics="reconcile",
+    record_fields=("/candidate",),
+)
+
+
+def test_a_record_with_several_sources_reads_the_stalest(f: Forms) -> None:
+    # ADR-P29 B2: every artifact version among the key values is a source.
+    f.b.save("R-0001", "p.form/C1", {"v": 1}, reads=[record("K")])
+    f.b.save("R-0001", "p.note/C1", {"v": 1}, reads=[record("J")])
+    a = {"form": "p.form/C1@v1", "brief": {"from": ["p.note/C1@v1"]}, "candidate": "SYN-C1"}
+    f.write(a, BRIEFED)
+    (rec,) = external_records(f.b.view())
+    assert rec.sources == (ArtifactRef.parse("p.form/C1@v1"), ArtifactRef.parse("p.note/C1@v1"))
+    assert rec.source_artifact == ArtifactRef.parse("p.form/C1@v1")
+    assert rec.freshness == "current"
+    f.move("J")  # only the second source is invalidated
+    (rec,) = external_records(f.b.view())
+    assert (rec.freshness, rec.stale) == ("invalidated", True)

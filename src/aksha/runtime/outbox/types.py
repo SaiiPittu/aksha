@@ -32,6 +32,9 @@ class EffectSpec:
     (the worker then calls the system registered under the tool's own name).
     ``key_fields`` are JSON pointers into the arguments; the idempotency key is computed
     from them. ``semantics`` uses ADR-P02's names; ``reconcile`` needs a ``system``.
+    ``record_fields`` are JSON pointers, each one of the key fields, naming the outside
+    record a request revises (ADR-P29 D1, B3); requests with equal values are revisions
+    of one record.
     """
 
     system: str | None
