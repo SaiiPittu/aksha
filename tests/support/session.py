@@ -2,7 +2,8 @@
 
 The scribe (``tests/fixtures/agents/scribe``) writes one note; a request that says "ask"
 asks a question first, one that says "publish" asks to publish the note (an external
-effect that needs approval, delivered to the in-memory ``board`` ledger).
+effect that needs approval). The bench passes an in-memory ``Ledger`` as ``board.ledger``,
+in place of the board extension's file ledger, so a test can read its rows.
 """
 
 from __future__ import annotations
@@ -68,7 +69,7 @@ class SessionBench:
         self.board = Ledger("board")
         self.config = config(tmp, **changes)
         self.session: Session = open_session(self.config, self.clock,
-                                             systems={"board": self.board})  # fmt: skip
+                                             systems={"board.ledger": self.board})  # fmt: skip
 
     def events(self, type_: str | None = None) -> list[Event]:
         return [e for e in self.session.store.read(OWNER) if type_ is None or e.type == type_]

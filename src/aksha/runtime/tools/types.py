@@ -84,6 +84,10 @@ class ToolContext:
     ``reader`` reads versioned records for this attempt (ADR-P13 D1): a body that mints
     citation spans drafts them over the texts it returned. None when no source is
     configured, and then every read returns None.
+
+    ``run_date`` is the ISO date (``YYYY-MM-DD``) of the run's recorded ``run.started``,
+    so a body that counts days counts them to a recorded date, the same on every replay.
+    It is not yet a recorded read: ADR-P25 D4's ``observe_time`` is not built.
     """
 
     owner: str
@@ -93,6 +97,7 @@ class ToolContext:
     step_id: str
     attempt: int
     reader: RecordReader | None = None
+    run_date: str | None = None
 
 
 @dataclass(frozen=True)

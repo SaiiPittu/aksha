@@ -242,11 +242,21 @@ def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
 
 
 def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
-    """Answer an input, choice or route interrupt."""
+    """Answer an input, choice or route interrupt.
+
+    ``TEXT`` answers the interrupt's one question (or its choice); the runtime files it
+    under the question's own ID. With several questions, each takes ``--answer ID=TEXT``.
+    """
+    answers: dict[str, str] = {}
+    for item in args.answer or ():
+        qid, sep, text = item.partition("=")
+        if not sep or not qid:
+            raise wire.WireInvalid(message=f"--answer {item!r}: use ID=TEXT")
+        answers[qid] = text
+    text = args.text if args.agent is None else None
 
     def build(cid: str) -> n.NamedCommand:
-        answers = {"q1": args.text} if args.text is not None and args.agent is None else {}
-        return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt,
+        return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt, text=text,
                                  answers=answers, agent=args.agent, command_id=cid)  # fmt: skip
 
     return _mutate(ctx, build, _item_target(ctx, "interrupt", args.interrupt))
@@ -450,7 +460,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("answer", help="answer an input, choice or route interrupt")
     s.add_argument("interrupt")
-    s.add_argument("text", nargs="?")
+    s.add_argument("text", nargs="?", help="the answer to the interrupt's one question")
+    s.add_argument("--answer", action="append", metavar="ID=TEXT",
+                   help="the answer to question ID (repeat for each question)")  # fmt: skip
     s.add_argument("--agent", help="for a route question: the agent to route to")
     s.set_defaults(handler=cmd_answer)
 

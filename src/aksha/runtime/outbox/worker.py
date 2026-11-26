@@ -73,6 +73,8 @@ from aksha.runtime.outbox.types import (
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.storage.errors import AlreadyRecorded
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tools.results import VIEW_FIELD, render_result, view_json
+from aksha.runtime.tools.types import Ok, ToolOutcome
 
 Phase = Literal["landed", "unlanded"]
 """The two recovery phases of D7, around the source check."""
@@ -289,9 +291,13 @@ def ended_step_result(entry: OutboxEntry, step: StepId) -> NewEvent:
 def step_result(entry: OutboxEntry, end: NewEvent) -> NewEvent:
     """The ``step.completed`` of ``entry``'s step for its last fact ``end``. Pure.
 
-    ``outbox.completed`` is ``ok`` with the key, ledger and receipt as the value; an
-    ``outcome_unknown`` abandonment is ``interrupted`` with the entry's ``on_unknown``; a
-    stop's is ``cancelled{run_stopped}``; any other abandonment is ``error`` with its reason.
+    ``outbox.completed`` is ``ok`` with the key, ledger and receipt as the value, and the
+    model view of that value as a success under ``value["view"]`` (ADR-P08 D4), so the
+    model reads a delivery that landed as one; an ``outcome_unknown`` abandonment is
+    ``interrupted`` with the entry's ``on_unknown``; a stop's is ``cancelled{run_stopped}``;
+    any other abandonment is ``error`` with its reason. Those record no view, and the model
+    is shown their outcome and code. The view uses the default result cap: a receipt is a
+    system's short reference, and the worker holds no agent's context policy.
     """
     if entry.step is None:
         raise ValueError(f"outbox entry {entry.key} belongs to no step")
@@ -299,7 +305,9 @@ def step_result(entry: OutboxEntry, end: NewEvent) -> NewEvent:
     p = end.payload
     attempts = int(p.get("attempts", entry.attempts))
     if end.type == "outbox.completed":
-        value = {"key": entry.key, "ledger_id": p["ledger_id"], "receipt": p["receipt"]}
+        delivered = {"key": entry.key, "ledger_id": p["ledger_id"], "receipt": p["receipt"]}
+        shown = view_json(render_result(ToolOutcome(Ok(delivered))))
+        value = {**delivered, VIEW_FIELD: shown}
         return step_facts.step_completed(
             step, "tool", entry.tool, "ok", attempts=attempts, value=value,
             reconciled=bool(p.get("reconciled", False)),

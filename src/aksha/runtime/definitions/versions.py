@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.1"
+API_VERSION = "2.2"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -32,7 +32,9 @@ so an agent that declares a policy to change one number keeps masking and summar
 is None (the high watermark); ``Agent.requires_api`` defaults to ``">=2.0,<3"``. It also
 added the trailing field ``Ok.reads`` (a body's recorded reads, ADR-P04 D6). 2.1 added the
 record reader a tool body reads through (``RecordReader``, ``ReturnedText``) and the
-trailing field ``ToolContext.reader`` (ADR-P13 D1).
+trailing field ``ToolContext.reader`` (ADR-P13 D1). 2.2 added what a contributed system
+of record implements and answers (``SystemOfRecord``, ``SystemReceipt``; ADR-P20 S2) and
+the trailing field ``ToolContext.run_date``, the run's recorded start date.
 """
 
 Version = tuple[int, int]

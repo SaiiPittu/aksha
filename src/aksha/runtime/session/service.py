@@ -39,6 +39,7 @@ from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
 from aksha.runtime.execution.recovery import RecoveryReport, recover_on_startup, resume_owner
+from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.interrupts.commands import (
     answer,
@@ -131,8 +132,12 @@ class SessionAgent:
         *,
         sandbox: Availability | None = None,
         blobs: BlobStore | None = None,
+        reader: RecordReader | None = None,
     ) -> LoopSetup:
-        """The loop's setup for one of ``owner``'s runs of this agent."""
+        """The loop's setup for one of ``owner``'s runs of this agent.
+
+        ``reader`` is the record reader its tool bodies read versioned sources through.
+        """
         limits = self.agent.limits
         extra: dict[str, Any] = {} if limits is None else {"limits": limits}
         return LoopSetup(
@@ -151,6 +156,7 @@ class SessionAgent:
             sandbox=sandbox,
             definition_hash=self.definition_hash,
             blobs=blobs,
+            reader=reader,
             **extra,
         )
 
@@ -185,9 +191,10 @@ class Session:
         blobs: BlobStore | None = None,
         systems: Mapping[str, SystemOfRecord] | None = None,
         sources: Sequence[VersionedSource] = (),
+        reader: RecordReader | None = None,
         ids: IdSource | None = None,
     ) -> None:
-        """Serve ``agents`` over ``store`` (a writer handle)."""
+        """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads."""
         self.store = store
         self.clock = clock
         self.agents: Mapping[str, SessionAgent] = MappingProxyType({a.name: a for a in agents})
@@ -196,6 +203,7 @@ class Session:
         self.blobs = blobs
         self.systems: Mapping[str, SystemOfRecord] = MappingProxyType(dict(systems or {}))
         self.sources = tuple(sources)
+        self.reader = reader
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
         self._executors: dict[str, StepExecutor] = {}
         startable = {
@@ -431,7 +439,7 @@ class Session:
         agent = self._agent_of_run(view, run)
         assert agent is not None, f"{run} is not a run of a loaded agent"
         return agent.setup(self.store, owner, _request(view, run), sandbox=self.sandbox(),
-                           blobs=self.blobs)  # fmt: skip
+                           blobs=self.blobs, reader=self.reader)  # fmt: skip
 
     def _executor(self, owner: str) -> StepExecutor:
         held = self._executors.get(owner)

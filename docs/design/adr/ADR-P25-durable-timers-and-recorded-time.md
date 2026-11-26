@@ -31,6 +31,10 @@ The terms:
 4. D4, the current date is a read and a recorded source. A tool that needs the date calls `observe_time(ctx)`, which returns an `InputRef(kind="time", id="clock", version=<ISO date>)` and records it as a read. The runtime also records the date itself: at every run start, and at each day boundary while a run is open, it writes the current date as the `time/clock` source version through `record_source_changes` (ADR-P05 S2, cause `clock`). Every artifact that read an older date is then invalidated before any reuse decision, whether or not the later run calls `observe_time`, so reuse always checks the recorded time.
 5. D5, approval expiry is a timer with cause `approval_expiry`, scoped to the approval itself (its approval ID), not to the instance that raised it; firing voids the approval `expired`. The open approval interrupt therefore never holds its own expiry timer (D2).
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, an interim date for tool bodies (D4). `observe_time` is not built. Until it is, `ToolContext.run_date` (extension API 2.2) gives a tool body the ISO date of its run's recorded `run.started`. The agent loop reads it from the log, so it comes from the injected clock and is the same on every replay. It is not a recorded read, and no day boundary invalidates anything built on it: that is still D4's job. The patent agent's source world counts elapsed days to it when it reads through the session's record reader.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
