@@ -17,18 +17,26 @@ def test_context_policy_defaults_follow_the_adr() -> None:
         60_000,
         45_000,
     )
-    assert (p.keep_recent_pairs, p.summary) == (3, None)
-    assert SummaryPolicy().alias == "generate.summary"
+    assert (p.keep_recent_pairs, p.summary) == (3, SummaryPolicy())
+    assert SummaryPolicy().alias == "generate"  # the implicit alias: the default always runs
     assert SummaryPolicy().max_per_instance == 2
+    assert SummaryPolicy().trigger(p) == p.high_water_chars
     assert CONTEXT_POLICY_VERSION == 1
 
 
 def test_masking_is_on_by_default_because_compaction_is_core() -> None:
-    assert ContextPolicy().masking is False  # the frozen API keeps the ADR's field default
-    assert DEFAULT_POLICY.masking is True
+    assert DEFAULT_POLICY.masking is True and DEFAULT_POLICY.summary is not None
     assert effective_policy(None) is DEFAULT_POLICY
     own = ContextPolicy(keep_recent_pairs=5)
     assert effective_policy(own) is own
+
+
+def test_declaring_one_number_keeps_masking_and_summaries() -> None:
+    """Decision 34 (API 2.0): a policy that only raises a cap is not a policy that opts out."""
+    own = ContextPolicy(result_cap_chars=20_000)
+    assert own.masking is True and own.summary == SummaryPolicy()
+    off = ContextPolicy(masking=False, summary=None)  # opting out is explicit
+    assert (off.masking, off.summary) == (False, None)
 
 
 def test_rendered_records_its_spans_sorted() -> None:

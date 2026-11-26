@@ -133,8 +133,29 @@ def test_second_decision_refused(bench: Bench) -> None:
     assert late.refused == ALREADY_DECIDED
 
 
-def test_approve_refused_while_a_target_is_changing(bench: Bench) -> None:
-    """S1: no grant while the packet is invalidated or dirty."""
+def test_approve_refused_while_a_target_is_changing(tmp_path: Path) -> None:
+    """S1: no grant while the packet is dirty (an input of an input changed)."""
+    from aksha.runtime.invalidation.commands import apply_source_change
+    from tests.support.invalidation import FakeSource, ref
+
+    b = Bench(tmp_path)
+    try:
+        b.start("R-0001")
+        b.save("R-0001", "p.form/C1", {"names": 1}, reads=[record("K")])
+        b.save("R-0001", "p.packet/C1", {"forms": 1}, reads=[ref("p.form/C1@v1").as_input()])
+        sig = _requested(b)
+        source = FakeSource()
+        source.change(b.owner, {"refs/K": "2"})
+        apply_source_change(b.store, b.owner, [source], "cs1")
+        assert "approval.revoked" not in b.types()  # dirty is not confirmed
+        receipt = approve(b.store, b.owner, "A-0001", sig, by="person")
+        assert receipt.refused == "target_changing"
+    finally:
+        b.close()
+
+
+def test_request_on_an_invalidated_target_is_revoked_with_its_interrupt(bench: Bench) -> None:
+    """ADR-P05 D9: no approval request stays live on a target confirmed invalidated."""
     sig = _requested(bench)
     from aksha.runtime.invalidation.commands import apply_source_change
     from tests.support.invalidation import FakeSource
@@ -142,8 +163,13 @@ def test_approve_refused_while_a_target_is_changing(bench: Bench) -> None:
     source = FakeSource()
     source.change(bench.owner, {"refs/K": "2"})
     apply_source_change(bench.store, bench.owner, [source], "cs1")
+    view = bench.view()
+    assert approvals(view)["A-0001"].state == "revoked"
+    i = interrupts(view)["A-0001"]
+    assert (i.state, i.void_reason) == ("voided", "target_invalidated")
+    assert open_interrupts(view, "R-0001", "send") == ()  # it no longer holds the instance
     receipt = approve(bench.store, bench.owner, "A-0001", sig, by="person")
-    assert receipt.refused == "target_changing"
+    assert receipt.refused == ALREADY_DECIDED
 
 
 def test_reject_changes_nothing(bench: Bench) -> None:

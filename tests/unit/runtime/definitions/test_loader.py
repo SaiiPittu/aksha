@@ -63,7 +63,7 @@ def test_unknown_extension_is_refused(plugins: Plugins) -> None:
         ("raise RuntimeError('boom')\n", "extension_import_failed"),
         (
             "from aksha.runtime.api import Extension\n"
-            "EXTENSION = Extension(name='other', version='1', requires_api='>=1.0,<2')\n",
+            "EXTENSION = Extension(name='other', version='1', requires_api='>=2.0,<3')\n",
             "extension_name_mismatch",
         ),
         (

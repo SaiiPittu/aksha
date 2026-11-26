@@ -17,8 +17,9 @@ holds no state between iterations; each pass re-reads the event store:
    DONE and FAIL resolve inside evaluation and never reach the driver.
 
 The turn limit, the stop-veto limit, a person's stop request and an open interrupt are all
-read in evaluation, never here. :class:`LoopDriver` is the ``RunDriver`` recovery calls
-to resume a run (ADR-P02 D10).
+read in evaluation, never here. :func:`drive_rebuilds` opens and drives the rebuild runs
+an agent's invalidated work calls for (ADR-P05 D8). :class:`LoopDriver` is the
+``RunDriver`` recovery calls to resume a run (ADR-P02 D10).
 """
 
 from __future__ import annotations
@@ -28,7 +29,8 @@ from typing import Literal
 
 from aksha.runtime.budgets.limits import turns_used
 from aksha.runtime.events.envelope import Event
-from aksha.runtime.execution.ports import DurableStepExecutor
+from aksha.runtime.execution.ports import DurableStepExecutor, IdSource
+from aksha.runtime.invalidation.rebuild import open_rebuild_runs
 from aksha.runtime.loop.classify import recorded_turn_end
 from aksha.runtime.loop.turn import run_turn, stop_view
 from aksha.runtime.loop.types import DriveResult, LoopSetup, TurnEnd
@@ -132,6 +134,40 @@ def drive(
         else:
             point = ControlPoint("ended")
     raise StopRefused("evaluation_loop", f"run {run} did not hold or end")
+
+
+DEFAULT_MAX_REBUILD_RUNS = 100
+"""More rebuild runs than one settling needs: a bound on a runtime bug, never a run limit."""
+
+
+def drive_rebuilds(
+    setup: LoopSetup,
+    executor: DurableStepExecutor,
+    ids: IdSource,
+    *,
+    max_runs: int = DEFAULT_MAX_REBUILD_RUNS,
+) -> tuple[DriveResult, ...]:
+    """Open and drive the rebuild runs ``setup``'s agent needs, until none opens (ADR-P05 D8).
+
+    Each pass asks ``invalidation.rebuild.open_rebuild_runs`` for this agent (one run per
+    set of runnable work, never while the work is held, headless only with a sandbox),
+    then drives each run like any other: the scheduler re-enters only the invalidated
+    writers by writer key, a human-reviewed rebuild raises its diff review, and the run
+    ends once nothing it re-enters may run. A run that waits on a person (``held``) keeps
+    the agent busy, so no further run opens until it ends. Returns every drive's result.
+    """
+    agent = setup.agent.name
+    hashes = {agent: setup.definition_hash} if setup.definition_hash else None
+    out: list[DriveResult] = []
+    for _ in range(max_runs):
+        opened = open_rebuild_runs(
+            setup.store, setup.owner, ids, definition_hashes=hashes, agents=(agent,),
+            sandbox=setup.sandbox,
+        )  # fmt: skip
+        if not opened:
+            return tuple(out)
+        out.extend(drive(setup, executor, run) for run in opened)
+    raise StopRefused("rebuild_loop", f"{agent} kept opening rebuild runs")
 
 
 class LoopDriver:

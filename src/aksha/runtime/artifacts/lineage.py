@@ -52,11 +52,26 @@ def reads_to_record(
 
 
 def recorded_reads(view: LogView, run: str, instance: str) -> frozenset[InputRef]:
-    """Every lineage input ``instance`` recorded in ``run``, up to the view's ``seq_read``."""
+    """Every lineage input ``instance`` recorded in ``run``, up to the view's ``seq_read``.
+
+    Only the reads since the instance's last re-entry for a rebuild count
+    (``task.entered{cause: rebuild}``, read by name; ADR-P05 D7): an instance that
+    regenerates its work in place starts a new generation of reads, so the versions it
+    read before the change are not lineage of what it saves now.
+    """
+    since = 0
+    for e in view.events:
+        if (
+            e.type == "task.entered"
+            and e.run == run
+            and e.instance == instance
+            and e.payload.get("cause") == "rebuild"
+        ):
+            since = e.seq
     return frozenset(
         InputRef.from_json(e.payload["input"])
         for e in view.events
-        if e.type == "read.recorded" and e.run == run and e.instance == instance
+        if e.type == "read.recorded" and e.run == run and e.instance == instance and e.seq > since
     )
 
 

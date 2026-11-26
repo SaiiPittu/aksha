@@ -23,7 +23,9 @@ from aksha.runtime.tasks.types import InstanceRef
 from tests.support.context import RUN, Log
 
 EDIT = InstanceRef(RUN, "edit", "parser")
-POLICY = ContextPolicy(summary=SummaryPolicy(trigger_chars=1_000, keep_recent_pairs=2))
+POLICY = ContextPolicy(
+    summary=SummaryPolicy(alias="generate.summary", trigger_chars=1_000, keep_recent_pairs=2)
+)
 STEP = StepId(RUN, EDIT.instance, turn=6)
 
 
@@ -56,7 +58,10 @@ def test_no_summary_under_the_trigger_or_without_a_policy(log: Log) -> None:
 
 def test_no_summary_past_the_per_instance_limit(log: Log) -> None:
     turns = instance_turns(log.view(), RUN, EDIT.instance)
-    zero = replace(POLICY, summary=SummaryPolicy(trigger_chars=1_000, max_per_instance=0))
+    zero = replace(
+        POLICY,
+        summary=SummaryPolicy(alias="generate.summary", trigger_chars=1_000, max_per_instance=0),
+    )
     assert summary_through(log.view(), STEP, turns, plan(5_000), zero) is None
 
 

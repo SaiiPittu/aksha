@@ -39,7 +39,7 @@ def policy_material(policy: ContextPolicy) -> dict[str, Any]:
         if summary is None
         else {
             "alias": summary.alias,
-            "trigger_chars": summary.trigger_chars,
+            "trigger_chars": summary.trigger(policy),
             "keep_recent_pairs": summary.keep_recent_pairs,
             "max_per_instance": summary.max_per_instance,
         },
@@ -71,6 +71,6 @@ def policy_refusals(policy: ContextPolicy, tools: Iterable[str]) -> list[str]:
             out.append("summary.alias must name a generation alias")
         if s.keep_recent_pairs < 1 or s.max_per_instance < 0:
             out.append("summary.keep_recent_pairs >= 1 and summary.max_per_instance >= 0")
-        if not 0 < s.trigger_chars < policy.context_limit_chars:
+        if not 0 < s.trigger(policy) < policy.context_limit_chars:
             out.append("summary.trigger_chars must lie between 0 and context_limit_chars")
     return out

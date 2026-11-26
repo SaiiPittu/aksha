@@ -19,7 +19,9 @@ an ``InstanceRef``  its run's hold, or an open interrupt raised by that instance
 ==================  ===========================================================
 
 So an approval pending on one instance parks that instance; the run's other instances,
-and writers upstream of it, go on.
+and writers upstream of it, go on. A diff review holds nothing here
+(``interrupts.reducers.DETACHED_KINDS``): its readers wait through the scheduler and the
+rebuild plan instead, and its writer is done (F2).
 
 ``held_auto_starts`` is ``inv.no_auto_start_while_held``: it walks a whole log and returns
 every automatic start recorded while its scope was held, by a stop (``cancellation``) or by
@@ -38,7 +40,7 @@ from aksha.runtime.cancellation.hold import stop_hold
 from aksha.runtime.cancellation.requests import pending_stop
 from aksha.runtime.cancellation.types import HeldStart
 from aksha.runtime.events.envelope import Event
-from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED
+from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED, detached
 from aksha.runtime.invalidation.types import RebuildEntry
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
@@ -61,6 +63,8 @@ class _Open:
 
     def apply(self, e: Event) -> None:
         ident = str(e.payload.get("interrupt", e.step or ""))
+        if e.type == INTERRUPT_RAISED and detached(e.payload.get("kind")):
+            return  # a diff review holds no run and no instance (ADR-P05 D1, F2)
         if e.type == INTERRUPT_RAISED and e.run is not None:
             self.raised[ident] = (e.run, e.instance, e.seq)
         elif e.type == INTERRUPT_RAISED and e.session is not None:

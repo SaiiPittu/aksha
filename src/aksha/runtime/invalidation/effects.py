@@ -1,7 +1,8 @@
 """Effects refused on stale targets (ADR-P05 D9). Pure.
 
-No selection save, form write, packet save, approval request or handoff runs on a version
-that is invalidated or dirty, nor on a pending revision no person has accepted. Each such
+No effect (a write to a system of record, a send, an approval request or a handoff) runs
+on a version that is invalidated or dirty, nor on a pending revision no person has
+accepted. Each such
 path asks :func:`effect_refusal` with the artifact refs it acts on. :func:`authority`
 wraps it as the outbox's ``Authority`` port (ADR-P03), so the worker re-checks it before
 each first call; the approval half of that port arrives with ADR-P17.

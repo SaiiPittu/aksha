@@ -19,7 +19,7 @@ from aksha.runtime.artifacts.lineage import recorded_reads
 from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.context.assembly import assemble_context
 from aksha.runtime.context.notices import rebuild_brief_for
-from aksha.runtime.context.prepare import Prepared, prepare_context
+from aksha.runtime.context.prepare import Prepared, SummaryApproval, prepare_context
 from aksha.runtime.context.types import (
     Assembled,
     AssemblyInputs,
@@ -56,7 +56,7 @@ from tests.support.tasks import TaskLog, demo_tree, ref
 EDIT = InstanceRef(RUN, "edit", "parser")
 SUMMARY = ModelAlias("generate.summary", "generation")
 POLICY = ContextPolicy(
-    masking=True,
+    masking=True, summary=None,  # masking alone; the summary tests add their own
     high_water_chars=6_000, low_water_chars=4_500, context_limit_chars=40_000,
     read_block_cap_chars=8_000, read_cap_chars=4_000,
 )  # fmt: skip
@@ -77,11 +77,16 @@ def table(main: ScriptedGenerationModel, summariser: ScriptedGenerationModel) ->
 
 
 def prepared(
-    log: Log, executor: StepExecutor, t: AliasTable, turn: int, policy: ContextPolicy = POLICY
+    log: Log,
+    executor: StepExecutor,
+    t: AliasTable,
+    turn: int,
+    policy: ContextPolicy = POLICY,
+    approve: SummaryApproval | None = None,
 ) -> Prepared:
     return prepare_context(
         log.store, OWNER, executor, t, tree(("coder.plan",)), EDIT, turn=turn, inputs=INPUTS,
-        prep=Prep(), policy=policy, tools=TOOLS,
+        prep=Prep(), policy=policy, tools=TOOLS, approve_summary=approve,
     )  # fmt: skip
 
 
@@ -173,7 +178,9 @@ def test_rendered_reads_are_recorded_reads(log: Log) -> None:
 
 
 def test_summary_replayed_not_recomputed(log: Log, tmp_path: Path) -> None:
-    once = SummaryPolicy(trigger_chars=5_000, keep_recent_pairs=2, max_per_instance=1)
+    once = SummaryPolicy(
+        alias="generate.summary", trigger_chars=5_000, keep_recent_pairs=2, max_per_instance=1
+    )
     policy = replace(POLICY, summary=once)
     main = ScriptedGenerationModel([reply(n) for n in range(1, 9)])
     summariser = ScriptedGenerationModel([GenerationResult("Ran the tests 5 times; all red.")])
@@ -204,8 +211,32 @@ def test_summary_replayed_not_recomputed(log: Log, tmp_path: Path) -> None:
     assert len(summariser.calls) == 1
 
 
+def test_a_summary_the_limits_refuse_calls_no_model(log: Log) -> None:
+    """ADR-P08 D7: the Task and run limits approve a summary; a refusal runs no model call."""
+    once = SummaryPolicy(alias="generate.summary", trigger_chars=5_000, keep_recent_pairs=2)
+    policy = replace(POLICY, summary=once)
+    summariser = ScriptedGenerationModel([GenerationResult("never")])
+    t = table(ScriptedGenerationModel([reply(n) for n in range(1, 9)]), summariser)
+    executor = StepExecutor(log.store, OWNER, log.clock)
+    refused: list[str] = []
+
+    def spent(view: object) -> str:
+        refused.append("summary_budget")
+        return "summary_budget"
+
+    for turn in range(1, 8):
+        run_turn(log, executor, t, turn, policy=policy, approve=spent)
+    assert refused and summariser.calls == []
+    assert not [e for e in log.view().events if e.type == "context.compacted"]
+    again = prepared(log, executor, t, 8, policy, spent)
+    assert again.summary is None and again.summary_refused == "summary_budget"
+
+
 def test_summary_is_never_an_artifact(log: Log) -> None:
-    policy = replace(POLICY, summary=SummaryPolicy(trigger_chars=5_000, keep_recent_pairs=2))
+    policy = replace(
+        POLICY,
+        summary=SummaryPolicy(alias="generate.summary", trigger_chars=5_000, keep_recent_pairs=2),
+    )
     summariser = ScriptedGenerationModel([GenerationResult("summary text")])
     t = table(ScriptedGenerationModel([reply(n) for n in range(1, 9)]), summariser)
     executor = StepExecutor(log.store, OWNER, log.clock)
@@ -217,7 +248,10 @@ def test_summary_is_never_an_artifact(log: Log) -> None:
 
 def test_summary_limit_per_instance(log: Log) -> None:
     policy = replace(
-        POLICY, summary=SummaryPolicy(trigger_chars=3_000, keep_recent_pairs=1, max_per_instance=1)
+        POLICY,
+        summary=SummaryPolicy(
+            alias="generate.summary", trigger_chars=3_000, keep_recent_pairs=1, max_per_instance=1
+        ),
     )
     summariser = ScriptedGenerationModel([GenerationResult("first"), GenerationResult("second")])
     t = table(ScriptedGenerationModel([reply(n) for n in range(1, 12)]), summariser)

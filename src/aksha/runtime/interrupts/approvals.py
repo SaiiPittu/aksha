@@ -9,9 +9,11 @@
 3. :func:`request_approval`: the ``approval.requested`` and ``interrupt.raised{approval}``
    facts a tool step returns (U2) or a command writes (U4). The approval and its interrupt
    share one ID. A request on a stale or unknown target is refused.
-4. :func:`approvals`: every approval's state, a reducer. ``requested`` until a person's
+4. :func:`approvals` (defined in ``reducers.py``, the one approval reducer the runtime
+   has, and re-exported here): every approval's state. ``requested`` until a person's
    ``approval.granted`` or ``approval.rejected``; ``voided`` by ``approval.voided`` (an edit,
-   a withdrawn key); ``revoked`` by invalidation's ``approval.revoked``; ``used`` once an
+   a withdrawn key); ``revoked`` by invalidation's ``approval.revoked``
+   (a grant, or a request, whose target it confirmed invalidated); ``used`` once an
    ``outbox.enqueued`` names it.
 5. :func:`verify_for_execution`: D8's re-check before an approved action runs, and again
    before every delivery (:func:`approval_authority`, the outbox ``Authority``): the
@@ -35,7 +37,25 @@ from aksha.runtime.artifacts.versions import version
 from aksha.runtime.canonical import canonical_json, sha256_hex
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.interrupts.raising import raised
-from aksha.runtime.interrupts.types import ActionBody, ApprovalView, InterruptRequest, Refusal
+from aksha.runtime.interrupts.reducers import (
+    APPROVAL_GRANTED as APPROVAL_GRANTED,
+)
+from aksha.runtime.interrupts.reducers import (
+    APPROVAL_REJECTED as APPROVAL_REJECTED,
+)
+from aksha.runtime.interrupts.reducers import (
+    APPROVAL_REQUESTED as APPROVAL_REQUESTED,
+)
+from aksha.runtime.interrupts.reducers import (
+    APPROVAL_REVOKED as APPROVAL_REVOKED,
+)
+from aksha.runtime.interrupts.reducers import (
+    APPROVAL_VOIDED as APPROVAL_VOIDED,
+)
+from aksha.runtime.interrupts.reducers import (
+    approvals as approvals,
+)
+from aksha.runtime.interrupts.types import ActionBody, InterruptRequest, Refusal
 from aksha.runtime.invalidation.effects import effect_refusal
 from aksha.runtime.invalidation.view import invalidation_view
 from aksha.runtime.outbox.keys import Resolve, idempotency_key
@@ -46,11 +66,6 @@ from aksha.runtime.tools.types import ToolSpec
 
 SIGNATURE_VERSION = "v1"
 
-APPROVAL_REQUESTED = "approval.requested"
-APPROVAL_GRANTED = "approval.granted"
-APPROVAL_REJECTED = "approval.rejected"
-APPROVAL_VOIDED = "approval.voided"
-APPROVAL_REVOKED = "approval.revoked"
 
 NOT_FOUND = "approval_not_found"
 NOT_GRANTED = "approval_not_granted"
@@ -189,48 +204,6 @@ def request_approval(
         return Refusal(STALE_TARGET, f"a target of {tool.spec.name} is {stale}")
     return request_events(approval_id, body, run=run, instance=instance, step=step,
                           replaces=replaces)  # fmt: skip
-
-
-def approvals(view: LogView) -> Mapping[str, ApprovalView]:
-    """Every approval of the view's owner by ID, in request order, with its state. A reducer."""
-    found: dict[str, ApprovalView] = {}
-    for e in view.events:
-        p = e.payload
-        if e.type == APPROVAL_REQUESTED and "body" in p:
-            ident = str(p["approval"])
-            found[ident] = ApprovalView(
-                ident, ActionBody.from_json(p["body"]), str(p["signature"]), "requested",
-                e.run, e.instance, e.seq,
-                replaces=None if p.get("replaces") is None else str(p["replaces"]),
-            )  # fmt: skip
-            continue
-        if e.type == "outbox.enqueued":
-            ident = str(p.get("approval_id", ""))
-        elif e.type in (APPROVAL_GRANTED, APPROVAL_REJECTED, APPROVAL_VOIDED, APPROVAL_REVOKED):
-            ident = str(p["approval"])
-        else:
-            continue
-        held = found.get(ident)
-        if held is not None:
-            found[ident] = _move(held, e.type, p)
-    return MappingProxyType(found)
-
-
-def _move(a: ApprovalView, event_type: str, p: Mapping[str, Any]) -> ApprovalView:
-    """One arrow of the state diagram; an arrow from a final state changes nothing."""
-    if a.state not in ("requested", "granted"):
-        return a
-    if event_type == APPROVAL_GRANTED and a.state == "requested":
-        return replace(a, state="granted", decided_by=str(p.get("by", "")) or None)
-    if event_type == APPROVAL_REJECTED and a.state == "requested":
-        return replace(a, state="rejected", decided_by=str(p.get("by", "")) or None)
-    if event_type == APPROVAL_VOIDED:
-        return replace(a, state="voided", void_reason=str(p.get("reason", "")) or None)
-    if event_type == APPROVAL_REVOKED:
-        return replace(a, state="revoked", revoked_because=tuple(p.get("moved", ())))
-    if event_type == "outbox.enqueued" and a.state == "granted":
-        return replace(a, state="used", used_by=str(p["key"]))
-    return a
 
 
 def verify_for_execution(

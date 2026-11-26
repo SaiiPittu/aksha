@@ -2,20 +2,23 @@
 
 A diff review is an ``interrupt.raised{kind: review}`` naming the old version, the pending
 revision and the card's hash. It is open until ``review.accepted`` or ``review.rejected``
-(with ``interrupt.resolved``) or ``interrupt.voided`` closes it. Approvals are ADR-P17's;
-invalidation reads ``approval.granted`` by name (its targets are artifact refs) and writes
-``approval.revoked``.
+(with ``interrupt.resolved``) or ``interrupt.voided`` closes it. Approvals are ADR-P17's:
+invalidation reads their states through ADR-P17's one reducer (its targets are the
+body's artifact refs) and writes ``approval.revoked`` for a grant and ``approval.voided``
+for a request whose target it confirmed invalidated.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal
+from typing import Literal
 
 from aksha.runtime.artifacts.types import ArtifactRef
 from aksha.runtime.canonical import sha256_hex
+from aksha.runtime.interrupts.reducers import approvals as approval_states
+from aksha.runtime.interrupts.types import ApprovalState
 from aksha.runtime.invalidation.types import Hunk, ReadStatus
 from aksha.runtime.projections.view import LogView
 
@@ -94,46 +97,63 @@ def card_hash(
     return "sha256:" + sha256_hex(card)
 
 
-# --- approvals (ADR-P17's facts, read by name) -----------------------------------------
+# --- approvals (ADR-P17's one reducer) ------------------------------------------------
 
 
 @dataclass(frozen=True)
 class ApprovalRecord:
-    """One granted approval: its ID, the artifact refs it covers, and whether it was revoked."""
+    """One approval as invalidation reads it: its ID, state, targets and requester.
+
+    Built from ADR-P17's approval reducer (``interrupts.reducers.approvals``), so the
+    revocation, the void of a request and the re-request after an accepted review read
+    the same states as the gate and the handoff.
+    """
 
     approval: str
     targets: tuple[str, ...]
     seq: int
-    revoked: bool = False
-    used: bool = False
+    state: ApprovalState
+    run: str | None = None
+    instance: str | None = None
+    decided: bool = False
+
+    @property
+    def revoked(self) -> bool:
+        """Whether invalidation revoked the grant."""
+        return self.state == "revoked"
+
+    @property
+    def used(self) -> bool:
+        """Whether an outbox entry names it: a used approval is never revoked (ADR-P17 D7)."""
+        return self.state == "used"
+
+    @property
+    def requested(self) -> bool:
+        """Whether it still waits on a person's decision."""
+        return self.state == "requested"
+
+    @property
+    def granted(self) -> bool:
+        """Whether a person granted it (it may be revoked or used since)."""
+        return self.state in ("granted", "used") or (self.revoked and self.decided)
 
 
 def approvals(view: LogView) -> tuple[ApprovalRecord, ...]:
-    """Every granted approval, in grant order, with its revocation and use.
-
-    An approval is used once an outbox entry names it (``outbox.enqueued{approval_id}``);
-    a used approval is never revoked (ADR-P17 D7).
-    """
-    granted: dict[str, ApprovalRecord] = {}
-    for e in view.events:
-        p = e.payload
-        if e.type == "approval.granted":
-            ident = str(p["approval"])
-            granted[ident] = ApprovalRecord(ident, _targets(p), e.seq)
-        elif e.type == "approval.revoked" and str(p["approval"]) in granted:
-            r = granted[str(p["approval"])]
-            granted[r.approval] = replace(r, revoked=True)
-        elif e.type == "outbox.enqueued" and str(p.get("approval_id")) in granted:
-            r = granted[str(p["approval_id"])]
-            granted[r.approval] = replace(r, used=True)
-    return tuple(granted.values())
-
-
-def _targets(payload: Mapping[str, Any]) -> tuple[str, ...]:
-    targets = payload.get("targets") or ()
-    return tuple(str(t) for t in targets)
+    """Every approval, in request order, with its state (ADR-P17's reducer, read once)."""
+    return tuple(
+        ApprovalRecord(
+            a.approval_id,
+            a.body.target_refs(),
+            a.seq,
+            a.state,
+            a.run,
+            a.instance,
+            a.decided_by is not None,
+        )
+        for a in approval_states(view).values()
+    )
 
 
 def approved_refs(view: LogView) -> frozenset[str]:
     """Every artifact ref a person ever approved (revoked or not): human-reviewed (D1)."""
-    return frozenset(t for a in approvals(view) for t in a.targets)
+    return frozenset(t for a in approvals(view) if a.granted for t in a.targets)

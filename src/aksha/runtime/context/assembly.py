@@ -58,6 +58,7 @@ from aksha.runtime.context.types import (
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.spans import span_index, spans_shown
+from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import GenerationRequest, Message, ToolCall
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.types import Prep
@@ -138,10 +139,11 @@ def _stale(
 ) -> tuple[StaleRead, ...]:  # fmt: skip
     hidden = {m.step for m in masks if m.reason == "stale"}
     out: list[StaleRead] = []
+    checker = ReadChecker(view, blobs=blobs) if hidden else None
     for t in turns:
         for p in t.pairs:
             if p.step in hidden:
-                out += stale_reads(view, instance.run, instance.instance, p, blobs=blobs)
+                out += stale_reads(view, instance.run, instance.instance, p, checker=checker)
     return tuple(dict.fromkeys(out))
 
 

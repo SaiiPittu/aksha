@@ -13,6 +13,13 @@ its own writes). For a parent instance:
 3. otherwise its runnable children are picked in its place, and the parent itself once
    every child instance is settled, so the stop decision evaluates and pops it.
 
+Invalidation (ADR-P05 D7, D8, F2): the rebuild plan, recomputed from the log at every
+pick, re-enters instances by writer key (:func:`rebuild_targets`). An open run picks
+its own settled work again when the plan lists it (in place); a rebuild run picks only
+what the plan re-enters, never its tree from the roots, and orders it by the plan's
+holds rather than ``needs``. A re-entry commits ``task.entered{cause: rebuild}`` (with a
+reset for a blocked instance), never an entry check, so the old version cannot pop it.
+
 ``next_instances`` returns the first ``tree.concurrency`` of them; v1 compiles only 1, so
 two fake-model runs start instances in the same order. ``schedule`` returns everything a
 stop decision commits for the scheduler (U3): ``task.withdrawn`` and
@@ -32,7 +39,7 @@ from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.artifacts.versions import unaccepted_revisions
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.finalization.types import UnknownEntry
-from aksha.runtime.interrupts.approvals import APPROVAL_VOIDED, approvals
+from aksha.runtime.interrupts.reducers import APPROVAL_VOIDED, approvals
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.completion import (
     evaluate_in,
@@ -41,6 +48,7 @@ from aksha.runtime.tasks.completion import (
     task_done,
 )
 from aksha.runtime.tasks.errors import TaskUnknown
+from aksha.runtime.tasks.rebuilds import is_rebuild_run, rebuild_targets
 from aksha.runtime.tasks.status import (
     TASK_ENTERED,
     TASK_WITHDRAWN,
@@ -68,6 +76,32 @@ class _Pick:
             except ValueError:
                 continue
         self.pending = tuple(refs)
+        self.rebuild_run = is_rebuild_run(state.view, state.run)
+        self.targets = rebuild_targets(state.view, state.tree, state.run)
+
+    def reentries(self) -> Iterator[InstanceRef]:
+        """The targets to re-enter: new in a rebuild run, or settled (done, blocked) here."""
+        for ref in self.targets:
+            if self.state.status(ref) in ("new", "done", "blocked"):
+                yield ref
+
+    def rebuild_walk(self) -> Iterator[InstanceRef]:
+        """A rebuild run's picks: what it already re-entered, then the targets (D8).
+
+        A rebuild run never walks its tree from the roots: it runs only the instances the
+        plan re-enters by writer key, so work the change did not touch stays untouched.
+        """
+        state = self.state
+        seen: set[InstanceRef] = set()
+        for instance, mark in state.last.items():
+            ref = InstanceRef.parse(state.run, instance)
+            if mark in ("entered", "reset") and ref not in seen:
+                seen.add(ref)
+                yield from self.consider(ref)
+        for ref in self.reentries():
+            if ref not in seen:
+                seen.add(ref)
+                yield ref
 
     def walk(self, paths: tuple[str, ...], key: str | None, keyed: bool) -> Iterator[InstanceRef]:
         for path in paths:
@@ -80,8 +114,10 @@ class _Pick:
         status = state.status(ref)
         if status in SETTLED or status == "suspended" or state.voided(ref):
             return
-        if not self.needs_met(ref) or self.awaiting_review(ref):
+        if self.awaiting_review(ref):
             return
+        if not self.rebuild_run and not self.needs_met(ref):
+            return  # a rebuild run's order is the plan's (held_by), not the tree's needs
         node = state.tree.node(ref.task_path)
         if node.is_leaf or status == "new":
             yield ref
@@ -149,8 +185,17 @@ def runnable_below(state: RunState, ref: InstanceRef) -> tuple[InstanceRef, ...]
 
 
 def runnable_in(state: RunState) -> tuple[InstanceRef, ...]:
-    """:func:`runnable` over an indexed run state."""
-    return tuple(_Pick(state).walk(state.tree.roots, None, False))
+    """:func:`runnable` over an indexed run state.
+
+    A rebuild run picks only what the plan re-enters (``_Pick.rebuild_walk``). Any other
+    run picks the plan's re-entries of its own settled work first (D7: an open run
+    regenerates its own work in place), then its tree in pick order.
+    """
+    pick = _Pick(state)
+    if pick.rebuild_run:
+        return tuple(dict.fromkeys(pick.rebuild_walk()))
+    walked = pick.walk(state.tree.roots, None, False)
+    return tuple(dict.fromkeys((*pick.reentries(), *walked)))
 
 
 def runnable(view: LogView, tree: CompiledTree, run: str) -> tuple[InstanceRef, ...]:
@@ -258,9 +303,12 @@ def schedule(view: LogView, tree: CompiledTree, run: str) -> Schedule:
     facts = list(withdrawals(view, tree, run))
     state = run_state(view, tree, run)
     picks = runnable_in(state)[: tree.concurrency]
+    targets = rebuild_targets(view, tree, run)
     done: list[InstanceRef] = []
     for ref in picks:
-        if state.status(ref) == "new":
+        if ref in targets and state.status(ref) in ("new", "done", "blocked"):
+            facts.extend(reentry(view, tree, run, writer_of(tree, ref)))
+        elif state.status(ref) == "new":
             entry = enter(view, tree, ref, cause="scheduler")
             facts.extend(entry.facts)
             if entry.done:
@@ -316,7 +364,11 @@ class RunOutcome:
 
 
 def run_outcome(view: LogView, tree: CompiledTree, run: str) -> RunOutcome | None:
-    """None while an instance may run or is suspended; else the tree's outcome. Pure."""
+    """None while an instance may run or is suspended; else the tree's outcome. Pure.
+
+    A rebuild run is ``complete`` once nothing it re-enters may run, and ``blocked`` if
+    a re-entered instance blocked; the rest of its tree was never meant to run (D8).
+    """
     from aksha.runtime.finalization.unknowns import unknowns_in  # deferred: it reads tasks
 
     state = run_state(view, tree, run)
@@ -326,6 +378,8 @@ def run_outcome(view: LogView, tree: CompiledTree, run: str) -> RunOutcome | Non
     if any(state.status(r) == "suspended" and not state.voided(r) for r in refs):
         return None
     blocked = tuple(r.instance for r in refs if state.status(r) == "blocked")
+    if is_rebuild_run(view, run):  # D8: its outcome is the re-entered work's alone
+        return RunOutcome("blocked" if blocked else "complete", blocked)
     found = unknowns_in(state)
     if state.finalizing is not None:
         return RunOutcome("partial", blocked, found)

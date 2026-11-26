@@ -117,7 +117,13 @@ ResetCause = Literal["answer", "rebuild"]
 """Why a blocked instance was reset: a person's answer, or a rebuild run's re-entry."""
 
 EvaluationCode = Literal[
-    "", "check_failed", "check_raised", "children_pending", "child_blocked", "keys_pending"
+    "",
+    "check_failed",
+    "check_raised",
+    "children_pending",
+    "child_blocked",
+    "keys_pending",
+    "rebuild_pending",
 ]
 """Why an evaluation failed; empty when it passed."""
 

@@ -198,7 +198,9 @@ def evaluate_stop(view: StopView, c: StopCandidate) -> StopDecision:
             stack = stack[: level + 1] + task_group(working, child)
             level = len(stack) - 1
             status = run_state(working.log, working.tree, c.run).status(child)
-            offer = c.offered("enter" if status == "new" else "next", child)
+            # A settled child the scheduler picked is a re-entry for a rebuild (ADR-P05 D7).
+            entering = status in ("new", "done", "blocked")
+            offer = c.offered("enter" if entering else "next", child)
             continue
         return _decide(
             working, c, seq_no, derived, trail, policy, verdict, offer.instance,
@@ -343,3 +345,30 @@ def awaiting_person(view: LogView, run: str) -> bool:
     if last is None or last.payload.get("verdict") != "hold" or last.instance is not None:
         return False
     return not any(e.seq > last.seq and e.run == run and e.type in ANSWERS for e in view.events)
+
+
+SUMMARY_HELD = "summary_held"
+"""The refusal of a summary step while a person's stop or an interrupt holds the work."""
+
+SUMMARY_BUDGET = "summary_budget"
+"""The refusal of a summary step once a budget dimension (less the reserve) is spent."""
+
+
+def summary_refusal(view: StopView, ref: InstanceRef) -> str | None:
+    """Whether the run and Task limits approve a summary step before ``ref``'s turn (ADR-P08 D7).
+
+    A summary is a model call that spends budget, so it is judged like a turn, on the same
+    log: refused ``summary_held`` while the hold predicate holds the run or the instance
+    (a pending stop, an open interrupt), and ``summary_budget`` once the meter with the
+    finalization reserve held back reports a spent dimension. None approves. Pure; the
+    turn itself was authorised by a CONTINUE, which already passed the turn limit.
+    """
+    log = view.log
+    if holds.hold_reason(log, RunScope(ref.run)) is not None:
+        return SUMMARY_HELD
+    if holds.hold_reason(log, ref) is not None:
+        return SUMMARY_HELD
+    spent = held_back(log, view.tree, ref.run, meter(log, ref.run, budget=view.budget))
+    if spent.exhausted():
+        return SUMMARY_BUDGET
+    return None

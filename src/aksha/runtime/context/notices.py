@@ -79,7 +79,10 @@ def recite(
     stale_list = list(stale)
     if stale_list:
         lines += ["Out of date since you read them:"]
-        lines += [f"- {s.read.id}@{s.read.version} is now {s.now}" for s in stale_list]
+        lines += [
+            f"- {s.read.id}@{s.read.version} is now {s.now if s.now is not None else 'gone'}"
+            for s in stale_list
+        ]
     lines.append(
         f"{len(hidden)} earlier tool results are hidden above to save space; "
         "repeat a call to see its result again."
@@ -102,6 +105,9 @@ def change_notice(
         if str(s.now) in seen:
             continue
         seen.add(str(s.now))
+        if s.now is None:
+            lines.append(f"- {s.read.id}@{s.read.version} is gone: its writer was withdrawn")
+            continue
         now = version(view, s.now, blobs=blobs)
         if now is None:
             continue

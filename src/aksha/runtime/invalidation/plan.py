@@ -24,7 +24,11 @@ from __future__ import annotations
 
 from aksha.runtime.artifacts.types import WriterId
 from aksha.runtime.invalidation.types import RebuildEntry, RebuildMode, VersionState
-from aksha.runtime.invalidation.view import HUMAN_ORIGINS, InvalidationView
+from aksha.runtime.invalidation.view import HUMAN_ORIGINS, InvalidationView, invalidation_view
+from aksha.runtime.projections.view import LogView
+
+_CHANGES = frozenset({"source.changed", "query.reexecuted", "task.withdrawn"})
+"""The facts that can make a read ``moved`` or ``gone`` besides a newer artifact version."""
 
 
 def rebuild_plan(iv: InvalidationView) -> tuple[RebuildEntry, ...]:
@@ -48,6 +52,27 @@ def rebuild_plan(iv: InvalidationView) -> tuple[RebuildEntry, ...]:
             )
         )
     return tuple(out)
+
+
+def may_invalidate(view: LogView) -> bool:
+    """Whether anything in ``view`` can have invalidated a version: a cheap guard.
+
+    Nothing is invalidated in a log with no source change, re-executed query or
+    withdrawal and no second version of any slot, so the plan is empty without walking.
+    """
+    for e in view.events:
+        if e.type in _CHANGES:
+            return True
+        if e.type == "artifact.saved" and not str(e.payload.get("ref", "")).endswith("@v1"):
+            return True
+    return False
+
+
+def plan_of(view: LogView) -> tuple[RebuildEntry, ...]:
+    """The rebuild plan of the owner's log as it stands (recomputed at every call, D7)."""
+    if not may_invalidate(view):
+        return ()
+    return rebuild_plan(invalidation_view(view))
 
 
 def mode_of(state: VersionState) -> RebuildMode:

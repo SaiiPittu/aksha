@@ -2,7 +2,8 @@
 
 1. :func:`summary_through` decides, purely from the masking plan, the log and the policy,
    whether a summary is due and through which turn: the context after masking is still
-   above ``trigger_chars`` (or over the limit), the instance has used fewer than
+   above the summary trigger (``trigger_chars``, by default the high watermark) or over
+   the limit, the instance has used fewer than
    ``max_per_instance`` summary steps (a failed one counts too), none started for this
    turn yet, and there
    are whole turns older than the newest ``keep_recent_pairs`` pairs that no earlier
@@ -92,7 +93,7 @@ def summary_through(
     s = policy.summary
     if s is None or step.instance is None:
         return None
-    if plan.final_chars <= s.trigger_chars and not plan.over_limit:
+    if plan.final_chars <= s.trigger(policy) and not plan.over_limit:
         return None
     done = _compacted(view, step.run, step.instance)
     tried = summary_attempts(view, step.run, step.instance)

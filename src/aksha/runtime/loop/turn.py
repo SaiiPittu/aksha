@@ -7,7 +7,8 @@ made through the durable step executor:
    as it stood before the turn's first step, so a resumed turn prepares the same request:
    brief lines for the context, and a tool narrowing the registry and the gate apply.
 2. The context (ADR-P08 ``prepare_context``): masking, and a recorded summary step when
-   one is due. Over the hard limit nothing is sent and the turn ends ``context_overflow``.
+   one is due and stop-policy evaluation's ``summary_refusal`` approves it (D7). Over the
+   hard limit nothing is sent and the turn ends ``context_overflow``.
 3. The model step ``tNN`` through the Task's generation alias, its ``args_hash`` the
    context hash (ADR-P07): a resumed turn returns the recorded reply, and a rebuilt
    context that hashes differently raises ``StepMismatch``, which ends the turn ``fault``
@@ -34,6 +35,7 @@ from aksha.runtime.loop.classify import is_malformed, overflow_end, recorded_tur
 from aksha.runtime.loop.types import STEP_MISMATCH, LoopSetup, TurnEnd
 from aksha.runtime.models.steps import generation_step
 from aksha.runtime.projections.view import LogView
+from aksha.runtime.stop_policy.evaluation import summary_refusal
 from aksha.runtime.stop_policy.stack import narrowing_of, prep_for
 from aksha.runtime.stop_policy.types import StopView
 from aksha.runtime.tasks.types import InstanceRef
@@ -64,6 +66,7 @@ def run_turn(
             setup.store, setup.owner, executor, setup.table, setup.tree, ref, turn=turn,
             inputs=setup.inputs(ref), prep=replace(prep, tools=None), policy=setup.policy(),
             tools=tools, kinds=setup.kinds, alias=GENERATE, blobs=setup.blobs,
+            approve_summary=lambda log: summary_refusal(stop_view(setup, ref.run, log), ref),
         )  # fmt: skip
         context = prepared.context
         if isinstance(context, ContextOverLimit):

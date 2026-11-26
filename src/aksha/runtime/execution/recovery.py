@@ -36,15 +36,22 @@ open run (and every owner the caller names), in ADR-P02 D5's fixed order:
    (``router.Router.route_check``) routes every message left with no decision and no
    route question, from the recorded classification when its step completed, again when
    it only started. Without one, nothing is routed.
+8. Open the rebuild runs the log now calls for (ADR-P05 D8): a ``RebuildCheck`` the
+   composition root passes (``invalidation.rebuild.open_rebuild_runs`` with the owner's
+   ID source) opens one ``run.started{cause: rebuild}`` per agent and set of runnable
+   work (U9), after the source check recorded what moved and after the runs above were
+   classified, so a held or stopped agent gets none. Without one, nothing is opened.
 
 The report lists, per owner, the steps closed unknown, the runs ended, the outbox keys
-reconciled, and every ``effects_unknown`` step of an open run (a step the kill boundary
-ended after its effects were authorised, ADR-P18 D6), which is how such a step is reported
+reconciled, the rebuild runs opened, and every ``effects_unknown`` step of an open run (a
+step the kill boundary ended after its effects were authorised, ADR-P18 D6), which is how
+such a step is reported
 until the interrupt for ``on_unknown="interrupt"`` (P17) is built.
 
 ``resume_owner`` drains one owner's in-flight runs (D10: lazily, before that owner's next
-mutating command or on ``aksha resume``). It recovers the owner again first (all six
-steps above). Each resume then writes a resume record, the stop decision
+mutating command or on ``aksha resume``). It recovers the owner again first (all eight
+steps above), then drives each rebuild run recovery opened, with no resume record: a new
+run has no turn to re-authorise. Each resume then writes a resume record, the stop decision
 ``stop.decided{cause: resume}`` (D7), judged by the restart limit (D8, ADR-P14 S2): with
 ``restart_limit`` resumes already recorded since the run's last progress (a completed tool
 step or a saved artifact), the record is STOP and the run ends ``failed, restart_limit``
@@ -58,16 +65,15 @@ ADR-P16 D6), so a stop committed since recovery holds the run too. When the driv
 returns, the end of its turn is a stop candidate: a stop it reached is honoured there
 (``run.ended{stopped}``).
 
-Not built yet (slice-2 cuts):
+Not built yet:
 
-1. ``RecoveryReport.prior_exit`` and ``rebuild_runs`` (rebuild runs are opened by
-   ``invalidation.rebuild.open_rebuild_runs`` after recovery); ``recovery.completed``
-   (U7); ``replay_check`` (D11).
+1. ``RecoveryReport.prior_exit``; ``recovery.completed`` (U7); ``replay_check`` (D11).
 2. Taking the lock and checking the schema version is the storage adapter's open, not a
    step here.
-3. The rest of the stop-policy evaluation a resume record can hand over to (ADR-P16), and
-   relabelling a lost turn end.
-4. ``suspended_with_rebuilds`` (S1), which needs the invalidation view (P05).
+3. Relabelling a lost turn end.
+4. ``suspended_with_rebuilds`` (S1): decision 27 left it for later. A suspended run's
+   invalidated work is rebuilt once the run ends (step 8 opens no run for an agent with an
+   open run).
 5. The automatic-start limit: ``budgets.limits.auto_start_allowed`` exists, but
    ``resume_owner`` does not ask it before a resume record, although a resume record is an
    automatic start under ADR-P14 D7.
@@ -75,8 +81,8 @@ Not built yet (slice-2 cuts):
    work is a command's outbox entry (a handoff) is recovered on startup only when the
    caller names it, and otherwise by ``resume_owner`` before its next command.
 
-``interrupt.raised``/``interrupt.resolved`` (P17) are read by name; no core type declares
-them yet, so the suspended class is reached only from a stand-in type.
+Interrupts (ADR-P17) are read through ``interrupts.reducers.pending_interrupts``: an open
+interrupt other than a diff review classifies a run ``suspended``.
 """
 
 from __future__ import annotations
@@ -238,6 +244,7 @@ class OwnerRecovery:
     effects_unknown: tuple[str, ...] = ()
     sources_moved: tuple[str, ...] = ()
     routed: tuple[str, ...] = ()
+    rebuild_runs: tuple[str, ...] = ()
 
 
 SourceCheck = Callable[[EventStore, str], tuple[str, ...]]
@@ -245,6 +252,9 @@ SourceCheck = Callable[[EventStore, str], tuple[str, ...]]
 
 RouteCheck = Callable[[EventStore, str], tuple[str, ...]]
 """Recovery's route settling for one owner (ADR-P23 D2): routes, returns the message IDs."""
+
+RebuildCheck = Callable[[EventStore, str], tuple[str, ...]]
+"""Recovery's rebuild opening for one owner (ADR-P05 D8): opens runs, returns their IDs."""
 
 
 @dataclass(frozen=True)
@@ -287,11 +297,13 @@ def recover_owner(
     outbox: OutboxWorker | None = None,
     source_check: SourceCheck | None = None,
     route_check: RouteCheck | None = None,
+    rebuild_check: RebuildCheck | None = None,
 ) -> OwnerRecovery:
-    """Steps 1 to 7 of the module docstring for one owner. ``loaded``: agent to hash.
+    """Steps 1 to 8 of the module docstring for one owner. ``loaded``: agent to hash.
 
     ``outbox`` is the owner's outbox worker; it may be None only when the owner has no
-    outbox entry left to finish. ``source_check`` is step 2; ``route_check`` is step 7.
+    outbox entry left to finish. ``source_check`` is step 2; ``route_check`` is step 7;
+    ``rebuild_check`` is step 8.
     """
     if not store.is_writer:
         raise NotRecoveryWriter(message="recovery needs the writer's store handle")
@@ -330,9 +342,10 @@ def recover_owner(
             in_flight.append(run)
     unknown = effects_unknown_steps(view, open_runs(rebuild(RUNS, load_view(store, owner))))
     routed = () if route_check is None else route_check(store, owner)
+    opened = () if rebuild_check is None else rebuild_check(store, owner)
     return OwnerRecovery(
         owner, tuple(closed), tuple(ended), tuple(suspended), tuple(in_flight), tuple(held),
-        reconciled, unknown, moved, routed,
+        reconciled, unknown, moved, routed, opened,
     )  # fmt: skip
 
 
@@ -366,6 +379,7 @@ def recover_on_startup(
     owners: Iterable[str] = (),
     source_check: SourceCheck | None = None,
     route_check: RouteCheck | None = None,
+    rebuild_check: RebuildCheck | None = None,
 ) -> RecoveryReport:
     """Recover every owner with an open run, and ``owners``; drive nothing (D10).
 
@@ -386,6 +400,7 @@ def recover_on_startup(
                 outbox=None if outbox is None else outbox(o),
                 source_check=source_check,
                 route_check=route_check,
+                rebuild_check=rebuild_check,
             )
             for o in every
         )
@@ -401,19 +416,32 @@ def resume_owner(
     loaded: Mapping[str, str],
     limits: Limits = DEFAULT_LIMITS,
     outbox: OutboxWorker | None = None,
+    source_check: SourceCheck | None = None,
+    rebuild_check: RebuildCheck | None = None,
 ) -> tuple[str, ...]:
     """Recover ``owner`` again, then resume each of its in-flight runs; return the runs driven.
+
+    ``source_check`` and ``rebuild_check`` are recovery's steps 2 and 8; each rebuild run
+    step 8 opened is driven after the in-flight runs, with no resume record.
 
     Called before the owner's next mutating command and by ``aksha resume``. A run the
     recovery ends or holds is never driven; a run past its restart limit is ended
     ``failed, restart_limit`` by its resume record and not driven either. ``outbox`` is
     the owner's outbox worker, for recovery and for the resumed runs' effectful steps.
     """
-    report = recover_owner(store, owner, loaded, outbox=outbox)
+    report = recover_owner(store, owner, loaded, outbox=outbox, source_check=source_check,
+                           rebuild_check=rebuild_check)  # fmt: skip
     driven: list[str] = []
     for run in report.in_flight:
         if not _resume_record(store, owner, run, limits):
             continue
+        runs = rebuild(RUNS, load_view(store, owner))
+        steps = StepExecutor(store, owner, clock, outbox=outbox)
+        driver(runs[run], steps)
+        steps.drain_late()
+        honour_stop(store, owner, run, TURN_END)
+        driven.append(run)
+    for run in report.rebuild_runs:
         runs = rebuild(RUNS, load_view(store, owner))
         steps = StepExecutor(store, owner, clock, outbox=outbox)
         driver(runs[run], steps)

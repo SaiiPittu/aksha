@@ -59,7 +59,8 @@ def test_is_supervisor_needs_children_and_wakes_on_or_a_brief() -> None:
 def test_a_wake_event_since_its_last_turn_gives_a_turn() -> None:
     tree, log = tree_with(), TaskLog()
     entered(log, tree)
-    log.add("source.changed", {"records": {}})
+    log.add("source.changed", {"source_version": 1, "cause": "command", "sources": {},
+                               "records": {}})  # fmt: skip
     assert step(log, tree) == SupervisorMove("turn", "wake")
     log.decided("continue", instance="lead", turn=1)
     assert step(log, tree).move == "push"

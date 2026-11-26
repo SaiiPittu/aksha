@@ -42,12 +42,15 @@ from aksha.runtime.stop_policy.types import (
     Verdict,
 )
 from aksha.runtime.tasks.completion import evaluate_in, evaluated_fact
+from aksha.runtime.tasks.rebuilds import rebuild_targets
 from aksha.runtime.tasks.scheduler import (
     enter,
+    reentry,
     run_outcome,
     runnable_below,
     runnable_in,
     withdrawals,
+    writer_of,
 )
 from aksha.runtime.tasks.status import RunState, run_state
 from aksha.runtime.tasks.supervisor import is_supervisor, supervisor_step
@@ -182,6 +185,12 @@ class TaskPolicy:
         node = view.tree.node(ref.task_path)
         state = run_state(view.log, view.tree, ref.run)
         status = state.status(ref)
+        entering = c.kind == "enter" and status in ("new", "done", "blocked")
+        if entering and ref in rebuild_targets(view.log, view.tree, ref.run):  # P05 D7, D8
+            facts = reentry(view.log, view.tree, ref.run, writer_of(view.tree, ref))
+            if node.is_leaf:
+                return Verdict("continue", node.task.brief or "", facts=facts)
+            return Verdict("pass", facts=facts)
         if status in SETTLED:
             return PASS
         if c.kind == "enter" and status == "new":

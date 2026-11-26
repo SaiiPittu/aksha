@@ -23,7 +23,7 @@ BASE = ContextPolicy(masking=True)
         replace(BASE, low_water_chars=40_000),
         replace(BASE, keep_recent_pairs=4),
         replace(BASE, exempt_tools=frozenset({"recall"})),
-        replace(BASE, summary=SummaryPolicy()),
+        replace(BASE, summary=None),
         replace(BASE, summary=SummaryPolicy(max_per_instance=5)),
     ],
 )

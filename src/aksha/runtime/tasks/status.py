@@ -12,6 +12,7 @@ Fact (envelope ``run`` and ``instance``)  Moves the instance to
 ``completion_check.reset``              ``running`` again after a block
 ``task.withdrawn``                      ``withdrawn``; ``new`` once its key returns (S3)
 ``interrupt.raised`` (open)             ``suspended`` while the instance is running
+                                        (never a diff review: F2)
 ======================================  ==================================================
 
 An instance whose key is not in its key source now is ``withdrawn`` whatever its facts
@@ -36,7 +37,7 @@ from types import MappingProxyType
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.finalization.state import finalizing
 from aksha.runtime.finalization.types import Finalizing
-from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED
+from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED, detached
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import run_check
 from aksha.runtime.tasks.keys import keys_of
@@ -203,7 +204,8 @@ def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
         elif e.instance is None:
             continue
         elif e.type == INTERRUPT_RAISED:
-            raised[str(e.payload.get("interrupt", e.step or ""))] = e.instance
+            if not detached(e.payload.get("kind")):  # a diff review suspends no one (F2)
+                raised[str(e.payload.get("interrupt", e.step or ""))] = e.instance
             continue
         else:
             mark = lifecycle_mark(e.type, None)

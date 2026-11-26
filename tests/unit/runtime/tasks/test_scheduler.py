@@ -134,8 +134,10 @@ def test_a_pending_review_of_a_read_kind_holds_the_reader_not_the_writer() -> No
     log.save("item", "C1", {"v": 1})
     log.save("item", "C1", {"v": 2})
     log.add(
-        "interrupt.raised", {"interrupt": "I-9", "kind": "review", "revision": "demo.item/C1@v2"}
-    )
+        "interrupt.raised",
+        {"interrupt": "I-9", "kind": "review", "old": "demo.item/C1@v1",
+         "revision": "demo.item/C1@v2", "card_hash": "sha256:0"},
+    )  # fmt: skip
     assert ids(runnable(log.view(), tree, RUN)) == []  # compare[C1] reads item/C1
     log.add("review.accepted", {"interrupt": "I-9", "revision": "demo.item/C1@v2"})
     assert ids(runnable(log.view(), tree, RUN)) == ["compare[C1]"]
@@ -146,7 +148,11 @@ def test_a_writer_is_never_held_by_its_own_pending_review() -> None:
     log = TaskLog()
     log.save("x", None, {"v": 1})
     log.save("x", None, {"v": 2})
-    log.add("interrupt.raised", {"interrupt": "I-9", "kind": "review", "revision": "demo.x@v2"})
+    log.add(
+        "interrupt.raised",
+        {"interrupt": "I-9", "kind": "review", "old": "demo.x@v1", "revision": "demo.x@v2",
+         "card_hash": "sha256:0"},
+    )  # fmt: skip
     assert ids(runnable(log.view(), tree, RUN)) == ["w"]
 
 

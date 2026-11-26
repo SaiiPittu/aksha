@@ -15,7 +15,11 @@ facts it returns commit in that stop decision (U3). The rules:
 3. A keyed Task taken as a whole (what a sibling's ``needs`` waits on) is done when every
    current key's instance is done, under the same partial rule; ``keys_pending`` while its
    key source has no record yet.
-4. A failing check on a finish request is a veto: its message is the next turn's runtime
+4. F2 (ADR-P05, decision 34): an instance is not done while the rebuild plan lists its
+   writer's version as runnable for its run (``rebuild_pending``, before its own check),
+   so a finish with the old version still in place is a veto. A writer that saved a
+   pending revision is done: the plan skips a version under review.
+5. A failing check on a finish request is a veto: its message is the next turn's runtime
    message. The ``max_finish_vetoes``-th failing finish since the instance was last entered
    (or reset) is FAIL instead, and the instance becomes ``blocked``. ``check_raised`` and
    ``child_blocked`` are FAIL at once: another turn cannot clear them.
@@ -30,6 +34,7 @@ from aksha.runtime.budgets.limits import vetoes_since_entry
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import check_name, run_check
+from aksha.runtime.tasks.rebuilds import rebuild_targets
 from aksha.runtime.tasks.status import CHECK_EVALUATED, CHECK_RESET, RunState, run_state
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import (
@@ -90,6 +95,12 @@ def evaluate_in(state: RunState, ref: InstanceRef) -> Evaluation:
 
 
 def _own(state: RunState, ref: InstanceRef) -> Evaluation:
+    if ref in rebuild_targets(state.view, state.tree, ref.run):
+        return Evaluation(
+            ref.instance, ok=False, code="rebuild_pending",
+            message="an input of your saved version changed: save it again from the "
+            "current inputs",
+        )  # fmt: skip
     check = state.tree.node(ref.task_path).task.done
     if check is None:
         return Evaluation(ref.instance, ok=True)

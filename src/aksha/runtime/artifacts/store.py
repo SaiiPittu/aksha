@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Collection, Iterable, Mapping
+from types import MappingProxyType
 from typing import Any, Literal
 
 from jsonschema import Draft202012Validator
@@ -140,6 +141,15 @@ class ArtifactStore:
         self._blobs = blobs
 
     # --- readers ---------------------------------------------------------------------
+
+    @property
+    def kinds(self) -> Mapping[str, ArtifactKind]:
+        """The declared kinds by full name."""
+        return MappingProxyType(self._kinds)
+
+    def kind_name(self, name: str, agent: str) -> str:
+        """The full name a save of ``name`` by ``agent`` resolves to."""
+        return _resolve_name(name, agent)
 
     def latest(self, view: LogView, kind: str, key: str | None) -> ArtifactVersion | None:
         """The slot's newest version."""

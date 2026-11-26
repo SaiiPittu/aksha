@@ -16,8 +16,11 @@ listed them. For each position ``tNN/cMM``:
    =========  ================================================================
    Route      What runs
    =========  ================================================================
-   dispatch   the body (read, store and exec tools), its saves through the one
-              save path, the capped model view, any span drafts minted
+   dispatch   the body (read, store and exec tools), the reads it declares
+              (``Ok.reads``), its saves through the one save path with what they
+              confirm (``invalidation.saving``: a diff review for a rebuilt
+              human-reviewed version, revocations and review voids, ADR-P05 D1,
+              D9), the capped model view, any span drafts minted
    reserved   ``finish`` (signal ``finish``) or ``ask`` (``interrupt.raised``)
    approval   a granted approval of this exact action runs it through the
               outbox; otherwise ``approval.requested`` and its interrupt
@@ -35,7 +38,8 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
-from aksha.runtime.artifacts.types import WriterId
+from aksha.runtime.artifacts.lineage import reads_to_record
+from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
@@ -56,6 +60,7 @@ from aksha.runtime.interrupts.approvals import (
 )
 from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
+from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
 from aksha.runtime.loop.types import SIGNAL_FIELD, LoopSetup, PositionOutcome, Signal, skip_code
 from aksha.runtime.models.types import ToolCall as ReplyCall
@@ -234,6 +239,11 @@ def _dispatched(
     view = setup.view()
     events: list[NewEvent] = []
     rows: list[ArtifactRow] = []
+    saved_versions: list[ArtifactVersion] = []
+    read = outcome.result.reads if isinstance(outcome.result, Ok) else ()
+    if read:
+        events.extend(reads_to_record(view, read, run=ref.run, instance=ref.instance,
+                                      step=str(step)))  # fmt: skip
     if outcome.saves:
         store = setup.artifacts
         if store is None:
@@ -243,16 +253,28 @@ def _dispatched(
         writes = frozenset(setup.tree.kind(w) for w in task.writes)
         writer = WriterId(setup.agent.name, ref.task_path, ref.key)
         for request in outcome.saves:
+            name = store.kind_name(request.kind, writer.agent)
             try:
                 saved = store.save(
                     view, request, writer=writer, run=ref.run, instance=ref.instance,
-                    step=str(step), writes=writes,
+                    step=str(step), writes=writes, pending_reads=read,
+                    origin=save_origin(view, name, request.key),
                 )  # fmt: skip
             except SaveRefused as refused:
                 err = Err(refused.code, refused.message, paths=(refused.path,))
                 return _shown(ToolOutcome(err), cap)
             events.extend(saved.events)
             rows.extend(saved.rows)
+            if not saved.replayed:
+                saved_versions.append(saved.version)
+        numbers = iter(range(highest(view.events, "I") + 1, 10**6))
+        events.extend(
+            step_confirmations(
+                view, events, rows, saved_versions, store.kinds,
+                lambda: f"I-{next(numbers):04d}",
+                run=ref.run, instance=ref.instance, step=str(step),
+            )
+        )  # fmt: skip
     try:
         minted = mint_for_result(
             outcome, (), spec=spec, index=span_index(view), run=ref.run,

@@ -340,3 +340,22 @@ def test_long_session_resume_spends_no_recorded_model_call(make: Any) -> None:
     assert len(model.requests) - asked == 61
     assert b.ended()["outcome"] == "complete"
     assert len(b.bodies.calls) == 199
+
+
+def test_summary_refusal_reads_the_budget_and_the_holds(make: Any) -> None:
+    """ADR-P08 D7: a summary step is approved by the run's limits, judged on the log."""
+    from aksha.runtime.cancellation.command import stop
+    from aksha.runtime.loop.turn import stop_view
+    from aksha.runtime.stop_policy.evaluation import SUMMARY_BUDGET, SUMMARY_HELD, summary_refusal
+
+    model = Recorder([tools_reply(call("read_file", path="a.py")), finish_reply()])
+    b = make(model, budget={"model_turns": 1, "tool_calls": 1_000, "active_ms": 10**9})
+    assert summary_refusal(stop_view(b.setup, RUN), EDIT) is None
+    b.drive()  # one turn spends the only model turn; the budget interrupt holds the run
+    assert summary_refusal(stop_view(b.setup, RUN), EDIT) == SUMMARY_HELD
+    (reached,) = b.events("budget.reached")
+    spent = b.view().upto(reached.seq - 1)  # spent, before the interrupt was raised
+    assert summary_refusal(stop_view(b.setup, RUN, spent), EDIT) == SUMMARY_BUDGET
+    other = make(Recorder([finish_reply()]))
+    stop(other.store, OWNER, RUN)
+    assert summary_refusal(stop_view(other.setup, RUN), EDIT) == SUMMARY_HELD

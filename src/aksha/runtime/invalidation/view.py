@@ -124,6 +124,33 @@ def runs_for(view: LogView) -> Mapping[str, frozenset[str]]:
     return MappingProxyType(out)
 
 
+def withdrawn_writers(view: LogView) -> frozenset[WriterId]:
+    """The writer keys whose last lifecycle fact is a ``task.withdrawn`` (S3, ADR-P15 D3).
+
+    A writer key names one instance in every run of its agent, so the last of its
+    ``task.entered`` (which names the writer) and ``task.withdrawn`` (which names the Task
+    path and key; the agent is the run's) decides, across runs: a key that came back and
+    was entered again is no longer withdrawn.
+    """
+    agents: dict[str, str] = {}
+    last: dict[WriterId, bool] = {}
+    for e in view.events:
+        if e.type == "run.started" and e.run is not None:
+            agents[e.run] = str(e.payload.get("agent", ""))
+        elif e.type == "task.entered":
+            w = e.payload.get("writer")
+            if isinstance(w, Mapping):
+                last[WriterId(str(w["agent"]), str(w["task_path"]), _key(w.get("key")))] = False
+        elif e.type == "task.withdrawn" and e.run in agents:
+            p = e.payload
+            last[WriterId(agents[e.run], str(p["task"]), _key(p.get("key")))] = True
+    return frozenset(w for w, gone in last.items() if gone)
+
+
+def _key(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
 def invalidation_view(
     view: LogView,
     *,
@@ -132,10 +159,12 @@ def invalidation_view(
 ) -> InvalidationView:
     """The invalidation view of ``view`` (module doc). Pure.
 
-    ``withdrawn`` are writer instances the scheduler withdrew (S3; ADR-P15 records them
-    once it is built): their versions read as ``gone``.
+    The withdrawn writers (S3) are read from the log's ``task.withdrawn`` facts
+    (:func:`withdrawn_writers`); ``withdrawn`` adds more, for a caller that knows of a
+    withdrawal not yet committed. Their versions read as ``gone``.
     """
-    return _Walk(view, frozenset(withdrawn), blobs).run()
+    every = withdrawn_writers(view) | frozenset(withdrawn)
+    return _Walk(view, every, blobs).run()
 
 
 class _Walk:
@@ -258,6 +287,10 @@ class _Walk:
 
     def read_state(self, reader: ArtifactVersion, read: InputRef) -> tuple[ReadStatus, str | None]:
         """One read's status, and the ref it waits on when unsettled."""
+        return self.read_state_for(self.line(reader), read)
+
+    def read_state_for(self, mine: frozenset[str], read: InputRef) -> tuple[ReadStatus, str | None]:
+        """One read's status for a reader written for the runs ``mine`` (rules 1 to 4)."""
         if read.kind == "record":
             return self._versioned(read, self.facts.records), None
         if read.kind == "query":
@@ -268,7 +301,7 @@ class _Walk:
         target = self.by_ref.get(str(whole))
         if target is None or target.writer in self.withdrawn:
             return ReadStatus(read, "gone"), None
-        newest = self.newest_counting(reader, target)
+        newest = self.newest_counting(mine, target)
         if newest is None:
             if self.stale(target):
                 return ReadStatus(read, "unsettled"), str(target.ref)
@@ -281,10 +314,10 @@ class _Walk:
         return ReadStatus(read, "equivalent", now), None
 
     def newest_counting(
-        self, reader: ArtifactVersion, target: ArtifactVersion
+        self, reader_line: frozenset[str], target: ArtifactVersion
     ) -> ArtifactVersion | None:
-        """The slot's newest version after ``target`` that counts for ``reader`` (rule 3)."""
-        mine = self.line(reader) | self.line(target)
+        """The slot's newest version after ``target`` that counts for the reader (rule 3)."""
+        mine = reader_line | self.line(target)
         later = [
             n
             for n in self.slots.get(target.ref.slot(), ())
@@ -300,6 +333,32 @@ class _Walk:
         if now is None:
             return ReadStatus(read, "gone")
         return ReadStatus(read, "same" if now == read.version else "moved", now)
+
+
+class ReadChecker:
+    """The state of a read an instance made, by the view's own rules (2 to 4 and S1, S3).
+
+    The context (ADR-P08, decision 32) asks it which of a tool result's reads went out of
+    date, so masking and invalidation agree: a sibling's newer version (another run's
+    line) moves nothing, an equal rebuild is ``equivalent`` (early cutoff) and not
+    announced, and a withdrawn writer's version is ``gone``. Build one per view; it
+    evaluates each version at most once.
+    """
+
+    def __init__(
+        self, view: LogView, *, withdrawn: Iterable[WriterId] = (), blobs: BlobStore | None = None
+    ) -> None:
+        """Check reads against ``view`` (withdrawn writers read from it, plus ``withdrawn``)."""
+        self._walk = _Walk(view, withdrawn_writers(view) | frozenset(withdrawn), blobs)
+
+    def status(self, run: str, read: InputRef) -> ReadStatus:
+        """The state of ``read`` for an instance of ``run`` (its line: S1)."""
+        mine = self._walk.lines.get(run, frozenset({run}))
+        return self._walk.read_state_for(mine, read)[0]
+
+    def version(self, ref: str) -> ArtifactVersion | None:
+        """The stored version ``ref`` names, accepted or not."""
+        return self._walk.by_ref.get(ref)
 
 
 def _equal(read: InputRef, old: ArtifactVersion, new: ArtifactVersion) -> bool:

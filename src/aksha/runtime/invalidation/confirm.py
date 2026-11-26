@@ -5,9 +5,10 @@ different), and in the transaction that confirmed it, so a change that comes out
 revokes nothing. The confirming transaction is a source change (U8), a step result that
 saved a rebuilt version (U2) or a person's acceptance (U4). The caller hands
 :func:`confirmations` the events it is about to commit; it projects the log as it will be
-after them and returns the ``approval.revoked`` facts, and an ``interrupt.voided`` for
-every open diff review whose pending revision went stale (``revision_invalidated``), to
-append in the same boundary. Pure.
+after them and returns the ``approval.revoked`` facts (for a grant, and for a request no
+person has decided yet, whose interrupt is voided ``target_invalidated`` with it), and an
+``interrupt.voided`` for every open diff review whose pending revision went stale
+(``revision_invalidated``), to append in the same boundary. Pure.
 """
 
 from __future__ import annotations
@@ -24,6 +25,9 @@ from aksha.runtime.storage.rows import ArtifactRow, StoredArtifact
 
 REVISION_INVALIDATED = "revision_invalidated"
 """The ``interrupt.voided`` reason of a diff review whose pending revision went stale."""
+
+TARGET_INVALIDATED = "target_invalidated"
+"""The ``interrupt.voided`` reason of an approval request whose target was invalidated."""
 
 
 def after(view: LogView, events: Sequence[NewEvent], rows: Sequence[ArtifactRow] = ()) -> LogView:
@@ -73,17 +77,26 @@ def confirmations(
 
 
 def revocations(view: LogView, iv: InvalidationView) -> tuple[NewEvent, ...]:
-    """``approval.revoked`` for each live approval with an invalidated target; never a used one."""
+    """``approval.revoked`` for each live approval with an invalidated target; never a used one.
+
+    Live is ``granted`` or ``requested`` in ADR-P17's reducer. A request is revoked too,
+    with an ``interrupt.voided{target_invalidated}`` for its interrupt (they share one ID),
+    so no approval request stays live on an invalidated target (D9) and its open interrupt
+    stops holding the instance that asked (ADR-P16 S1).
+    """
     out: list[NewEvent] = []
     for a in approvals(view):
-        if a.revoked or a.used:
+        if a.state not in ("granted", "requested"):
             continue
         for target in a.targets:
             state = iv.versions.get(target)
             if state is not None and state.freshness == "invalidated":
                 moved = [r.input.as_json() for r in state.changed_reads()]
                 payload = {"approval": a.approval, "target": target, "moved": moved}
-                out.append(NewEvent("approval.revoked", payload))
+                out.append(NewEvent("approval.revoked", payload, run=a.run, instance=a.instance))
+                if a.requested:
+                    voided = {"interrupt": a.approval, "reason": TARGET_INVALIDATED}
+                    out.append(NewEvent("interrupt.voided", voided, run=a.run, instance=a.instance))
                 break
     return tuple(out)
 

@@ -99,5 +99,5 @@ class Agent:
     fakes: str = "fakes"
     phrases: str | None = "phrases.json"
     extensions: tuple[str, ...] = ()
-    requires_api: str = ">=1.0,<2"
+    requires_api: str = ">=2.0,<3"
     concurrency: int = 1

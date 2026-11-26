@@ -22,9 +22,8 @@ from aksha.runtime.invalidation.commands import (
     check_sources,
 )
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable, writer_has_rebuild
-from aksha.runtime.invalidation.rebuild import open_rebuild_runs, rebuild_brief
+from aksha.runtime.invalidation.rebuild import open_rebuild_runs, rebuild_brief, rebuild_key
 from aksha.runtime.invalidation.reviews import open_reviews
-from aksha.runtime.projections.view import load_view
 from aksha.runtime.storage.ports import EventStore
 from tests.support.invalidation import (
     OWNER,
@@ -86,7 +85,9 @@ def test_s6_change_and_recovery(bench: Bench) -> None:
     (run,) = open_rebuild_runs(b.store, OWNER, b.ids)
     started = b.events()[-1]
     assert started.payload["for_runs"] == ("R-0001",)
-    assert started.payload["rebuild_key"] == f"rebuild:{OWNER}/p/1"
+    assert started.payload["rebuild_key"] == rebuild_key(
+        OWNER, "p", 1, ["p.extract/C1@v1", "p.prior/C1@v1"]
+    )
     brief = rebuild_brief(b.view(), iv, plan[0])
     assert brief.current_reads == (record("K-C1", "2"),)
 
@@ -220,34 +221,86 @@ def test_recovery_source_check_records_what_moved(bench: Bench) -> None:
     assert recover_owner(bench.store, OWNER, {}, source_check=check).sources_moved == ()
 
 
+def _rebuild_to_the_form(b: Bench, run: str) -> None:
+    """The demo's steps 1 to 4: C1's chain rebuilt and the selection review accepted."""
+    b.save(run, "p.extract/C1", {"contributors": ["a", "b"]}, reads=[record("K-C1", "2")])
+    b.save(run, "p.prior/C1", {"families": ["A", "E"]}, reads=[query("Q-C1", "h2")])
+    b.save(run, "p.compare/C1", {"rows": [{"id": "F1", "state": "disclosed"}]},
+           reads=[ref("p.prior/C1@v2").as_input()])  # fmt: skip
+    b.save(run, "p.recommend/C1", {"go": True, "closest": "E"},
+           reads=[ref("p.compare/C1@v2").as_input()])  # fmt: skip
+    both = [ref("p.recommend/C1@v2").as_input(), ref("p.recommend/C2@v1").as_input()]
+    b.save(run, "p.table", {"order": ["C2", "C1"]}, reads=both)
+    b.save(run, "p.selection", {"chosen": ["C1", "C2"]}, reads=[ref("p.table@v2").as_input()],
+           writer=SELECT, origin="copy_choice", review="I-0001")  # fmt: skip
+    (card,) = open_reviews(b.view()).values()
+    assert accept_review(b.store, OWNER, "I-0001", card.card_hash, b.ids).accepted
+
+
 def test_crash_during_invalidation(bench: Bench) -> None:
-    """Crash point 8: after a kill mid-rebuild, the invalidated set equals the answer key."""
+    """Crash point 8: a kill after rebuilt saves committed, before the revocation commits.
+
+    Six rebuilt saves and an accepted review have committed. The kill lands on the U2
+    append of the form's rebuild, the step that confirms the packet invalidated and so
+    carries the revocation of A-0001. After it: neither the form's new version nor the
+    revocation exists (one transaction), everything committed before it is still there,
+    and the invalidated set and the plan equal the answer from before the kill. Saving
+    again commits the version and exactly one revocation.
+    """
     source, queries = FakeSource(), FakeQueries()
     change_c1(bench, source, queries)
     (run,) = open_rebuild_runs(bench.store, OWNER, bench.ids)
+    _rebuild_to_the_form(bench, run)
     answer = bench.iv().refs("invalidated")
+    plan = [(str(e.invalidated), e.mode) for e in rebuild_plan(bench.iv())]
+    assert answer == ("p.form/C1@v1",) and plan == [("p.form/C1@v1", "regenerate")]
+    committed = bench.events()
+    inputs = [ref("p.selection@v2").as_input(), ref("p.extract/C1@v2").as_input()]
     real = bench.store
     bench.store = FaultStore(real, die_on=lambda boundary, _: boundary == "U2")  # type: ignore[assignment]
     with pytest.raises(Crash):
-        bench.save(run, "p.extract/C1", {"contributors": ["b"]}, reads=[record("K-C1", "2")])
+        bench.save(run, "p.form/C1", {"names": ["a", "b"]}, reads=inputs)
     bench.store = real
+    after = bench.events()
+    assert after == committed  # nothing of the killed step, all of what came before
+    assert bench.latest("p.form/C1") is not None
+    assert str(bench.latest("p.form/C1").ref) == "p.form/C1@v1"  # type: ignore[union-attr]
+    assert "approval.revoked" not in [e.type for e in after]
     assert bench.iv().refs("invalidated") == answer
-    assert load_view(real, OWNER).seq_read == bench.events()[-1].seq
+    assert [(str(e.invalidated), e.mode) for e in rebuild_plan(bench.iv())] == plan
+    bench.save(run, "p.form/C1", {"names": ["a", "b"]}, reads=inputs)  # the restart's retry
+    revoked = [e for e in bench.events() if e.type == "approval.revoked"]
+    assert [e.payload["approval"] for e in revoked] == ["A-0001"]
+    form = [e for e in bench.events() if e.type == "artifact.saved"
+            and e.payload["ref"] == "p.form/C1@v2"]  # fmt: skip
+    assert len(form) == 1 and revoked[0].seq > form[0].seq
+    between = [e for e in bench.events() if form[0].seq <= e.seq <= revoked[0].seq]
+    assert all(e.step in (form[0].step, None) for e in between)  # one transaction
 
 
 def test_no_rebuild_run_while_held(bench: Bench) -> None:
-    """TC-4: a person's stop of the agent's last run holds every automatic start."""
+    """TC-4: a person's stop of the agent's last run holds every automatic start.
+
+    The plan has runnable work and each entry is held (``rebuild_blocked``), so the
+    audit below is not vacuous: there was work to start, no rebuild run opened, and the
+    audit finds no automatic start recorded while held.
+    """
     from aksha.runtime.cancellation.command import stop
     from aksha.runtime.cancellation.ending import honour_stop
+    from aksha.runtime.cancellation.hold import held_auto_starts
+    from aksha.runtime.stop_policy.hold import rebuild_blocked
 
     bench.start("R-0002")
     stop(bench.store, OWNER, "R-0002")
     honour_stop(bench.store, OWNER, "R-0002", "turn_end")
     change_c1(bench, FakeSource(), FakeQueries())
-    assert rebuild_plan(bench.iv())
+    plan = runnable(rebuild_plan(bench.iv()))
+    assert plan
+    view = bench.view()
+    assert all(rebuild_blocked(view, e) is not None for e in plan)
     assert open_rebuild_runs(bench.store, OWNER, bench.ids) == ()
-    from aksha.runtime.cancellation.hold import held_auto_starts
-
+    assert not [e for e in bench.events() if e.type == "run.started"
+                and e.payload.get("cause") == "rebuild"]  # fmt: skip
     assert held_auto_starts(bench.view()) == ()
 
 

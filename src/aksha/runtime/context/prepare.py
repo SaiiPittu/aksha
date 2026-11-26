@@ -5,7 +5,10 @@
 1. It assembles the context from the log as it stood before this turn's summary step
    started (or now, if none did), so the decision and the summariser's request are the
    same on a restart.
-2. When :func:`summary.summary_through` says a summary is due, it runs the summary step
+2. When :func:`summary.summary_through` says a summary is due, the Task and run limits
+   approve it through stop-policy evaluation (``approve_summary``, D7: the loop passes
+   ``stop_policy.evaluation.summary_refusal``), judged on the same log, so a restart
+   decides the same; a refusal runs no model call. An approved summary runs as the step
    ``<turn>/compact`` on the durable step executor; a recorded step returns its summary
    and calls no model. One summary step per turn at most.
 3. It reads the log again and assembles the turn's context, which now stands the summary
@@ -14,7 +17,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from aksha.runtime.artifacts.ports import BlobStore
@@ -36,20 +39,28 @@ from aksha.runtime.context.types import (
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.models.routing import AliasTable
-from aksha.runtime.projections.view import load_view
+from aksha.runtime.projections.view import LogView, load_view
 from aksha.runtime.stop_policy.types import Prep
 from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tools.types import ToolView
 
+SummaryApproval = Callable[[LogView], str | None]
+"""The stop-policy approval of a summary step (D7): a refusal code, or None to approve."""
+
 
 @dataclass(frozen=True)
 class Prepared:
-    """A turn's context, or why nothing may be sent, and the summary step if one ran."""
+    """A turn's context, or why nothing may be sent, and the summary step if one ran.
+
+    ``summary_refused`` is the approval's refusal code when a summary was due and the
+    limits refused it (no summary step ran).
+    """
 
     context: Assembled | ContextOverLimit
     summary: SummaryOutcome | None = None
+    summary_refused: str | None = None
 
 
 def prepare_context(
@@ -69,6 +80,7 @@ def prepare_context(
     alias: str = GENERATE,
     recovery: bool = False,
     blobs: BlobStore | None = None,
+    approve_summary: SummaryApproval | None = None,
 ) -> Prepared:
     """Turn ``turn``'s context for ``instance``, with a summary step when due (module doc)."""
     step = StepId(instance.run, instance.instance, turn=turn)
@@ -93,6 +105,9 @@ def prepare_context(
     through = summary_through(before, step, turns, plan, policy)
     if through is None:
         return Prepared(build())
+    refused = None if approve_summary is None else approve_summary(before)
+    if refused is not None:
+        return Prepared(build(), None, refused)
     previous = latest_compaction(before, instance.run, instance.instance)
     outcome = summarise(executor, table, step, turns, through, policy, previous)
     return Prepared(build(), outcome)

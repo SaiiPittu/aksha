@@ -1198,6 +1198,7 @@ COMPLETION_CHECK_EVALUATED = EventTypeSpec(
                     "children_pending",
                     "child_blocked",
                     "keys_pending",
+                    "rebuild_pending",
                 ]
             },
             "blockers": {"type": "array", "items": {"type": "string"}},

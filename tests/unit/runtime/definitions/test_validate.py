@@ -329,7 +329,7 @@ def test_the_api_refusal_comes_first(echo: tuple[LoadedExtension, ...], tmp_path
 def test_api_refusals_accept_the_current_version() -> None:
     from aksha.runtime.definitions.validate import api_refusals
 
-    assert api_refusals("m", ">=1.0,<2") == []
+    assert api_refusals("m", ">=2.0,<3") == []
     assert [r.code for r in api_refusals("m", "<1")] == ["api_mismatch"]
 
 

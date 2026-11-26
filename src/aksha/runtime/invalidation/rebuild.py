@@ -10,10 +10,21 @@ own boundary (U9). An agent with an open run regenerates its work in place inste
 2. Agents are opened oldest entry first.
 3. ``for_runs`` names the runs whose invalidated work the run regenerates (S1); its
    versions are written for those runs, which decides whose readers they may move.
-4. ``rebuild_key`` is ``rebuild:{owner}/{agent}/{source_version}``: one rebuild run per
-   agent per source change. Amendment from the build: a ``run.started`` has one dedup
-   template (``rstart:{run}``), so the key is a payload field and the single writer
-   checks it before appending, rather than a second store-enforced key.
+4. ``rebuild_key`` is ``rebuild:{owner}/{agent}/{source_version}/{entries}``, where
+   ``entries`` is a short hash of the invalidated versions the run is opened for: one
+   rebuild run per agent per set of runnable work. Amendment from the build: a
+   ``run.started`` has one dedup template (``rstart:{run}``), so the key is a payload
+   field and the single writer checks it before appending, rather than a second
+   store-enforced key. The entry set is in the key because work can become runnable with
+   no new source change (a reader held behind a review becomes runnable when the review is
+   accepted after the rebuild run ended); a key of the source version alone would never
+   open a run for it. The same set is never opened twice, so a rebuild run that failed
+   or was stopped is not retried in a loop; new work (another change, a person's
+   decision) is a new set.
+6. Headless (decision 26): a rebuild run is headless when a run it rebuilds for was
+   (``for_runs``), and records ``headless`` on its ``run.started`` like any start. A
+   headless start with no available sandbox backend is refused
+   (``policy.headless.headless_start_refusal``): no run is opened for that agent.
 5. Never for held work (TC-4, ``inv.no_auto_start_while_held``, narrowed by ADR-P16 S1):
    each entry asks ``stop_policy.hold.rebuild_blocked``, which holds it while the agent
    is held by a person's stop or the writer's own instance is held. An agent with an open
@@ -25,18 +36,21 @@ Decision 34 chose a fresh context with a rebuild brief for the first milestone;
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 
 from aksha.runtime.artifacts.types import ArtifactRef, InputRef
 from aksha.runtime.artifacts.versions import version
+from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
 from aksha.runtime.invalidation.types import ReadStatus, RebuildBrief, RebuildEntry
 from aksha.runtime.invalidation.view import InvalidationView, invalidation_view
+from aksha.runtime.policy.headless import headless_start_refusal, started_headless
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
 from aksha.runtime.projections.view import LogView, load_view
+from aksha.runtime.sandbox.types import Availability
 from aksha.runtime.stop_policy.hold import rebuild_blocked
 from aksha.runtime.storage.ports import EventStore
 
@@ -44,18 +58,27 @@ REBUILD_BOUNDARY = "U9"
 REBUILD_CAUSE = "rebuild"
 
 
-def rebuild_key(owner: str, agent: str, source_version: int) -> str:
-    """The key of the one rebuild run per agent and source change (D8)."""
-    return f"rebuild:{owner}/{agent}/{source_version}"
+def rebuild_key(owner: str, agent: str, source_version: int, entries: Iterable[str] = ()) -> str:
+    """The key of the one rebuild run per agent and set of runnable work (D8, rule 4)."""
+    work = sha256_hex(sorted(set(entries)))[:12]
+    return f"rebuild:{owner}/{agent}/{source_version}/{work}"
 
 
 def rebuild_starts(
-    view: LogView, ids: IdSource, *, definition_hashes: Mapping[str, str] | None = None
+    view: LogView,
+    ids: IdSource,
+    *,
+    definition_hashes: Mapping[str, str] | None = None,
+    agents: Iterable[str] | None = None,
+    sandbox: Availability | None = None,
 ) -> tuple[NewEvent, ...]:
     """The ``run.started{cause: rebuild}`` facts the owner's log calls for now (module doc).
 
-    Allocates run IDs from ``ids``; appends nothing.
+    Allocates run IDs from ``ids``; appends nothing. ``agents`` limits the opening to
+    those agents (a loop that drives one agent); ``sandbox`` is the sandbox backend's
+    availability, asked for a headless rebuild (rule 6).
     """
+    only = None if agents is None else frozenset(agents)
     iv = invalidation_view(view)
     entries = tuple(e for e in runnable(rebuild_plan(iv)) if rebuild_blocked(view, e) is None)
     if not entries:
@@ -72,16 +95,24 @@ def rebuild_starts(
         by_agent.setdefault(entry.writer.agent, []).append(entry)
     out: list[NewEvent] = []
     for agent, mine in by_agent.items():
-        key = rebuild_key(view.owner, agent, iv.sources.source_version)
+        if only is not None and agent not in only:
+            continue
+        work = [str(e.invalidated) for e in mine]
+        key = rebuild_key(view.owner, agent, iv.sources.source_version, work)
         if agent in busy or key in keys:
             continue
         for_runs = sorted({r for e in mine for r in iv.state(e.invalidated).line})
+        headless = any(started_headless(view, r) for r in for_runs)
+        if headless_start_refusal(headless, sandbox) is not None:
+            continue
         payload: dict[str, object] = {
             "agent": agent,
             "cause": REBUILD_CAUSE,
             "for_runs": for_runs,
             "rebuild_key": key,
         }
+        if headless:
+            payload["headless"] = True
         if definition_hashes and agent in definition_hashes:
             payload["definition_hash"] = definition_hashes[agent]
         out.append(NewEvent("run.started", payload, run=ids.next(view.owner, "R")))
@@ -94,9 +125,18 @@ def open_rebuild_runs(
     ids: IdSource,
     *,
     definition_hashes: Mapping[str, str] | None = None,
+    agents: Iterable[str] | None = None,
+    sandbox: Availability | None = None,
 ) -> tuple[str, ...]:
-    """Open the rebuild runs the owner's log calls for; return their run IDs (module doc)."""
-    starts = rebuild_starts(load_view(store, owner), ids, definition_hashes=definition_hashes)
+    """Open the rebuild runs the owner's log calls for; return their run IDs (module doc).
+
+    Called after every commit that can change the plan: by recovery (its
+    ``rebuild_check``) and by ``loop.drive.drive_rebuilds``, which then drives each run.
+    """
+    starts = rebuild_starts(
+        load_view(store, owner), ids, definition_hashes=definition_hashes, agents=agents,
+        sandbox=sandbox,
+    )  # fmt: skip
     for start in starts:
         store.append(owner, REBUILD_BOUNDARY, (start,))
     return tuple(str(s.run) for s in starts)

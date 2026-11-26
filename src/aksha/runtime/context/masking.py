@@ -5,9 +5,11 @@ and the spans it minted; the call and its arguments stay, so a tool pair is neve
 The plan for a turn is a pure function of the log and the policy:
 
 1. **Stale** results are hidden first and always (decision 32): a result that read an
-   artifact version another writer has since replaced. Its stub says the slot changed and
-   that the current version is in the change notice at the end; the new content is never
-   written into the old position.
+   artifact version the invalidation view now reads as ``moved`` or ``gone`` for the
+   instance's run (ADR-P05 D4: the sibling rule and early cutoff apply, so another run's
+   version and an equal rebuild hide nothing), unless this instance saved the newer
+   version itself. Its stub says the slot changed and that the current version is in the
+   change notice at the end; the new content is never written into the old position.
 2. **Recorded** masks stay: every tool step an earlier turn's model step recorded under
    ``step.started{masked}`` is hidden again, so a result once masked stays masked (the
    plan is monotone) and a restart rebuilds the same plan.
@@ -29,7 +31,7 @@ from typing import Any
 
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactRef
-from aksha.runtime.artifacts.versions import current, versions
+from aksha.runtime.artifacts.versions import versions
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import (
     CONTEXT_POLICY_VERSION,
@@ -43,6 +45,7 @@ from aksha.runtime.context.types import (
 )
 from aksha.runtime.execution.errors import StepIdInvalid
 from aksha.runtime.execution.types import StepId
+from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.projections.view import LogView
 
 Measure = Callable[[tuple[Masked, ...]], int]
@@ -81,19 +84,37 @@ def _by_me(step: str | None, run: str, instance: str) -> bool:
 
 
 def stale_reads(
-    view: LogView, run: str, instance: str, pair: ToolPair, *, blobs: BlobStore | None = None
+    view: LogView,
+    run: str,
+    instance: str,
+    pair: ToolPair,
+    *,
+    blobs: BlobStore | None = None,
+    checker: ReadChecker | None = None,
 ) -> tuple[StaleRead, ...]:
-    """The artifact reads of ``pair`` that another writer has replaced since (decision 32)."""
+    """The artifact reads of ``pair`` that went out of date since (decision 32).
+
+    Out of date is the invalidation view's answer for the instance's run (ADR-P05 D4,
+    S1): ``moved`` (a newer version of the run's line with other content) or ``gone``
+    (the version's writer was withdrawn). A newer version this instance saved itself is
+    not stale: it supersedes (rule 3). ``checker`` reuses one evaluation of the view
+    across a turn's pairs.
+    """
+    check = checker or ReadChecker(view, blobs=blobs)
     out: list[StaleRead] = []
     for read in pair.reads:
         if read.kind != "artifact":
             continue
-        old = ArtifactRef.from_input(read)
-        now = current(view, old.kind, old.key, blobs=blobs)
-        if now is None or now.ref == old or now.ref.version < old.version:
+        status = check.status(run, read)
+        if status.state == "gone":
+            out.append(StaleRead(read, None))
             continue
-        if not _by_me(now.step, run, instance):
-            out.append(StaleRead(read, now.ref))
+        if status.state != "moved" or status.now is None:
+            continue
+        newer = check.version(status.now)
+        if newer is not None and _by_me(newer.step, run, instance):
+            continue
+        out.append(StaleRead(read, ArtifactRef.parse(status.now)))
     return tuple(out)
 
 
@@ -181,11 +202,13 @@ def plan_masking(
         )  # fmt: skip
     superseded = _superseded(view, run, instance, pairs)
     prior = recorded_masks(view, run, instance)
+    checker = ReadChecker(view, blobs=blobs)
+    stale_of = {p.step: stale_reads(view, run, instance, p, checker=checker) for p in pairs}
 
     def masked(pair: ToolPair, reason: MaskReason, since: int) -> Masked:
         newer, stored = superseded.get(pair.step, ((), False))
-        stale = stale_reads(view, run, instance, pair, blobs=blobs)
-        changed = tuple(dict.fromkeys(s.now.slot_id() for s in stale))
+        stale = stale_of[pair.step]
+        changed = tuple(dict.fromkeys(s.slot_id() for s in stale))
         why: MaskReason = "stale" if stale else reason
         return Masked(
             step=pair.step, tool=pair.tool, chars=len(pair.text), refs=pair.saved,
@@ -195,7 +218,7 @@ def plan_masking(
 
     chosen: dict[str, Masked] = {}
     for pair in pairs:
-        if stale_reads(view, run, instance, pair, blobs=blobs):
+        if stale_of[pair.step]:
             chosen[pair.step] = masked(pair, "stale", prior.get(pair.step, turn))
         elif pair.step in prior:
             chosen[pair.step] = masked(pair, _why(pair, superseded), prior[pair.step])

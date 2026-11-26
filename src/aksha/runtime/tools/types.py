@@ -22,7 +22,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal, get_args
 
-from aksha.runtime.artifacts.types import SaveRequest
+from aksha.runtime.artifacts.types import InputRef, SaveRequest
 from aksha.runtime.grounding.types import SpanDraft
 from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.outbox.types import EffectSpec
@@ -94,10 +94,15 @@ class Ok:
 
     ``spans`` are span drafts over texts the runtime's reader returned; only a tool that
     declares ``mints_citation_spans`` may return them, and the runtime mints them (ADR-P13).
+    ``reads`` are the versioned inputs the body read (a source record at its version, a
+    recorded query and its result-set hash, an artifact version): the agent loop records
+    them as the instance's reads in the step's result (ADR-P04 D6), so lineage reaches
+    the source and a source change invalidates what was built from it (ADR-P05).
     """
 
     data: Mapping[str, Any]
     spans: tuple[SpanDraft, ...] = ()
+    reads: tuple[InputRef, ...] = ()
 
 
 @dataclass(frozen=True)

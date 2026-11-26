@@ -39,15 +39,23 @@ MaskReason = Literal["superseded", "stale", "aged"]
 class SummaryPolicy:
     """Summary compaction (D7): a recorded generation step under ``alias``.
 
-    Due when the context after masking is still above ``trigger_chars``; it keeps at least
-    the newest ``keep_recent_pairs`` tool pairs word for word and runs at most
-    ``max_per_instance`` times for one instance (S3: an agent may raise it).
+    Due when the context after masking is still above ``trigger_chars`` (None: the
+    policy's ``high_water_chars``, so a summary is due exactly when masking alone could
+    not bring the context under the high watermark); it keeps at least the newest
+    ``keep_recent_pairs`` tool pairs word for word and runs at most ``max_per_instance``
+    times for one instance (S3: an agent may raise it). ``alias`` defaults to the implicit
+    ``generate`` alias, which every agent has, so the default policy always runs; an
+    agent may bind a cheaper model under its own alias (for example ``generate.summary``).
     """
 
-    alias: str = "generate.summary"
-    trigger_chars: int = 80_000
+    alias: str = "generate"
+    trigger_chars: int | None = None
     keep_recent_pairs: int = 3
     max_per_instance: int = 2
+
+    def trigger(self, policy: ContextPolicy) -> int:
+        """The effective trigger under ``policy``."""
+        return policy.high_water_chars if self.trigger_chars is None else self.trigger_chars
 
 
 @dataclass(frozen=True)
@@ -55,25 +63,26 @@ class ContextPolicy:
     """Caps and compaction limits for one agent, in characters of canonical JSON.
 
     ``masking`` turns on observation masking, the recitation and the supersede rule of
-    decision 32. The field keeps the ADR's default (the extension API is frozen at it); an
-    agent that declares no policy runs under :data:`DEFAULT_POLICY`, which turns it on,
-    because compaction is a core feature (decision 34).
+    decision 32; ``summary`` is summary compaction (D7). Both are on by default, because
+    compaction is a core feature (decision 34): an agent that declares a policy only to
+    change one number (say ``result_cap_chars``) keeps masking and summaries. Turning
+    either off is an explicit ``masking=False`` or ``summary=None`` (extension API 2.0).
     """
 
     result_cap_chars: int = 8_000
     read_cap_chars: int = 12_000
     read_block_cap_chars: int = 40_000
     context_limit_chars: int = 100_000
-    masking: bool = False
+    masking: bool = True
     high_water_chars: int = 60_000
     low_water_chars: int = 45_000
     keep_recent_pairs: int = 3
     exempt_tools: frozenset[str] = frozenset()
-    summary: SummaryPolicy | None = None
+    summary: SummaryPolicy | None = SummaryPolicy()
 
 
-DEFAULT_POLICY: Final[ContextPolicy] = ContextPolicy(masking=True)
-"""The policy of an agent that declares none: the ADR's numbers with masking on."""
+DEFAULT_POLICY: Final[ContextPolicy] = ContextPolicy()
+"""The policy of an agent that declares none: the ADR's numbers, masking and summaries on."""
 
 
 def effective_policy(declared: ContextPolicy | None) -> ContextPolicy:
@@ -162,10 +171,21 @@ class Turn:
 
 @dataclass(frozen=True)
 class StaleRead:
-    """A read whose artifact another writer has since replaced (decision 32)."""
+    """A read that went out of date (decision 32): moved to ``now``, or gone (``now`` None).
+
+    "Out of date" is the invalidation view's: the read is ``moved`` or ``gone`` for the
+    reader's line (ADR-P05 D4, S1), so a sibling run's version and an equal rebuild
+    (early cutoff) never count.
+    """
 
     read: InputRef
-    now: ArtifactRef
+    now: ArtifactRef | None
+
+    def slot_id(self) -> str:
+        """The slot that changed: the newer version's, or the read's own when gone."""
+        if self.now is not None:
+            return self.now.slot_id()
+        return ArtifactRef.from_input(self.read).slot_id()
 
 
 @dataclass(frozen=True)
