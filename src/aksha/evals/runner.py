@@ -364,6 +364,7 @@ def _relations(
                     changed=set(delta.changed),
                     base_verdict=verdicts[(case.id, base, r)].outcome,
                     variant_verdict=verdicts[(case.id, wname, r)].outcome,
+                    added_files=delta.added_files,
                 )
             else:
                 results = directional(bs, vs, maps, delta=delta)

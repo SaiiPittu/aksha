@@ -232,11 +232,14 @@ aksha eval selftest          # the grader self-tests for every world
 aksha eval run scripted      # self-tests, then every case of the scripted suite
 aksha eval run research      # the research agent on the runtime, fake model, both worlds
 aksha eval run patent        # the patent agent on the runtime, fake model, both worlds
+aksha eval run tilldew       # both agents on a world in another domain their code never names
 aksha eval run change --k 3  # resume against fresh on a scope change, one run per arm
 aksha eval key-check         # recompute every answer key's anchors and counts
 ```
 
 In a run on a fresh clone on 26 Nov 2026 the self-tests passed with 33 of 33 gradeable criteria killed by their mutants, and every suite passed. The research and patent agents run as they ship, with their own tools reading through the episode: research passed 11 of 11 episodes (6 of 6 cases, `rel.same_calls` included on every invariance pair), patent 16 of 16 (8 of 8), the scripted suite 17 of 17 (7 of 7), and the change suite 9 of 9: the resume-against-fresh case (decision 36) at k = 3 per arm, every arm correct against the change's derived key. In that case plain resume fell back to fresh on all four re-entries, and only the arm that exempts the scope from the premise check resumed one Task. With the scope exempt, the rebuild took 8 model turns, 20 tool calls and 152,770 context characters, against fresh's 10, 22 and 182,896. Those measures are properties of the rule-based fake, not of a model, and the fake reports no tokens; [docs/evals/resume-vs-fresh.md](docs/evals/resume-vs-fresh.md) says what they do and do not show. In fake model mode the rates are plumbing checks, not reliability, and the report says so on its second line. Results go to `var/evals/<suite>-<seed>/`. The details are in [docs/evals/README.md](docs/evals/README.md).
+
+The `tilldew` suite runs both agents, unchanged, on an agritech world with other folders, file formats, column names, section headings and form fields (see [fixtures/README.md](fixtures/README.md)); their offline models follow general rules there, never a lexicon of that world. In the run on a fresh clone on 26 Nov 2026 it passed 12 of 12 episodes (6 research cases, 6 patent cases), with the self-tests passing 33 of 33 mutants on its key. `tests/architecture/test_agent_generality.py` fails if any agent module other than its offline model names a value of either world.
 
 ## The primitives
 
@@ -331,6 +334,9 @@ As of 26 Nov 2026:
 9. **One Task instance at a time.** Concurrency above one and keyed children below the top level are refused by the loader.
 10. **Offline only, in practice.** `AKSHA_MODE` accepts only `fake`. A live generation adapter exists but is never tested against a live server, and there is no live extraction or classification adapter.
 11. **Evals run in fake model mode only, and the coding agent has never run.** The research and patent agents run their suites on the runtime with rule-based fakes, so the numbers are plumbing checks; replay and live modes are not built. The rule of three is a reading for the third agent, not a run.
+12. **The agents' offline models read a grammar, not free text.** With no live model, the research agent's fake finds the dimensions and review themes in a small request grammar (`Compare ...`, `say about: ...`) and the patent agent's fake makes one element per mechanism step from its distinctive words; neither is a model, and a request outside the grammar compares on price only and reads no themes. The agent code (definitions, tools, readers, rules, checks) takes no fixture or grammar assumption, but no live model has been run through it: `AKSHA_MODE` accepts only `fake` (item 10).
+13. **Inputs are text, kept per user.** Uploads must be UTF-8 text: a PDF needs its text extracted first (`.pdf.txt`), and binaries are skipped. Each user's inputs are one workspace that all their sessions read (`var/inputs/<user>/`); uploading a single file stores it under its name, so to replace a file inside an uploaded folder upload the folder again. A CSV row read as a part must be one line.
+14. **Some reopening is wider than the change.** A changed seller page re-resolves the companies, which reopens every company's evidence (it reads the whole competitor list) though each saves an equal profile; a changed row of a table reopens what read that row, and a renamed name inside it moves it too.
 
 ## Roadmap
 

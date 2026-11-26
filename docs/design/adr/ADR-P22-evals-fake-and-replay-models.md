@@ -117,6 +117,7 @@ The eval runner is built in `src/aksha/evals/` and `aksha eval` (`src/aksha/inte
 
 1. G1, a world the agent code has never seen. `fixtures/worlds/tilldew/` (an agritech venture in another market, with its own `spec.yaml`, `manifest.json`, `key.json` and lock) uses other folders, column names, section headings, template fields and file formats (a Markdown seller page, a CSV review export, ST.9 text). Its suite, `evals/suites/tilldew/`, runs both agents through the same adapters: six research cases and six patent cases, each trap keyed with anchors computed from the files.
 2. G2, the scripted user's answers are per world (`ANSWERS` and `GAP_ANSWERS` in the agent adapters, keyed by `episode.world`), and the episode reader serves the whole world as the `input` collection (`input/<path>` is `sources/<path>`); a bundle names the world's file, so the keys' anchors are unchanged.
+3. G3, `rel.same_calls` leaves out calls on an input the variant adds (its key's `changes_from_base.added`): an agent that finds its inputs by content opens every file, and the added one is in the changed set. Any other extra or reordered call still fails it. The self-test oracle finds a publication wherever the world keeps it, the known-value mutant also nulls the conception date, and `patent.c1_extraction` checks the candidate the key's first mechanism step is about (`C1` in the stillroom worlds), so the self-tests run on any world's key.
 >>>>>>> a234ec1 (General research and patent agents over a person's own uploaded inputs)
 
 ## Alternatives considered

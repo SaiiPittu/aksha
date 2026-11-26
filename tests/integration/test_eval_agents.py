@@ -56,17 +56,14 @@ def test_the_research_happy_path_passes_in_both_worlds(research: SuiteRun) -> No
     (pair,) = report["relations"]
     outcomes = {c["id"]: c["outcome"] for c in pair["criteria"]}
     # The agent profiles companies in the order it discovered their pages, not by name, so
-    # a rename leaves its reads in the same order. But it finds its inputs by content, and
-    # the variant holds one more file (family E's JSON publication): listing the review
-    # exports opens every table to see whether it is one, so the variant's calls have one
-    # more read (rel.same_calls). Its outputs agree (rel.invariant).
+    # a rename leaves its reads in the same order (rel.same_calls). It finds its inputs by
+    # content, so it also opens the file the variant adds (family E's publication); that
+    # read is in the changed set and left out of the comparison.
     assert outcomes == {
         "rel.invariant": "pass",
         "rel.same_verdict": "pass",
-        "rel.same_calls": "fail",
+        "rel.same_calls": "pass",
     }
-    (calls,) = [c for c in pair["criteria"] if c["id"] == "rel.same_calls"]
-    assert "publications/SYN-PUB-0011.json" in " ".join(calls["evidence"])
 
 
 def test_the_research_agent_reads_only_through_the_episode(research: SuiteRun) -> None:
