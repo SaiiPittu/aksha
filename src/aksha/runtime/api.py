@@ -37,7 +37,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
    ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one).
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
-   ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26).
+   ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26);
+   what a contributed system of record implements and answers: ``SystemOfRecord`` and
+   ``SystemReceipt`` (P03).
 """
 
 from __future__ import annotations
@@ -96,7 +98,8 @@ from aksha.runtime.models.types import (
     ToolCall,
     Usage,
 )
-from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec
+from aksha.runtime.outbox.ports import SystemOfRecord
+from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec, SystemReceipt
 from aksha.runtime.projections.ports import Reducer
 from aksha.runtime.projections.view import ArtifactsView, LogView
 from aksha.runtime.sandbox.types import (
@@ -204,7 +207,9 @@ __all__ = [
     "SpanRef",
     "StopPolicyOptIn",
     "SummaryPolicy",
+    "SystemOfRecord",
     "SystemOfRecordSpec",
+    "SystemReceipt",
     "Task",
     "TaskView",
     "TodoReminder",

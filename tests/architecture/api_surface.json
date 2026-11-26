@@ -1,5 +1,5 @@
 {
-  "api_version": "2.1",
+  "api_version": "2.2",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1) -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None) -> None",
@@ -70,7 +70,9 @@
     "SpanRef": "class SpanRef(span_id: 'str', start: 'int', end: 'int') -> None",
     "StopPolicyOptIn": "class StopPolicyOptIn(name: 'StopPolicyName', params: 'Mapping[str, object]') -> None",
     "SummaryPolicy": "class SummaryPolicy(alias: 'str' = 'generate', trigger_chars: 'int | None' = None, keep_recent_pairs: 'int' = 3, max_per_instance: 'int' = 2) -> None",
+    "SystemOfRecord": "class SystemOfRecord: apply(self, key: 'str', request: 'Mapping[str, Any]') -> 'SystemReceipt'; ledger_id(self) -> 'str'; lookup(self, key: 'str', request: 'Mapping[str, Any]') -> 'SystemReceipt | None'",
     "SystemOfRecordSpec": "class SystemOfRecordSpec(name: 'str', factory: 'Callable[..., object]') -> None",
+    "SystemReceipt": "class SystemReceipt(key: 'str', ledger_id: 'str', body: 'Mapping[str, Any]') -> None",
     "Task": "class Task(id: 'str', tools: 'tuple[str, ...]' = (), reads: 'tuple[str | Read, ...]' = (), writes: 'tuple[str, ...]' = (), done: 'Check | None' = None, children: 'tuple[Task, ...]' = (), per: 'KeySource | None' = None, needs: 'tuple[str, ...]' = (), interrupt: 'DeclaredInterrupt | None' = None, extracts: 'bool' = False, stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), brief: 'str | None' = None, turn_limit: 'int' = 10, max_finish_vetoes: 'int' = 3, on_child_blocked: \"Literal['block', 'partial']\" = 'block', finalizer: 'bool' = False, wakes_on: 'tuple[str, ...]' = (), model_aliases: 'tuple[str, ...]' = ()) -> None",
     "TaskView": "class TaskView(log: 'LogView', tree: 'CompiledTree', instance: 'InstanceRef') -> None",
     "TodoReminder": "def TodoReminder(every: 'int') -> 'StopPolicyOptIn'",

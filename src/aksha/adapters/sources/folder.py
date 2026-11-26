@@ -13,6 +13,7 @@ runtime's ``RecordReader`` port and ``record_version`` of the ``VersionedSource`
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from pathlib import Path
 
 from aksha.runtime.grounding.types import ReturnedText
@@ -59,3 +60,25 @@ class FolderSource:
         """The record's current version (the same for every owner); None when it is gone."""
         found = self.read(self.name, record_id)
         return None if found is None else found.version
+
+
+class FolderSources:
+    """Several folder sources behind one record reader, each answering for its own name.
+
+    ``FolderSources({"corpus": Path("sources")})`` serves source ``corpus`` from that
+    folder; a source it does not hold reads as none, as an unconfigured reader would.
+    """
+
+    def __init__(self, folders: Mapping[str, Path]) -> None:
+        """One :class:`FolderSource` per name in ``folders``."""
+        self.sources = {name: FolderSource(name, root) for name, root in folders.items()}
+
+    def read(self, source: str, record_id: str) -> ReturnedText | None:
+        """The record's text from the folder of ``source``; None when it has none."""
+        held = self.sources.get(source)
+        return None if held is None else held.read(source, record_id)
+
+    def records(self, source: str, collection: str) -> tuple[str, ...]:
+        """The record IDs of ``collection`` in ``source``'s folder; empty when it has none."""
+        held = self.sources.get(source)
+        return () if held is None else held.records(source, collection)

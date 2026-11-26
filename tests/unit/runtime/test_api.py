@@ -13,7 +13,7 @@ def test_api_keeps_the_event_store_names() -> None:
 
 
 def test_api_version_is_major_minor() -> None:
-    assert parse_version(api.API_VERSION) == (2, 1)
+    assert parse_version(api.API_VERSION) == (2, 2)
 
 
 def test_api_exports_what_a_save_names() -> None:
@@ -23,4 +23,9 @@ def test_api_exports_what_a_save_names() -> None:
 
 def test_api_exports_what_grounding_asks_of_an_agent() -> None:
     for name in ("SpanDraft", "CitePolicy", "Unknown", "maybe_unknown"):
+        assert name in api.__all__
+
+
+def test_api_exports_what_a_contributed_system_of_record_implements() -> None:
+    for name in ("SystemOfRecordSpec", "SystemOfRecord", "SystemReceipt"):
         assert name in api.__all__

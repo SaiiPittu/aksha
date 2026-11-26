@@ -1,4 +1,7 @@
-"""The scribe: one Task that writes a note, with a question and an approved publish."""
+"""The scribe: one Task that writes a note, with a question and an approved publish.
+
+Its publish delivers to the board extension's system of record, ``board.ledger``.
+"""
 
 from __future__ import annotations
 
@@ -51,7 +54,7 @@ PUBLISH = ToolSpec(
     "external",
     "Publish a note to the board.",
     POST,
-    external=EffectSpec("board", ("/text",), "reconcile"),
+    external=EffectSpec("board.ledger", ("/text",), "reconcile"),
     approval=ApprovalRule(facts=_facts),
 )
 
@@ -72,4 +75,5 @@ AGENT = Agent(
         ),
     ),
     budget=Budget(model_turns=10, tool_calls=20),
+    extensions=("board",),
 )

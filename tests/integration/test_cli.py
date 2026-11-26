@@ -21,6 +21,8 @@ from aksha.interfaces.cli.main import main
 from tests.support.events import START
 from tests.support.session import env
 
+REPO = Path(__file__).resolve().parents[2]
+
 
 def aksha(tmp: Path, *argv: str, **extra: str) -> tuple[int, str]:
     out = io.StringIO()
@@ -59,6 +61,45 @@ def test_an_approval_exits_four_and_a_wrong_signature_is_refused(tmp_path: Path)
     assert code == wire.EXIT_REFUSED and "signature_mismatch" in out
     code, out = aksha(tmp_path, "reject", found.group(1), "--note", "not today")
     assert code != wire.EXIT_REFUSED, out
+
+
+def test_an_approved_publish_is_delivered_through_the_extensions_system(tmp_path: Path) -> None:
+    code, out = aksha(tmp_path, "run", "Write and publish", "--session", "S-1")
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+    found = re.search(r"aksha approve (A-\d+) --signature (v1:[0-9a-f]{64})", out)
+    assert found is not None
+    code, out = aksha(tmp_path, "approve", found.group(1), "--signature", found.group(2))
+    assert code == wire.EXIT_OK, out
+    assert "ended complete" in out
+    rows = tmp_path / "var" / "systems" / "board.ledger" / "rows.json"
+    assert len(json.loads(rows.read_text(encoding="utf-8"))) == 1
+    code, out = aksha(tmp_path, "inspect", "R-0001")
+    assert code == wire.EXIT_OK and json.loads(out)["outcome"] == "complete"
+
+
+def test_the_default_agents_load_and_research_runs_offline_on_a_world(tmp_path: Path) -> None:
+    from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
+
+    sources = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
+    defaults = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
+                "AKSHA_SOURCES": f"corpus={sources}"}  # fmt: skip
+    code, out = aksha(tmp_path, "capabilities", **defaults)
+    assert code == wire.EXIT_OK, out
+    request = "Who sells camera-free occupancy sensing for offices, and at what price?"
+    code, out = aksha(tmp_path, "run", request, "--agent", "research", "--session", "S-1",
+                      **defaults)  # fmt: skip
+    assert code == wire.EXIT_WAITING_INPUT, out
+    interrupt = re.search(r"aksha answer (I-\d+)", out)
+    assert interrupt is not None
+    code, out = aksha(tmp_path, "answer", interrupt.group(1), "EU", **defaults)
+    assert code == wire.EXIT_OK, out
+    assert "research ended complete" in out
+    store = open_store(tmp_path / "var" / "aksha.sqlite", FakeClock(START), writer=False)
+    try:
+        reads = [e for e in store.read("o1") if e.type == "read.recorded"]
+    finally:
+        store.close()
+    assert reads, "the tools read the world's records through the configured source"
 
 
 def test_stop_exits_six(tmp_path: Path) -> None:

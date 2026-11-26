@@ -35,8 +35,8 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, TypeGuard, cast
@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
-from aksha.adapters.sources.folder import FolderSource
+from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
 from aksha.evals.agents.scripted import ScriptedResearchAgent
@@ -57,6 +57,7 @@ from aksha.runtime.budgets.types import Limits
 from aksha.runtime.definitions.hashing import run_started_fields
 from aksha.runtime.definitions.loader import LoadedDefinition, discover, load_agents
 from aksha.runtime.definitions.modules import import_value
+from aksha.runtime.definitions.names import qualify
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.execution.executor import StepExecutor
@@ -64,6 +65,7 @@ from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
+from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.models.errors import BindRefusal, BindRefused
 from aksha.runtime.models.routing import bind_aliases
@@ -147,7 +149,18 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_MODE``           run mode: ``fake`` (each agent's ``fakes.py``)  ``fake``
 # ``AKSHA_SANDBOX``        ``<backend>:<strength>`` the operator provides  none
 # ``AKSHA_SERVER_URL``     the server a CLI command talks to               the server file
+# ``AKSHA_SOURCES``        ``<source>=<folder>`` pairs (``os.pathsep``)    each spec's ``root``
 # =======================  ==============================================  ==================
+#
+# ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
+# for example ``corpus=fixtures/worlds/stillroom/sources`` for the research agent. A
+# declared source with neither a setting nor a ``root`` has no reader: its tools read
+# nothing and say so (``fetch_failed``). A setting naming no declared source is refused.
+#
+# Systems of record that extensions contribute (``Extension.systems``, ADR-P20 S2) are
+# built here, once per full name (``<extension>.<name>``), by calling the spec's factory
+# with ``state_dir``: a folder beside the SQLite file (``systems/<full name>``) where a
+# local or fixture system may keep its own ledger. A real adapter may ignore it.
 #
 # ``AKSHA_SANDBOX`` is a declaration, not a probe: no sandbox backend is built yet
 # (ADR-P12), so the operator names the one the process runs inside, for example
@@ -158,6 +171,8 @@ DEFAULT_AGENTS = Path(__file__).resolve().parent / "agents"
 DEFAULT_EXTENSIONS = Path(__file__).resolve().parent / "extensions"
 SERVER_FILE = "aksha.server.json"
 """Beside the store: the URL of the server holding the writer lock, written by ``serve``."""
+SYSTEMS_DIR = "systems"
+"""Beside the store: one state folder per contributed system of record."""
 
 
 @dataclass(frozen=True)
@@ -170,6 +185,7 @@ class RuntimeConfig:
     mode: str = "fake"
     sandbox: str | None = None
     server_url: str | None = None
+    sources: Mapping[str, Path] = field(default_factory=dict)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -188,6 +204,7 @@ class RuntimeConfig:
             mode=env.get("AKSHA_MODE", "fake"),
             sandbox=env.get("AKSHA_SANDBOX") or None,
             server_url=env.get("AKSHA_SERVER_URL") or None,
+            sources=_source_settings(env.get("AKSHA_SOURCES", "")),
         )
 
     def sandbox_availability(self) -> Availability | None:
@@ -207,6 +224,21 @@ class RuntimeConfig:
     def server_file(self) -> Path:
         """Where ``serve`` records its URL: beside the SQLite file."""
         return self.storage.sqlite_path.parent / SERVER_FILE
+
+    def system_dir(self, name: str) -> Path:
+        """The state folder of the contributed system of record ``name``."""
+        return self.storage.sqlite_path.parent / SYSTEMS_DIR / name
+
+
+def _source_settings(raw: str) -> dict[str, Path]:
+    """``AKSHA_SOURCES``: ``name=folder`` pairs separated by ``os.pathsep``."""
+    out: dict[str, Path] = {}
+    for item in (part for part in raw.split(os.pathsep) if part):
+        name, sep, folder = item.partition("=")
+        if not sep or not name or not folder:
+            raise StoreError("source_invalid", f"AKSHA_SOURCES item {item!r}: use name=folder")
+        out[name] = Path(folder)
+    return out
 
 
 def _is_strength(value: str) -> TypeGuard[Strength]:
@@ -283,23 +315,88 @@ def session_agent(
     )
 
 
+def load_definitions(
+    config: RuntimeConfig, *, catalogue: Catalogue | None = None
+) -> tuple[LoadedDefinition, ...]:
+    """Discover and load every agent the configuration names. Raises ``LoadError``."""
+    found = discover(config.agent_paths, ())
+    return load_agents(list(found), list(config.extension_paths), catalogue=catalogue)
+
+
 def load_session_agents(
     config: RuntimeConfig,
     adapters: Mapping[str, Mapping[str, object]] | None = None,
     *,
     catalogue: Catalogue | None = None,
+    loaded: Sequence[LoadedDefinition] | None = None,
 ) -> tuple[SessionAgent, ...]:
     """Discover, load and bind every agent the configuration names. Raises ``LoadError``.
 
-    ``adapters`` overrides the model adapters of an agent by name (tests, scripted runs).
+    ``adapters`` overrides the model adapters of an agent by name (tests, scripted runs);
+    ``loaded`` are definitions already loaded, so they are not loaded twice.
     """
-    found = discover(config.agent_paths, ())
-    loaded = load_agents(list(found), list(config.extension_paths), catalogue=catalogue)
+    if loaded is None:
+        loaded = load_definitions(config, catalogue=catalogue)
     commit = runtime_commit()
     return tuple(
         session_agent(d, config.mode, (adapters or {}).get(d.agent.name), commit=commit)
         for d in loaded
     )
+
+
+def extension_systems(
+    config: RuntimeConfig,
+    loaded: Sequence[LoadedDefinition],
+    *,
+    skip: Collection[str] = (),
+) -> dict[str, SystemOfRecord]:
+    """The systems of record the loaded agents' extensions contribute, by full name.
+
+    Each is built once, by its spec's factory with its ``state_dir``; a name in ``skip``
+    (one the caller supplies itself) is not built. Raises ``StoreError`` when a factory
+    returns something that is not a system of record (``system_invalid``).
+    """
+    out: dict[str, SystemOfRecord] = {}
+    for definition in loaded:
+        for ext in definition.extensions:
+            for spec in ext.ext.systems:
+                name = qualify(ext.ext.name, spec.name)
+                if name in out or name in skip:
+                    continue
+                built = spec.factory(state_dir=config.system_dir(name))
+                if not all(callable(getattr(built, m, None)) for m in _SYSTEM_METHODS):
+                    raise StoreError("system_invalid", f"{name}: the factory returned "
+                                     f"{type(built).__name__}, not a system of record")  # fmt: skip
+                out[name] = cast(SystemOfRecord, built)
+    return out
+
+
+_SYSTEM_METHODS = ("ledger_id", "apply", "lookup")
+
+
+def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> FolderSources:
+    """The record reader over every declared versioned source that has a folder.
+
+    A source's folder is its ``AKSHA_SOURCES`` setting, else its spec's ``root``. Raises
+    ``StoreError`` for a setting that names no declared source (``source_unknown``).
+    """
+    declared: dict[str, VersionedSourceSpec] = {}
+    for definition in loaded:
+        for spec in definition.agent.sources:
+            declared.setdefault(spec.name, spec)
+        for ext in definition.extensions:
+            for spec in ext.ext.sources:
+                declared.setdefault(qualify(ext.ext.name, spec.name), spec)
+    unknown = sorted(set(config.sources) - set(declared))
+    if unknown:
+        raise StoreError("source_unknown", f"AKSHA_SOURCES names {unknown}, which no loaded "
+                         f"agent declares; declared: {sorted(declared)}")  # fmt: skip
+    folders: dict[str, Path] = {}
+    for name, spec in declared.items():
+        folder = config.sources.get(name) or (Path(spec.root) if spec.root else None)
+        if folder is not None:
+            folders[name] = folder
+    return FolderSources(folders)
 
 
 def open_session(
@@ -309,14 +406,19 @@ def open_session(
     adapters: Mapping[str, Mapping[str, object]] | None = None,
     systems: Mapping[str, SystemOfRecord] | None = None,
 ) -> Session:
-    """The writer's session: the store (taking the writer lock), agents, router, sandbox.
+    """The writer's session: store (writer lock), agents, router, sandbox, systems, reader.
 
-    Raises ``LockHeld`` when another process holds the writer lock (a server, or another
-    embedded command).
+    The systems are the extensions' (:func:`extension_systems`) with ``systems`` added
+    over them by name (tests, scripted runs). Raises ``LockHeld`` when another process
+    holds the writer lock (a server, or another embedded command).
     """
     clock = clock or SystemClock()
     catalogue = Catalogue(CORE_EVENT_TYPES)
-    agents = load_session_agents(config, adapters, catalogue=catalogue)
+    loaded = load_definitions(config, catalogue=catalogue)
+    agents = load_session_agents(config, adapters, loaded=loaded)
+    given = dict(systems or {})
+    every_system = {**extension_systems(config, loaded, skip=given), **given}
+    reader = source_reader(config, loaded)
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
@@ -325,7 +427,8 @@ def open_session(
         router = Router(routable, PurposeClassifier(), ids)
     sandbox = config.sandbox_availability()
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
-                   blobs=open_blob_store(config.storage), systems=systems, ids=ids)  # fmt: skip
+                   blobs=open_blob_store(config.storage), systems=every_system,
+                   reader=reader, ids=ids)  # fmt: skip
 
 
 def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:

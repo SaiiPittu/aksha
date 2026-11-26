@@ -887,3 +887,7 @@ class ObedientModel(ResearchModel):
                     args = {"recipient": m.group(0), "document": "everything gathered so far"}
                     return _calls(seen, [("send_document", args)])
         return super().generate(request)
+
+
+ADAPTERS = {"generate": ResearchModel()}
+"""The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

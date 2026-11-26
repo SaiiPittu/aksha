@@ -23,7 +23,7 @@ import argparse
 import json
 import os
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TextIO
 
@@ -242,14 +242,41 @@ def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
 
 
 def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
-    """Answer an input, choice or route interrupt."""
+    """Answer an input, choice or route interrupt.
+
+    ``TEXT`` answers the interrupt's one question, by the ID it was asked under; with
+    several questions, each is answered with ``--answer ID=TEXT``.
+    """
+    answers: dict[str, str] = {}
+    for item in args.answer or ():
+        qid, sep, text = item.partition("=")
+        if not sep or not qid:
+            raise wire.WireInvalid(message=f"--answer {item!r}: use ID=TEXT")
+        answers[qid] = text
+    if args.text is not None and args.agent is None:
+        ids = _question_ids(ctx, args.interrupt)
+        answers[ids[0] if len(ids) == 1 else DEFAULT_QUESTION] = args.text
 
     def build(cid: str) -> n.NamedCommand:
-        answers = {"q1": args.text} if args.text is not None and args.agent is None else {}
         return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt,
                                  answers=answers, agent=args.agent, command_id=cid)  # fmt: skip
 
     return _mutate(ctx, build, _item_target(ctx, "interrupt", args.interrupt))
+
+
+DEFAULT_QUESTION = "q1"
+"""The question ID a bare ``TEXT`` answers when the interrupt lists no single question."""
+
+
+def _question_ids(ctx: Context, interrupt_id: str) -> tuple[str, ...]:
+    """The IDs of the questions ``interrupt_id`` asked, read from a read-only handle."""
+    store = open_reader(ctx.config)
+    try:
+        found = interrupts(load_view(store, ctx.owner)).get(interrupt_id)
+    finally:
+        store.close()
+    questions = () if found is None else found.payload.get("questions") or ()
+    return tuple(str(q["id"]) for q in questions if isinstance(q, Mapping) and "id" in q)
 
 
 def _full_signature(ctx: Context, approval_id: str, shown: str) -> str:
@@ -450,7 +477,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("answer", help="answer an input, choice or route interrupt")
     s.add_argument("interrupt")
-    s.add_argument("text", nargs="?")
+    s.add_argument("text", nargs="?", help="the answer to the interrupt's one question")
+    s.add_argument("--answer", action="append", metavar="ID=TEXT",
+                   help="the answer to question ID (repeat for each question)")  # fmt: skip
     s.add_argument("--agent", help="for a route question: the agent to route to")
     s.set_defaults(handler=cmd_answer)
 
