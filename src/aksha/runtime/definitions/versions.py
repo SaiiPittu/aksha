@@ -67,7 +67,7 @@ an extraction alias; ADR-P07 G3), and ``record_sections`` and ``section_heading`
 record holding several kinds is decided section by section (ADR-P07 G4).
 2.10 (27 Nov 2026, decision 38) added invalidation modes: the trailing fields
 ``Agent.invalidation`` (``off`` by default) and ``ToolSpec.edits``, and the names
-``InvalidationMode`` and ``EditSpec``.
+``InvalidationMode`` and ``EditSpec``, and ``RecordReader.serves``.
 """
 
 Version = tuple[int, int]

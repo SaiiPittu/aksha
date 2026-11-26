@@ -101,6 +101,10 @@ class EpisodeReader:
         self.texts[path] = text
         return ReturnedText(source, record_id, _digest(text), text)
 
+    def serves(self, source: str) -> bool:
+        """Whether ``source`` is one of the agent's declared sources."""
+        return source in self.sources
+
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         """The record IDs under ``collection`` through ``list_sources``; empty on a refusal."""
         if source not in self.sources or not collection:

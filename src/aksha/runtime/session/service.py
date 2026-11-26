@@ -820,6 +820,12 @@ class _Overlay:
             return self.own.read(source, record_id)
         return None if self.fallback is None else self.fallback.read(source, record_id)
 
+    def serves(self, source: str) -> bool:
+        """Whether the own reader or the fallback serves ``source``."""
+        if source == self.name:
+            return self.own.serves(source)
+        return self.fallback is not None and self.fallback.serves(source)
+
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         """The collection's record IDs from the reader that serves ``source``."""
         if source == self.name:

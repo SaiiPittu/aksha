@@ -67,7 +67,7 @@
     "Projection": "class Projection(name: 'str', reducer: 'Reducer[Any]') -> None",
     "QuestionSpec": "class QuestionSpec(name: 'str', prompt: 'str', type: 'QuestionType' = 'choice', options: 'tuple[str, ...]' = (), options_from: 'KeySource | None' = None, thresholds: 'ConfidenceThresholds' = ConfidenceThresholds(accept_at=0.9, reject_at=0.2, null_at=0.5, margin=None, fitted_on=None), adapted: 'ConfidenceThresholds | None' = None) -> None",
     "Read": "class Read(kind: 'str', keys: \"Literal['own', 'all'] | FromField\" = 'own') -> None",
-    "RecordReader": "class RecordReader: read(self, source: 'str', record_id: 'str') -> 'ReturnedText | None'; records(self, source: 'str', collection: 'str') -> 'tuple[str, ...]'",
+    "RecordReader": "class RecordReader: read(self, source: 'str', record_id: 'str') -> 'ReturnedText | None'; records(self, source: 'str', collection: 'str') -> 'tuple[str, ...]'; serves(self, source: 'str') -> 'bool'",
     "Reducer": "class Reducer: apply(self, state: 'S', event: 'Event', artifacts: 'ArtifactsView') -> 'S'; initial(self, args: 'Hashable') -> 'S'; name (property) (self) -> 'str'; reads (property) (self) -> 'frozenset[str]'",
     "RelationKind": "class RelationKind(name: 'str', src: 'tuple[str, ...]', dst: 'tuple[str, ...]', labels: 'tuple[str, ...]' = (), symmetric: 'bool' = False, transitive: 'bool' = False, cites: \"Literal['one', 'per_end']\" = 'one') -> None",
     "RelationRequest": "class RelationRequest(kind: 'str', src: 'End', dst: 'End', evidence: 'tuple[Excerpt, ...]' = (), label: 'str | None' = None) -> None",

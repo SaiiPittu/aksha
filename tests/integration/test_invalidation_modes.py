@@ -31,7 +31,7 @@ from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.types import ReturnedText
-from aksha.runtime.invalidation.guard import STALE_EDIT, UNREAD_OVERWRITE
+from aksha.runtime.invalidation.guard import EDIT_UNCHECKED, STALE_EDIT, UNREAD_OVERWRITE
 from aksha.runtime.invalidation.modes import run_mode
 from aksha.runtime.invalidation.reviews import open_reviews
 from aksha.runtime.invalidation.view import invalidation_view
@@ -208,6 +208,7 @@ class Tree:
 
     files: dict[str, str] = field(default_factory=dict)
     versions: dict[str, int] = field(default_factory=dict)
+    served: bool = True
 
     def put(self, path: str, text: str) -> str:
         self.files[path] = text
@@ -225,6 +226,9 @@ class Tree:
 
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         return tuple(f"file/{p}" for p in sorted(self.files))
+
+    def serves(self, source: str) -> bool:
+        return self.served and source == SOURCE
 
     # --- the tool bodies ---
 
@@ -411,3 +415,17 @@ def test_a_resumed_step_keeps_the_recorded_refusal(tmp_path: Path) -> None:
     bench.run()  # the run has ended: driving it again appends nothing
     assert [e.seq for e in load_view(bench.store, OWNER).events] == before
     assert bench.code(2) == STALE_EDIT
+
+
+def test_edit_guard_refuses_a_write_into_a_source_the_reader_does_not_serve(
+    tmp_path: Path,
+) -> None:
+    """An unserved source reads every record as absent; that is no licence to create one."""
+    write_b = tools_reply(call("write_file", path="b.py", text="replaced\n"))
+    new_c = tools_reply(call("write_file", path="c.py", text="new\n"))
+    bench = EditBench(tmp_path / "e.sqlite", "edit_guard", {1: write_b, 2: new_c})
+    bench.tree.served = False
+    bench.run()
+    assert (bench.code(1), bench.code(2)) == (EDIT_UNCHECKED, EDIT_UNCHECKED)
+    assert "is not served" in bench.shown(2)
+    assert bench.tree.files["b.py"] == "keep me\n" and "c.py" not in bench.tree.files

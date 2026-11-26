@@ -158,3 +158,37 @@ def test_a_routed_run_of_a_loaded_agent_records_its_mode(plugins: Plugins) -> No
     )
     event = run_opened("S-0001", "R-0001", agent.routable())
     assert event.payload["invalidation"] == "edit_guard"
+
+
+def _sources(plugins: Plugins, *specs: str) -> None:
+    joined = ", ".join(specs)
+    plugins.edit(
+        "agents/toy/agent.py",
+        'extensions=("echo",),',
+        f'extensions=("echo",),\n    sources=({joined},),',
+    )
+    plugins.edit("agents/toy/agent.py", "    Budget,", "    Budget,\n    VersionedSourceSpec,")
+
+
+def test_two_sources_serving_one_collection_are_refused(plugins: Plugins) -> None:
+    """A recorded read names a record by its ID, so a collection must name one source."""
+    _sources(
+        plugins,
+        'VersionedSourceSpec("a", collections=("file",))',
+        'VersionedSourceSpec("b", collections=("file",))',
+    )
+    with pytest.raises(LoadError) as err:
+        load_agents([plugins.toy], [plugins.extensions])
+    (refusal,) = err.value.refusals
+    assert (refusal.code, refusal.field) == ("collection_served_twice", "sources")
+    assert "'b'" in refusal.message and "'a'" in refusal.message
+
+
+def test_sources_serving_different_collections_load(plugins: Plugins) -> None:
+    _sources(
+        plugins,
+        'VersionedSourceSpec("a", collections=("file",))',
+        'VersionedSourceSpec("b", collections=("page",))',
+    )
+    (loaded,) = load_agents([plugins.toy], [plugins.extensions])
+    assert [s.name for s in loaded.agent.sources] == ["a", "b"]

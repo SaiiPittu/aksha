@@ -6,19 +6,23 @@ runtime checks that record before the body runs, inside the tool's durable step,
 resumed step returns the recorded answer and never checks again:
 
 1. The current version is asked from the run's record reader. A record that does not
-   exist yet is created freely: there is nothing to overwrite.
+   exist yet in a source the reader serves is created freely: there is nothing to
+   overwrite.
 2. The version the instance last read is its last ``read.recorded`` of that record ID, in
    log order, whatever generation of reads it is in. A body that writes the record
    returns the version it wrote in ``Ok.reads``, so the instance's next edit is checked
-   against its own write.
+   against its own write. A recorded read names no source: a record ID names one record
+   of the owner because one source serves each collection, which the loader holds to
+   (``collection_served_twice``), so a read of the ID is a read of the edited source.
 3. A record whose current version differs from the version last read is refused
    ``stale_edit``: someone else changed it since the instance read it.
 4. A whole-record overwrite (``EditSpec.overwrite``) of an existing record the instance
    never read is refused ``unread_overwrite``. An edit of a record never read is let
    through, because an edit quotes the text it changes and fails on its own when that
    text is not there.
-5. With no record reader the target cannot be checked, and the edit is refused
-   ``edit_unchecked`` (fail closed).
+5. With no record reader, or a reader that does not serve the edit's source (a source
+   with no folder, or a misspelled name), the target cannot be checked, and the edit is
+   refused ``edit_unchecked`` (fail closed): an absent record there is not a new one.
 
 Each refusal says what to do and carries the current version and text, so the model can
 re-read once and retry, rather than resend stale text in a loop. Nothing is rebased: a
@@ -48,7 +52,7 @@ UNREAD_OVERWRITE = "unread_overwrite"
 """The code of a whole-record overwrite refused because the instance never read the target."""
 
 EDIT_UNCHECKED = "edit_unchecked"
-"""The code of an edit refused because the run has no record reader to check it with."""
+"""The code of an edit refused because no record reader serves the source to check it in."""
 
 EDIT_REFUSALS = frozenset({STALE_EDIT, UNREAD_OVERWRITE, EDIT_UNCHECKED})
 """Every code the check refuses with; none of them is retried."""
@@ -93,6 +97,12 @@ def edit_refusal(
         return None  # the arguments were validated: a bad target is the body's to refuse
     if reader is None:
         message = f"{tool}: {record_id} cannot be checked before the edit (no record reader)"
+        return Err(EDIT_UNCHECKED, message, item=record_id)
+    if not reader.serves(edit.source):
+        message = (
+            f"{tool}: {record_id} cannot be checked before the edit (source "
+            f"{edit.source!r} is not served)"
+        )
         return Err(EDIT_UNCHECKED, message, item=record_id)
     current = reader.read(edit.source, record_id)
     if current is None:

@@ -82,6 +82,10 @@ class FolderSource:
         data = path.read_bytes()
         return ReturnedText(source, record_id, _sha(data), data.decode("utf-8"))
 
+    def serves(self, source: str) -> bool:
+        """Whether ``source`` is this folder's source."""
+        return source == self.name
+
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         """The record IDs under ``collection``, sorted; empty for another source."""
         if source != self.name or not collection or "/" in collection or collection == "..":
@@ -137,6 +141,10 @@ class FolderSources:
         """The record's text from the folder of ``source``; None when it has none."""
         held = self.sources.get(source)
         return None if held is None else held.read(source, record_id)
+
+    def serves(self, source: str) -> bool:
+        """Whether a folder is held for ``source``."""
+        return source in self.sources
 
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         """The record IDs of ``collection`` in ``source``'s folder; empty when it has none."""

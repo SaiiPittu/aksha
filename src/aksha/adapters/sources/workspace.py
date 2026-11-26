@@ -79,6 +79,10 @@ class OwnerInputs:
             found |= set(self.base.records(source, collection))
         return tuple(sorted(found))
 
+    def serves(self, source: str) -> bool:
+        """Whether ``source`` is the inputs source."""
+        return source == self.name
+
     def read(self, source: str, record_id: str) -> ReturnedText | None:
         """The input's text (the upload's when both have it)."""
         if source != self.name:
