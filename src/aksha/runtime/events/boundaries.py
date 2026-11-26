@@ -42,6 +42,7 @@ _ALL = (
         "execution",
         "step.completed with the result's facts: read.recorded, excerpts.minted, "
         "excerpts.shown, artifact rows and artifact.saved, relation.saved, citation.bound, "
+        "context.compacted, "
         "an interrupt.raised or an approval request; for an "
         "effectful tool call, the outbox.completed or outbox.abandoned it ends with",
     ),

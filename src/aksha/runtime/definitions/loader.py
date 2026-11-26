@@ -21,6 +21,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
+from aksha.runtime.context.policy import policy_hash
 from aksha.runtime.definitions.contributions import (
     CONTRIBUTIONS,
     event_type_refusals,
@@ -329,7 +330,11 @@ def _definition(
             {qualify(agent.name, a.name): a for a in agent.model_aliases}
         ),
         definition_hash=definition_hash(
-            folder, exts, API_VERSION, tools_hash=registry.canonical_hash()
+            folder,
+            exts,
+            API_VERSION,
+            tools_hash=registry.canonical_hash(),
+            context_hash=policy_hash(agent.context_policy),
         ),
         file_hashes=file_hashes(folder),
     )

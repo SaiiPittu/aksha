@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from jsonschema import Draft202012Validator, SchemaError
 
 from aksha.runtime.artifacts.types import PROVENANCE_RELATIONS
+from aksha.runtime.context.policy import POLICY_INVALID, policy_refusals
 from aksha.runtime.definitions.errors import LoadRefusal, Refusals
 from aksha.runtime.definitions.names import is_local_name, qualify, resolve_kind
 from aksha.runtime.definitions.tree_checks import (
@@ -92,6 +93,9 @@ def validate_agent(
     if agent.concurrency != MAX_CONCURRENCY:
         message = f"concurrency {agent.concurrency!r} is not built; v1 runs one instance at a time"
         out.add("concurrency", "concurrency_unsupported", message)
+    if agent.context_policy is not None:
+        for message in policy_refusals(agent.context_policy, [*tool_names, *LOADER_ADDED_TOOLS]):
+            out.add("context_policy", POLICY_INVALID, message)
     if any(not is_function(c) for c in agent.completion):
         out.add("completion", "check_not_callable", "every completion check is a function")
     written = {resolve_kind(w, agent.name) for _, t in walk_tasks(agent.tasks) for w in t.writes}

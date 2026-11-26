@@ -105,6 +105,7 @@ def test_step_id_refuses_an_invalid_value(kwargs: dict[str, object]) -> None:
         ("end", True),
         ("handoff", True),
         ("derived", True),
+        ("compact", True),
         ("compare", False),
         ("t", False),
         ("tool", False),
@@ -113,6 +114,19 @@ def test_step_id_refuses_an_invalid_value(kwargs: dict[str, object]) -> None:
 )
 def test_reserved_segments(name: str, reserved: bool) -> None:
     assert is_reserved_segment(name) is reserved
+
+
+def test_step_id_compact_sub_step_of_a_turn() -> None:
+    step = StepId("R-0001", "edit[a]", turn=12, sub="compact")
+    assert str(step) == "R-0001/edit[a]/t12/compact"
+    assert StepId.parse(str(step)) == step
+    assert StepId("R-0001", "edit[a]", turn=12).compaction() == step
+    with pytest.raises(StepIdInvalid):
+        StepId("R-0001", "edit[a]", sub="compact")
+    with pytest.raises(StepIdInvalid):
+        StepId("R-0001", "edit[a]", turn=1, call=1, sub="compact")
+    with pytest.raises(StepIdInvalid):
+        StepId.parse("R-0001/edit[a]/t12/compact/c01")
 
 
 def test_step_id_steps_of_a_turn() -> None:

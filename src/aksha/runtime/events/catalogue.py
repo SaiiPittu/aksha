@@ -325,6 +325,29 @@ RECOVERY_COMPLETED = EventTypeSpec(
     boundaries=frozenset({"U7"}),
 )
 
+# --- P08 summary compaction (``context/summary.py`` builds it) -------------------------
+# D7: one recorded generation step replaces an instance's older turns with a summary. The
+# summary rides on this event, never on an artifact, so it can never be cited as evidence;
+# it commits with the summary step's ``step.completed`` (U2), so a resume replays it.
+
+CONTEXT_COMPACTED = EventTypeSpec(
+    name="context.compacted",
+    schema={
+        "type": "object",
+        "properties": {
+            "through_turn": {"type": "integer", "minimum": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "summary_hash": _HASH,
+            "policy_version": {"type": "integer", "minimum": 1},
+        },
+        "required": ["through_turn", "summary", "summary_hash", "policy_version"],
+        "additionalProperties": False,
+    },
+    writer="context",
+    boundaries=frozenset({"U2"}),
+    dedup_key="compact:{step}",
+)
+
 # --- P02 step facts: the durable step executor (``execution/facts.py`` builds them) ------
 # P11 D9: an allow is the ``step.started`` that follows; a refusal is one
 # ``step.completed{outcome: refused, code, layer}``. The executor adds the step's name,
@@ -373,6 +396,26 @@ STEP_STARTED = EventTypeSpec(
             "adapter": {"type": "string", "minLength": 1},
             "native": {"type": "boolean"},
             "replaces": {"type": "string", "minLength": 1},
+            # ADR-P08 D3, S1: what the context of a generation step held. ``context_chars``
+            # is its measured size; ``rendered`` each artifact shown and how; ``masked`` the
+            # tool steps whose results it hid, so a later turn keeps them hidden (monotone).
+            "context_chars": {"type": "integer", "minimum": 0},
+            "rendered": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "ref": {"type": "string", "minLength": 1},
+                        "mode": {"enum": ["full", "summary", "ref_only"]},
+                        "chars": {"type": "integer", "minimum": 0},
+                        "spans": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["ref", "mode", "chars", "spans"],
+                    "additionalProperties": False,
+                },
+            },
+            "masked": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "summary_through": {"type": "integer", "minimum": 1},
         },
         "required": ["kind", "counted"],
     },
@@ -1171,6 +1214,7 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     STEP_FAILED,
     ATTEMPT_DISCARDED,
     STEP_COMPLETED,
+    CONTEXT_COMPACTED,
     OUTBOX_ENQUEUED,
     OUTBOX_CLAIMED,
     OUTBOX_FAILED,

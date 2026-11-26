@@ -17,6 +17,7 @@ from aksha.runtime.api import (
     Agent,
     ArtifactKind,
     CheckResult,
+    ContextPolicy,
     ModelAlias,
     Ok,
     Read,
@@ -159,6 +160,18 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         lambda a: replace(
             a, model_aliases=(*a.model_aliases, ModelAlias("classify.tone", "generation"))
         ),
+    ),
+    (
+        "context_policy_invalid",
+        None,
+        "context_policy",
+        lambda a: replace(a, context_policy=ContextPolicy(low_water_chars=70_000)),
+    ),
+    (
+        "context_policy_invalid",
+        None,
+        "context_policy",
+        lambda a: replace(a, context_policy=ContextPolicy(exempt_tools=frozenset({"nope"}))),
     ),
     ("check_not_callable", None, "completion", lambda a: replace(a, completion=("x",))),  # type: ignore[arg-type]
     ("duplicate_task", None, "tasks", lambda a: replace(a, tasks=(*a.tasks, a.tasks[1]))),

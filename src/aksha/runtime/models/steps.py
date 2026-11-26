@@ -25,10 +25,11 @@ refuse what a code rule allowed: nothing here authorises an effect.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, cast
 
+from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import Deadline, StepId, StepOutput, StepPolicy, StepResult
@@ -111,8 +112,15 @@ def generation_step(
     request: GenerationRequest,
     *,
     policy: StepPolicy = MODEL_STEP_POLICY,
+    started: Mapping[str, Any] | None = None,
+    facts: Callable[[GenerationResult], Sequence[NewEvent]] | None = None,
 ) -> GenerationOutcome:
-    """Run (or replay) one generation call of ``request.alias`` as step ``step_id``."""
+    """Run (or replay) one generation call of ``request.alias`` as step ``step_id``.
+
+    ``started`` adds fields to ``step.started`` (the context's size, renderings and masks,
+    ADR-P08). ``facts`` builds the events that commit with the result (U2): the reads and
+    spans the context showed, or a summary step's ``context.compacted``.
+    """
     if request.step_id != str(step_id):
         raise ValueError(f"the request names step {request.step_id}, not {step_id}")
     adapter = table.generation(request.alias)
@@ -122,12 +130,16 @@ def generation_step(
         if result.finish not in FINISH_REASONS:
             return StepOutput(outcome="error", code=RESULT_INVALID)
         value = {"result": generation_result_json(result)}
-        return StepOutput(value, usage=result.usage.as_json())
+        events = tuple(facts(result)) if facts is not None else ()
+        return StepOutput(value, usage=result.usage.as_json(), events=events)
 
     def work(deadline: Deadline) -> StepOutput:
         return _call(body)
 
-    extra = _extra(table, request.alias, adapter, table.native(request.alias))
+    extra = {
+        **(started or {}),
+        **_extra(table, request.alias, adapter, table.native(request.alias)),
+    }
     step = executor.step(
         step_id, "model", request.alias, request.context_hash, work, policy, extra=extra
     )
