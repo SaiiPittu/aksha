@@ -87,3 +87,26 @@ def test_the_runtime_store_sits_beside_the_world_copy(patent: SuiteRun) -> None:
     assert folders and all((f.parent / "world" / "sources").is_dir() for f in folders)
     assert not list(patent.out.rglob("sources/**/aksha.sqlite"))
     assert json.loads(next(patent.out.rglob("meta.json")).read_text())["agent"] == "patent"
+
+
+def test_the_episode_mailbox_never_sends_a_landed_key_twice(patent: SuiteRun) -> None:
+    """A send that landed before a restart is found in the episode's store, not sent again."""
+    from aksha.app import eval_store_opener
+    from aksha.evals.agents.runtime import EpisodeMailbox
+    from aksha.evals.episode import Episode
+    from aksha.evals.events import episode_catalogue
+
+    (case, _world, _rollout), rec = next(iter(patent.records.items()))
+    assert rec.path is not None
+    (row,) = rec.ledger
+    folder = rec.path.parent if rec.path.name == "bundle" else rec.path
+    store = eval_store_opener()(folder / "store.sqlite", episode_catalogue())
+    try:
+        episode = Episode(store=store, owner=f"episode:{case}", root=folder / "world",
+                          case_id="c", world="w", rollout=0, seed=0)  # fmt: skip
+        box = EpisodeMailbox("counsel_mail", episode)  # a fresh process: no grants, no memory
+        receipt = box.apply(str(row["effect_key"]), {})
+        assert receipt.body["effect_key"] == row["effect_key"]
+        assert episode.receiver.rows == []
+    finally:
+        store.close()

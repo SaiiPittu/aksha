@@ -107,9 +107,14 @@ class EpisodeMailbox:
         return f"{self.name}-episode"
 
     def apply(self, key: str, request: Mapping[str, Any]) -> SystemReceipt:
-        """Send once per key, under the episode approval granted for the request's target."""
-        if key in self.sent:
-            return self.sent[key]
+        """Send once per key, under the episode approval granted for the request's target.
+
+        A key the episode's store already holds a delivery for (a send that landed before a
+        restart) returns that delivery's receipt and sends nothing again.
+        """
+        landed = self.lookup(key, request)
+        if landed is not None:
+            return landed
         target = next((t for t in self.grants if t in _strings(request)), None)
         if target is None:
             raise EvalError("unbound_send", f"{self.name}: no episode approval for {key}")
@@ -120,8 +125,14 @@ class EpisodeMailbox:
         return self.sent[key]
 
     def lookup(self, key: str, request: Mapping[str, Any]) -> SystemReceipt | None:
-        """The receipt of the send under ``key``, or None when it never landed."""
-        return self.sent.get(key)
+        """The receipt of the send under ``key``, read from the episode's store; None if none."""
+        if key in self.sent:
+            return self.sent[key]
+        for e in self.episode.store.read(self.episode.owner):
+            if e.type == "episode.effect_sent" and e.payload.get("effect_key") == key:
+                self.sent[key] = SystemReceipt(key, self.ledger_id(), {"effect_key": key})
+                return self.sent[key]
+        return None
 
 
 def _strings(value: Any) -> list[str]:
