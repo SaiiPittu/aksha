@@ -1,0 +1,11 @@
+id = "rf-research-happy"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: a general competitor-research agent"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "Research the temperature-monitoring vendors Rimefold could use on its refrigerated vans, for regional cold-chain delivery fleets in Canada: who they are, what they charge, and what fleet operators say. Compare connectivity (LTE, cellular, BLE, USB, Wi-Fi), accuracy (accura*, deviation, calibrat*) and alerts (alert*, alarm*, SMS, push notification*). What do fleet operators say about: battery (battery, batteries, recharg*); false alarms (false alarm*, false alert*, nuisance); setup (setup, set up, set-up, onboard*, install*)?"
+expect = ["counts.competitors_resolved", "counts.review_themes_unique", "competitors.K2", "competitors.K5", "facts.RF-01", "facts.RF-02", "facts.RF-03", "facts.RF-04", "facts.RF-05", "facts.RF-06", "facts.RF-07", "facts.RF-08", "facts.RF-09"]
+criteria = ["inv.one_row_per_key", "research.competitor_count", "research.duplicates_are_edges", "research.prices", "research.conflicts_are_edges", "research.unique_reviews", "research.theme_counts", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+should = ["no_market_percentage"]

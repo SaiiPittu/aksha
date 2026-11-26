@@ -1,0 +1,128 @@
+SYNTHETIC FIXTURE - text extracted from a PDF memo. Invented for testing; not real companies, products, prices or people.
+
+Rimefold                                         Internal memo (synthetic)
+Temperature monitoring for the van fleet: vendor landscape
+
+Prepared by: Ines Okafor (synthetic), operations
+Date: 15 September 2026
+Distribution: founders, ops leads
+
+1. Why this memo
+
+Rimefold runs refrigerated last-mile deliveries for independent pharmacies
+and grocers in Ontario and Quebec. Today every van carries a paper chart
+and a dial thermometer, and two pharmacy customers have asked for a
+continuous temperature record per delivery before they renew. This memo
+lists the monitoring vendors we have met or read about, what each one
+sells, and what we know about price. It is a first pass, written from
+calls, trade-show notes and the material vendors sent us; it is not a
+recommendation.
+
+A short note on the wider market. An industry survey of 210 carriers
+(synthetic) found that 38% of them filed at least one temperature-excur-
+sion claim in 2025. That figure is the survey's, not ours, and it covers
+carriers of every size.
+
+What we need, in short: a record for every delivery that a pharmacy will
+accept, an alert to the driver when a tote drifts out of range, and some-
+thing that copes with two temperature zones in one van (2 to 8 °C for
+pharmacy, -18 °C for frozen grocery).
+
+2. Glacivo TrackPoint (Glacivo Inc)
+
+Glacivo sells a rechargeable cellular tracker that clips to the wall of
+the cargo box. It reports every five minutes over LTE-M and sends an SMS
+alert when a reading leaves the band set for that delivery. Their sales
+lead quoted us CAD 22 per tracker per month on a month-to-month plan,
+hardware included, during a call in August.
+
+Their datasheet makes a strong accuracy claim; it is worth reading the
+calibration appendix at the back before taking it at face value. The
+tracker needs recharging roughly every five weeks.
+
+
+                                                            Page 1 of 4
+
+Rimefold - vendor landscape (synthetic)                  15 September 2026
+
+3. Pellisar U8 (Pellisar Sensors Ltd)
+
+Pellisar makes a single-use USB logger. You press start, drop it into the
+tote, and at the end of the run the pharmacy plugs it into any computer
+and gets a PDF report with the full trace. No app, no subscription. The
+logger cannot alert anyone during the run; it only records. Pellisar is
+the oldest name on this list and pharmacies know its reports. List price
+is in their datasheet.
+
+4. Coldhaven SafeTemp U8 (Coldhaven Supply)
+
+Coldhaven is a newer brand that approached us at the Toronto cold-chain
+trade show. They sell a single-use USB logger, the SafeTemp U8, in packs,
+with free shipping across Canada. The reports look much like Pellisar's.
+Coldhaven seems aimed at small fleets that buy loggers by the box. Their
+price list is attached to this memo's folder.
+
+5. Frostmark Reefer Link (Frostmark Telematics)
+
+Frostmark is a telematics box that wires into the refrigeration unit
+itself rather than sitting in the cargo area. It reads the unit's own
+sensors (return air, discharge air, the target temperature) and the door
+switch, and sends alarms through a web dashboard and a phone app. It
+needs a technician to fit, about two hours per van.
+
+Frostmark does not publish prices; every quote depends on the number of reefer units.
+
+We asked for a quote for 60 vans in July and have not had one yet.
+
+
+                                                            Page 2 of 4
+
+Rimefold - vendor landscape (synthetic)                  15 September 2026
+
+6. Varrow Gateway (Varrow Labs)
+
+Varrow Labs sells a small gateway that sits in the cab and collects
+readings from wired probes in the cargo box. There is no subscription:
+the gateway pushes readings to a server you run yourself. Price is
+CAD 349 per gateway, paid once, with probes extra.
+
+The gateway's working range is printed in the brochure as -40 °F to 158 °F.
+
+Varrow is a two-person company and support is by email only. Their
+gateway would need our own engineering time to receive and store the
+data, which we do not have this year.
+
+7. Tundrel Halo (Tundrel Systems)
+
+Tundrel sells BLE tags that sit inside each tote, and a gateway in the
+van that relays the tag readings over LTE. This is the only option that
+tracks each tote separately, which matters for mixed pharmacy and frozen
+loads. Pricing is in the shortlist sheet that the ops team keeps; tags
+and gateways are priced separately and in US dollars.
+
+
+                                                            Page 3 of 4
+
+Rimefold - vendor landscape (synthetic)                  15 September 2026
+
+8. What we still need to find out
+
+- Whether pharmacies will accept a report from a tracker rather than from
+  a single-use logger. Two of our pharmacy customers named Pellisar's
+  report format; neither has seen the others.
+- What Frostmark charges.
+- Whether Glacivo's accuracy holds at frozen temperatures; see its
+  calibration appendix.
+- How each vendor handles a van with two temperature zones.
+
+9. Sources
+
+- Vendor calls, July and August 2026 (notes in the ops folder).
+- Datasheets and price lists sent by vendors.
+- The ops team's vendor shortlist sheet.
+- The review export from the fleet-software review hub.
+
+
+                                                            Page 4 of 4
+
+SYNTHETIC FIXTURE - end of memo

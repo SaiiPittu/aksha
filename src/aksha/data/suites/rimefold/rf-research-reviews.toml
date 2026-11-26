@@ -1,0 +1,11 @@
+id = "rf-research-reviews"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-REVIEWDUP"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "What do fleet operators say about temperature-monitoring products, for regional cold-chain delivery fleets in Canada? What do fleet operators say about: battery (battery, batteries, recharg*); false alarms (false alarm*, false alert*, nuisance); setup (setup, set up, set-up, onboard*, install*)?"
+expect = ["counts.reviews_unique", "counts.review_themes_unique", "traps.T-REVIEWDUP"]
+criteria = ["research.unique_reviews", "research.theme_counts", "citation.exists", "trap.T-REVIEWDUP"]
+should = ["no_market_percentage"]

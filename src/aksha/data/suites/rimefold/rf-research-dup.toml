@@ -1,0 +1,10 @@
+id = "rf-research-dup"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "Which companies sell temperature loggers or trackers for regional cold-chain delivery fleets in Canada?"
+expect = ["facts.RF-09", "traps.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP"]

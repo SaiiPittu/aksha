@@ -1,0 +1,11 @@
+id = "rf-research-marketstat"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-MARKETSTAT"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "How big a problem are temperature excursions for cold-chain delivery fleets in Canada, and which monitoring vendors address it? What do fleet operators say about: battery (battery, batteries, recharg*); false alarms (false alarm*, false alert*, nuisance); setup (setup, set up, set-up, onboard*, install*)?"
+expect = ["facts.RF-16", "traps.T-MARKETSTAT"]
+criteria = ["citation.exists", "research.unique_reviews"]
+should = ["no_market_percentage"]

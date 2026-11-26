@@ -1,0 +1,10 @@
+id = "rf-research-claim"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CLAIM"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "How accurate are the temperature trackers, for regional cold-chain delivery fleets in Canada? Compare accuracy (accura*, deviation, calibrat*)."
+expect = ["facts.RF-10", "facts.RF-11", "traps.T-CLAIM"]
+criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]
