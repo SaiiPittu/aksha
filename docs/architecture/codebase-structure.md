@@ -327,15 +327,23 @@ src/aksha/
 │       └── export.py                        export_run: ReadableSpan, OTLP JSON Lines file per segment
 ├── agents/                                  AGENTS: one folder per agent
 │   ├── __init__.py                          imports aksha.runtime.api and named extensions
-│   └── research/                            the research agent (scenarios 1, 11, 12)
-│       ├── __init__.py                      what it does, where each part lives
-│       ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
-│       ├── tools.py                         search, fetch_page, read_reviews, read_note
-│       ├── parsing.py                       pages, review exports and notes as exact passages; pure
-│       ├── analysis.py                      entity resolution, price conflicts, review samples; pure
-│       ├── checks.py                        completion checks over a TaskView; pure
-│       ├── fakes.py                         ResearchModel: the offline rule-based policy
-│       └── prompts/                         the instructions and one prompt per Task
+│   ├── research/                            the research agent (scenarios 1, 11, 12)
+│   │   ├── __init__.py                      what it does, where each part lives
+│   │   ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
+│   │   ├── tools.py                         search, fetch_page, read_reviews, read_note
+│   │   ├── parsing.py                       pages, review exports and notes as exact passages; pure
+│   │   ├── analysis.py                      entity resolution, price conflicts, review samples; pure
+│   │   ├── checks.py                        completion checks over a TaskView; pure
+│   │   ├── fakes.py                         ResearchModel: the offline rule-based policy
+│   │   └── prompts/                         the instructions and one prompt per Task
+│   └── patent/                              the patent-disclosure agent (example)
+│       ├── __init__.py                      what it does and never does
+│       ├── agent.py                         AGENT: kinds, the Task tree, build_agent(world)
+│       ├── world.py                         SourceWorld: typed views, view versions, search
+│       ├── tools.py                         read tools, fill_form, send_packet (approval)
+│       ├── rules.py                         the rule table, families, form refusals
+│       ├── checks.py                        pure completion checks
+│       └── fakes.py                         PatentFake: the rule-based generation model
 └── interfaces/                              INTERFACES: how people reach the runtime
     ├── __init__.py                          calls the session API through aksha.app
     ├── wire.py                              commands, receipts and statuses as JSON; the exit codes
@@ -430,7 +438,7 @@ The ADR interface sections name a flat file per primitive (for example `aksha/ru
 | `tests/contract/` | One suite per port, parametrised over every adapter of that port; a new adapter must pass it unchanged | `tests/contract/storage/test_event_store.py` runs against `SQLiteEventStore` and `PostgresEventStore`; `tests/contract/blobs/test_blob_store.py` against `FilesystemBlobStore` |
 | `tests/integration/` | Several primitives together through `aksha.app`, on a temporary store | a run that suspends on an approval and resumes after a restart |
 | `tests/architecture/` | The dependency rule, the layout rules and the ADR-named guards, each with a planted violation; the committed snapshots (`api_surface.json`, `permission_matrix.md`) | `test_dependency_rule.py`, `test_definitions.py` |
-| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container, named per session), `steps.py` (simulated crashes, scripted work, `FaultStore`), `systems.py` (mock systems of record), `killrun.py` (the run a real SIGKILL ends after its Nth commit), `agents.py` (copies the fixture agent and extension into a temporary folder), `artifacts.py` (kinds, relations and a `World` with a SQLite store, a blob store and an artifact store) |
+| `tests/support/` | Values and harnesses the suites share, never tests themselves | `events.py` (probe event types), `backends.py` (one harness per storage adapter), `postgres.py` (the test container, named per session), `steps.py` (simulated crashes, scripted work, `FaultStore`), `systems.py` (mock systems of record), `killrun.py` (the run a real SIGKILL ends after its Nth commit), `agents.py` (copies the fixture agent and extension into a temporary folder), `artifacts.py` (kinds, relations and a `World` with a SQLite store, a blob store and an artifact store), `patent.py` (the patent agent's episode rig over a fixture world, and the graders that read `key.json`) |
 | `tests/fixtures/` | Plugins the loader tests copy, never load in place | `agents/toy/` (the conformance agent), `extensions/echo/` (the conformance extension), `agent_terms.txt` (words the runtime must not contain) |
 
 1. A test function name says the behaviour it checks. A test named in an ADR's Tests section keeps that name (`test_update_and_delete_refused`).
