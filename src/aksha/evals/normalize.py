@@ -20,8 +20,11 @@ def squash(text: str) -> str:
 
 
 def name_key(text: str) -> str:
-    """A name for matching: case-folded, punctuation dropped, whitespace folded."""
-    return squash(re.sub(r"[^\w\s]", " ", text.casefold()))
+    """A name for matching: case-folded, punctuation and underscores dropped, whitespace folded.
+
+    ``double booking`` and an ID made from it, ``double_booking``, are one name.
+    """
+    return squash(re.sub(r"[^\w\s]|_", " ", text.casefold()))
 
 
 def enum_key(value: object) -> str:

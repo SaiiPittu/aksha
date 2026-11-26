@@ -1,0 +1,10 @@
+{
+  "_comment": "SYNTHETIC FIXTURE. Invented for testing the agents; not real people.",
+  "exported": "2026-11-20",
+  "inventors": [
+    {"ref": "SYN-P-21", "who": {"name": "Priya Natarajan", "org": "Cindral"}, "role": "product lead", "idea": "INV-7", "did": "Proposed marking a slot at risk when the reminder reply is late", "since": "2026-02-11", "terms": "employment contract, IP assigned to Cindral"},
+    {"ref": "SYN-P-22", "who": {"name": "Tomasz Wilk", "org": "Cindral"}, "role": "backend engineer", "idea": "INV-7", "did": "Designed the hold and the restore of the original booking; built the prototype", "since": "2026-02-11", "terms": "employment contract, IP assigned to Cindral"},
+    {"ref": "SYN-P-23", "who": {"name": "Grace Obi", "org": "Cindral"}, "role": "founder", "idea": "INV-9", "did": "Proposed ranking the waitlist by travel time", "since": "2026-04-03", "terms": "founder agreement, IP assigned to Cindral"},
+    {"ref": "SYN-P-22", "who": {"name": "Tomasz Wilk", "org": "Cindral"}, "role": "backend engineer", "idea": "INV-9", "did": "Built the travel-time estimate from postcodes", "since": "2026-04-03", "terms": "employment contract, IP assigned to Cindral"}
+  ]
+}

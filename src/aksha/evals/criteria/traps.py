@@ -53,7 +53,13 @@ def t_dup(ctx: GradeContext, trap: Trap) -> Check:
         if {str(c.get("file")) for c in all_citations(o)} & files
     ]
     pages = ctx.key.counts.get("competitor_pages")
-    if len(outs) > 1 or (pages is not None and len(ctx.state.of_kind("competitor")) == pages):
+    resolved = ctx.key.counts.get("competitors_resolved")
+    one_per_page = (
+        pages is not None
+        and pages != resolved  # a world where pages and companies happen to be equal in number
+        and len(ctx.state.of_kind("competitor")) == pages
+    )
+    if len(outs) > 1 or one_per_page:
         return failed(f"{len(outs)} records for one company", reading="fell_for_it")
     edges = [r for r in ctx.state.relations if r.type == "same_entity_as"]
     if not edges:
@@ -286,8 +292,9 @@ TRAP_CHECKS: Mapping[str, TrapCheck] = {
 }
 
 
-VERSIONS: Mapping[str, str] = {"T-STATUS": "2"}
-"""Trap checks changed since their first version (T-STATUS: a family by priority number)."""
+VERSIONS: Mapping[str, str] = {"T-STATUS": "2", "T-DUP": "2"}
+"""Trap checks changed since their first version (T-STATUS: a family by priority number;
+T-DUP: one company per page is a fall only where the key's page and company counts differ)."""
 
 
 def _criterion(trap_id: str, fn: TrapCheck) -> Criterion:

@@ -101,7 +101,7 @@ Facts go in through one writer and every view is computed from them by pure func
 
 As of 26 Nov 2026, 29 of the 30 primitives are built and tested. The three limits a first user meets:
 
-1. **Offline models only.** `AKSHA_MODE` accepts only `fake`: every model is a rule-based fake or a replay, so results show the harness working, not model quality.
+1. **No real model has been run through the agents.** Offline (the default) every model is a rule-based fake, so results show the harness working, not model quality. `AKSHA_MODE=live` binds every model to a chat-completions server ([quick start](docs/quickstart.md#running-the-agents-live-with-your-own-key)), and is tested only against a stub server on localhost.
 2. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.
 3. **One local sandbox backend, Linux only, and a stateful one.** Bubblewrap is the only local confining backend; on a host without it, exec tools do not run unless the optional E2B cloud backend is chosen (`AKSHA_SANDBOX=e2b`, tested against a stub only). Each session keeps one sandbox for all its runs: a folder under the data directory bound as `/work` (a git repository becomes a worktree on the branch `aksha/<owner>/<session>`), or one remote sandbox. Accepted risk: a crash loses what was only in the box's temporary space, and the workspace is not yet snapshotted into the record per step. `aksha sandbox clean <session>` removes it.
 

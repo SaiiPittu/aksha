@@ -154,3 +154,20 @@ def test_runtime_commit_is_unknown_outside_a_checkout(tmp_path: Path) -> None:
     assert runtime_commit(tmp_path) == ("unknown", False)
     commit, _ = runtime_commit()
     assert commit != "unknown"  # the tests run from a checkout
+
+
+def test_a_requery_whose_model_call_fails_answers_the_empty_hash() -> None:
+    """A transient model error re-running a recorded query is a failed query, not a crash."""
+    from types import SimpleNamespace
+
+    from aksha.app import ToolQueryRunner
+    from aksha.runtime.execution.errors import TransientStepError
+
+    def body(ctx: object, args: object) -> object:
+        raise TransientStepError("transient", "the model timed out")
+
+    decl = SimpleNamespace(body=body, spec=SimpleNamespace(name="list_inputs", model_aliases=()))
+    registry = SimpleNamespace(names=lambda: ("list_inputs",), get=lambda name: decl)
+    loaded = SimpleNamespace(agent=SimpleNamespace(name="a"), registry=registry)
+    runner = ToolQueryRunner([loaded], lambda owner: None)  # type: ignore[list-item]
+    assert runner("o", "a.list_inputs?{}") == ""

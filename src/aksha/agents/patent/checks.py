@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from typing import Any
 
 from aksha.runtime.api import CheckResult
@@ -9,6 +10,56 @@ from aksha.runtime.api import CheckResult
 from . import rules
 
 K = "patent."
+QUOTED = ("extraction", "prior_art", "comparison", "recommendation", "packet")
+"""The kinds whose ``{file, quote}`` items must quote a passage a read tool returned."""
+
+
+def _quotes(value: Any, path: str = "") -> Iterator[tuple[str, str, str]]:
+    if isinstance(value, Mapping):
+        f, q = value.get("file"), value.get("quote")
+        if isinstance(f, str) and isinstance(q, str) and q:
+            yield path, f, q
+        for k, v in value.items():
+            yield from _quotes(v, f"{path}/{k}")
+    elif isinstance(value, list | tuple):
+        for i, v in enumerate(value):
+            yield from _quotes(v, f"{path}/{i}")
+
+
+def ungrounded(view: Any, content: Mapping[str, Any]) -> list[str]:
+    """The paths of quotes in ``content`` that no passage minted for their file holds.
+
+    The read tools mint a span over every passage a view quotes, so a quote the model
+    copied from what it read is inside one; a quote it made up, or edited, is in none.
+    """
+    texts: dict[str, list[str]] = {}
+    for e in view.log.events:
+        if e.type == "excerpts.minted":
+            for s in e.payload.get("spans", ()):
+                texts.setdefault(str(s.get("record_id")), []).append(str(s.get("text", "")))
+    out = []
+    for path, f, q in _quotes(content):
+        if not any(q in t for t in texts.get(f, ())):
+            out.append(path)
+    return out
+
+
+def _grounded(view: Any, kind: str) -> CheckResult | None:
+    v = _own(view, kind)
+    if v is None:
+        return None
+    bad = ungrounded(view, v.content)
+    if bad:
+        return CheckResult(False, f"quotes at {bad[:5]} are in no passage a tool returned for "
+                           "their file: quote the record exactly", count=len(bad))  # fmt: skip
+    return None
+
+
+def plan_of(view: Any) -> Mapping[str, Any]:
+    """The portfolio's plan (the request read into what to do)."""
+    p = view.latest("portfolio")
+    plan = p.content.get("plan") if p is not None else None
+    return plan if isinstance(plan, Mapping) else {}
 
 
 def _own(view: Any, kind: str) -> Any:
@@ -21,13 +72,20 @@ def portfolio_saved(view: Any) -> CheckResult:
 
 
 def extraction_saved(view: Any) -> CheckResult:
-    """This candidate's extraction is saved."""
-    return CheckResult(_own(view, "extraction") is not None, "save the extraction")
+    """This candidate's extraction is saved, every quote in it grounded in what was read."""
+    if _own(view, "extraction") is None:
+        return CheckResult(False, "save the extraction")
+    return _grounded(view, "extraction") or CheckResult(True)
 
 
 def prior_art_saved(view: Any) -> CheckResult:
-    """This candidate's prior-art record is saved."""
-    return CheckResult(_own(view, "prior_art") is not None, "save the prior-art record")
+    """This candidate's prior-art record is saved, its quotes grounded; skipped by the plan."""
+    v = _own(view, "prior_art")
+    if v is None:
+        return CheckResult(False, "save the prior-art record")
+    if v.content.get("skipped") and plan_of(view).get("prior_art", True):
+        return CheckResult(False, "the plan asks for a prior-art search: search, do not skip")
+    return _grounded(view, "prior_art") or CheckResult(True)
 
 
 def comparison_saved(view: Any) -> CheckResult:
@@ -36,8 +94,12 @@ def comparison_saved(view: Any) -> CheckResult:
     if v is None:
         return CheckResult(False, "save the comparison matrix")
     cells = v.content.get("cells", [])
-    bad = [c for c in cells if c.get("state") not in rules.STATES]
-    return CheckResult(not bad, "every cell is disclosed, partial, not_found or not_checked")
+    bad = [c for c in cells if not isinstance(c, Mapping) or c.get("state") not in rules.STATES
+           or not c.get("element")]  # fmt: skip
+    if bad:
+        return CheckResult(False, "every cell names its element and is disclosed, partial, "
+                           "not_found or not_checked")  # fmt: skip
+    return _grounded(view, "comparison") or CheckResult(True)
 
 
 def recommendation_follows_rules(view: Any) -> CheckResult:
@@ -47,7 +109,8 @@ def recommendation_follows_rules(view: Any) -> CheckResult:
         return CheckResult(False, "save the recommendation")
     if ext is None or cmp_ is None:
         return CheckResult(False, "the extraction and comparison must exist first")
-    want, rule = rules.next_action(ext.content, cmp_.content)
+    cutoff = int(plan_of(view).get("priority_cutoff", rules.TOP_PRIORITIES))
+    want, rule = rules.next_action(ext.content, cmp_.content, top_n=cutoff)
     got = rec.content.get("next_action")
     return CheckResult(got == want, f"the rule table gives {want} ({rule}), not {got}")
 
@@ -68,10 +131,24 @@ def selection_saved(view: Any) -> CheckResult:
     return CheckResult(view.latest("selection") is not None, "save the person's selection")
 
 
+def _forms(view: Any) -> dict[str, Any]:
+    """This candidate's filled forms, by template."""
+    prefix = f"{view.key}~"
+    return {
+        str(k)[len(prefix) :]: v
+        for k, v in view.all_latest("form").items()
+        if k is not None and str(k).startswith(prefix)
+    }
+
+
 def forms_filled(view: Any) -> CheckResult:
-    """Both forms are filled for this candidate."""
-    ok = _own(view, "disclosure") is not None and _own(view, "worksheet") is not None
-    return CheckResult(ok, "fill the disclosure form and the worksheet")
+    """Every form the plan names is filled for this candidate (at least one form)."""
+    filled = _forms(view)
+    want = [str(t) for t in plan_of(view).get("forms", ())]
+    missing = [t for t in want if t not in filled]
+    if missing:
+        return CheckResult(False, f"fill the forms {missing}", keys=tuple(missing))
+    return CheckResult(bool(filled), "fill each blank form found (list_templates)")
 
 
 def packet_saved(view: Any) -> CheckResult:
@@ -84,13 +161,16 @@ def packet_saved(view: Any) -> CheckResult:
     if p is None:
         return CheckResult(False, "save the counsel-review packet")
     sections = p.content.get("sections", [])
-    first = sections[0]["title"] if sections else ""
+    first = sections[0].get("title") if sections and isinstance(sections[0], Mapping) else ""
     ok = first == "Needs counsel confirmation" and bool(p.content.get("scope_note"))
     if not ok:
         return CheckResult(False, "open with 'Needs counsel confirmation' and carry the scope note")
-    forms = [_own(view, k) for k in ("disclosure", "worksheet")]
-    if any(f is None for f in forms):
-        return CheckResult(False, "the disclosure form and the worksheet must exist first")
+    forms = list(_forms(view).values())
+    if not forms:
+        return CheckResult(False, "the forms must be filled first")
+    bad = _grounded(view, "packet")
+    if bad is not None:
+        return bad
     missing = [n for f in forms for n in rules.required_missing(f.content)]
     return CheckResult(
         not missing,
@@ -100,5 +180,10 @@ def packet_saved(view: Any) -> CheckResult:
 
 
 def handoff_recorded(view: Any) -> CheckResult:
-    """The send's receipt is recorded."""
-    return CheckResult(_own(view, "handoff") is not None, "record the send receipt")
+    """The send's receipt is recorded; a plan that sends nothing records the packet held."""
+    h = _own(view, "handoff")
+    if h is None:
+        return CheckResult(False, "record the send receipt")
+    if h.content.get("status") == "held" and plan_of(view).get("send", True):
+        return CheckResult(False, "the plan asks for the packet to be sent")
+    return CheckResult(True)

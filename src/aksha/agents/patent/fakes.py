@@ -24,9 +24,15 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from aksha.runtime.api import GenerationRequest, GenerationResult, RuleGenerationModel, ToolCall
+from aksha.runtime.api import (
+    GenerationRequest,
+    GenerationResult,
+    RuleGenerationModel,
+    ToolCall,
+    find_dates,
+)
 
-from . import fakes_stillroom, rules
+from . import fakes_readers, fakes_stillroom, rules
 
 Groups = list[list[str]]
 
@@ -183,6 +189,7 @@ class Context:
     results: list[tuple[str, dict[str, Any], dict[str, Any]]] = field(default_factory=list)
     answers: list[str] = field(default_factory=list)
     rebuild_old: dict[str, Any] | None = None
+    request: str = ""
 
     def read(self, kind: str) -> tuple[str, dict[str, Any]] | None:
         """The read of local kind ``kind``: ``(ref, content)``."""
@@ -222,7 +229,13 @@ def parse(request: GenerationRequest) -> Context:
                 ctx.reads[ref.rsplit("@", 1)[0]] = (ref, json.loads(body))
         elif msg.role == "user" and text.startswith("Answers from the person:"):
             ctx.answers += re.findall(r"^A: (.+)$", text, flags=re.M)
-        elif msg.role == "user" and text.startswith("Rebuild: your earlier version"):
+        elif (
+            msg.role == "user"
+            and not ctx.request
+            and not text.startswith(("Artifacts this Task reads", "Answers from", "Rebuild:"))
+        ):
+            ctx.request = text.split("\n\nTask: ", 1)[0]
+        if msg.role == "user" and text.startswith("Rebuild: your earlier version"):
             body = text.split("\n", 2)[1]
             try:
                 ctx.rebuild_old = json.loads(body)
@@ -232,8 +245,9 @@ def parse(request: GenerationRequest) -> Context:
             calls[c.call_id] = (c.name, dict(c.arguments))
         if msg.role == "tool" and msg.call_id in calls:
             name, args = calls[msg.call_id]
+            head = text.partition("\n")[0]  # span IDs, when minted, follow on the next line
             try:
-                result = json.loads(text)
+                result = json.loads(head)
             except ValueError:
                 result = {"status": "error"}
             ctx.results.append((name, args, result))
@@ -301,6 +315,43 @@ def _evidence(p: Mapping[str, Any], groups: Groups) -> dict[str, Any] | None:
     return None
 
 
+_NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def plan_of(
+    request: str, candidates: Sequence[str], templates: Sequence[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """The plan a request asks for, by a small grammar (a live model reads free text).
+
+    * candidates the request names by ID (else every candidate);
+    * ``only prior art`` / ``just the prior-art search`` / ``no forms``: search, fill nothing;
+      ``no prior art`` / ``skip the search``: fill forms without a search;
+    * ``only the <words> form``: the templates whose title holds those words;
+    * ``do not send`` / ``don't send`` / ``draft only``: hold the packet;
+    * ``top <N> priorities``: how many business priorities count as top (else two).
+    """
+    low = request.lower()
+    named = [c for c in candidates if re.search(rf"(?<![\w-]){re.escape(c)}(?![\w-])", request)]
+    only_art = bool(re.search(r"\b(only|just)\b[^.]{0,20}\bprior[- ]art\b|\bno forms?\b", low))
+    no_art = bool(re.search(r"\bno prior[- ]art\b|\bskip (the )?(prior[- ]art )?search\b", low))
+    forms: list[str] = []
+    m = re.search(r"\b(?:only|just) (?:the |our )?([\w -]{2,40}?) form\b", low)
+    if m and not only_art:
+        words = [w for w in m.group(1).split() if len(w) > 2]
+        forms = [str(t["template"]) for t in templates
+                 if all(w in f"{t['template']} {t['form']}".lower() for w in words)]  # fmt: skip
+    top = re.search(r"\btop (\d+|one|two|three|four|five) (?:business )?priorit", low)
+    cutoff = 2 if top is None else int(_NUMBERS.get(top.group(1), top.group(1)))
+    return {
+        "candidates": named or list(candidates),
+        "prior_art": not no_art,
+        "forms": forms,
+        "fill_forms": not only_art,
+        "send": not (only_art or re.search(r"\b(do not|don't|dont) send\b|\bdraft only\b", low)),
+        "priority_cutoff": cutoff,
+    }
+
+
 class PatentFake(RuleGenerationModel):
     """The rule-based generation model (module doc). One method per Task."""
 
@@ -318,12 +369,23 @@ class PatentFake(RuleGenerationModel):
     def _scope(self, ctx: Context) -> GenerationResult:
         listed = ctx.ok("list_candidates")
         if not listed:
-            return _reply(_call("list_candidates", 1))
+            return _reply(_call("list_candidates", 1), _call("list_templates", 1))
         rows = listed[-1][1]["candidates"]
+        unread = list(listed[-1][1].get("unread", []))
+        if unread and not ctx.called("read_document"):  # the fast readers left these: read them
+            return _reply(*(_call("read_document", i, path=p) for i, p in enumerate(unread, 1)))
+        templates = ctx.ok("list_templates")[-1][1]["templates"] if ctx.ok("list_templates") else []
+        plan = plan_of(ctx.request, [r["candidate"] for r in rows], templates)
+        rows = [r for r in rows if r["candidate"] in plan["candidates"]]
         content = {
+            "plan": plan,
             "candidates": [r["candidate"] for r in rows],
             "notes": [
                 {"candidate": r["candidate"], "file": r["note"], "title": r["title"]} for r in rows
+            ],
+            "unread": [
+                {"file": a["path"], "holds": "read; no invention recognised in it"}
+                for a, _ in ctx.ok("read_document")
             ],
         }
         return _reply(
@@ -365,12 +427,22 @@ class PatentFake(RuleGenerationModel):
 
     def _prior_art(self, ctx: Context) -> GenerationResult:
         c = str(ctx.key)
+        plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
+        if plan.get("prior_art") is False:
+            content: dict[str, Any] = {
+                "candidate": c, "query": None, "publications": [], "families": [],
+                "skipped": "the request asks for no prior-art search",
+            }  # fmt: skip
+            return _reply(
+                _call("save_artifact", 1, kind="prior_art", key=c, content=content),
+                _call("finish", 1, summary="no search asked for"),
+            )
         if not ctx.called("search_publications"):
             ext = ctx.read("extraction")
             assert ext is not None, "prior_art reads the extraction"
             return _reply(_call("search_publications", 1, all_of=ext[1]["search"]))
         search = ctx.ok("search_publications")[-1][1]
-        if not ctx.called("fetch_publication"):
+        if search["hits"] and not ctx.called("fetch_publication"):
             return _reply(
                 *(
                     _call("fetch_publication", i, id=h["id"])
@@ -379,6 +451,9 @@ class PatentFake(RuleGenerationModel):
             )
         pubs = [d for _, d in ctx.ok("fetch_publication")]
         content = prior_art(c, search, pubs)
+        if not search.get("publications_searched", 1):
+            content["not_checked"] = {"question": "Which publications should be searched? None "
+                                      "is among the inputs.", "reason": "not_checked"}  # fmt: skip
         return _reply(
             _call("save_artifact", 1, kind="prior_art", key=c, content=content),
             _call("finish", 1, summary=f"{len(pubs)} publications recorded"),
@@ -431,6 +506,13 @@ class PatentFake(RuleGenerationModel):
         table = ctx.read("table")
         assert table is not None
         options = [r["candidate"] for r in table[1]["rows"]]
+        if not options:  # nothing to choose from: say so, never ask an empty choice
+            content = {"selected": [], "table": table[0], "based_on": {}, "chosen_by": "none",
+                       "note": "no invention candidate was found among the inputs"}  # fmt: skip
+            return _reply(
+                _call("save_artifact", 1, kind="selection", content=content),
+                _call("finish", 1, summary="no candidate to select"),
+            )
         chosen = [a.strip() for a in ctx.answers if a.strip() in options]
         if not chosen and ctx.rebuild_old is not None:
             chosen = [c for c in ctx.rebuild_old.get("selected", []) if c in options]
@@ -456,13 +538,15 @@ class PatentFake(RuleGenerationModel):
         c = str(ctx.key)
         ext = ctx.read("extraction")
         assert ext is not None
+        plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
         if not ctx.called("list_templates"):
             return _reply(_call("list_templates", 1))
         listed = ctx.ok("list_templates")[-1][1]["templates"]
-        names = {t["form"]: t["template"] for t in listed if t["form"]}
+        wanted = [str(t) for t in plan.get("forms", ())]
+        names = [t["template"] for t in listed if not wanted or t["template"] in wanted]
         if not ctx.called("read_template"):
             ids = sorted({r["person_id"] for r in ext[1]["contributors"]})
-            reads = [_call("read_template", i, template=t) for i, t in enumerate(names.values(), 1)]
+            reads = [_call("read_template", i, template=t) for i, t in enumerate(names, 1)]
             ask = [_call("read_people", 1, person_ids=ids)] if ids else []
             return _reply(*ask, *reads)
         people = {p["person_id"]: p for _, d in ctx.ok("read_people") for p in d["people"]}
@@ -470,31 +554,22 @@ class PatentFake(RuleGenerationModel):
         cmp_, rec, art = ctx.read("comparison"), ctx.read("recommendation"), ctx.read("prior_art")
         assert cmp_ is not None and rec is not None and art is not None
         calls = []
-        if "disclosure" in names:
-            t = names["disclosure"]
-            form = fit(templates[t], disclosure_fields(ext[1], cmp_, art, people, templates[t]))
-            calls.append(_call("fill_form", 1, template=t, candidate=c, fields=form))
-        if "worksheet" in names:
-            t = names["worksheet"]
-            ws = fit(templates[t], worksheet_fields(ext[1], cmp_, people, templates[t]))
-            calls.append(_call("fill_form", 2, template=t, candidate=c, fields=ws))
-        return _reply(*calls, _call("finish", 1, summary="forms filled"))
+        for i, t in enumerate(names, 1):
+            pool = [*disclosure_fields(ext[1], cmp_, art, people, templates[t]),
+                    *worksheet_fields(ext[1], cmp_, people, templates[t])]  # fmt: skip
+            form = fit(templates[t], pool)
+            calls.append(_call("fill_form", i, template=t, candidate=c, fields=form))
+        return _reply(*calls, _call("finish", 1, summary=f"{len(calls)} forms filled"))
 
     def _packet(self, ctx: Context) -> GenerationResult:
         c = str(ctx.key)
         reads = {
-            k: ctx.read(k)
-            for k in (
-                "disclosure",
-                "worksheet",
-                "comparison",
-                "recommendation",
-                "extraction",
-                "prior_art",
-            )
+            k: ctx.read(k) for k in ("comparison", "recommendation", "extraction", "prior_art")
         }
         assert all(v is not None for v in reads.values()), reads.keys()
-        content = packet(c, {k: v for k, v in reads.items() if v is not None})
+        forms = [v for k, v in sorted(ctx.reads.items())
+                 if k.startswith(f"patent.form/{c}~")]  # fmt: skip
+        content = packet(c, {k: v for k, v in reads.items() if v is not None}, forms)
         return _reply(
             _call("save_artifact", 1, kind="packet", key=c, content=content),
             _call("finish", 1, summary="packet ready for review"),
@@ -504,6 +579,14 @@ class PatentFake(RuleGenerationModel):
         c = str(ctx.key)
         pkt = ctx.read("packet")
         assert pkt is not None
+        plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
+        if plan.get("send") is False:
+            content = {"candidate": c, "packet": pkt[0], "recipient": None, "status": "held",
+                       "receipt": "the request asks for the packet to be held, not sent"}  # fmt: skip  # noqa: E501
+            return _reply(
+                _call("save_artifact", 1, kind="handoff", key=c, content=content),
+                _call("finish", 1, summary="held, not sent"),
+            )
         sent = [
             r
             for name, a, r in ctx.results
@@ -533,6 +616,9 @@ def _q(file: str, quote: str, **extra: Any) -> dict[str, Any]:
 
 
 def _implementation(note: Mapping[str, Any]) -> str:
+    said = str(note.get("implementation_status") or "")
+    if said in rules.IMPLEMENTATION and said != "unknown":
+        return said
     text = f"{note['mechanism_heading']} {note['evidence']}".casefold()
     if "whiteboard" in text or "not yet built" in text:
         return "idea_only"
@@ -549,6 +635,8 @@ OUTSIDE = re.compile(
     r"\b(outside|external|consultant|advisor|adviser|contractor|university)\b", re.I
 )
 """An event or a role that comes from outside the venture."""
+SHOWN = re.compile(r"^(what|shown|showed|demo|demonstrated|presented|content|slides?|exhibit)")
+"""A record section that says what was shown, by its heading's first word."""
 FULL = re.compile(r"\b(full description|in full|described fully|complete description)\b", re.I)
 """What was shown described the invention in full."""
 
@@ -667,16 +755,14 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                 **_q(contrib["file"], r["contributed"]),
             }
         )
-        m = re.search(
-            r"\b([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*-\d{4}-\d+), effective (\d{4}-\d{2}-\d{2})",
-            r["agreement_ref"],
-        )
-        if m:
-            found = any(d["found"] for d in r["agreement_documents"] if d["ref"] == m.group(1))
+        refs = [d for d in r["agreement_documents"] if d.get("ref")]
+        when = find_dates(str(r["agreement_ref"]), "dmy")
+        if refs and when:
+            found = any(d["found"] for d in refs)
             agreements.append(
                 {
-                    "ref": m.group(1),
-                    "effective": m.group(2),
+                    "ref": refs[0]["ref"],
+                    "effective": when[-1][0],
                     "person_id": r["person_id"],
                     "document": "found" if found else "referenced_not_found",
                     **_q(contrib["file"], r["agreement_ref"]),
@@ -687,7 +773,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
     roles = {r["person_id"]: r["role"] for r in contrib["rows"]}
     for r in history["rows"]:
         by = [p.strip() for p in str(r.get("by", "")).split(",") if p.strip()]
-        outsider = bool(OUTSIDE.search(r["event_type"])) or any(
+        outsider = bool(OUTSIDE.search(str(r["event_type"] or ""))) or any(
             OUTSIDE.search(roles.get(p, "")) for p in by
         )
         row = {
@@ -702,11 +788,17 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             **_q(r.get("file") or history["file"], r["what_was_shown"]),
             "row": _q(r.get("file") or history["file"], r["row_start"]),
         }
-        if r["date"] is None or r["public"] not in ("yes", "no"):
+        if r["date"] is None:
             row["status"] = "needs_counsel_confirmation"
             row["counsel_question"] = (
                 f"{r['event_id']}: when was it sent, and to how many "
                 "people? The record has no date."
+            )
+        elif r["public"] not in ("yes", "no"):
+            row["status"] = "needs_counsel_confirmation"
+            row["counsel_question"] = (
+                f"{r['event_id']} on {r['date']}, {r.get('elapsed_days')} days before today: "
+                "who could see it? The record does not say whether it was public."
             )
         elif r["public"] == "yes":
             row["status"] = "needs_counsel_confirmation"
@@ -718,7 +810,9 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             row["status"] = "complete"
         doc = docs.get(r["linked_file"] or "")
         if doc and doc["type"] == "record":
-            shown_text = doc["sections"].get("what", "")
+            shown_text = next(
+                (v for k, v in doc["sections"].items() if SHOWN.match(k)), doc.get("body", "")
+            )
             shown = _shown_elements(lex, shown_text)
             if "public_terms" in lex:
                 clause = _clause(shown_text, [t[0] for t in lex["public_terms"].values()])
@@ -971,6 +1065,9 @@ def recommendation(c: str, ext: tuple[str, Any], cmp_: tuple[str, Any]) -> dict[
             )
         elif d["date"] is None:
             risks.append(f"undated disclosure {d['event_id']} ({d['event_type']})")
+        elif d["public"] != "no":
+            risks.append(f"disclosure {d['event_id']} on {d['date']}: the record does not say "
+                         "whether it was public")  # fmt: skip
     for o in ext[1]["outside_contributions"]:
         extra = (
             " and before the agreement's effective date" if o["before_agreement_effective"] else ""
@@ -1037,7 +1134,7 @@ def disclosure_fields(
     outside += [
         {"person_id": r["person_id"], "role": r["role"]}
         for r in ext["contributors"]
-        if "contractor" in r["agreement_ref"]
+        if OUTSIDE.search(str(r["agreement_ref"]))
     ]
     questions = [q["question"] for q in ext["counsel_questions"]]
     gaps = [g["gap"]["question"] for g in ext["missing_details"]]
@@ -1189,8 +1286,25 @@ FIELD_WORDS: Mapping[str, tuple[str, ...]] = {
     "alternatives_considered": ("alternatives", "considered", "rejected", "options"),
     "difference_from_known_approaches": ("difference", "known", "prior", "art", "comparison"),
     "contributors": ("contributors", "inventors", "people", "contributions"),
-    "conception_date_and_records": ("conception", "date", "records", "dated"),
-    "public_disclosures": ("public", "disclosures", "disclosed"),
+    "conception_date_and_records": (
+        "conception",
+        "date",
+        "records",
+        "dated",
+        "first",
+        "written",
+        "earliest",
+    ),
+    "public_disclosures": (
+        "public",
+        "disclosures",
+        "disclosed",
+        "shown",
+        "showed",
+        "demos",
+        "talks",
+        "shared",
+    ),
     "outside_resources": ("outside", "resources", "third", "external", "funding", "grants"),
     "implementation_evidence": ("implementation", "evidence", "built", "tested", "prototype"),
     "figure_list": ("figure", "figures", "drawings"),
@@ -1198,7 +1312,14 @@ FIELD_WORDS: Mapping[str, tuple[str, ...]] = {
     "working_title": ("working", "title"),
     "applicant": ("applicant", "applicants"),
     "proposed_inventors": ("inventors", "proposed", "inventor"),
-    "ownership_and_assignments": ("ownership", "assignment", "assignments", "owner"),
+    "ownership_and_assignments": (
+        "ownership",
+        "assignment",
+        "assignments",
+        "owner",
+        "owns",
+        "owned",
+    ),
     "outside_party_agreements": ("agreements", "party", "outside"),
     "earlier_public_disclosures": ("earlier", "public", "disclosures"),
     "related_applications": ("related", "applications"),
@@ -1214,7 +1335,9 @@ _FILLER = frozenset({"and", "of", "the", "for", "with", "it", "a", "an", "to", "
 
 
 def _tokens(name: str) -> set[str]:
-    return {t for t in re.split(r"[^a-z0-9]+", name.lower()) if t and t not in _FILLER}
+    """A field name's words, each with its singular (``records`` also counts as ``record``)."""
+    words = {t for t in re.split(r"[^a-z0-9]+", name.lower()) if t and t not in _FILLER}
+    return words | {w[:-1] for w in words if len(w) > 3 and w.endswith("s")}
 
 
 def fit(template: Mapping[str, Any], fields: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -1233,7 +1356,7 @@ def fit(template: Mapping[str, Any], fields: Sequence[Mapping[str, Any]]) -> lis
         if src is None:
             want = _tokens(name)
             scored = [
-                (len(want & (_tokens(k) | set(FIELD_WORDS.get(k, ())))), -i, f)
+                (len(want & (_tokens(k) | _tokens(" ".join(FIELD_WORDS.get(k, ()))))), -i, f)
                 for i, (k, f) in enumerate(by_name.items())
             ]
             best = max(scored, key=lambda x: (x[0], x[1]), default=None)
@@ -1255,10 +1378,11 @@ def fit(template: Mapping[str, Any], fields: Sequence[Mapping[str, Any]]) -> lis
     return out
 
 
-def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:
+def packet(
+    c: str, reads: Mapping[str, tuple[str, Any]], forms: Sequence[tuple[str, Any]]
+) -> dict[str, Any]:
     """The counsel-review packet: the counsel section first, then the scope note and parts."""
     ext = reads["extraction"][1]
-    forms = [reads["disclosure"], reads["worksheet"]]
     counsel_items = [
         {"form": ref, "field": f["field"], "question": f.get("counsel_question", "")}
         for ref, content in forms
@@ -1286,8 +1410,7 @@ def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:
             {"title": "Scope", "text": SCOPE_NOTE},
             {
                 "title": "Forms",
-                "disclosure": reads["disclosure"][0],
-                "worksheet": reads["worksheet"][0],
+                "forms": [ref for ref, _ in forms],
                 "counts": counts,
                 "missing": missing,
             },
@@ -1314,9 +1437,21 @@ def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:
                 ],
             },
         ],
-        "inputs": {k: v[0] for k, v in sorted(reads.items())},
+        "inputs": {
+            **{k: v[0] for k, v in sorted(reads.items())},
+            "forms": [ref for ref, _ in forms],
+        },
     }
 
 
-ADAPTERS = {"generate": PatentFake()}
+ADAPTERS = {
+    "generate": PatentFake(),
+    "doc_kind": fakes_readers.DocKind(),
+    "note_structure": fakes_readers.NoteStructure(),
+    "priorities": fakes_readers.Priorities(),
+    "template_fields": fakes_readers.TemplateFields(),
+    "publication_biblio": fakes_readers.PublicationBiblio(),
+    "table_roles": fakes_readers.TableRoles(),
+    "candidate_of": fakes_readers.CandidateOf(),
+}
 """The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

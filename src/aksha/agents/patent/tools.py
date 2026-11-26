@@ -23,7 +23,9 @@ from aksha.runtime.api import (
     Err,
     InputRef,
     Ok,
+    RetryPolicy,
     SaveRequest,
+    SpanDraft,
     ToolContext,
     ToolDecl,
     ToolOutcome,
@@ -36,11 +38,19 @@ from . import rules
 from .world import NotInWorld, SourceWorld, days_between, query_id, query_version
 
 AGENT = "patent"
-RECIPIENTS = ("counsel-primary",)
-"""The configured recipients: the only addresses ``send_packet`` takes."""
+RECIPIENT = {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$"}
+"""A recipient the person names (``counsel-primary``, an address): the approval binds the
+exact one, and the counsel mail system delivers only to recipients it is configured for."""
+FORM_KIND = "form"
+"""Every filled form, whatever template it is, keyed ``<candidate>~<template>``."""
+ALIASES = frozenset({"doc_kind", "note_structure", "table_roles", "candidate_of", "priorities",
+                     "template_fields", "publication_biblio"})  # fmt: skip
+"""The fast-class aliases the read tools ask (``world.py``)."""
 
-FORM_KINDS = ("disclosure", "worksheet")
-"""The two forms a counsel packet carries; which template is which is read from the template."""
+
+def form_key(candidate: str, template: str) -> str:
+    """The key of ``candidate``'s filled ``template``."""
+    return f"{candidate}~{template}"
 
 
 def _obj(props: Mapping[str, Any], required: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -55,6 +65,8 @@ def _obj(props: Mapping[str, Any], required: tuple[str, ...] = ()) -> dict[str, 
 CANDIDATE = _obj({"candidate": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}},
                  ("candidate",))  # fmt: skip
 STRING = {"type": "string", "minLength": 1}
+_SLOW = RetryPolicy(timeout_ms=600_000, max_retries=1)
+"""A read asks fast-class models about several records: a live model takes seconds each."""
 
 
 def _whole(world: SourceWorld, record: str) -> InputRef:
@@ -63,9 +75,16 @@ def _whole(world: SourceWorld, record: str) -> InputRef:
 
 
 def _parts(world: SourceWorld, parts: Any) -> tuple[InputRef, ...]:
-    """Reads of the table rows a view used: each a record part at that part's version."""
+    """Reads of the table rows a view used: each a record part at that part's version.
+
+    A view whose rows no one candidate column selects (rows joined by what they say)
+    reads the whole table.
+    """
     out = []
     for record, column, value in parts:
+        if column is None or value is None:
+            out.append(_whole(world, record))
+            continue
         part = where_part(record, column, str(value).split(","))
         found = world.found(record)
         version = part_version(found.text, part.partition("#")[2], found.version)
@@ -75,6 +94,14 @@ def _parts(world: SourceWorld, parts: Any) -> tuple[InputRef, ...]:
 
 def _shown(data: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in data.items() if k != "parts"}
+
+
+def _spans(world: SourceWorld, *records: str | None) -> tuple[SpanDraft, ...]:
+    """Drafts over every passage of ``records``: what the view may quote, minted as spans."""
+    out: list[SpanDraft] = []
+    for r in dict.fromkeys(x for x in records if x):
+        out.extend(world.quoted(r))
+    return tuple(out)
 
 
 def _guard(body: Callable[[ToolContext, Mapping[str, Any]], ToolOutcome]) -> Any:
@@ -96,30 +123,32 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
     """
 
     def list_candidates(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.candidates()
         read = InputRef("query", query_id("list_candidates", args),
-                        query_version(data["candidates"]))  # fmt: skip
+                        query_version([*data["candidates"], *data["unread"]]))  # fmt: skip
         return ToolOutcome(Ok(data, reads=(read,)))
 
     def read_note(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.note(str(args["candidate"]))
-        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
+        spans = _spans(world, data["file"])
+        return ToolOutcome(Ok(data, spans=spans, reads=(_whole(world, data["file"]),)))
 
     def read_contributors(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.contributor_rows(str(args["candidate"]))
-        return ToolOutcome(Ok(_shown(data), reads=_parts(world, data["parts"])))
+        spans = _spans(world, *(r["file"] for r in data["rows"]))
+        return ToolOutcome(Ok(_shown(data), spans=spans, reads=_parts(world, data["parts"])))
 
     def read_people(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         ids = sorted(str(p) for p in args["person_ids"])
         data = world.people(ids)
         return ToolOutcome(Ok(_shown(data), reads=_parts(world, data["parts"])))
 
     def read_disclosures(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.disclosure_rows(str(args["candidate"]))
         reads = _parts(world, data["parts"])
         shown = _shown(data)
@@ -129,56 +158,64 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 {**r, "elapsed_days": days_between(r["date"], world.today) if r["date"] else None}
                 for r in data["rows"]
             ]
-        return ToolOutcome(Ok(shown, reads=reads))
+        spans = _spans(world, *(r["file"] for r in data["rows"]))
+        return ToolOutcome(Ok(shown, spans=spans, reads=reads))
 
     def read_document(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         path = str(args["path"])
         if ".." in path.split("/") or path not in world.records():
             return ToolOutcome(Err("not_found", f"{path} is not among the inputs"))
         data = world.document(path)
-        return ToolOutcome(Ok(data, reads=(_whole(world, path),)))
+        return ToolOutcome(Ok(data, spans=_spans(world, path), reads=(_whole(world, path),)))
 
     def read_priorities(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.priorities()
         reads = () if data["file"] is None else (_whole(world, data["file"]),)
-        return ToolOutcome(Ok(data, reads=reads))
+        return ToolOutcome(Ok(data, spans=_spans(world, data["file"]), reads=reads))
 
     def list_templates(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.templates()
         read = InputRef("query", query_id("list_templates", args),
                         query_version(data["templates"]))  # fmt: skip
         return ToolOutcome(Ok(data, reads=(read,)))
 
     def read_template(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.template(str(args["template"]))
-        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
+        spans = _spans(world, data["file"])
+        return ToolOutcome(Ok(data, spans=spans, reads=(_whole(world, data["file"]),)))
 
     def search_publications(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         groups = [[str(t) for t in g] for g in args["all_of"]]
         hits = world.search(groups)
         qid = query_id("search_publications", {"all_of": groups})
-        data = {"query": qid, "hits": hits}
+        searched = len(world.publication_ids())
+        data = {"query": qid, "hits": hits, "publications_searched": searched}
+        if not searched:
+            data["note"] = (
+                "no publication is among the inputs: nothing was searched, so no "
+                "element can be called not_found against prior art"
+            )
         read = InputRef("query", qid, query_version([h["id"] for h in hits]))
         return ToolOutcome(Ok(data, reads=(read,)))
 
     def fetch_publication(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         data = world.publication(str(args["id"]))
-        return ToolOutcome(Ok(data, reads=(_whole(world, data["file"]),)))
+        spans = _spans(world, data["file"])
+        return ToolOutcome(Ok(data, spans=spans, reads=(_whole(world, data["file"]),)))
 
     def fill_form(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-        world = bound.over(ctx.reader, ctx.run_date)
+        world = bound.over(ctx.reader, ctx.run_date, ctx.models)
         name, candidate = str(args["template"]), str(args["candidate"])
         listed = {t["template"]: t["form"] for t in world.templates()["templates"]}
-        kind = listed.get(name)
-        if kind not in FORM_KINDS:
-            return ToolOutcome(Err("unknown_template", f"{name!r} is no disclosure form or "
-                                   f"filing worksheet among the inputs"))  # fmt: skip
+        if name not in listed:
+            return ToolOutcome(Err("unknown_template", f"{name!r} is no blank form among the "
+                                   f"inputs; list_templates names {sorted(listed)}"))  # fmt: skip
         if ctx.key is not None and ctx.key != candidate:
             return ToolOutcome(Err("wrong_candidate", f"this instance prepares {ctx.key}"))
         template = world.template(name)
@@ -194,13 +231,16 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
         counts = {s: sum(1 for f in fields if f["status"] == s) for s in rules.FIELD_STATUSES}
         content = {
             "template": name,
+            "form": listed[name],
             "template_version": read.version,
             "candidate": candidate,
             "fields": fields,
             "counts": counts,
         }
-        save = SaveRequest(kind, candidate, content)
-        return ToolOutcome(Ok({"saved": kind, "counts": counts}, reads=(read,)), saves=(save,))
+        key = form_key(candidate, name)
+        save = SaveRequest(FORM_KIND, key, content)
+        data = {"saved": f"{FORM_KIND}/{key}", "counts": counts}
+        return ToolOutcome(Ok(data, reads=(read,)), saves=(save,))
 
     def send_packet(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         # Never called directly: the outbox sends through the counsel mail system.
@@ -219,11 +259,15 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "list_candidates",
                 AGENT,
                 "read",
-                "List the invention candidates (one per invention note among the inputs).",
+                "List the invention candidates (one per invention note among the inputs). "
+                "'unread' names the inputs no kind fits and in which the fast readers found "
+                "no invention: read each with read_document and say what it holds.",
                 _obj({}),
                 collections=rec,
                 recorded_query=True,
                 result_key="/candidate",
+                model_aliases=ALIASES,
+                retry=_SLOW,
             ),
             list_candidates,
         ),
@@ -237,6 +281,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "points and referenced files.",
                 CANDIDATE,
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_note,
         ),
@@ -249,6 +296,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "candidate (who contributed what, when, under which agreement).",
                 CANDIDATE,
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_contributors,
         ),
@@ -263,6 +313,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                     ("person_ids",),
                 ),
                 collections=rec,
+                model_aliases=ALIASES,
+                retry=_SLOW,
             ),
             read_people,
         ),
@@ -275,6 +327,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "for one candidate, with elapsed days to today. Dates only; no legal view.",
                 CANDIDATE,
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_disclosures,
         ),
@@ -286,6 +341,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "Read a record linked from the disclosure history (an email or an event record).",
                 _obj({"path": STRING}, ("path",)),
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_document,
         ),
@@ -297,6 +355,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "Read the ranked business priorities.",
                 _obj({}),
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_priorities,
         ),
@@ -305,12 +366,14 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "list_templates",
                 AGENT,
                 "read",
-                "List the blank form templates among the inputs, each with the form it is "
-                "(disclosure or worksheet).",
+                "List the blank forms among the inputs (any number, any layout), each with "
+                "its title.",
                 _obj({}),
                 collections=rec,
                 recorded_query=True,
                 result_key="/template",
+                model_aliases=ALIASES,
+                retry=_SLOW,
             ),
             list_templates,
         ),
@@ -322,6 +385,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "Read a blank form template's fields.",
                 _obj({"template": STRING}, ("template",)),
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             read_template,
         ),
@@ -345,6 +411,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 collections=rec,
                 recorded_query=True,
                 result_key="/id",
+                model_aliases=ALIASES,
+                retry=_SLOW,
             ),
             search_publications,
         ),
@@ -357,6 +425,9 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 "dates, URL, every status wording as written, claims and text.",
                 _obj({"id": STRING}, ("id",)),
                 collections=rec,
+                model_aliases=ALIASES,
+                mints_citation_spans=True,
+                retry=_SLOW,
             ),
             fetch_publication,
         ),
@@ -377,7 +448,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                     ("template", "candidate", "fields"),
                 ),
                 collections=rec,
-                writes_kinds=frozenset(f"patent.{k}" for k in FORM_KINDS),
+                writes_kinds=frozenset({f"patent.{FORM_KIND}"}),
+                model_aliases=ALIASES,
             ),
             fill_form,
         ),
@@ -387,9 +459,10 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
                 AGENT,
                 "external",
                 "Send one counsel-review packet version to "
-                "a configured recipient. Needs a person's approval of this exact action.",
+                "the recipient the person names. Needs a person's approval of this exact "
+                "action, recipient included.",
                 _obj(
-                    {"packet": STRING, "recipient": {"enum": list(RECIPIENTS)}},
+                    {"packet": STRING, "recipient": RECIPIENT},
                     ("packet", "recipient"),
                 ),
                 external=EffectSpec("counsel_mail", ("/packet", "/recipient"), "reconcile"),

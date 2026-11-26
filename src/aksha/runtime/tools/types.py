@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Literal, get_args
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from aksha.runtime.artifacts.ports import ArtifactReader
 from aksha.runtime.artifacts.types import InputRef, SaveRequest
@@ -33,6 +33,9 @@ from aksha.runtime.outbox.types import EffectSpec
 from aksha.runtime.sandbox.ports import ExecAPI
 from aksha.runtime.sandbox.types import SandboxNeeds
 from aksha.runtime.timers.reads import TimeReads
+
+if TYPE_CHECKING:
+    from aksha.runtime.tools.ports import ToolModels
 
 EffectClass = Literal["read", "store", "external", "exec", "model", "reserved"]
 """The one category of effect a tool has; it picks the gate's route and the recovery."""
@@ -60,7 +63,9 @@ class ToolSpec:
     ``effect`` is ``external``; ``approval`` requires ``external``; ``sandbox`` is for
     ``exec`` tools and ``model_alias`` for ``model`` tools only. ``result_key`` is a JSON
     pointer to a hit's stable identity in a recorded query; ``egress`` names the egress
-    policy of a tool whose body reaches the network.
+    policy of a tool whose body reaches the network. ``model_aliases`` names the agent's
+    extraction and classification aliases the body may ask through ``ToolContext.models``
+    (ADR-P07 G1); the loader refuses one the agent does not declare.
     """
 
     name: str
@@ -80,6 +85,7 @@ class ToolSpec:
     egress: str | None = None
     sandbox: SandboxNeeds | None = None
     model_alias: str | None = None
+    model_aliases: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -107,6 +113,9 @@ class ToolContext:
     ``reads_kinds``, as the log stood before the step started (ADR-P09 D3); None for a
     tool that declares none. What a body reads through it is lineage only when the body
     returns it in ``Ok.reads``.
+
+    ``models`` asks the fast-class aliases the tool declares (``ToolSpec.model_aliases``),
+    recorded on the tool step (ADR-P07 G1); None for a tool that declares none.
     """
 
     owner: str
@@ -121,6 +130,7 @@ class ToolContext:
     exec: ExecAPI | None = None
     time_reads: TimeReads | None = None
     artifacts: ArtifactReader | None = None
+    models: ToolModels | None = None
 
     def __getattribute__(self, name: str) -> Any:
         """Every read of ``run_date`` is recorded in ``time_reads`` (class doc)."""

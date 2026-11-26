@@ -180,6 +180,17 @@ def test_ask_raises_an_interrupt_and_holds(make: Any) -> None:
     assert b.bodies.calls == []
 
 
+def test_an_ask_that_cannot_be_raised_is_refused_to_the_model_not_raised(make: Any) -> None:
+    """An ask the model got wrong (two questions with one ID) comes back as a refusal it can
+    correct, never a step exception that ends the run."""
+    dup = [{"id": "q", "text": "Which file?"}, {"id": "q", "text": "Which test?"}]
+    b = make(Recorder([tools_reply(call("ask", questions=dup)), finish_reply()]))
+    assert b.drive().outcome == "complete"
+    refused = b.completed(f"{T01}/c01").payload
+    assert (refused["outcome"], refused["code"]) == ("error", "schema")
+    assert b.events("interrupt.raised") == []
+
+
 def test_only_continue_starts_a_turn(make: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     ran = _counted_turns(monkeypatch)
     model = Recorder([

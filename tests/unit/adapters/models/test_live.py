@@ -201,3 +201,50 @@ assert "urllib.request" not in sys.modules, "an HTTP client was imported"
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert done.returncode == 0, done.stderr
+
+
+def test_the_adapted_extractor_locates_each_quote_and_drops_a_made_up_one() -> None:
+    """A general model in adapted mode (ADR-P07 G3): its spans are where code found its quotes."""
+    from aksha.adapters.models.live import LiveExtractionModel
+    from aksha.runtime.grounding.types import CitationSpan
+    from aksha.runtime.models.types import ExtractionRequest, FieldSpec
+
+    fields = {"fields": {
+        "price": {"value": "EUR 9", "quotes": [{"passage": "p0", "quote": "EUR  9 per\nmonth"}],
+                  "confidence": 0.95, "absent": 0.01},
+        "maker": {"value": "Acme Ltd", "quotes": [{"passage": "p0", "quote": "Acme Holdings"}],
+                  "confidence": 0.99, "absent": 0.0},
+    }}  # fmt: skip
+    server = Server((200, {"choices": [{"message": {"content": json.dumps(fields)}}]}))
+    model = LiveExtractionModel("page_facts", ENV, transport=server)
+    assert model.capabilities.native is False  # adapted mode, judged by adapted thresholds
+    text = "It costs EUR 9 per month, by Acme."
+    state = (CitationSpan("p0", "o", "inputs", "r", "v", 0, len(text), text, "t"),)
+    request = ExtractionRequest("s", "page_facts", state, (FieldSpec("price"), FieldSpec("maker")))
+    got = dict(model.extract(request).answers)
+    (span,) = got["price"].spans  # located with whitespace folded
+    assert state[0].text[span.start : span.end] == "EUR 9 per month"
+    assert got["maker"].spans == ()  # a quote that is not in the passage locates nowhere
+    sent = server.sent[0][2]
+    assert (
+        sent["response_format"] == {"type": "json_object"}
+        and "passages" in sent["messages"][1]["content"]
+    )
+
+
+def test_a_partial_classification_distribution_abstains_instead_of_normalising() -> None:
+    """A lone ``offer: 0.6`` is not offer at 1.0: unstated mass leaves the question unanswered."""
+    from aksha.adapters.models.live import LiveClassificationModel
+
+    q = QuestionSpec("kind", "Which kind?", options=("offer", "review", "other"))
+    request = ClassificationRequest("s", "doc_kind", "a record", (q,))
+
+    def answer(probs: Mapping[str, float]) -> Any:
+        content = json.dumps({"answers": {"kind": {"probabilities": probs}}})
+        server = Server((200, {"choices": [{"message": {"content": content}}]}))
+        return dict(LiveClassificationModel("doc_kind", ENV, transport=server)
+                    .classify(request).answers)["kind"]  # fmt: skip
+
+    assert answer({"offer": 0.6}).choice is None
+    complete = answer({"offer": 0.7, "review": 0.3})  # "other" omitted at zero
+    assert complete.choice == "offer"

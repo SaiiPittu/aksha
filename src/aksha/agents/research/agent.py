@@ -23,7 +23,9 @@ from aksha.runtime.api import (
     CitePolicy,
     ContextPolicy,
     DeclaredInterrupt,
+    FieldSpec,
     Limits,
+    ModelAlias,
     Read,
     RelationKind,
     Task,
@@ -136,6 +138,119 @@ TESTS = ArtifactKind(
 
 PAGE = f"record:{tools.COLLECTION}"
 
+
+def _fast(name: str, model_class: Literal["extraction", "classification"], *fields: FieldSpec
+          ) -> ModelAlias:  # fmt: skip
+    """A fast-class alias any adapter may answer: native, or a general model adapted (G3)."""
+    return ModelAlias(name, model_class, allow_adapted=True, on_exhausted="unknown",
+                      fields=fields)  # fmt: skip
+
+
+MODEL_ALIASES = (
+    _fast("doc_kind", "classification"),
+    _fast(
+        "page_facts",
+        "extraction",
+        FieldSpec(
+            "company",
+            description="the company that makes or sells what the "
+            "document offers; absent when it offers nothing for sale",
+        ),
+        FieldSpec("product", description="the product or service the document offers"),
+        FieldSpec(
+            "published", "date", description="when the document was published or last updated"
+        ),
+        FieldSpec(
+            "prices",
+            "list",
+            description="each price the document states for what "
+            "it offers, quoted with its currency and basis (per unit, a month) and any "
+            "condition (from, launch offer)",
+        ),
+        FieldSpec(
+            "relationships",
+            "list",
+            description="each sentence saying two names are "
+            "one company or product: a rename, an acquisition, a merger",
+        ),
+        FieldSpec(
+            "claims",
+            "list",
+            description="each marketing or performance claim the "
+            "seller makes about its own product",
+        ),
+        FieldSpec(
+            "addressed_to_agents",
+            "list",
+            description="text addressed to an automated "
+            "reader or an AI assistant, or telling a reader to change what it does",
+        ),
+    ),
+    _fast(
+        "price_table",
+        "extraction",
+        FieldSpec(
+            "sellers",
+            "list",
+            description="in each row, the seller or company it names, quoted from that row",
+        ),
+        FieldSpec(
+            "products",
+            "list",
+            description="in each row, the product, model or plan it names, quoted from that row",
+        ),
+        FieldSpec(
+            "prices",
+            "list",
+            description="in each row, the price it states, quoted with its currency and basis",
+        ),
+        FieldSpec("published", "date", description="when the table was compiled or updated"),
+        FieldSpec(
+            "addressed_to_agents",
+            "list",
+            description="text addressed to an automated reader or an AI assistant",
+        ),
+    ),
+    _fast(
+        "report_facts",
+        "extraction",
+        FieldSpec(
+            "companies",
+            "list",
+            description="each company the report names as "
+            "offering a product in the market, quoted where it is named",
+        ),
+        FieldSpec(
+            "figures",
+            "list",
+            description="each market figure it states (a size, a share, a growth rate), quoted",
+        ),
+        FieldSpec("claims", "list", description="each claim about where the market is going"),
+        FieldSpec("published", "date", description="when the report was published"),
+        FieldSpec(
+            "addressed_to_agents",
+            "list",
+            description="text addressed to an automated reader or an AI assistant",
+        ),
+    ),
+    _fast(
+        "feedback_items",
+        "extraction",
+        FieldSpec(
+            "items",
+            "list",
+            description="each customer's or user's own words in the "
+            "document: a review, an interview answer, a survey answer, a ticket; one "
+            "quote per voice",
+        ),
+    ),
+    _fast("table_roles", "classification"),
+    _fast("theme_match", "classification"),
+)
+"""The fast-class aliases the read tools ask (``reading.py``): the decide alias, one schema
+alias per document kind, and the column and theme classifiers. Which model answers each is
+configuration (fakes offline; a native or adapted model live), never this module."""
+
 AGENT = Agent(
     name="research",
     purpose=(
@@ -211,6 +326,7 @@ AGENT = Agent(
         ),
     ),
     completion=(checks.outputs_exist,),
+    model_aliases=MODEL_ALIASES,
     budget=Budget(model_turns=90, tool_calls=140, active_ms=600_000),
     limits=Limits(turn_limit=6),
     context_policy=ContextPolicy(

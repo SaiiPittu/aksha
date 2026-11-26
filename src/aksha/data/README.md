@@ -33,6 +33,7 @@ src/aksha/data/
         publications/     ten publications in five families (.json), one of them as PDF-like text (.pdf.txt)
     stillroom-v2/         the change-and-recovery variant, same layout, its own key
     tilldew/              a world in another domain and layout, to prove the agents general
+    cindral/              a third domain whose inputs also have other shapes, to prove them structure-agnostic
 ```
 
 ## The base world, `stillroom`
@@ -80,6 +81,25 @@ Tilldew makes a solar-powered soil-moisture probe and an irrigation alert servic
 | Form templates | `invention-disclosure-form`, `filing-information-worksheet` | `tilldew-idf`, `tilldew-filing-sheet`, with other field names |
 
 Its traps: a duplicate company under a new name (Dripwise, now part of Hydrafield Agritech); an unknown price and a price conflict across two dated pages; a vendor claim against its own specification; a hidden instruction to automated readers; two cross-posted reviews; the venture's own field-day disclosure; an outside advisor's earlier suggestion that the contributor records understate; a referenced cost model that is not in the world; conflicting status wordings in one family; a missing rationale and an undated disclosure. The key's element IDs are the mechanism steps (`S1` to `S4`); its review theme counts are for the terms the suite's request gives each theme.
+
+## The world of other shapes, `cindral`
+
+Tilldew proves the agents do not depend on stillroom's names, but it keeps stillroom's structure: the same traps in the same kinds of file, the same table shapes, the same two forms. Cindral, booking and waitlist software for independent physiotherapy clinics in the UK, changes the structure itself, so an agent that recognised inputs by their layout fails it. Every record is decided by kind and extracted by that kind's schema (ADR-P07 G3), through the same code as the other worlds (`src/aksha/data/suites/cindral/`, 11 cases).
+
+| What | stillroom and tilldew | cindral |
+|---|---|---|
+| Competitors | one HTML or Markdown page per product | text extracted from two PDFs (a brochure, a datasheet: no markup, hard-wrapped lines, a price inside a sentence), a tab-separated price comparison pasted from a spreadsheet (plan, price, provider; one seller found nowhere else), an HTML page with reversed attribute order, self-closing meta tags, a JSON-LD `@graph` and prices split across `<span>`s, and a page with no price |
+| The renamed company | two dated HTML pages | a PDF datasheet ("is now part of") and an HTML page |
+| Price conflict | two dated pages of one seller | a brochure and the pasted spreadsheet |
+| Reviews | a flat JSON list or CSV | a JSON export with nested fields: `meta.locale.country` spelled out, `body.comment`, `score.value` of `score.out_of` |
+| Invention candidates | Markdown notes with a mechanism heading and numbered steps | meeting notes in plain text (colon headings, bullet steps, a US-style date, an `Idea ref:` line) and a slide-deck export (`Slide N:` titles, the ID leading a line) |
+| Contributors | a CSV with a person ID column | nested JSON with no person ID |
+| Disclosures | a CSV log and a linked write-up | a Markdown table inside a note, columns in another order, one empty date |
+| Priorities | a numbered Markdown list | a CSV with a rank column |
+| Forms | two Markdown templates (`Field`, `Required`) | one firm's own intake form (`Field name`, `Mandatory`, counsel-only fields) |
+| Publications | JSON with one layout, WIPO ST.9 text | labelled text and a JSON export with other keys (`doc_number`, `biblio.dates`, `legal.status`) |
+
+Its traps: a company under a new owner across PDF text and HTML; an unknown price and a conflict between a brochure and a spreadsheet; a vendor claim against its own pilot figure; a hidden instruction to automated readers; two cross-posted reviews; the venture's own public demo of one invention; a document named on a slide that is not in the world; two status wordings in one publication; a missing rationale and an undated disclosure. It has no outside-contributor trap, and other counts: two candidates, four companies (one known only from the spreadsheet), three publications in two families, 18 review rows.
 
 ## How the keys are used
 

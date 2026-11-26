@@ -135,3 +135,25 @@ def test_both_agents_pass_a_world_their_code_has_never_seen(general: SuiteRun) -
     assert len(research) == 6 and len(patent) == 6
     sends = [rec for rec in general.records.values() if rec.ledger]
     assert sends and all(len(rec.ledger) == 1 for rec in sends)  # each packet sent once
+
+
+@pytest.fixture(scope="module")
+def other_shapes(tmp_path_factory: pytest.TempPathFactory) -> SuiteRun:
+    return _run(tmp_path_factory.mktemp("cindral"), "cindral")
+
+
+def test_both_agents_pass_a_world_of_other_shapes(other_shapes: SuiteRun) -> None:
+    """The cindral suite: a third domain whose inputs differ in structure, not only in names.
+
+    Competitors as PDF text and a pasted tab-separated spreadsheet (a seller found only
+    there), reviews as a nested JSON export, inventions as meeting notes and a slide-deck
+    export, contributors as nested JSON with no person-ID column, disclosures as a table
+    inside a note, priorities as a CSV, one firm's own form, publications as labelled text
+    and a JSON export with other keys. Each record is decided by kind, then extracted by
+    that kind's schema, through the same code that runs the other worlds.
+    """
+    verdicts = _verdicts(other_shapes)
+    assert len(verdicts) == 11 and set(verdicts.values()) == {"pass"}, verdicts
+    sends = [rec for rec in other_shapes.records.values() if rec.ledger]
+    assert sends and all(len(rec.ledger) == 1 for rec in sends)
+    assert {rec.ledger[0]["target_ref"] for rec in sends} == {"packet/INV-7"}

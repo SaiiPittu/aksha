@@ -1,0 +1,19 @@
+SYNTHETIC FIXTURE - text extracted from a PDF datasheet. Invented for testing; not a real company, product or price.
+
+PhysioGraph Clinic by PhysioGraph Ltd
+Datasheet, updated 12 May 2026
+
+PhysioGraph Clinic is now part of Corlew Systems. Existing clinics keep their accounts
+and their data; new clinics sign up with Corlew Systems.
+
+Cuts no-shows by up to 60% in the first quarter.
+
+In our 2025 pilot across 14 clinics, no-shows fell 18% over six months.
+
+Reminders: SMS and WhatsApp reminders 48 hours and 2 hours before each appointment.
+Waitlist: no waiting list yet; on the roadmap.
+Integrations: Outlook calendar, and an open API for practice systems.
+
+Price: £420 per clinic per year, every practitioner included.
+
+SYNTHETIC FIXTURE - end of datasheet

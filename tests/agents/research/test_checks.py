@@ -58,6 +58,7 @@ def _scope(geography: str, *, basis: str = "answer", **extra: Any) -> dict[str, 
         "boundary": BOUNDARY,
         "dimensions": DIMENSIONS,
         "themes": THEMES,
+        "plan": {"kind": "comparison"},
         **extra,
     }
 
@@ -69,15 +70,25 @@ def test_scope_needs_segment_and_geography() -> None:
     assert checks.scope_done(view).ok
 
 
+def test_a_synthesis_needs_no_segment_or_geography_but_names_its_themes() -> None:
+    plan = {"kind": "synthesis"}
+    assert checks.scope_done(_View({("scope", None): _scope("", plan=plan, segment={})})).ok
+    no_themes = _scope("", plan=plan, themes=[], segment={})
+    assert not checks.scope_done(_View({("scope", None): no_themes})).ok
+    assert not checks.scope_done(_View({("scope", None): _scope("EU", plan={})})).ok
+
+
 def test_scope_needs_where_each_value_came_from_and_a_boundary() -> None:
     assert not checks.scope_done(_View({("scope", None): _scope("EU", basis="")})).ok
     assert not checks.scope_done(_View({("scope", None): _scope("EU", boundary={})})).ok
 
 
-def test_scope_needs_what_to_compare_each_with_its_terms() -> None:
+def test_scope_needs_what_to_compare_but_no_keyword_terms() -> None:
     assert checks.scope_done(_View({("scope", None): _scope("EU", dimensions=[], themes=[])})).ok
+    # a live model judges a passage against a dimension by meaning (theme_match), so terms
+    # are a hint, never required (audit item 20)
     no_terms = [{"id": "power", "name": "power", "terms": []}]
-    assert not checks.scope_done(_View({("scope", None): _scope("EU", dimensions=no_terms)})).ok
+    assert checks.scope_done(_View({("scope", None): _scope("EU", dimensions=no_terms)})).ok
     twice = DIMENSIONS * 2
     assert not checks.scope_done(_View({("scope", None): _scope("EU", dimensions=twice)})).ok
     missing = {k: v for k, v in _scope("EU").items() if k != "themes"}
@@ -119,6 +130,16 @@ def test_discover_refuses_a_page_under_two_companies_and_a_wrong_count() -> None
         "pages_found": 2,
     }
     assert not checks.discover_done(_View({("competitors", None): miscount})).ok
+
+
+def test_discover_takes_two_sections_of_one_record_as_two_pages() -> None:
+    """A memo with one section per seller: each section is its own company's page."""
+    a, b = _company("a", "memo.md"), _company("b", "memo.md")
+    a["pages"][0]["section"], b["pages"][0]["section"] = 1, 2
+    content = {"companies": [a, b], "resolved": 2, "pages_found": 2}
+    assert checks.discover_done(_View({("competitors", None): content})).ok
+    b["pages"][0]["section"] = 1
+    assert not checks.discover_done(_View({("competitors", None): content})).ok
 
 
 def _profile(**over: Any) -> dict[str, Any]:

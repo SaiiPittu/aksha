@@ -2,7 +2,10 @@
 
 A fast-class answer is accepted only at or above ``accept_at`` (and, for a cited
 extraction field, only with a span inside the minted citation spans it was given);
-otherwise it abstains and the reason says why. A boolean question is accepted False at or
+otherwise it abstains and the reason says why. An adapted extractor (a general model
+under a forced schema, ADR-P07 G3) is judged the same way, by the field's ``adapted``
+thresholds: its spans are where code found its verbatim quotes, so a quote it made up
+has no span and abstains ``span_missing``. A boolean question is accepted False at or
 under ``reject_at``; between the two lies the abstention band. Every comparison is on
 integers in parts per million, so two runs judge the same answer the same way.
 
@@ -10,7 +13,7 @@ Reasons. Accept: ``at_or_over_accept``, ``at_or_under_reject`` (a boolean False)
 ``absent`` (an extraction field at or over ``null_at``). Abstain: ``missing_answer``,
 ``probability_invalid``, ``refused``, ``not_an_option``, ``distribution_invalid``,
 ``choice_not_top``, ``under_accept``, ``under_margin``, ``abstention_band``,
-``type_invalid``, ``adapted_no_span``, ``span_missing``, ``span_outside``,
+``type_invalid``, ``span_missing``, ``span_outside``,
 ``confidence_missing``, ``null_unsure``, ``null_conflict``.
 """
 
@@ -37,6 +40,11 @@ from aksha.runtime.models.types import (
 
 _NUMBER = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
 _DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+_TIME = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$")
+_DATETIME = re.compile(
+    r"^([0-9]{4}-[0-9]{2}-[0-9]{2})[T ]([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]+)?)?"
+    r"(Z|[+-][0-9]{2}:?[0-9]{2})?$"
+)
 _DURATION = re.compile(
     r"^P(?!$)([0-9]+Y)?([0-9]+M)?([0-9]+W)?([0-9]+D)?(T(?=[0-9])([0-9]+H)?([0-9]+M)?([0-9]+S)?)?$"
 )
@@ -62,8 +70,13 @@ def type_ok(spec: FieldSpec, value: object) -> bool:
         return isinstance(value, tuple | list) and all(isinstance(v, str) for v in value)
     if not isinstance(value, str):
         return False
-    if spec.type == "number":
+    if spec.type in ("number", "estimate"):
         return bool(_NUMBER.match(value))
+    if spec.type == "time":
+        return bool(_TIME.match(value))
+    if spec.type == "datetime":
+        m = _DATETIME.match(value)
+        return m is not None and _is_date(m.group(1))
     if spec.type == "date":
         return _is_date(value)
     if spec.type == "duration":
@@ -92,7 +105,7 @@ def threshold_extraction(
         return abstain("missing_answer")
     if not _in_range(answer.p_null_ppm, answer.confidence_ppm):
         return abstain("probability_invalid", answer.value)
-    t = spec.thresholds
+    t = spec.thresholds_for(native)
     if answer.value is None:
         if answer.p_null_ppm is not None and answer.p_null_ppm >= ppm(t.null_at):
             return Judgement(name, "accept", None, "absent")
@@ -103,8 +116,6 @@ def threshold_extraction(
     if answer.p_null_ppm is not None and answer.p_null_ppm >= ppm(t.null_at):
         return abstain("null_conflict", value)
     if spec.cited:
-        if not native:
-            return abstain("adapted_no_span", value)
         if not answer.spans:
             return abstain("span_missing", value)
         if not all(_span_inside(ref, state) for ref in answer.spans):
@@ -171,13 +182,15 @@ def threshold_classification(
 def unfitted_thresholds(aliases: Iterable[ModelAlias]) -> tuple[str, ...]:
     """Every threshold no labelled set has fitted, as ``alias/field`` or ``alias/question``.
 
-    A question's adapted thresholds are listed as ``alias/question (adapted)``. Sorted.
+    A field's or question's adapted thresholds are listed as ``alias/question (adapted)``. Sorted.
     """
     out: list[str] = []
     for alias in aliases:
         for f in alias.fields:
             if f.thresholds.fitted_on is None:
                 out.append(f"{alias.name}/{f.name}")
+            if f.adapted is not None and f.adapted.fitted_on is None:
+                out.append(f"{alias.name}/{f.name} (adapted)")
         for q in alias.questions:
             if q.thresholds.fitted_on is None:
                 out.append(f"{alias.name}/{q.name}")

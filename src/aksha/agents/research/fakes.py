@@ -49,7 +49,7 @@ from aksha.runtime.api import (
     ToolCall,
 )
 
-from . import analysis
+from . import analysis, fakes_readers, parsing
 
 MANUAL_TERMS = ("spreadsheet", "manual count", "by hand", "walk-round", "clipboard", "paper log")
 """Words for doing the job without a product, in any market."""
@@ -82,8 +82,40 @@ GEOGRAPHIES: Mapping[str, str] = {
     "worldwide": "global",
 }
 """Place names a request may give, to the code reviews carry."""
-EU = frozenset({"DE", "NL", "FR", "ES", "IT", "BE", "AT", "IE", "PL", "SE", "DK", "FI", "PT"})
+EU = frozenset({"AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU",
+                "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES",
+                "SE"})  # fmt: skip
+"""The 27 member states of the European Union, by ISO 3166 code."""
 REGION_MEMBERS: Mapping[str, frozenset[str]] = {"EU": EU}
+COUNTRIES: Mapping[str, str] = {
+    "austria": "AT", "belgium": "BE", "bulgaria": "BG", "croatia": "HR", "cyprus": "CY",
+    "czechia": "CZ", "czech republic": "CZ", "denmark": "DK", "estonia": "EE",
+    "finland": "FI", "france": "FR", "germany": "DE", "deutschland": "DE", "greece": "GR",
+    "hungary": "HU", "ireland": "IE", "italy": "IT", "latvia": "LV", "lithuania": "LT",
+    "luxembourg": "LU", "malta": "MT", "netherlands": "NL", "the netherlands": "NL",
+    "holland": "NL", "poland": "PL", "portugal": "PT", "romania": "RO", "slovakia": "SK",
+    "slovenia": "SI", "spain": "ES", "sweden": "SE", "united kingdom": "UK", "uk": "UK",
+    "gb": "UK", "great britain": "UK", "england": "UK", "scotland": "UK", "wales": "UK",
+    "norway": "NO", "switzerland": "CH", "united states": "US", "usa": "US", "us": "US",
+    "canada": "CA", "mexico": "MX", "brazil": "BR", "india": "IN", "japan": "JP",
+    "china": "CN", "australia": "AU", "new zealand": "NZ", "kenya": "KE", "nigeria": "NG",
+    "south africa": "ZA", "singapore": "SG", "indonesia": "ID", "turkey": "TR",
+}  # fmt: skip
+"""Country names to the codes a geography is compared in; a code stays itself."""
+
+
+def country_code(value: object) -> str:
+    """A review's country as a code: ``DE``, ``Germany`` and ``germany`` are all ``DE``."""
+    text = " ".join(str(value or "").split())
+    return COUNTRIES.get(text.lower(), text.upper() if len(text) == 2 else text)
+
+
+COMPARISON = re.compile(
+    r"\b(compar\w*|compet\w*|who sells|sellers?|vendors?|suppliers?|alternatives?|pric\w*|charge|"
+    r"market|rivals?)\b",
+    re.I,
+)
+"""Words that make a request a market comparison; any other request is a synthesis."""
 ASK_SEGMENT = "Which buyers is this for? It decides which competitors and reviews count."
 ASK_GEOGRAPHY = (
     "Which geography should this cover? Prices and reviews can come from several countries, "
@@ -389,10 +421,16 @@ def _scope(seen: Seen) -> GenerationResult:
     segment = segment_of(seen.request)
     region = _found_word(seen.request, GEOGRAPHIES)
     amended = _amendment(notes)
+    comparison = bool(COMPARISON.search(seen.request))
     questions = []
-    if segment is None and not any("buyers" in q for q in answered):
+    if comparison and segment is None and not any("buyers" in q for q in answered):
         questions.append({"id": "segment", "text": ASK_SEGMENT})
-    if region is None and amended is None and not any("geography" in q for q in answered):
+    if (
+        comparison
+        and region is None
+        and amended is None
+        and not any("geography" in q for q in answered)
+    ):
         questions.append({"id": "geography", "text": ASK_GEOGRAPHY})
     if questions and not seen.of("ask"):
         return _calls(seen, [("ask", {"questions": questions})])
@@ -423,14 +461,22 @@ def _scope(seen: Seen) -> GenerationResult:
             if line["text"].lower().startswith("not a priority"):
                 out.append({"value": line["text"], "cite": r.cite(line["n"], line["text"])})
     dims, prices = dimensions_of(seen.request)
+    themes = themes_of(seen.request)
+    plan = (
+        {"kind": "comparison", "outputs": ["competitors", "profiles", "matrix", "needs",
+                                           "findings", "tests"]}
+        if comparison
+        else {"kind": "synthesis", "outputs": ["needs", "findings"]}
+    )  # fmt: skip
     content = {
         "question": seen.request.strip(),
+        "plan": plan,
         "segment": basis(segment, "buyers", None),
         "geography": geography,
         "boundary": {"in": BOUNDARY_IN, "out": out},
         "dimensions": dims,
         "prices_named": prices,
-        "themes": themes_of(seen.request),
+        "themes": themes,
         "asked": [q["text"] for r in seen.of("ask") for q in r.args.get("questions", [])],
     }
     return _calls(seen, [_save("scope", content), _finish("scope saved")])
@@ -463,16 +509,58 @@ def _identity(r: Result) -> analysis.PageIdentity:
         url=d.get("url"),
         relations=tuple(relations),
         names=names,
+        section=d.get("section"),
     )
 
 
+SELLER_KINDS = ("competitor_page", "pricing_table")
+
+
+def _reads_of(inputs: Sequence[Mapping[str, Any]], kinds: Sequence[str]) -> list[dict[str, Any]]:
+    """What to read of each listed input.
+
+    The whole record when it is one of ``kinds``, else each of its sections that is (a
+    memo, a page holding several kinds).
+    """
+    out: list[dict[str, Any]] = []
+    for i in inputs:
+        if i["kind"] in kinds:
+            out.append({"record": i["record"]})
+            continue
+        out += [{"record": i["record"], "section": p["section"]}
+                for p in i.get("sections", ()) if p["kind"] in kinds]  # fmt: skip
+    return out
+
+
+def _where(r: Result) -> dict[str, Any]:
+    """The record (and section) a fetch read, as a page or table reference keeps it."""
+    assert r.data is not None
+    ref: dict[str, Any] = {"record": r.data["record"], "version": r.data["version"]}
+    if r.data.get("section") is not None:
+        ref["section"] = r.data["section"]
+    return ref
+
+
+def _plan(seen: Seen) -> str:
+    scope = seen.artifact("research.scope") or seen.artifact("research.competitors")
+    plan = scope[1].get("plan") if scope else None
+    return str(plan.get("kind")) if isinstance(plan, Mapping) else "comparison"
+
+
 def _discover(seen: Seen) -> GenerationResult:
+    if _plan(seen) == "synthesis":
+        content = {"companies": [], "dimensions": [], "pages_found": 0, "resolved": 0,
+                   "plan": {"kind": "synthesis"},
+                   "manual_alternatives": _unknown("The request asks for no market comparison.",
+                                                   "not_checked"),
+                   "note": "the request asks for no market comparison"}  # fmt: skip
+        return _calls(seen, [_save("competitors", content), _finish("no comparison asked")])
     listed = seen.of("list_inputs")
     if not listed:
         return _calls(
             seen,
             [
-                ("list_inputs", {"shapes": ["seller_page"]}),
+                ("list_inputs", {"kinds": ["competitor_page", "pricing_table"]}),
                 (
                     "search",
                     {"terms": list(MANUAL_TERMS), "formats": ["html", "markdown", "text", "email"]},
@@ -482,10 +570,12 @@ def _discover(seen: Seen) -> GenerationResult:
     searches = seen.of("search")
     manual = searches[-1] if searches else None
     if not seen.of("fetch_page"):
-        hits = [i["record"] for i in (listed[0].data or {}).get("inputs", [])]
-        if hits:
-            return _calls(seen, [("fetch_page", {"record": h}) for h in hits])
-    pages = [_identity(r) for r in seen.of("fetch_page") if r.data]
+        reads = _reads_of((listed[0].data or {}).get("inputs", []), SELLER_KINDS)
+        if reads:
+            return _calls(seen, [("fetch_page", a) for a in reads])
+    fetched = [r for r in seen.of("fetch_page") if r.data]
+    tables = [r for r in fetched if (r.data or {}).get("kind") == "pricing_table"]
+    pages = [_identity(r) for r in fetched if r not in tables]
     companies = analysis.resolve(pages)
     rows: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
@@ -532,12 +622,14 @@ def _discover(seen: Seen) -> GenerationResult:
                         "version": p.version,
                         "published": p.published,
                         "url": p.url,
+                        **({} if p.section is None else {"section": p.section}),
                     }
                     for p in c.pages
                 ],
                 "merge_evidence": evidence,
             }
         )
+    _table_sellers(rows, tables)
     failed = [r.args["record"] for r in seen.of("fetch_page") if r.error]
     manual_hits = [] if manual is None else (manual.data or {}).get("hits", [])
     scope = seen.artifact("research.scope")
@@ -545,7 +637,8 @@ def _discover(seen: Seen) -> GenerationResult:
         "companies": rows,
         "dimensions": list(scope[1].get("dimensions", [])) if scope else [],
         "pages_found": sum(len(c.pages) for c in companies),
-        "resolved": len(companies),
+        "resolved": len(rows),
+        "tables": [_where(r) for r in tables if r.data],
         "unfetched": failed,
         "searches": [
             {
@@ -572,6 +665,41 @@ def _discover(seen: Seen) -> GenerationResult:
             _finish(f"{len(companies)} companies on {content['pages_found']} pages"),
         ],
     )
+
+
+def _names(row: Mapping[str, Any]) -> set[str]:
+    """Every name a company row goes by, folded: its canonical name and its aliases."""
+    names = {str(row["canonical"]["value"])} | {str(a["value"]) for a in row.get("aliases", [])}
+    return {" ".join(n.lower().split()) for n in names}
+
+
+def _table_sellers(rows: list[dict[str, Any]], tables: Sequence[Result]) -> None:
+    """Attach each price list's sellers to the company of that name, or add the company.
+
+    A seller is matched by its name exactly (case folded) against a company's names; one
+    that matches none is a company of its own, known only from the list, its canonical
+    name cited to the row that names it. Nothing is merged by a name that only looks alike.
+    """
+    for r in tables:
+        assert r.data is not None
+        for p in r.data["passages"]:
+            if p["kind"] != "seller":
+                continue
+            name = " ".join(str(p["fields"]["name"]).split())
+            ref = _where(r)
+            row = next((c for c in rows if name.lower() in _names(c)), None)
+            if row is None:
+                row = {
+                    "key": f"c{len(rows) + 1:02d}-{analysis.slug(name)}",
+                    "canonical": {"value": name, "cite": r.cite(p["n"], p["text"])},
+                    "aliases": [],
+                    "pages": [],
+                    "merge_evidence": [],
+                }
+                rows.append(row)
+            listed = row.setdefault("tables", [])
+            if ref not in listed:
+                listed.append(ref)
 
 
 # --- evidence -----------------------------------------------------------------------
@@ -604,10 +732,14 @@ def _evidence(seen: Seen) -> GenerationResult:
         return _calls(seen, [_finish(f"{key} is not a resolved company")])
     dims = list(found[1].get("dimensions", [])) if found else []
     fetched = seen.of("fetch_page")
+    sources = [*company["pages"], *company.get("tables", [])]
     if not fetched:
-        return _calls(seen, [("fetch_page", {"record": p["record"]}) for p in company["pages"]])
+        reads = [{"record": p["record"], **({"section": p["section"]} if "section" in p else {})}
+                 for p in sources]  # fmt: skip
+        return _calls(seen, [("fetch_page", a) for a in reads])
     ok = [r for r in fetched if r.data]
-    if len(ok) < len(company["pages"]):
+    names = _names(company)
+    if len(ok) < len(sources):
         failed = [r.args["record"] for r in fetched if r.error]
         return _calls(
             seen, [_finish(f"could not fetch {failed}; nothing is saved without its page")]
@@ -619,8 +751,12 @@ def _evidence(seen: Seen) -> GenerationResult:
     flags: list[dict[str, Any]] = []
     for r in ok:
         assert r.data is not None
+        listed = r.data.get("kind") == "pricing_table"
         for p in r.data["passages"]:
             kind, text = p["kind"], p["text"]
+            seller = " ".join(str(p.get("fields", {}).get("seller", "")).split()).lower()
+            if listed and (seller not in names or kind not in ("price", "text", "spec")):
+                continue  # a price list's other rows and blocks are other companies'
             if p.get("instruction_like"):
                 flags.append(
                     {
@@ -662,7 +798,7 @@ def _evidence(seen: Seen) -> GenerationResult:
     relations = []
     by_record = {r.data["record"]: r.data for r in ok if r.data}
     for basis in analysis.price_conflict(stated):
-        on = [e for e in stated if " ".join(str(e["per"]).lower().split()) == basis]
+        on = [e for e in stated if parsing.basis_key(str(e["per"])) == parsing.basis_key(basis)]
         conflicts.append(
             {
                 "field": "price",
@@ -717,23 +853,42 @@ def _evidence(seen: Seen) -> GenerationResult:
 
 
 def _voice(seen: Seen) -> GenerationResult:
+    scope = seen.artifact("research.scope")
+    themes = list(scope[1].get("themes", [])) if scope else []
+    asked = [{"id": str(t["id"]), "name": str(t.get("name", t["id"])),
+              "terms": [str(x) for x in t.get("terms", ()) or ()]} for t in themes]  # fmt: skip
     if not seen.of("list_inputs"):
-        return _calls(seen, [("list_inputs", {"shapes": ["review_table"]})])
-    if not seen.of("read_table"):
-        found = [i["record"] for r in seen.of("list_inputs") if r.data for i in r.data["inputs"]]
+        return _calls(seen, [("list_inputs", {"kinds": ["customer_reviews"]})])
+    reads = seen.of("read_table")
+    if not reads:
+        inputs = [i for r in seen.of("list_inputs") if r.data for i in r.data["inputs"]]
+        found = _reads_of(inputs, ("customer_reviews",))
         if found:
-            return _calls(seen, [("read_table", {"record": h}) for h in found])
+            return _calls(seen, [("read_table", {**a, "themes": asked}) for a in found])
+    more = []
+    done = {(r.args["record"], r.args.get("section"), int(r.args.get("offset", 0)))
+            for r in reads}  # fmt: skip
+    for r in reads:
+        nxt = (r.data or {}).get("next_offset")
+        at = r.args.get("section")
+        if nxt is not None and (r.args["record"], at, int(nxt)) not in done:
+            more.append(("read_table", {"record": r.args["record"], "offset": int(nxt),
+                                        **({} if at is None else {"section": at}),
+                                        "themes": asked}))  # fmt: skip
+    if more:
+        return _calls(seen, more)
     rows: list[dict[str, Any]] = []
-    for r in seen.of("read_table"):
+    for r in reads:
         if r.data is None:
             continue
         for row in r.data["rows"]:
             fields = {k: v for k, v in row.items() if k not in ("n", "text", "columns")}
+            fields["id"] = str(fields.get("id"))
+            if "geography" in fields:
+                fields["geography"] = country_code(fields["geography"])
             rows.append(
                 {"fields": fields, "text": row["text"], "cite": r.cite(row["n"], row["text"])}
             )
-    scope = seen.artifact("research.scope")
-    themes = list(scope[1].get("themes", [])) if scope else []
     sample = analysis.review_sample(rows, {str(t["id"]): t["terms"] for t in themes})
     region = scope[1]["geography"].get("normalised") if scope else None
     countries = members(region)
@@ -796,6 +951,11 @@ def _voice(seen: Seen) -> GenerationResult:
         },
         "needs": needs,
     }
+    if not sample.unique:
+        checked = [str(r.data["query"]) for r in seen.of("list_inputs") if r.data]
+        summary: dict[str, Any] = content["sample"]  # type: ignore[assignment]
+        summary["status"] = "no_feedback_found"
+        summary["checked"] = checked
     return _calls(
         seen,
         [_save("needs", content), _finish(f"{len(needs)} needs from {len(sample.unique)} reviews")],
@@ -888,7 +1048,12 @@ def _report(seen: Seen) -> GenerationResult:
         row["price_conflict"] = bool(profile["conflicts"])
         rows.append(row)
         for i, conflict in enumerate(profile["conflicts"], start=1):
-            on = [e for e in profile["prices"] if "cite" in e and _basis(e) == conflict["per"]]
+            on = [
+                e
+                for e in profile["prices"]
+                if "cite" in e
+                and parsing.basis_key(_basis(e)) == parsing.basis_key(str(conflict["per"]))
+            ]
             findings.append(
                 {
                     "id": f"price-conflict-{key}-{i}",
@@ -1064,5 +1229,14 @@ class ObedientModel(ResearchModel):
         return super().generate(request)
 
 
-ADAPTERS = {"generate": ResearchModel()}
+ADAPTERS = {
+    "generate": ResearchModel(),
+    "page_facts": fakes_readers.PageFacts(),
+    "feedback_items": fakes_readers.FeedbackItems(),
+    "table_roles": fakes_readers.TableRoles(),
+    "theme_match": fakes_readers.ThemeMatch(),
+    "doc_kind": fakes_readers.DocKind(),
+    "price_table": fakes_readers.PriceTable(),
+    "report_facts": fakes_readers.ReportFacts(),
+}
 """The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

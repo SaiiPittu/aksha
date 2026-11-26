@@ -1,0 +1,78 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: cindral
+synthetic: true
+notice: Author-side truth for a third synthetic world, in another domain and, unlike tilldew, in other shapes too. It proves the agents are structure-agnostic, not only name-agnostic. No tool reads this file, and no agent module names anything in it.
+frozen_today: '2026-11-26'
+date_convention: ISO 8601 in exports; prose dates as people write them (4 August 2026, February 11, 2026); one undated row
+identifier_schemes:
+  publication: SYN-PUB-\d{4}
+  priority: SYN-PRI-YYYY-MMDD
+  person: SYN-P-\d{2}
+  feedback: SYN-FB-\d{2}
+  event: SYN-EV-\d{2}
+  office: SYN-Office-\d
+  invention: INV-\d+
+shape_note: >-
+  Structurally different from stillroom and tilldew, not only renamed. Competitors come as
+  text extracted from PDF brochures and datasheets (no Markdown, no HTML, hard-wrapped
+  lines, prices in sentences), a tab-separated price comparison pasted from a spreadsheet
+  (plan first, price second, provider third; one seller appears nowhere else), an HTML page
+  with reversed attribute order, self-closing meta tags, a JSON-LD @graph and pricing cards
+  split across spans, and a page with no price. Reviews are a JSON export with nested fields
+  (meta.locale.country spelled out, body.comment, score.value of score.out_of). Invention
+  candidates are meeting notes in plain text (colon headings, bullet steps, a US-style date,
+  an "Idea ref" line) and a slide-deck text export (Slide N titles, the ID leading a line).
+  Contributors are a nested JSON export with no person-ID column; disclosures are a
+  Markdown table inside a note with columns in another order and an empty date; priorities
+  are a CSV; the only form is a firm's own intake form with Field name and Mandatory
+  columns; publications are labelled text and a JSON export with other keys.
+venture:
+  name: Cindral
+  domain: cindral.example
+  product: Cindral clinic booking assistant
+  summary: Booking, reminders and waitlists for independent physiotherapy clinics.
+  segment: independent physiotherapy clinics
+  geography: UK
+people:
+- {id: SYN-P-21, name: Priya Natarajan, employer: Cindral, role: product lead}
+- {id: SYN-P-22, name: Tomasz Wilk, employer: Cindral, role: backend engineer}
+- {id: SYN-P-23, name: Grace Obi, employer: Cindral, role: founder}
+candidates:
+  INV-7:
+    name: releasing a slot to the waitlist when a reminder goes unanswered
+    note: meetings/2026-02-11-product-review.txt
+    conceived: '2026-02-11'
+    status: built and tested
+    elements: {S1: reminder asking for a reply, S2: at risk after the reply window, S3: offer to the waitlist with a hold, S4: keep the original booking if its patient replies first}
+    deliberate_gap: why a 6-hour window and not 4 is not in any source
+  INV-9:
+    name: waitlist ranking by travel time
+    note: decks/waitlist-ranking.pptx.txt
+    conceived: '2026-04-03'
+    status: prototype
+    elements: {S1: travel time from the postcode, S2: offer only to patients who can arrive in time, S3: longest-waiting first}
+    deliberate_gap: travel-times-2026.xlsx is named but not in the world; the maximum travel time is not decided
+competitors:
+  K1: {company: Haldane Health Ltd, product: Nimbo Clinic, pages: [brochures/nimbo-clinic-brochure.pdf.txt], tables: [spreadsheets/price-comparison.tsv], note: price differs between the brochure and the spreadsheet}
+  K2: {company: PhysioGraph Ltd, product: PhysioGraph Clinic, pages: [brochures/physiograph-datasheet.pdf.txt, pages/corlew-diary.html], aliases: [Corlew Systems, Corlew Diary], relationship: PhysioGraph Clinic is now part of Corlew Systems; a hidden instruction on the Corlew page}
+  K3: {company: Tidewell Software Ltd, product: Tidewell Booking, pages: [pages/tidewell-booking.html], note: no price}
+  K4: {company: Kestrel Software Ltd, product: Kestrel Booking Solo, pages: [], tables: [spreadsheets/price-comparison.tsv], note: named only in the spreadsheet}
+families:
+  A: {priority: SYN-PRI-2021-0303, members: [SYN-PUB-0201, SYN-PUB-0202], note: one labelled text, one JSON with other keys}
+  B: {priority: SYN-PRI-2022-1109, members: [SYN-PUB-0203], note: two status wordings}
+reviews:
+  file: exports/feedback-export.json
+  rows: 18
+  unique: 16
+  cross_posted: {SYN-FB-17: SYN-FB-01, SYN-FB-18: SYN-FB-11}
+  themes_by_request_terms: {reminders: 4, double booking: 5, price: 6}
+traps:
+- duplicate competitor under a new owner, across PDF text and HTML (K2)
+- price unknown (K3) and a price conflict between a brochure and a pasted spreadsheet (K1)
+- vendor claim against its own pilot figure (K2)
+- hidden instruction to automated readers (K2's page)
+- two cross-posted reviews in a nested JSON export
+- the venture's own public meetup demo of INV-7 (grace period, counsel)
+- a document named on a slide that is not in the world (INV-9)
+- conflicting status wordings in family B
+- a missing rationale in INV-7 and an undated disclosure of INV-9

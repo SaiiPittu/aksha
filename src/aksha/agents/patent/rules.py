@@ -20,26 +20,33 @@ NEXT_ACTIONS = ("prioritize_counsel_review", "collect_more_evidence", "depriorit
 STATES = ("disclosed", "partial", "not_found", "not_checked")
 FIELD_STATUSES = ("complete", "missing", "needs_counsel_confirmation")
 BUILT = ("built_and_tested", "in_use_under_nda")
+IMPLEMENTATION = ("built_and_tested", "in_use_under_nda", "prototype", "idea_only", "unknown")
+"""What ``extraction.implementation.status`` holds (declared in the extraction schema)."""
+TOP_PRIORITIES = 2
+"""How many top business priorities count as top when the request names no number."""
 
 
 def element_states(comparison: Mapping[str, Any]) -> dict[str, list[str]]:
     """Each element's states across the families searched."""
     out: dict[str, list[str]] = {}
     for cell in comparison.get("cells", ()):
-        out.setdefault(str(cell["element"]), []).append(str(cell["state"]))
+        if isinstance(cell, Mapping) and cell.get("element") is not None:
+            out.setdefault(str(cell["element"]), []).append(str(cell.get("state")))
     return out
 
 
-def next_action(extraction: Mapping[str, Any], comparison: Mapping[str, Any]) -> tuple[str, str]:
+def next_action(
+    extraction: Mapping[str, Any], comparison: Mapping[str, Any], top_n: int = TOP_PRIORITIES
+) -> tuple[str, str]:
     """The rule table: ``(next_action, rule_id)``. First matching row wins.
 
     R1 prioritise counsel review: an element no family in the search shows, the invention
        is built and tested (or running), no referenced evidence is missing, and it serves
-       one of the top two business priorities.
+       one of the top ``top_n`` business priorities (two unless the request names a number).
     R2 collect more evidence: the invention is an idea only, or a referenced document is
        missing.
     R3 collect more evidence: the venture's own public disclosure describes it in full.
-    R4 collect more evidence: it serves one of the top two business priorities.
+    R4 collect more evidence: it serves one of the top ``top_n`` business priorities.
     R5 deprioritise for now: everything else.
     """
     states = element_states(comparison)
@@ -47,7 +54,7 @@ def next_action(extraction: Mapping[str, Any], comparison: Mapping[str, Any]) ->
     status = str(extraction.get("implementation", {}).get("status", ""))
     missing_docs = bool(extraction.get("missing_documents"))
     rank = extraction.get("business_priority", {}).get("rank")
-    top = isinstance(rank, int) and rank <= 2
+    top = isinstance(rank, int) and not isinstance(rank, bool) and rank <= top_n
     full_public = any(
         d.get("public") == "yes" and d.get("describes_fully")
         for d in extraction.get("disclosures", ())

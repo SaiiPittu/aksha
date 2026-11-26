@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
-from aksha.evals.criteria.forbidden import NEGATIVE_SETS, PATTERNS, violations
+from aksha.evals.criteria.forbidden import NEGATIVE_SETS, PATTERNS, own_words, violations
 from aksha.evals.normalize import amount, cell_state, currency, enum_key, name_key, price_of
 from tests.support.evals import case, graded, key, run_episode, world
 
@@ -188,3 +188,12 @@ def test_same_calls_leaves_out_only_reads_of_an_input_the_variant_adds() -> None
     base = _calls(rec("a.md", "b.md"), None)
     assert _calls(rec("a.md", "publications/SYN-PUB-0011.json", "b.md"), None, added) == base
     assert _calls(rec("a.md", "other.md", "b.md"), None, added) != base  # any other read counts
+
+
+def test_a_quoted_claim_is_not_the_agents_own_words() -> None:
+    quote = "Cuts no-shows by up to 60% in the first quarter."
+    claim = {"text": quote, "label": "vendor_claim",
+             "citation": {"file": "brochures/a.txt", "exact": quote}}  # fmt: skip
+    assert list(own_words({"claims": [claim]})) == ["vendor_claim"]
+    said = {**claim, "text": "60% of clinics churn."}  # the agent's own sentence, not the quote
+    assert [h for s in own_words(said) for h in violations("no_market_percentage", s)] == ["60%"]

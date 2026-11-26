@@ -1,0 +1,351 @@
+{
+  "_comment": "SYNTHETIC FIXTURE. Invented for testing the agents; not real patients, clinics or reviews.",
+  "export": {
+    "generated": "2026-10-30",
+    "source": "patient feedback inbox, all products",
+    "items": [
+      {
+        "id": "SYN-FB-01",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-03-02",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Day-before reminder",
+          "comment": "The SMS reminder the day before means far fewer patients forget their session."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-02",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-03-15",
+          "channel": "web form",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Sync trouble",
+          "comment": "Two patients turned up for the same 9am slot after the Outlook sync went wrong."
+        },
+        "score": {
+          "value": 2,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-03",
+        "product_name": "Corlew Diary",
+        "meta": {
+          "submitted_at": "2026-04-01",
+          "channel": "review site",
+          "locale": {
+            "country": "Ireland"
+          }
+        },
+        "body": {
+          "title": "Older patients love it",
+          "comment": "Booking is quick and the WhatsApp reminders are brilliant for our older patients."
+        },
+        "score": {
+          "value": 5,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-04",
+        "product_name": "PhysioGraph Clinic",
+        "meta": {
+          "submitted_at": "2026-04-09",
+          "channel": "review site",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Good but pricey",
+          "comment": "A good diary, but the yearly fee is a lot for a two-room practice."
+        },
+        "score": {
+          "value": 3,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-05",
+        "product_name": "Kestrel Booking",
+        "meta": {
+          "submitted_at": "2026-04-20",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Does the job",
+          "comment": "Cheap and simple; it does what a solo practice needs and nothing more."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-06",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-05-03",
+          "channel": "review site",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Lost a patient",
+          "comment": "We had a double booking twice in one week and lost a regular patient over it."
+        },
+        "score": {
+          "value": 1,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-07",
+        "product_name": "Corlew Diary",
+        "meta": {
+          "submitted_at": "2026-05-11",
+          "channel": "web form",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "No-shows down",
+          "comment": "Reminders go out by text message now, and our empty slots have dropped a lot."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-08",
+        "product_name": "PhysioGraph Clinic",
+        "meta": {
+          "submitted_at": "2026-05-27",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Diary conflicts",
+          "comment": "Appointments clash when two physios edit the diary at the same time."
+        },
+        "score": {
+          "value": 2,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-09",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-06-04",
+          "channel": "web form",
+          "locale": {
+            "country": "Ireland"
+          }
+        },
+        "body": {
+          "title": "Price rise",
+          "comment": "The price went up after the first year without much warning from them."
+        },
+        "score": {
+          "value": 3,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-10",
+        "product_name": "Kestrel Booking",
+        "meta": {
+          "submitted_at": "2026-06-18",
+          "channel": "review site",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Patients like it",
+          "comment": "Patients like the booking page and the email confirmations they get."
+        },
+        "score": {
+          "value": 5,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-11",
+        "product_name": "Corlew Diary",
+        "meta": {
+          "submitted_at": "2026-07-02",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Gets costly",
+          "comment": "Too expensive once you add a second practitioner to the account."
+        },
+        "score": {
+          "value": 2,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-12",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-07-19",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Quick setup",
+          "comment": "Setup took one afternoon and support answered our question the same day."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-13",
+        "product_name": "PhysioGraph Clinic",
+        "meta": {
+          "submitted_at": "2026-08-05",
+          "channel": "web form",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Late messages",
+          "comment": "SMS reminders sometimes arrive after the appointment has already started."
+        },
+        "score": {
+          "value": 3,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-14",
+        "product_name": "Kestrel Booking",
+        "meta": {
+          "submitted_at": "2026-08-21",
+          "channel": "app store",
+          "locale": {
+            "country": "Ireland"
+          }
+        },
+        "body": {
+          "title": "Fair",
+          "comment": "No clashes so far, and the cost is fair for what the tool does for us."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-15",
+        "product_name": "Corlew Diary",
+        "meta": {
+          "submitted_at": "2026-09-09",
+          "channel": "review site",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Overbooked",
+          "comment": "The diary let me double-book a patient into a slot that was already taken."
+        },
+        "score": {
+          "value": 1,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-16",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-09-30",
+          "channel": "review site",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Just works",
+          "comment": "Online booking from our own website just works, and it costs less than our old system."
+        },
+        "score": {
+          "value": 5,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-17",
+        "product_name": "Nimbo Clinic",
+        "meta": {
+          "submitted_at": "2026-10-04",
+          "channel": "app store",
+          "locale": {
+            "country": "United Kingdom"
+          }
+        },
+        "body": {
+          "title": "Day-before reminder",
+          "comment": "The SMS reminder the day before means far fewer patients forget their session."
+        },
+        "score": {
+          "value": 4,
+          "out_of": 5
+        }
+      },
+      {
+        "id": "SYN-FB-18",
+        "product_name": "Corlew Diary",
+        "meta": {
+          "submitted_at": "2026-10-12",
+          "channel": "review site",
+          "locale": {
+            "country": "Ireland"
+          }
+        },
+        "body": {
+          "title": "Gets costly",
+          "comment": "Too expensive once you add a second practitioner to the account."
+        },
+        "score": {
+          "value": 2,
+          "out_of": 5
+        }
+      }
+    ]
+  }
+}

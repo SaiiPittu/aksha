@@ -40,6 +40,7 @@ beyond reading the log, and appends nothing.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import replace
 from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
@@ -74,6 +75,7 @@ from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
 from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, run_session, with_records
 from aksha.runtime.loop.types import SIGNAL_FIELD, LoopSetup, PositionOutcome, Signal, skip_code
+from aksha.runtime.models.calls import MODEL_CALLS_FIELD, ToolModelCalls
 from aksha.runtime.models.types import ToolCall as ReplyCall
 from aksha.runtime.policy.events import args_hash, decision_event
 from aksha.runtime.policy.gate import check
@@ -253,10 +255,15 @@ def run_position(
         versions = ViewArtifactReader(view, kinds, setup.blobs) if kinds else None
 
         def ctx(
-            reader: AttemptReader, http: HttpFor, exe: BoxedExec | None, dates: TimeReads
+            reader: AttemptReader,
+            http: HttpFor,
+            exe: BoxedExec | None,
+            dates: TimeReads,
+            models: ToolModelCalls,
         ) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader, run_date, http, exe, dates, versions)  # fmt: skip
+                               attempt, reader, run_date, http, exe, dates, versions,
+                               models if spec.model_aliases else None)  # fmt: skip
 
         def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
             # Each attempt reads through a fresh reader (its drafts are minted over what it
@@ -269,8 +276,11 @@ def run_position(
             if unit is not None:
                 session = run_session(view, setup.owner, ref.run)
                 exe = exec_for(setup, spec, str(step), attempt, unit, session)
-            outcome = body(ctx(reader, http, exe, dates))
+            models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner)
+            outcome = body(ctx(reader, http, exe, dates, models))
             out = _dispatched(setup, ref, step, spec, outcome, reader.returned, dates.reads)
+            if models.records:
+                out = replace(out, value={**(out.value or {}), MODEL_CALLS_FIELD: models.records})
             return with_records(out, http, exe)
 
         return record(lambda: dispatched(lambda c: call_body(decl, c, args)), unit)
@@ -383,7 +393,11 @@ def _asked(
     if declared is None:  # the gate offers ask only with a declared interrupt
         return _shown(ToolOutcome(Err("not_in_task", "this Task declares no interrupt")), cap)
     ident = f"I-{highest(setup.view().events, 'I') + 1:04d}"
-    request = ask_request(declared, args, run=ref.run, instance=ref.instance)
+    try:
+        request = ask_request(declared, args, run=ref.run, instance=ref.instance)
+    except (KeyError, ValueError) as bad:  # e.g. a choice with no options: the model's to fix
+        message = f"this ask cannot be raised: {bad}"
+        return _shown(ToolOutcome(Err("schema", message, paths=("/",))), cap)
     event = raised(request, ident, step=str(step))
     shown = ToolOutcome(Ok({"interrupt": ident, "status": "waiting"}))
     return _shown(shown, cap, signal="interrupt", events=(event,), extra={"interrupt": ident})

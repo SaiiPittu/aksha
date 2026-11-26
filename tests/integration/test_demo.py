@@ -22,9 +22,13 @@ from aksha.interfaces.demo.world import EDITS, VARIANT, WORLDS, apply_change, co
 ROOT = Path(__file__).resolve().parents[2]
 C1_CHAIN = {
     f"patent.{kind}/C1@v2"
-    for kind in ("extraction", "prior_art", "comparison", "recommendation", "disclosure",
-                 "worksheet", "packet", "handoff")
-} | {"patent.table@v2", "patent.selection@v2"}  # fmt: skip
+    for kind in ("extraction", "prior_art", "comparison", "recommendation", "packet", "handoff")
+} | {
+    "patent.form/C1~invention-disclosure-form@v2",
+    "patent.form/C1~filing-information-worksheet@v2",
+    "patent.table@v2",
+    "patent.selection@v2",
+}  # fmt: skip
 
 
 @pytest.fixture(scope="module")

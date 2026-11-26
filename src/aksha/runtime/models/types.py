@@ -32,7 +32,9 @@ from aksha.runtime.tools.types import ToolView
 
 ModelClass = Literal["extraction", "classification", "generation"]
 RunMode = Literal["fake", "scripted", "replay", "live"]
-FieldType = Literal["text", "number", "date", "duration", "list"]
+FieldType = Literal[
+    "text", "number", "date", "time", "datetime", "duration", "list", "estimate", "forecast"
+]
 QuestionType = Literal["choice", "boolean", "score"]
 OnExhausted = Literal["unknown", "review", "fail"]
 FinishReason = Literal["tool_calls", "text", "length", "refusal"]
@@ -101,13 +103,27 @@ class ConfidenceThresholds:
 
 @dataclass(frozen=True)
 class FieldSpec:
-    """One field an extraction alias fills. ``cited`` fields need a span in the state."""
+    """One field an extraction alias fills. ``cited`` fields need a span in the state.
+
+    The types follow the typed extraction contract (ADR-P07 G3): ``text``; ``number`` (a
+    decimal string); ``date`` (ISO ``YYYY-MM-DD``); ``time`` (``HH:MM`` or ``HH:MM:SS``);
+    ``datetime`` (ISO date and time); ``duration`` (ISO 8601); ``list`` (strings, one
+    span per item); ``estimate`` (a number the document states as approximate, a decimal
+    string); ``forecast`` (a stated expectation about the future, as text). ``adapted``
+    holds the thresholds an adapted extractor's answer is judged by; None judges it by
+    ``thresholds``.
+    """
 
     name: str
     type: FieldType = "text"
     thresholds: ConfidenceThresholds = ConfidenceThresholds()
     cited: bool = True
     description: str = ""
+    adapted: ConfidenceThresholds | None = None
+
+    def thresholds_for(self, native: bool) -> ConfidenceThresholds:
+        """The thresholds a native or an adapted answer is judged by."""
+        return self.thresholds if native or self.adapted is None else self.adapted
 
 
 @dataclass(frozen=True)
@@ -139,8 +155,9 @@ class ModelAlias:
     """A named use of a model class; namespaced by the agent at load (``ns.alias``).
 
     ``fallback`` names other aliases of the same class, tried in order when an answer
-    abstains or a candidate fails. ``allow_adapted`` (classification only) lets an
-    adapted classifier stand in, never for an alias that ``gates_effect``. ``fields``
+    abstains or a candidate fails. ``allow_adapted`` lets an adapted adapter (a general
+    model under a forced schema) answer, never for an alias that ``gates_effect``; an
+    adapted extractor's spans are located by code from its verbatim quotes (G3). ``fields``
     (extraction) and ``questions`` (classification) are what the alias answers; the loader
     and the binder check them against each adapter's capabilities.
     """

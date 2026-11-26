@@ -13,7 +13,8 @@ every refusal at once (:class:`~aksha.runtime.models.errors.BindRefused`):
 5. ``unsupported_type``: the alias declares a field or question type the adapter's
    capability record does not list; ``no_spans``: a cited field needs an adapter that
    returns spans; ``no_distribution``: a classification adapter returns a distribution.
-6. ``adapted_not_allowed``: an adapted classifier is bound only where the alias sets
+6. ``adapted_not_allowed``: an adapted adapter (a general model under a forced schema,
+   classification or extraction, G3) is bound only where the alias sets
    ``allow_adapted`` and does not gate an external effect.
 7. ``not_offline``: ``fake``, ``scripted`` and ``replay`` bind offline adapters only.
 
@@ -22,9 +23,9 @@ hash, and a run never resumes under a different one (``binding_changed``). Confi
 and keys are never recorded.
 
 Fallback never crosses a class (:func:`cascade_for`): a fast-class alias's chain holds
-only adapters of its class, natives first; an adapted classifier only when the alias
-allows it and gates no effect; an extraction candidate that returns no spans never
-stands in for a cited field.
+only adapters of its class, natives first; an adapted one only when the alias allows it
+and gates no effect; an extraction candidate that returns no spans never stands in for
+a cited field (an adapted extractor returns the spans code located its quotes at).
 """
 
 from __future__ import annotations
@@ -178,11 +179,11 @@ def _fit(alias: ModelAlias, adapter: object, mode: str) -> list[BindRefusal]:
         message = "a classification adapter returns a distribution"
         out.append(BindRefusal(name, "no_distribution", message))
     if (
-        alias.model_class == "classification"
-        and not caps.native
+        not caps.native
+        and alias.model_class != "generation"
         and (not alias.allow_adapted or alias.gates_effect)
     ):
-        message = "an adapted classifier needs allow_adapted and no gated effect"
+        message = f"an adapted {alias.model_class} adapter needs allow_adapted and no gated effect"
         out.append(BindRefusal(name, "adapted_not_allowed", message))
     if mode in OFFLINE_MODES and not caps.offline:
         message = f"{mode} mode binds offline adapters only"
@@ -231,12 +232,9 @@ def _serves(primary: ModelAlias, caps: ModelCapabilities) -> bool:
         return False
     if any(f.cited for f in primary.fields) and not caps.returns_spans:
         return False
-    if primary.model_class == "classification":
-        if not caps.returns_distribution:
-            return False
-        if not caps.native and (not primary.allow_adapted or primary.gates_effect):
-            return False
-    return True
+    if primary.model_class == "classification" and not caps.returns_distribution:
+        return False
+    return caps.native or (primary.allow_adapted and not primary.gates_effect)
 
 
 def cascade_for(alias: str, table: AliasTable) -> tuple[Candidate, ...]:
@@ -269,6 +267,21 @@ def live_env_name(alias: str) -> str:
     return LIVE_ENV_PREFIX + "".join(c if c.isalnum() else "_" for c in alias).upper()
 
 
+def live_model_name(alias: str, model_class: str, env: Mapping[str, str]) -> str:
+    """The model a live adapter of ``alias`` asks for: per alias, per class, else one for all.
+
+    ``AKSHA_LIVE_MODEL_<ALIAS>`` (``page_facts`` reads ``AKSHA_LIVE_MODEL_PAGE_FACTS``),
+    then ``AKSHA_LIVE_MODEL_<CLASS>`` (``GENERATION``, ``EXTRACTION``, ``CLASSIFICATION``),
+    then ``AKSHA_LIVE_MODEL``; empty when none is set.
+    """
+    folded = "".join(c if c.isalnum() else "_" for c in alias).upper()
+    return (
+        env.get(f"AKSHA_LIVE_MODEL_{folded}")
+        or env.get(f"AKSHA_LIVE_MODEL_{model_class.upper()}")
+        or env.get("AKSHA_LIVE_MODEL", "")
+    )
+
+
 def import_class(path: str) -> type:
     """The class ``module:Class`` names, imported now. Only live mode calls this (D9)."""
     module, _, name = path.partition(":")
@@ -282,18 +295,22 @@ def live_adapters(
     aliases: Iterable[ModelAlias],
     env: Mapping[str, str],
     load_class: Callable[[str], type] = import_class,
+    defaults: Mapping[str, str] | None = None,
 ) -> dict[str, object]:
     """Each alias's live adapter, named by ``AKSHA_ALIAS_<NAME>`` and built as ``cls(alias, env)``.
 
-    The adapter reads its own key from ``env`` in ``__init__`` and keeps it off every
-    record. Raises ``BindRefused``: ``live_adapter_unnamed`` (no variable),
-    ``live_adapter_invalid`` (not ``module:Class``, or nothing importable there).
+    An alias with no variable takes ``defaults[<its model class>]`` when given (the
+    wiring passes the built-in live adapter of each class). The adapter reads its own key
+    from ``env`` in ``__init__`` and keeps it off every record. Raises ``BindRefused``:
+    ``live_adapter_unnamed`` (no variable and no default), ``live_adapter_invalid`` (not
+    ``module:Class``, or nothing importable there).
     """
     out: dict[str, object] = {}
     refusals: list[BindRefusal] = []
-    for name in sorted(declared_aliases(aliases)):
+    declared = declared_aliases(aliases)
+    for name in sorted(declared):
         var = live_env_name(name)
-        path = env.get(var)
+        path = env.get(var) or (defaults or {}).get(declared[name].model_class)
         if not path:
             refusals.append(BindRefusal(name, "live_adapter_unnamed", f"set {var}=module:Class"))
             continue

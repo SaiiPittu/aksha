@@ -36,7 +36,7 @@ def with_alias(alias: ModelAlias) -> Agent:
 CASES: list[tuple[str, ModelAlias]] = [
     ("fields_not_extraction", ModelAlias("c2", "classification", fields=(FieldSpec("x"),))),
     ("questions_not_classification", ModelAlias("e2", "extraction", questions=(Q,))),
-    ("allow_adapted_not_classification", ModelAlias("e3", "extraction", allow_adapted=True)),
+    ("allow_adapted_not_fast", ModelAlias("generate", "generation", allow_adapted=True)),
     (
         "adapted_gates_effect",
         ModelAlias("c3", "classification", allow_adapted=True, gates_effect=True, questions=(Q,)),

@@ -13,12 +13,13 @@ import pytest
 from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.patent import checks, rules
 from aksha.agents.patent.agent import AGENT
-from aksha.agents.patent.fakes import parse
+from aksha.agents.patent.fakes import ADAPTERS, parse
 from aksha.agents.patent.tools import build_tools
 from aksha.agents.patent.world import NotInWorld, SourceWorld
 from aksha.runtime.api import Err, GenerationRequest, Message, Ok, ToolCall, ToolContext
 from aksha.runtime.grounding.parts import part_version
-from tests.support.patent import TODAY, sources
+from tests.support.fast import models_for
+from tests.support.patent import AGENT_DIR, TODAY, sources
 
 V1 = sources("stillroom")
 
@@ -27,8 +28,13 @@ def _folder(root: Path) -> FolderSource:
     return FolderSource("inputs", root, "input")
 
 
+def _models(tool: str = "read_note") -> Any:
+    """The fake-mode ``ToolContext.models`` a read tool's body gets (``tests.support.fast``)."""
+    return models_for(AGENT_DIR, ADAPTERS, tool)
+
+
 def _world(root: Path = V1, today: date | None = TODAY) -> SourceWorld:
-    return SourceWorld(today).over(_folder(root))
+    return SourceWorld(today).over(_folder(root), models=_models())
 
 
 @pytest.fixture
@@ -38,7 +44,7 @@ def w1() -> SourceWorld:
 
 def _ctx(key: str | None = "C1", root: Path = V1) -> ToolContext:
     return ToolContext("o1", "patent", "prepare", key, "R-0001/prepare[C1]/t01/c01", 1,
-                       _folder(root))  # fmt: skip
+                       _folder(root), models=_models())  # fmt: skip
 
 
 def _tools(world: SourceWorld | None = None) -> dict[str, Any]:
@@ -170,8 +176,8 @@ def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
     assert row["agreement_documents"] == [{"ref": "SYN-AA-2025-04", "found": False}]
     events = {r["event_id"]: r for r in w.disclosure_rows("TD-3")["rows"]}
     assert events["SYN-EV-04"]["date"] is None
-    forms = {t["form"]: t["template"] for t in w.templates()["templates"]}
-    assert forms == {"disclosure": "tilldew-idf", "worksheet": "tilldew-filing-sheet"}
+    forms = {t["template"] for t in w.templates()["templates"]}
+    assert forms == {"tilldew-idf", "tilldew-filing-sheet"}
     assert [i["relates_to"] for i in w.priorities()["items"]] == ["TD-1", "TD-3", "TD-2"]
     assert w.publication_ids() == [f"SYN-PUB-010{n}" for n in range(1, 6)]
     assert w.publication("SYN-PUB-0104")["claims"][1]["depends_on"] == 1
@@ -290,7 +296,9 @@ def test_fill_form_refuses_marking_a_counsel_field_complete() -> None:
     ok = fill(_ctx(), {**args, "fields": _ws_fields()})
     assert isinstance(ok.result, Ok) and len(ok.saves) == 1
     (save,) = ok.saves
-    assert (save.kind, save.key, save.content["counts"]["missing"]) == ("worksheet", "C1", 11)
+    assert (save.kind, save.key, save.content["counts"]["missing"]) == (
+        "form", "C1~filing-information-worksheet", 11,
+    )  # fmt: skip
     other = fill(_ctx("C2"), {**args, "fields": _ws_fields()})
     assert isinstance(other.result, Err) and other.result.code == "wrong_candidate"
 
@@ -303,7 +311,9 @@ def test_send_needs_an_approval_and_goes_through_the_outbox() -> None:
     assert spec.external.key_fields == ("/packet", "/recipient")
     assert spec.approval.targets is not None
     assert spec.approval.targets({"packet": "patent.packet/C1@v1"}) == ("patent.packet/C1@v1",)
-    assert spec.schema["properties"]["recipient"] == {"enum": ["counsel-primary"]}
+    # the person names their own counsel; the approval binds the exact recipient
+    recipient = spec.schema["properties"]["recipient"]
+    assert recipient["type"] == "string" and "pattern" in recipient
     out = send.body(_ctx(), {"packet": "patent.packet/C1@v1", "recipient": "counsel-primary"})
     assert isinstance(out.result, Err) and out.result.code == "outbox_only"
 
@@ -326,13 +336,32 @@ class _V:
     content: dict[str, Any]
 
 
+@dataclass
+class _Log:
+    events: tuple[Any, ...] = ()
+
+
 class _View:
-    def __init__(self, **own: dict[str, Any]) -> None:
+    """The parts of a ``TaskView`` the checks read; ``forms`` are this candidate's, by template."""
+
+    def __init__(self, forms: dict[str, dict[str, Any]] | None = None,
+                 **own: dict[str, Any]) -> None:  # fmt: skip
         self.mine = {k: _V(v) for k, v in own.items()}
+        self.forms = {f"C1~{t}": _V(v) for t, v in (forms or {}).items()}
         self.key = "C1"
+        self.log = _Log()
 
     def own(self, kind: str) -> _V | None:
         return self.mine.get(kind)
+
+    def latest(self, kind: str, key: str | None = None) -> _V | None:
+        return self.mine.get(kind)
+
+    def all_latest(self, kind: str) -> dict[str | None, _V]:
+        found: dict[str | None, _V] = {}
+        if kind == "form":
+            found.update(self.forms)
+        return found
 
 
 def test_the_recommendation_check_vetoes_an_action_the_rules_do_not_give() -> None:
@@ -358,22 +387,25 @@ LATER = _form(("representative", False, "missing"))
 
 def test_the_packet_check_needs_the_counsel_section_first() -> None:
     ok = {"scope_note": "no opinion", "sections": [{"title": "Needs counsel confirmation"}]}
-    assert checks.packet_saved(_View(packet=ok, disclosure=READY, worksheet=LATER)).ok
+    both = {"disclosure": READY, "worksheet": LATER}
+    assert checks.packet_saved(_View(both, packet=ok)).ok
     late = {
         "scope_note": "x",
         "sections": [{"title": "Scope"}, {"title": "Needs counsel confirmation"}],
     }
-    assert not checks.packet_saved(_View(packet=late, disclosure=READY, worksheet=LATER)).ok
+    assert not checks.packet_saved(_View(both, packet=late)).ok
     bare = {**ok, "scope_note": ""}
-    assert not checks.packet_saved(_View(packet=bare, disclosure=READY, worksheet=LATER)).ok
+    assert not checks.packet_saved(_View(both, packet=bare)).ok
 
 
 def test_a_missing_required_field_keeps_the_packet_from_ready() -> None:
     ok = {"scope_note": "no opinion", "sections": [{"title": "Needs counsel confirmation"}]}
     gap = _form(("title", True, "complete"), ("figure_list", True, "missing"))
-    result = checks.packet_saved(_View(packet=ok, disclosure=gap, worksheet=LATER))
+    result = checks.packet_saved(_View({"disclosure": gap, "worksheet": LATER}, packet=ok))
     assert not result.ok and "figure_list" in result.message and result.count == 1
-    assert not checks.packet_saved(_View(packet=ok, disclosure=READY)).ok  # no worksheet yet
+    assert not checks.packet_saved(_View(packet=ok)).ok  # no form filled yet
+    # any number of forms: one form, filled, is a ready packet
+    assert checks.packet_saved(_View({"own-counsel-form": READY}, packet=ok)).ok
 
 
 def test_fill_form_records_required_from_the_template_not_the_model() -> None:
@@ -429,6 +461,6 @@ def test_the_tools_read_only_through_the_call_reader() -> None:
         ToolContext("o1", "patent", "scope", None, "R-0001/scope/t01/c01", 1), {}
     )
     assert isinstance(out.result, Err) and out.result.code == "not_found"
-    dated = SourceWorld().over(_folder(V1), "2026-11-26")
+    dated = SourceWorld().over(_folder(V1), "2026-11-26", _models())
     assert dated.today == TODAY
     assert dated.disclosure_rows("C1") == _world().disclosure_rows("C1")

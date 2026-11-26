@@ -1,0 +1,10 @@
+# Both agents on the cindral world: a clinic-booking venture in a third domain, whose inputs
+# also have other shapes than stillroom's and tilldew's: PDF text and a pasted spreadsheet
+# for competitors, a nested JSON export for reviews, meeting notes and a slide-deck export
+# for inventions, a nested JSON contributor export, a CSV of priorities, one firm's own form,
+# labelled-text publications. No agent module names anything in it; the offline models
+# follow general rules (aksha/agents/*/fakes*.py), never a lexicon of this world.
+[suite]
+name = "cindral"
+description = "Research and patent agents on a world of other shapes, never seen by their code"
+k = 1

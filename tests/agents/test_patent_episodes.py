@@ -38,6 +38,10 @@ from tests.support.patent import (
     sources,
 )
 
+DISCLOSURE = "C1~invention-disclosure-form"
+WORKSHEET = "C1~filing-information-worksheet"
+"""C1's two filled forms: one artifact kind, keyed by candidate and template."""
+
 CANDIDATES = ("C1", "C2", "C3", "C4")
 
 
@@ -170,7 +174,7 @@ def test_consultant_suggestion_is_raised_for_counsel(sent: PatentRig) -> None:
     assert cr07["contributed"] == "Reviewed the thermal noise model"  # understated, kept as written
     topics = {q["topic"] for q in ext["counsel_questions"]}
     assert {"inventorship", "ownership", "outside contributor"} <= topics
-    form = {f["field"]: f for f in sent.content("disclosure", "C1")["fields"]}
+    form = {f["field"]: f for f in sent.content("form", DISCLOSURE)["fields"]}
     assert form["contributors"]["status"] == "needs_counsel_confirmation"
     assert form["outside_resources"]["status"] == "needs_counsel_confirmation"
     if sent.world_name == "stillroom-v2":
@@ -201,7 +205,7 @@ def test_forms_report_every_field_and_refuse_nothing_silently(sent: PatentRig) -
         "worksheet": {"complete": 2, "missing": 3, "needs_counsel_confirmation": 6},
     }
     for kind, n in (("disclosure", 14), ("worksheet", 11)):
-        form = sent.content(kind, "C1")
+        form = sent.content("form", {"disclosure": DISCLOSURE, "worksheet": WORKSHEET}[kind])
         assert len(form["fields"]) == n
         assert form["counts"] == counts[kind]
         assert rules.required_missing(form) == []  # only optional fields wait "until known"
@@ -209,7 +213,7 @@ def test_forms_report_every_field_and_refuse_nothing_silently(sent: PatentRig) -
             assert f["status"] in ("complete", "missing", "needs_counsel_confirmation")
             if f["status"] == "complete":
                 assert f["value"] not in (None, "", [], {})
-    ws = {f["field"]: f["status"] for f in sent.content("worksheet", "C1")["fields"]}
+    ws = {f["field"]: f["status"] for f in sent.content("form", WORKSHEET)["fields"]}
     for field in (
         "applicant",
         "proposed_inventors",
@@ -258,13 +262,13 @@ def test_no_forbidden_output_anywhere(sent: PatentRig) -> None:
 
 def test_the_selection_comes_before_any_form_and_one_send_happens(sent: PatentRig) -> None:
     saved = [e.payload["ref"] for e in sent.events("artifact.saved")]
-    assert saved.index("patent.selection@v1") < saved.index("patent.disclosure/C1@v1")
+    assert saved.index("patent.selection@v1") < saved.index(f"patent.form/{DISCLOSURE}@v1")
     assert sent.content("selection")["selected"] == ["C1"]
     assert not [
         r
         for r in saved
-        if r.endswith(("/C2@v1", "/C3@v1", "/C4@v1"))
-        and r.split("/")[0] in ("patent.disclosure", "patent.packet")
+        if re.search(r"/C[234](~[\w-]+)?@v1$", r)
+        and r.split("/")[0] in ("patent.form", "patent.packet")
     ]
     assert len(sent.ledger.rows) == 1
     (row,) = sent.ledger.rows.values()
@@ -324,8 +328,7 @@ C1_CHAIN = (
     "prior_art",
     "comparison",
     "recommendation",
-    "disclosure",
-    "worksheet",
+    "form",
     "packet",
 )
 
@@ -339,7 +342,8 @@ def test_the_change_set_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None
         assert r.change(tmp_path / "changed").accepted
         iv = invalidation_view(r.view())
         touched = set(iv.refs("invalidated")) | set(iv.refs("dirty"))
-        expected = {f"patent.{k}/C1@v1" for k in C1_CHAIN} | {
+        keys = {"form": (DISCLOSURE, WORKSHEET)}
+        expected = {f"patent.{k}/{c}@v1" for k in C1_CHAIN for c in keys.get(k, ("C1",))} | {
             "patent.table@v1",
             "patent.selection@v1",
         }
@@ -352,7 +356,7 @@ def test_the_change_set_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None
         result = r.drive()  # the open run regenerates its own work in place
         assert result.state == "ended"
         rebuilt = {e.payload["ref"] for e in r.events("artifact.saved")} - before
-        assert rebuilt == {f"patent.{k}/C1@v2" for k in C1_CHAIN} | {
+        assert rebuilt == {f"patent.{k}/{c}@v2" for k in C1_CHAIN for c in keys.get(k, ("C1",))} | {
             "patent.table@v2",
             "patent.selection@v2",
         }

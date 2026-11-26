@@ -47,6 +47,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
+from urllib.parse import urlsplit
 
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
@@ -82,6 +83,7 @@ from aksha.runtime.definitions.types import Agent
 from aksha.runtime.egress.ports import Network
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
+from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock
@@ -89,8 +91,17 @@ from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.loop.types import LoopSetup
+from aksha.runtime.models.calls import ModelCallFailed, ToolModelCalls
 from aksha.runtime.models.errors import BindRefusal, BindRefused
-from aksha.runtime.models.routing import bind_aliases
+from aksha.runtime.models.routing import (
+    LIVE_ENV_PREFIX,
+    AliasTable,
+    bind_aliases,
+    declared_aliases,
+    live_adapters,
+    live_env_name,
+)
+from aksha.runtime.models.routing import live_model_name as model_for
 from aksha.runtime.models.types import RunMode
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
@@ -201,6 +212,8 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_AGENTS``         folders holding agent folders (``os.pathsep``)  ``src/aksha/agents``
 # ``AKSHA_EXTENSIONS``     folders holding extension folders               ``src/aksha/extensions``
 # ``AKSHA_MODE``           run mode: ``fake`` (each agent's ``fakes.py``)  ``fake``
+#                          or ``live`` (a chat-completions server, below)
+# ``AKSHA_LIVE_*``         live mode's server, key and models (below)      none
 # ``AKSHA_SANDBOX``        the sandbox backend: ``bwrap``, ``e2b``,        none
 #                          ``auto``, ``refuse``, ``none``, or
 #                          ``<name>:<strength>``
@@ -265,6 +278,17 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # worktree on the branch ``aksha/<owner>/<session>`` (never the checkout itself), any other folder
 # is copied in, and unset is an empty folder. Workspaces are kept after the run;
 # ``aksha sandbox clean <session>`` removes one (:func:`clean_sandbox_session`).
+#
+# ``AKSHA_MODE=live`` binds every alias of every agent to a live adapter (ADR-P07 D9 as
+# amended G2): ``AKSHA_ALIAS_<NAME>=module:Class`` names one, else the built-in adapter
+# of the alias's class (``adapters.models.live``) over ``AKSHA_LIVE_BASE_URL`` (any
+# server speaking the chat-completions shape, hosted or on localhost) with
+# ``AKSHA_LIVE_API_KEY``. The model is ``AKSHA_LIVE_MODEL_<ALIAS>``, else
+# ``AKSHA_LIVE_MODEL_<CLASS>`` (``GENERATION``, ``EXTRACTION``, ``CLASSIFICATION``), else
+# ``AKSHA_LIVE_MODEL``. The start is refused, before any call, with
+# ``live_config_missing`` (no server or no model for an alias) or ``live_key_missing``
+# (no key for a server that is not on this machine). The key is read from the
+# environment only and never recorded; ``run.started`` records each adapter's class.
 #
 # ``AKSHA_NETWORK`` is ``off`` unless set to ``on``: off, every tool's HTTP client
 # refuses ``network_off``, so the default process is offline (ADR-P26 amendment A2).
@@ -333,6 +357,9 @@ class RuntimeConfig:
     approved_environments: tuple[str, ...] = ()
     sandboxes: SandboxSettings = field(default_factory=lambda: SandboxSettings())
     """Where session workspaces live and what they start from (decision 37)."""
+    live_env: Mapping[str, str] = field(default_factory=dict, repr=False)
+    """``AKSHA_LIVE_*`` and ``AKSHA_ALIAS_*``: live mode's settings, the key among them.
+    Read only when ``mode`` is ``live``, and never recorded."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -361,6 +388,9 @@ class RuntimeConfig:
                 for k in env.get("AKSHA_APPROVED_ENVIRONMENTS", "").split(",")
                 if k.strip()
             ),
+            live_env={
+                k: v for k, v in env.items() if k.startswith(("AKSHA_LIVE_", LIVE_ENV_PREFIX)) and v
+            },
         )
 
     def reentry_setting(self) -> ReentrySetting:
@@ -464,6 +494,50 @@ def _fake_adapters(loaded: LoadedDefinition) -> Mapping[str, object]:
     return found
 
 
+LIVE_ADAPTERS: Mapping[str, str] = {
+    "generation": "aksha.adapters.models.live:LiveGenerationModel",
+    "extraction": "aksha.adapters.models.live:LiveExtractionModel",
+    "classification": "aksha.adapters.models.live:LiveClassificationModel",
+}
+"""The built-in live adapter of each model class, imported only in live mode."""
+
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+"""Hosts a live server may be on without a key: this machine."""
+
+
+def live_refusals(loaded: LoadedDefinition, env: Mapping[str, str]) -> list[BindRefusal]:
+    """Why live mode cannot start for ``loaded`` with ``env`` (app comment above)."""
+    out: list[BindRefusal] = []
+    base = env.get("AKSHA_LIVE_BASE_URL", "")
+    custom = {
+        a for a in declared_aliases(loaded.model_aliases.values()) if env.get(live_env_name(a))
+    }
+    builtin = [a for a in declared_aliases(loaded.model_aliases.values()).values()
+               if a.name not in custom]  # fmt: skip
+    if not builtin:
+        return out
+    if not base:
+        out.append(BindRefusal("*", "live_config_missing", "set AKSHA_LIVE_BASE_URL"))
+    for a in builtin:
+        if not model_for(a.name, a.model_class, env):
+            var = "AKSHA_LIVE_MODEL_" + "".join(c if c.isalnum() else "_" for c in a.name).upper()
+            message = f"set AKSHA_LIVE_MODEL, AKSHA_LIVE_MODEL_{a.model_class.upper()} or {var}"
+            out.append(BindRefusal(a.name, "live_config_missing", message))
+    host = (urlsplit(base).hostname or "") if base else ""
+    if base and not env.get("AKSHA_LIVE_API_KEY") and host not in LOCAL_HOSTS:
+        message = f"set AKSHA_LIVE_API_KEY: {host or base!r} is not on this machine"
+        out.append(BindRefusal("*", "live_key_missing", message))
+    return out
+
+
+def bind_live(loaded: LoadedDefinition, env: Mapping[str, str]) -> Mapping[str, object]:
+    """Every alias's live adapter (app comment above); raises ``BindRefused`` first if unset."""
+    refusals = live_refusals(loaded, env)
+    if refusals:
+        raise BindRefused(tuple(refusals))
+    return live_adapters(loaded.model_aliases.values(), env, defaults=LIVE_ADAPTERS)
+
+
 def session_agent(
     loaded: LoadedDefinition,
     mode: str,
@@ -471,17 +545,24 @@ def session_agent(
     *,
     commit: tuple[str, bool] = ("unknown", False),
     reentry: ReentrySetting | None = None,
+    live_env: Mapping[str, str] | None = None,
 ) -> SessionAgent:
     """One loaded definition bound to its models, as a session runs it.
+
+    In ``live`` mode with no ``adapters`` given, each alias is bound by :func:`bind_live`
+    from ``live_env`` (the ``AKSHA_LIVE_*`` and ``AKSHA_ALIAS_*`` settings).
 
     ``reentry`` is the setting its request runs record (decision 36); None is ``fresh``.
     """
     agent = loaded.agent
     if adapters is None:
-        if mode != "fake":
-            refusal = BindRefusal("*", "mode_unsupported", f"AKSHA_MODE={mode!r}: only fake")
-            raise BindRefused((refusal,))
-        adapters = _fake_adapters(loaded)
+        if mode == "live":
+            adapters = bind_live(loaded, live_env or {})
+        elif mode != "fake":
+            message = f"AKSHA_MODE={mode!r}: use fake or live"
+            raise BindRefused((BindRefusal("*", "mode_unsupported", message),))
+        else:
+            adapters = _fake_adapters(loaded)
     table = bind_aliases(loaded.model_aliases.values(), cast(RunMode, mode), adapters)
     briefs = {
         path: (loaded.folder / node.task.brief).read_text(encoding="utf-8")
@@ -534,7 +615,12 @@ def load_session_agents(
     commit = runtime_commit()
     return tuple(
         session_agent(
-            d, config.mode, (adapters or {}).get(d.agent.name), commit=commit, reentry=reentry
+            d,
+            config.mode,
+            (adapters or {}).get(d.agent.name),
+            commit=commit,
+            reentry=reentry,
+            live_env=config.live_env,
         )
         for d in loaded
     )
@@ -674,10 +760,21 @@ class ToolQueryRunner:
     reopens rather than staying current on an answer nobody can check.
     """
 
-    def __init__(self, loaded: Sequence[LoadedDefinition], reader: Callable[[str], Any]) -> None:
-        """Answer queries of ``loaded``'s tools, reading through ``reader(owner)``."""
+    def __init__(
+        self,
+        loaded: Sequence[LoadedDefinition],
+        reader: Callable[[str], Any],
+        tables: Mapping[str, AliasTable] | None = None,
+    ) -> None:
+        """Answer queries of ``loaded``'s tools, reading through ``reader(owner)``.
+
+        ``tables`` holds each agent's bound aliases: a tool that asks fast-class models
+        (the decide step of a listing) asks them again through the same binding, so the
+        query's answer is the one a run would get now (ADR-P07 G1).
+        """
         self.loaded = {d.agent.name: d for d in loaded}
         self.reader = reader
+        self.tables = dict(tables or {})
 
     def __call__(self, owner: str, query: str) -> str:
         """The result-set hash of ``query`` for ``owner`` now."""
@@ -692,9 +789,19 @@ class ToolQueryRunner:
         if decl.body is None:
             return ""
         args = json.loads(raw) if raw else {}
+        table = self.tables.get(agent)
+        spec = decl.spec
+        models = (
+            ToolModelCalls(table, spec.model_aliases, spec.name, owner)
+            if table is not None and spec.model_aliases
+            else None
+        )
         ctx = ToolContext(owner, agent, "requery", None, f"requery/{query}", 1,
-                          reader=self.reader(owner))  # fmt: skip
-        outcome = decl.body(ctx, args)
+                          reader=self.reader(owner), models=models)  # fmt: skip
+        try:
+            outcome = decl.body(ctx, args)
+        except (TransientStepError, ModelCallFailed):  # a model call failed: a failed query
+            return ""
         if not isinstance(outcome.result, Ok):
             return ""
         for read in outcome.result.reads:
@@ -853,7 +960,8 @@ def open_session(
                    blobs=open_blob_store(config.storage), systems=every_system,
                    reader=reader, ids=ids, tier=tier, inputs=inputs, rebuilds=True,
                    run_query=None if inputs is None else ToolQueryRunner(
-                       loaded, lambda owner: inputs.reader(owner)))  # fmt: skip
+                       loaded, lambda owner: inputs.reader(owner),
+                       {a.agent.name: a.table for a in agents}))  # fmt: skip
 
 
 def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:
@@ -958,7 +1066,9 @@ def _setup(
         agent=agent,
         tree=compile_tree(agent.name, agent.tasks),
         registry=registry,
-        table=bind_aliases(agent.model_aliases, "fake", {"generate": model}),
+        table=bind_aliases(
+            agent.model_aliases, "fake", {**_fake_adapters(loaded), "generate": model}
+        ),
         instructions=(loaded.folder / agent.instructions).read_text(encoding="utf-8"),
         request=request,
         briefs=_briefs(loaded.folder, agent),
@@ -1014,7 +1124,8 @@ def open_demo(
     authority = approval_authority(send_tools, lambda entry: patent.definition_hash)
     box = mailbox or counsel_mailbox(work)
     worker = OutboxWorker(store, DEMO_OWNER, clock, {COUNSEL_MAILBOX: box}, authority=authority)
-    queries = ToolQueryRunner(list(loaded.values()), lambda owner: folder)
+    tables = {research.agent.name: research_setup.table, agent.name: patent_setup.table}
+    queries = ToolQueryRunner(list(loaded.values()), lambda owner: folder, tables)
     return DemoRuntime(
         store,
         clock,

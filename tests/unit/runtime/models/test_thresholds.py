@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from dataclasses import replace
 
 import pytest
 
@@ -89,15 +90,24 @@ def test_a_field_the_adapter_left_out_abstains() -> None:
     assert (j.outcome, j.reason) == ("abstain", "missing_answer")
 
 
-def test_an_uncited_field_needs_no_span_but_an_adapted_answer_never_fills_a_cited_one() -> None:
+def test_an_adapted_answer_fills_a_cited_field_only_with_a_located_span() -> None:
     loose = FieldSpec("note", "text", cited=False)
     j = threshold_extraction(
         FieldAnswer("ok", (), confidence_ppm=950_000), loose, STATE, native=False
     )
     assert j.accepted
+    # an adapted extractor's spans are where code found its quotes (G3): a located one is
+    # judged like a native answer, by the field's adapted thresholds when it has them
     cited = FieldAnswer("279", (WHERE,), confidence_ppm=990_000)
-    j = threshold_extraction(cited, PRICE, STATE, native=False)
-    assert (j.outcome, j.reason) == ("abstain", "adapted_no_span")
+    assert threshold_extraction(cited, PRICE, STATE, native=False).accepted
+    strict = replace(PRICE, adapted=ConfidenceThresholds(accept_at=0.995))
+    j = threshold_extraction(cited, strict, STATE, native=False)
+    assert (j.outcome, j.reason) == ("abstain", "under_accept")
+    assert threshold_extraction(cited, strict, STATE, native=True).accepted
+    # a quote it made up was never located, so the answer has no span
+    made_up = FieldAnswer("279", (), confidence_ppm=990_000)
+    j = threshold_extraction(made_up, PRICE, STATE, native=False)
+    assert (j.outcome, j.reason) == ("abstain", "span_missing")
 
 
 @pytest.mark.parametrize(
@@ -108,6 +118,10 @@ def test_an_uncited_field_needs_no_span_but_an_adapted_answer_never_fills_a_cite
         ("duration", "P1Y", True), ("duration", "P3M", True), ("duration", "PT12H", True),
         ("duration", "P", False), ("duration", "3 months", False),
         ("list", ("a", "b"), True), ("list", "a", False), ("text", ("a",), False),
+        ("time", "09:30", True), ("time", "23:59:59", True), ("time", "24:00", False),
+        ("datetime", "2026-11-27T09:30", True), ("datetime", "2026-11-27 09:30:00Z", True),
+        ("datetime", "2026-02-30T09:30", False), ("estimate", "40", True),
+        ("estimate", "about 40", False), ("forecast", "doubles by 2028", True),
     ],
 )  # fmt: skip
 def test_field_types_are_checked(type_: str, value: object, ok: bool) -> None:

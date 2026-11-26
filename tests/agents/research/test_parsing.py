@@ -1,4 +1,9 @@
-"""The research agent's pure readers: every passage is an exact range of the raw record."""
+"""The research agent's readers: decide the kind, extract by its schema, exact ranges.
+
+Each reader runs as a tool body would: through the fake-mode ``ToolContext.models`` of the
+tool (``tests.support.fast``), so the decide, extract and classify calls go through the
+real binder, cascade and thresholds.
+"""
 
 from __future__ import annotations
 
@@ -6,21 +11,50 @@ from pathlib import Path
 
 import pytest
 
-from aksha.agents.research import parsing
+import aksha.agents
+from aksha.agents.research import parsing, reading
+from aksha.agents.research.fakes import ADAPTERS
+from aksha.runtime.api import DocumentReading
+from aksha.runtime.grounding.types import ReturnedText
+from tests.support.fast import models_for
 from tests.support.research import WORLDS
+
+AGENT_DIR = Path(aksha.agents.__file__).parent / "research"
+
+
+def _found(world: str, rel: str) -> ReturnedText:
+    raw = (WORLDS / world / "sources" / rel).read_text(encoding="utf-8")
+    return ReturnedText("inputs", f"input/{rel}", "v1", raw)
+
+
+def _read(world: str, rel: str) -> tuple[str, parsing.Page, DocumentReading]:
+    found = _found(world, rel)
+    fmt = reading.record_format(found.record_id, found.text)
+    page, read = reading.read_page(models_for(AGENT_DIR, ADAPTERS, "fetch_page"), found, fmt,
+                                   "inputs")  # fmt: skip
+    return found.text, page, read
+
+
+def _table(world: str, rel: str) -> tuple[str, parsing.Table]:
+    found = _found(world, rel)
+    fmt = reading.record_format(found.record_id, found.text)
+    return found.text, reading.read_table(
+        models_for(AGENT_DIR, ADAPTERS, "read_table"), found, fmt, "inputs"
+    )
+
 
 PAGES = sorted((WORLDS / "stillroom" / "sources" / "competitors").glob("*.html"))
 
 
 def _page(name: str) -> tuple[str, parsing.Page]:
-    raw = (WORLDS / "stillroom" / "sources" / "competitors" / name).read_text(encoding="utf-8")
-    return raw, parsing.read_page(raw)
+    raw, page, read = _read("stillroom", f"competitors/{name}")
+    assert (read.kind, read.decided) == ("competitor_page", True)
+    return raw, page
 
 
 @pytest.mark.parametrize("path", PAGES, ids=lambda p: p.name)
 def test_every_passage_is_the_exact_raw_range(path: Path) -> None:
-    raw = path.read_text(encoding="utf-8")
-    page = parsing.read_page(raw)
+    raw, page = _page(path.name)
     assert page.passages
     for p in page.passages:
         assert raw[p.start : p.end] == p.text
@@ -32,8 +66,10 @@ def test_identity_comes_from_the_structured_product_and_brand() -> None:
     assert (page.published, page.product, page.brand) == (
         "2026-09-15", "Corvane Presence P1", "Corvane Group",
     )  # fmt: skip
-    (rel,) = [p for p in page.passages if p.kind == "relationship"]
-    assert rel.text.startswith("Corvane Presence P1 is the new name for OccuPoint.")
+    # each relationship sentence of the paragraph is its own citable passage
+    rels = [p.text for p in page.passages if p.kind == "relationship"]
+    assert rels[0] == "Corvane Presence P1 is the new name for OccuPoint."
+    assert rels[1].startswith("Brightfield Analytics joined Corvane Group on 12 May 2026")
 
 
 def test_price_rows_carry_amount_currency_and_terms() -> None:
@@ -68,8 +104,7 @@ def test_hidden_text_is_flagged_and_a_sales_line_is_not() -> None:
 
 
 def test_reviews_are_one_passage_per_row_over_the_text_value() -> None:
-    raw = (WORLDS / "stillroom" / "sources" / "reviews" / "reviews.json").read_text("utf-8")
-    table = parsing.read_table(raw, "json")
+    raw, table = _table("stillroom", "reviews/reviews.json")
     assert table.header["collected"] == "2026-11-01"
     assert len(table.passages) == 42
     first = table.passages[0]
@@ -79,8 +114,7 @@ def test_reviews_are_one_passage_per_row_over_the_text_value() -> None:
 
 
 def test_a_csv_with_quoted_commas_is_read_with_exact_offsets() -> None:
-    raw = (WORLDS / "tilldew" / "sources" / "exports" / "farmer-reviews.csv").read_text("utf-8")
-    table = parsing.read_table(raw, "csv")
+    raw, table = _table("tilldew", "exports/farmer-reviews.csv")
     assert len(table.passages) == 24
     for p in table.passages:
         assert raw[p.start : p.end] == p.text
@@ -93,8 +127,8 @@ def test_a_csv_with_quoted_commas_is_read_with_exact_offsets() -> None:
 
 
 def test_a_markdown_page_names_its_product_and_maker_from_front_matter() -> None:
-    raw = (WORLDS / "tilldew" / "sources" / "vendors" / "khetimeter.md").read_text("utf-8")
-    page = parsing.read_markdown_page(raw)
+    raw, page, read = _read("tilldew", "vendors/khetimeter.md")
+    assert read.kind == "competitor_page"
     assert (page.product, page.brand, page.published) == (
         "KhetiMeter", "Rootline Agro", "2026-04-18",
     )  # fmt: skip
@@ -108,27 +142,38 @@ def test_a_markdown_page_names_its_product_and_maker_from_front_matter() -> None
 
 
 @pytest.mark.parametrize(
-    ("record", "shape"),
+    ("record", "kind"),
     [
-        ("vendors/khetimeter.md", "seller_page"),
-        ("vendors/furrowpulse.html", "seller_page"),
-        ("exports/farmer-reviews.csv", "review_table"),
-        ("people/contributions.csv", "table"),
-        ("rnd/td1-salinity-compensated-moisture.md", "note"),
-        ("prior-art/SYN-PUB-0101.json", "table"),
-        ("mail/advisor-email.eml.txt", "note"),
+        ("vendors/khetimeter.md", "competitor_page"),
+        ("vendors/furrowpulse.html", "competitor_page"),
+        ("exports/farmer-reviews.csv", "customer_reviews"),
+        ("people/contributions.csv", "other"),
+        ("reports/district-irrigation-survey.pdf.txt", "market_report"),
+        ("rnd/td1-salinity-compensated-moisture.md", "internal_note"),
+        ("prior-art/SYN-PUB-0101.json", "other"),
+        ("prior-art/SYN-PUB-0104.pdf.txt", "other"),
+        ("mail/advisor-email.eml.txt", "internal_note"),
     ],
 )
-def test_an_input_is_recognised_by_its_content(record: str, shape: str) -> None:
-    raw = (WORLDS / "tilldew" / "sources" / record).read_text("utf-8")
-    assert parsing.shape_of(record, raw) == shape
+def test_the_decide_step_names_each_record_s_kind_by_its_content(record: str, kind: str) -> None:
+    found = _found("tilldew", record)
+    fmt = reading.record_format(found.record_id, found.text)
+    got = reading.decide(models_for(AGENT_DIR, ADAPTERS, "list_inputs"), found, fmt)
+    assert got == (kind, True)
+
+
+def test_a_record_of_kind_other_is_left_to_the_general_model() -> None:
+    raw, page, read = _read("tilldew", "people/contributions.csv")
+    assert (read.kind, read.unresolved, read.needs_reader) == ("other", ("kind",), True)
+    assert page.passages  # every row is still a citable passage for the general model
+    for p in page.passages:
+        assert raw[p.start : p.end] == p.text
 
 
 def test_note_lines_skip_front_matter() -> None:
-    raw = (WORLDS / "stillroom" / "sources" / "priorities" / "business-priorities.md").read_text(
-        "utf-8"
-    )
-    lines = parsing.read_lines(raw)
+    found = _found("stillroom", "priorities/business-priorities.md")
+    raw = found.text
+    lines = reading.read_lines(found, reading.record_format(found.record_id, raw))
     assert not any(line.text.startswith("record_id") for line in lines)
     assert any(line.text.startswith("Not a priority in H1 2026") for line in lines)
     for line in lines:

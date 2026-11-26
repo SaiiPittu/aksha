@@ -53,12 +53,16 @@ def test_active_time_is_durations_plus_the_backoff_of_a_retry() -> None:
     assert records.active_ms(log.tool("s")) == 0
 
 
-def test_usage_is_read_from_model_steps_only() -> None:
+def test_usage_is_read_from_model_steps_and_a_tool_bodys_model_calls() -> None:
     log = Log()
     use = {"input_tokens": 10, "output_tokens": 5, "cost_micro_usd": 70}
     assert records.usage(log.completed("m", kind="model", usage=use)) == (15, 70)
     assert records.usage(log.completed("t", kind="tool", usage=use)) == (0, 0)
     assert records.usage(log.completed("m2", kind="model")) == (0, 0)
+    calls = [{"alias": "a", "usage": use}, {"alias": "b", "usage": {"input_tokens": 3}}]
+    body = log.add("step.completed", {"outcome": "ok", "kind": "tool",
+                                      "value": {"model_calls": calls}}, step="t2")  # fmt: skip
+    assert records.usage(body) == (18, 70)
 
 
 def test_automatic_starts_are_resumes_rebuilds_continuations_and_timers() -> None:

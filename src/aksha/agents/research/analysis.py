@@ -33,7 +33,19 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from .parsing import amount_number, basis_key
+
+
+def _decimal(text: str) -> bool:
+    try:
+        Decimal(text)
+    except (InvalidOperation, ValueError):
+        return False
+    return True
+
 
 _RELATION_WORDS = re.compile(
     r"\b(is the new name for|joined|acquired|was acquired by|merged with|now part of|renamed|"
@@ -59,6 +71,12 @@ class PageIdentity:
     url: str | None = None
     relations: tuple[Mapping[str, Any], ...] = ()  # {"text", "span"} of relationship lines
     names: Mapping[str, Mapping[str, str]] = field(default_factory=dict)  # kind -> {text, span}
+    section: int | None = None  # one section of a record holding several sellers' sections
+
+    @property
+    def page(self) -> tuple[str, int | None]:
+        """The page's identity: its record, and its section when it is one."""
+        return (self.record, self.section)
 
 
 @dataclass(frozen=True)
@@ -74,9 +92,9 @@ class Company:
 
 def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
     """Group ``pages`` into companies by relationship sentences only (module doc, rule 1)."""
-    parent = {p.record: p.record for p in pages}
+    parent = {p.page: p.page for p in pages}
 
-    def find(r: str) -> str:
+    def find(r: tuple[str, int | None]) -> tuple[str, int | None]:
         while parent[r] != r:
             r = parent[r]
         return r
@@ -88,35 +106,35 @@ def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
             if not _RELATION_WORDS.search(text):
                 continue
             for other in pages:
-                if other.record == page.record:
+                if other.page == page.page:
                     continue
                 named = [n for n in (other.product, other.brand) if n and n in text]
                 if not named:
                     continue
-                a, b = find(page.record), find(other.record)
+                a, b = find(page.page), find(other.page)
                 if a != b:
                     parent[b] = a
                     merges.append((page, other, rel))
-    groups: dict[str, list[PageIdentity]] = {}
+    groups: dict[tuple[str, int | None], list[PageIdentity]] = {}
     for p in pages:
-        groups.setdefault(find(p.record), []).append(p)
+        groups.setdefault(find(p.page), []).append(p)
     out: list[Company] = []
     for rank, members in enumerate(groups.values(), start=1):
-        ordered = sorted(members, key=lambda p: (p.published or "9999", p.record))
+        ordered = sorted(members, key=lambda p: (p.published or "9999", p.record, p.section or 0))
         canonical = ordered[0].brand or ordered[0].product
         names: list[str] = []
         for p in ordered:
             for n in (p.brand, p.product):
                 if n and n != canonical and n not in names:
                     names.append(n)
-        mine = {p.record for p in members}
+        mine = {p.page for p in members}
         out.append(
             Company(
                 key=f"c{rank:02d}-{slug(canonical)}",
                 canonical=canonical,
                 aliases=tuple(names),
                 pages=tuple(ordered),
-                merges=tuple(m for m in merges if m[0].record in mine),
+                merges=tuple(m for m in merges if m[0].page in mine),
             )
         )
     return tuple(out)
@@ -125,20 +143,28 @@ def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
 def price_conflict(points: Iterable[Mapping[str, Any]]) -> list[str]:
     """The price bases on which a company's pages disagree (module doc, rule 2).
 
-    Each point has ``record``, ``per``, ``currency`` and ``value``. A basis conflicts when
-    at least two pages state exactly one price on it each and those prices differ.
+    Each point has ``record``, ``per``, ``currency`` and ``value`` (and ``number``, the
+    value as a plain decimal, when known). A basis conflicts when at least two pages state
+    exactly one price on it each and those prices differ. Bases compare folded
+    (``/unit`` is ``per unit``) and values by their decimal, so ``1,499`` is ``1499``.
     """
     by_basis: dict[str, dict[str, set[tuple[str, str]]]] = {}
+    shown: dict[str, str] = {}
     for p in points:
-        per = " ".join(str(p.get("per", "")).lower().split())
+        written = " ".join(str(p.get("per", "")).lower().split())
+        per = basis_key(written)
+        shown.setdefault(per, written)
         page = str(p.get("record", ""))
-        value = (str(p.get("currency")), str(p.get("value")))
+        number = str(p.get("number") or amount_number(str(p.get("value"))))
+        if _decimal(number):
+            number = format(Decimal(number).normalize(), "f")
+        value = (str(p.get("currency")), number)
         by_basis.setdefault(per, {}).setdefault(page, set()).add(value)
     out = []
     for per, pages in sorted(by_basis.items()):
         single = [next(iter(v)) for v in pages.values() if len(v) == 1]
         if len(single) >= 2 and len(set(single)) > 1:
-            out.append(per)
+            out.append(shown[per])
     return out
 
 
@@ -212,9 +238,15 @@ def review_sample(
         seen[sig] = r
         unique.append(r)
     by_id = sorted(unique, key=lambda r: str(r["fields"]["id"]))
+
+    def speaks(r: Mapping[str, Any], name: str, terms: Sequence[str]) -> bool:
+        said = r["fields"].get("themes")  # the theme_match alias's answer, when it was asked
+        if isinstance(said, list | tuple):
+            return name in said
+        return bool(term_hits(str(r["text"]), terms))
+
     matched = {
-        name: tuple(r for r in by_id if term_hits(str(r["text"]), terms))
-        for name, terms in themes.items()
+        name: tuple(r for r in by_id if speaks(r, name, terms)) for name, terms in themes.items()
     }
     return ReviewSample(
         rows=tuple(rows),

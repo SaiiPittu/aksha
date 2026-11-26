@@ -49,9 +49,13 @@ class BindRefused(AkshaError):
     default_code = "bind_refused"
 
     def __init__(self, refusals: tuple[BindRefusal, ...]) -> None:
-        """Hold every refusal; the message lists their codes."""
+        """Hold every refusal; the message lists their codes, each with what to do."""
         self.refusals = refusals
-        super().__init__(message="; ".join(f"{r.alias}: {r.code}" for r in refusals))
+        super().__init__(
+            message="; ".join(
+                f"{r.alias}: {r.code}" + (f" ({r.message})" if r.message else "") for r in refusals
+            )
+        )
 
 
 class OptionsUnavailable(AkshaError):
