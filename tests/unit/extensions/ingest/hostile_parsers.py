@@ -137,3 +137,19 @@ def real(name: str, data: bytes, declared: str | None, caps: Caps, allow: frozen
          *, sniffed: Any = None) -> Parsed:  # fmt: skip
     """The real parsing (a module-level alias tests can name)."""
     return parse_in_process(name, data, declared, caps, allow, sniffed=sniffed)
+
+
+def malformed(name: str, data: bytes, declared: str | None, caps: Caps, allow: frozenset[str],
+              *, sniffed: Any = None) -> Parsed:  # fmt: skip
+    """Sends a well-framed reply whose anchor has two fields instead of three."""
+    from aksha.extensions.ingest import wire
+
+    reply = {"stage": "parsed",
+             "sniffed": {"detected_type": "text/plain", "charset": None, "text": None,
+                         "type_conflict": None, "gap": None},
+             "converted": {"representation": {"text": "x", "anchors": [["a", 0]]},
+                           "gap": None, "children": []},
+             "frames": []}  # fmt: skip
+    os.write(1, wire.frame(reply))
+    time.sleep(60)
+    raise AssertionError("unreachable")

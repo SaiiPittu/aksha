@@ -111,6 +111,13 @@ def _list(x: object) -> list[Any]:
     return x
 
 
+def _fixed(x: object, n: int) -> list[Any]:
+    items = _list(x)
+    if len(items) != n:
+        raise WireError(f"expected a list of {n}")
+    return items
+
+
 def _dict(x: object) -> dict[str, Any]:
     if not isinstance(x, dict):
         raise WireError("expected an object")
@@ -198,7 +205,7 @@ def _rep_json(rep: Representation) -> dict[str, Any]:
 
 
 def _pair(x: object) -> tuple[int, int]:
-    a, b = _list(x)
+    a, b = _fixed(x, 2)
     return _int(a), _int(b)
 
 
@@ -206,15 +213,15 @@ def _rep_from(x: object) -> Representation:
     d = _dict(x)
     anchors = []
     for a in _list(d.get("anchors", [])):
-        label, start, end = _list(a)
+        label, start, end = _fixed(a, 3)
         anchors.append(Anchor(_str(label), _int(start), _int(end)))
     pages = []
     for p in _list(d.get("pages", [])):
-        anchor, rung, trust = _list(p)
+        anchor, rung, trust = _fixed(p, 3)
         pages.append(PageRung(_str(anchor), _one_of(rung, RUNGS), _one_of(trust, TRUSTS)))
     signals = []
     for s in _list(d.get("signals", [])):
-        k, v = _list(s)
+        k, v = _fixed(s, 2)
         signals.append((_str(k), _int(v)))
     image = None
     if d.get("image") is not None:

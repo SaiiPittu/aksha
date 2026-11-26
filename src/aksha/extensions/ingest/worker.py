@@ -160,7 +160,10 @@ def main(config: dict[str, Any]) -> None:
         for module in PRELOAD:
             with contextlib.suppress(Exception):
                 importlib.import_module(module)
-    hard_cpu = cpu * jobs + 1
+    # The hard limit sits a whole cap above the last job's soft one: at the soft limit the
+    # kernel sends SIGXCPU (parser_timeout), but where soft equals hard it sends SIGKILL,
+    # which would read as a crash (a one-job worker's soft limit is ceil(startup) + cpu).
+    hard_cpu = cpu * (jobs + 1) + 2
     _limit(resource.RLIMIT_AS, memory, memory)
     _limit(resource.RLIMIT_CORE, 0, 0)
     _limit(resource.RLIMIT_FSIZE, 0, 0)
@@ -409,7 +412,11 @@ class ParserPool:
             worker = self._take(limits) or self._start(self._argv(limits, self.max_jobs), limits)
             if isinstance(worker, Gap):
                 return failed(None, worker)
-            parsed, keep = self._run(worker, wire.frame(job, [data]), data, caps, limits)
+            try:
+                parsed, keep = self._run(worker, wire.frame(job, [data]), data, caps, limits)
+            except BaseException:  # a bug or an interrupt here never leaves a worker running
+                worker.kill()
+                raise
             worker.jobs += 1
             if keep and worker.jobs < self.max_jobs and self._give(limits, worker):
                 return parsed
@@ -507,8 +514,8 @@ class ParserPool:
             code = worker.exit_code()
             worker.kill()
             return failed(found, _died(code, jailed, limits)), False
-        except (wire.WireError, OSError):
-            worker.kill()
+        except (ValueError, TypeError, KeyError, OSError):  # WireError, or a field decoder
+            worker.kill()  # that met a shape it does not check: the reply is untrusted
             return failed(
                 found,
                 _gap(f"{PARSER_CRASHED}: the parser sent a reply the protocol does not allow"),

@@ -175,6 +175,22 @@ def test_a_reply_the_protocol_does_not_allow_is_parser_crashed() -> None:
                               "not allow")  # fmt: skip
 
 
+def test_a_well_framed_reply_with_a_malformed_field_is_parser_crashed() -> None:
+    p = hostile("malformed")
+    got = run("notes.txt", b"plain words\n", p)
+    assert got.gap is not None
+    assert got.gap.detail == (f"{PARSER_CRASHED}: the parser sent a reply the protocol does "
+                              "not allow")  # fmt: skip
+    assert idle(p) == 0
+
+
+def test_a_single_job_worker_over_the_cpu_cap_is_a_timeout_not_a_crash() -> None:
+    p = ParserPool(target=f"{H}:spins", max_jobs=1)
+    got = run("notes.txt", b"plain words\n", p, Caps(parser_time_ms=30_000, parser_cpu_s=1))
+    assert got.gap is not None
+    assert got.gap.detail == f"{PARSER_TIMEOUT}: over the CPU cap of 1 s; the parser was stopped"
+
+
 def _bomb(entry_bytes: int) -> bytes:
     """A real DOCX whose body part expands to ``entry_bytes`` bytes (written streaming)."""
     out = io.BytesIO()
