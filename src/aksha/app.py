@@ -970,6 +970,7 @@ def open_session(
     every_system = {**extension_systems(config, loaded, skip=given), **given}
     reader = source_reader(config, loaded)
     inputs = input_workspace(config, loaded)
+    ingester = None if inputs is None else upload_ingester(config)  # refuses before the store opens
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
@@ -980,7 +981,6 @@ def open_session(
     sandbox = tier.gate_availability
     recorded = tier.record()
     agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
-    ingester = None if inputs is None else upload_ingester(config)
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
                    blobs=open_blob_store(config.storage), systems=every_system,
                    reader=reader, ids=ids, tier=tier, inputs=inputs, rebuilds=True,

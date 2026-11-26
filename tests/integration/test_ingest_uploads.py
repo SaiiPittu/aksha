@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import re
 import shutil
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -272,3 +273,16 @@ def test_an_upload_cut_off_before_its_facts_does_not_hand_its_doc_key_out_again(
         assert f"[document {fact.payload['doc_key']} " not in orphan, orphan
     finally:
         session.store.close()
+
+
+def test_an_unknown_image_profile_opens_no_store(tmp_path: Path) -> None:
+    """The profile is checked before the event store opens, so a refused start leaks no
+    connection and holds no writer lock."""
+    from aksha.app import open_session
+    from aksha.runtime.storage.errors import StoreError
+    from tests.support.session import config
+
+    cfg = replace(config(tmp_path, agent_paths=(DEFAULT_AGENTS,)), image_profile="nope")
+    with pytest.raises(StoreError, match="image_profile_unknown"):
+        open_session(cfg)
+    assert not (tmp_path / "var" / "aksha.sqlite").exists()
