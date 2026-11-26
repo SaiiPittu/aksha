@@ -14,4 +14,6 @@ criteria = [
   "no_unbound_send",
   "citation.exists",
   "citation.overlaps_key",
+  "web.noise_unread",
+  "web.fetched_from_results",
 ]

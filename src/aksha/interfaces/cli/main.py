@@ -13,6 +13,11 @@ the owner's inputs (``UploadInputs``), then sends the message; ``aksha upload PA
 alone. Uploading a file again with other bytes records what moved, and only the work built
 on it reopens: the command drives the rebuild runs that opens and reports them.
 
+``aksha run --record FOLDER`` runs one agent to its end in a store of its own inside the
+folder, recording every model call, search and fetch, the inputs, the answers given
+(``--answer ID=TEXT``, ``--approve``), the outputs and the trace; ``aksha replay FOLDER``
+runs it again fully offline from the recording and says whether the outputs are the same.
+
 ``aksha run --headless`` starts a headless run (ADR-P11 D12, option B): no approval is
 asked, every deny still holds, and the start is refused ``sandbox_required`` unless a
 sandbox backend probes available (``AKSHA_SANDBOX``) or an outer box is declared. The
@@ -462,11 +467,109 @@ def _run_ids(ctx: Context) -> set[str]:
         store.close()
 
 
+def _answers(raw: Sequence[str]) -> dict[str, str] | None:
+    """``ID=TEXT`` pairs as a mapping; None when one has no ``=``."""
+    out: dict[str, str] = {}
+    for item in raw:
+        qid, sep, text = item.partition("=")
+        if not sep or not qid.strip():
+            return None
+        out[qid.strip()] = text
+    return out
+
+
+def _stream_counts(folder: Path) -> str:
+    counts = []
+    for stream, word in (("models", "model calls"), ("search", "searches"), ("fetch", "fetches")):
+        path = folder / f"{stream}.jsonl"
+        lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
+        n = sum(1 for line in lines if line.strip())
+        counts.append(f"{n} {word}")
+    return ", ".join(counts)
+
+
+def cmd_record(ctx: Context, args: argparse.Namespace) -> int:
+    """``aksha run --record FOLDER``: run one agent to its end with every answer recorded.
+
+    The run takes place in a store inside the folder (never the owner's own), with every
+    model call, search and fetch appended as it is answered; ``--answer ID=TEXT`` answers
+    the run's questions and ``--approve`` grants its approvals. ``aksha replay FOLDER``
+    runs it again offline.
+    """
+    from aksha.app import RunScript, record_run
+
+    if not args.agent:
+        ctx.say("--record needs --agent: a recording runs one agent")
+        return wire.EXIT_USAGE
+    answers = _answers(args.answer or [])
+    if answers is None:
+        ctx.say("--answer takes ID=TEXT, for example --answer geography=EU")
+        return wire.EXIT_USAGE
+    try:
+        files, skipped = collect_inputs(args.input or [])
+    except FileNotFoundError as e:
+        ctx.say(f"no such input: {e}")
+        return wire.EXIT_USAGE
+    for why in skipped:
+        ctx.say(f"skipped {why}")
+    folder = Path(args.record)
+    script = RunScript(args.agent, args.text, answers, bool(args.approve), ctx.owner)
+    try:
+        ended = record_run(ctx.config, folder, script, files)
+    except AkshaError as e:
+        ctx.say(f"refused: {e.code}: {e.message}")
+        return wire.EXIT_REFUSED
+    ctx.say(f"recorded {ended.run or 'no run'} {args.agent} ({ended.outcome}) into {folder}: "
+            f"{_stream_counts(folder)}")  # fmt: skip
+    for path in ended.trace:
+        ctx.say(f"trace: {path}")
+    if ended.waiting:
+        ctx.say("waiting on " + ", ".join(ended.waiting) + ": record again with --answer "
+                "ID=TEXT (or --approve)")  # fmt: skip
+        return wire.EXIT_WAITING_INPUT
+    ctx.say(f"replay it offline: aksha replay {folder}")
+    return wire.EXIT_OK if ended.outcome == "complete" else wire.EXIT_PARTIAL
+
+
+def cmd_replay(ctx: Context, args: argparse.Namespace) -> int:
+    """``aksha replay FOLDER``: the recorded run again, offline, its outputs compared."""
+    from aksha.app import replay_run
+
+    folder = Path(args.folder)
+    out = Path(args.out) if args.out else _fresh(folder.parent / f"{folder.name}-replay")
+    try:
+        done = replay_run(ctx.config, folder, out)
+    except AkshaError as e:
+        ctx.say(f"refused: {e.code}: {e.message}")
+        return wire.EXIT_REFUSED
+    run = done.run
+    ctx.say(f"replayed {run.run or 'no run'} offline from {folder} ({run.outcome}) in {out}")
+    for path in run.trace:
+        ctx.say(f"trace: {path}")
+    if done.same:
+        ctx.say(f"outputs: the same as recorded ({len(run.outputs)} outputs)")
+        return wire.EXIT_OK
+    ctx.say("outputs differ from the recording: " + ", ".join(done.differing))
+    return wire.EXIT_FAILED
+
+
+def _fresh(base: Path) -> Path:
+    """``base``, or ``base-2``, ``base-3``... the first that does not exist or is empty."""
+    n, path = 1, base
+    while path.exists() and any(path.iterdir()):
+        n += 1
+        path = base.with_name(f"{base.name}-{n}")
+    return path
+
+
 def cmd_run(ctx: Context, args: argparse.Namespace) -> int:
     """Send a message; with ``--agent`` it starts that agent's run, else the router picks.
 
-    With ``--input``, the files are uploaded to the owner's inputs first.
+    With ``--input``, the files are uploaded to the owner's inputs first. With
+    ``--record``, the run is recorded instead (:func:`cmd_record`).
     """
+    if args.record:
+        return cmd_record(ctx, args)
     if args.input:
         failed = _upload(ctx, args.input)
         if failed is not None:
@@ -801,7 +904,8 @@ def cmd_sandbox(ctx: Context, args: argparse.Namespace) -> int:
 def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
     """Copy a bundled synthetic world's input files into a new folder, to try ``--input``.
 
-    Only ``sources/`` is copied, never the world's answer key. With no world named, it
+    Only ``sources/`` is copied, never the world's answer key or its web (the pages its
+    offline web serves, which ``AKSHA_SEARCH=world:<name>`` reaches). With no world named, it
     lists the bundled ones. A folder that already holds files is refused, so nothing of
     the person's is overwritten.
     """
@@ -824,6 +928,9 @@ def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
     count = sum(1 for p in target.rglob("*") if p.is_file())
     ctx.say(f"copied {count} synthetic input files of {args.world} to {target}")
     ctx.say(f'next: aksha run --agent research --input {target} "<your request>"')
+    if (data.world_path(args.world) / "web.json").is_file():
+        ctx.say(f"its vendor pages are on the world's offline web: set AKSHA_SEARCH=world:"
+                f"{args.world} so web_search and fetch_url reach them")  # fmt: skip
     return wire.EXIT_OK
 
 
@@ -895,7 +1002,27 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="a folder or file to upload to your inputs first (repeat for several)",
     )
+    s.add_argument(
+        "--record",
+        metavar="FOLDER",
+        help="record the run: every model call, search and fetch, into a new folder "
+        "(aksha replay FOLDER runs it again offline); runs embedded, in its own store",
+    )
+    s.add_argument(
+        "--answer",
+        action="append",
+        metavar="ID=TEXT",
+        help="with --record: the answer to a question the run asks (repeat for several)",
+    )
+    s.add_argument(
+        "--approve", action="store_true", help="with --record: grant the approvals it asks"
+    )
     s.set_defaults(handler=cmd_run)
+
+    s = sub.add_parser("replay", help="run a recording again offline and compare its outputs")
+    s.add_argument("folder", help="a folder aksha run --record wrote")
+    s.add_argument("--out", help="a new folder for the replay's store, outputs and trace")
+    s.set_defaults(handler=cmd_replay)
 
     s = sub.add_parser("upload", help="upload files to your inputs; reopens only changed work")
     s.add_argument("paths", nargs="+", metavar="PATH", help="folders or files")

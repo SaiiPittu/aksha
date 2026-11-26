@@ -1,5 +1,5 @@
 {
-  "api_version": "2.10",
+  "api_version": "2.11",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off') -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
@@ -38,6 +38,7 @@
     "ExtractionRequest": "class ExtractionRequest(step_id: 'str', alias: 'str', state: 'tuple[CitationSpan, ...]', fields: 'tuple[FieldSpec, ...]') -> None",
     "ExtractionResult": "class ExtractionResult(answers: 'tuple[tuple[str, FieldAnswer], ...]', usage: 'Usage' = Usage(input_tokens=0, output_tokens=0, cost_micro_usd=0)) -> None",
     "FORMATS": "FORMATS = ('html', 'markdown', 'csv', 'json', 'email', 'text')",
+    "FetchedText": "class FetchedText(page: 'FetchedPage', text: 'ReturnedText') -> None",
     "FieldAnswer": "class FieldAnswer(value: 'FieldValue', spans: 'tuple[SpanRef, ...]' = (), p_null_ppm: 'int | None' = None, confidence_ppm: 'int | None' = None) -> None",
     "FieldSpec": "class FieldSpec(name: 'str', type: 'FieldType' = 'text', thresholds: 'ConfidenceThresholds' = ConfidenceThresholds(accept_at=0.9, reject_at=0.2, null_at=0.5, margin=None, fitted_on=None), cited: 'bool' = True, description: 'str' = '', adapted: 'ConfidenceThresholds | None' = None) -> None",
     "ForcedTool": "def ForcedTool(tool: 'str', when: 'Check') -> 'StopPolicyOptIn'",
@@ -98,7 +99,7 @@
     "TodoReminder": "def TodoReminder(every: 'int') -> 'StopPolicyOptIn'",
     "ToolBody": "ToolBody = collections.abc.Callable[[aksha.runtime.tools.types.ToolContext, collections.abc.Mapping[str, typing.Any]], aksha.runtime.tools.types.ToolOutcome]",
     "ToolCall": "class ToolCall(call_id: 'str', name: 'str', arguments: 'Mapping[str, Any]' = <factory>) -> None",
-    "ToolContext": "class ToolContext(owner: 'str', agent: 'str', task_path: 'str', key: 'str | None', step_id: 'str', attempt: 'int', reader: 'RecordReader | None' = None, run_date: 'str | None' = None, http: 'HttpClient' = <factory>, exec: 'ExecAPI | None' = None, time_reads: 'TimeReads | None' = None, artifacts: 'ArtifactReader | None' = None, models: 'ToolModels | None' = None) -> None",
+    "ToolContext": "class ToolContext(owner: 'str', agent: 'str', task_path: 'str', key: 'str | None', step_id: 'str', attempt: 'int', reader: 'RecordReader | None' = None, run_date: 'str | None' = None, http: 'HttpClient' = <factory>, exec: 'ExecAPI | None' = None, time_reads: 'TimeReads | None' = None, artifacts: 'ArtifactReader | None' = None, models: 'ToolModels | None' = None, web: 'AttemptWeb | None' = None) -> None",
     "ToolDecl": "class ToolDecl(spec: 'ToolSpec', body: 'ToolBody | None') -> None",
     "ToolModels": "class ToolModels: classify(self, alias: 'str', state: 'str', questions: 'Sequence[QuestionSpec] | None' = None, state_inputs: 'Sequence[str]' = ()) -> 'Sequence[Judgement]'; extract(self, alias: 'str', text: 'ReturnedText', passages: 'Sequence[SpanDraft]', fields: 'Sequence[FieldSpec] | None' = None) -> 'Sequence[Judgement]'",
     "ToolOutcome": "class ToolOutcome(result: 'Ok | Err', saves: 'tuple[SaveRequest, ...]' = ()) -> None",
@@ -109,6 +110,8 @@
     "Unknown": "class Unknown(question: 'str', reason: 'UnknownReason', checked: 'tuple[str, ...]' = (), failed_step: 'str | None' = None) -> None",
     "Usage": "class Usage(input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_micro_usd: 'int' = 0) -> None",
     "VersionedSourceSpec": "class VersionedSourceSpec(name: 'str', root: 'str | None' = None, collections: 'tuple[str, ...]' = (), max_age_s: 'int | None' = None) -> None",
+    "WEB_EGRESS": "WEB_EGRESS = 'aksha.web'",
+    "WEB_SOURCE": "WEB_SOURCE = 'web'",
     "artifact_keys": "def artifact_keys(kind: 'str', path: 'str', unless: 'Check | None' = None) -> 'KeySource'",
     "decide_kind": "def decide_kind(models: 'ToolModels | None', alias: 'str', kinds: 'Sequence[DocumentKind]', state: 'str', thresholds: 'ConfidenceThresholds | None' = None) -> 'tuple[str, bool, str]'",
     "decimal_string": "def decimal_string(value: 'object') -> 'str'",
@@ -116,12 +119,15 @@
     "document_preview": "def document_preview(record_id: 'str', fmt: 'str', text: 'str', segments: 'Sequence[Segment]') -> 'str'",
     "ended_runs": "def ended_runs(view: 'LogView', agents: 'frozenset[str]') -> 'tuple[RunEnded, ...]'",
     "external_records": "def external_records(view: 'LogView', system: 'str | None' = None) -> 'tuple[ExternalRecord, ...]'",
+    "fetch_text": "def fetch_text(ctx: 'ToolContext', url: 'str') -> 'FetchedText | Err'",
+    "fetch_url_spec": "def fetch_url_spec(agent: 'str', description: 'str' = '', **extra: 'Any') -> 'ToolSpec'",
     "find_dates": "def find_dates(text: 'str', order: 'str' = '') -> 'list[tuple[str, int, int]]'",
     "from_field": "def from_field(kind: 'str', path: 'str') -> 'FromField'",
     "instruction_text": "def instruction_text(text: 'str') -> 'bool'",
     "kind_question": "def kind_question(kinds: 'Sequence[DocumentKind]', thresholds: 'ConfidenceThresholds | None' = None) -> 'QuestionSpec'",
     "maybe_unknown": "def maybe_unknown(schema: 'Mapping[str, Any]') -> 'dict[str, Any]'",
     "observe_time": "def observe_time(ctx: 'ToolContext') -> 'InputRef'",
+    "page_read": "def page_read(fetched: 'FetchedText') -> 'InputRef'",
     "parse_date": "def parse_date(text: 'str', order: 'str' = '') -> 'str | None'",
     "part_version": "def part_version(text: 'str', fragment: 'str', whole: 'str') -> 'str | None'",
     "passage_id": "def passage_id(n: 'int') -> 'str'",
@@ -135,6 +141,8 @@
     "source_keys": "def source_keys(collection: 'str') -> 'KeySource'",
     "span_draft": "def span_draft(ref: 'SpanRef', passages: 'Sequence[SpanDraft]') -> 'SpanDraft | None'",
     "visible": "def visible(fragment: 'str') -> 'str'",
+    "web_record_id": "def web_record_id(url: 'str') -> 'str'",
+    "web_search_tool": "def web_search_tool(agent: 'str') -> 'ToolDecl'",
     "where_part": "def where_part(record: 'str', column: 'str', values: 'list[str] | tuple[str, ...]') -> 'str'"
   }
 }

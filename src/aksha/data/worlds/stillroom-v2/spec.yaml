@@ -103,32 +103,32 @@ competitors:
     product: Thermyx Grid 32
     modality: thermal array, PoE
     pages:
-    - competitors/comp01-thermyx.html
+    - web/thermyx.example/product
   K2:
     company: Radiant Loop
     product: Radiant Loop Orbit
     modality: mmWave radar, mains
     pages:
-    - competitors/comp02-radiantloop.html
+    - web/radiantloop.example/product
   K3:
     company: Gatecount
     product: Gatecount Arc
     modality: ToF doorway counter, battery
     pages:
-    - competitors/comp03-gatecount.html
+    - web/gatecount.example/product
   K4:
     company: Airwise
     product: Airwise Room
     modality: PIR plus CO2, battery
     pages:
-    - competitors/comp04-airwise.html
+    - web/airwise.example/product
   K5:
     company: Lumenstat
     product: SeatSense
     modality: thermal plus PIR, battery
     pages:
-    - competitors/comp05-lumenstat.html
-    - competitors/comp06-orrin.html
+    - web/lumenstat.example/product
+    - web/orrin.example/product
     aliases:
     - Orrin Holdings
     - Orrin Presence One

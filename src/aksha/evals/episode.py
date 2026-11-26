@@ -8,8 +8,11 @@ in the store, never on what it says it did).
 
 The path guard (:func:`guard_path`) refuses an absolute path, a ``..`` segment, a path that
 resolves outside the copy (a symlink, for example) and any path naming a file kept out of
-reach (``key.json``, ``spec.yaml``, ``manifest.json``, ``world.lock.json``). The world copy
-holds only ``sources/``, so the key is not even present to be reached.
+reach (``key.json``, ``spec.yaml``, ``manifest.json``, ``world.lock.json``, ``web.json``).
+The world copy holds only ``sources/`` and the world's ``web/`` pages, so the key is not
+even present to be reached. A web page is read through :meth:`Episode.read_web` (the
+world's search proxy serves it; it is never an input) and a search is recorded by
+:meth:`Episode.searched_web`, each as an ``episode.tool_called`` like any read.
 
 Sends go to a fixture receiver whose ledger lives beside the store, not in it. The receiver
 accepts a second send under the same effect key, because catching that is the invariant
@@ -249,6 +252,40 @@ class Episode:
         self.reads[h] = text
         record(True, h, None)
         return text
+
+    @property
+    def web(self) -> Path:
+        """The episode's own copy of the world's ``web/`` pages."""
+        return self.root / "web"
+
+    @tool
+    def read_web(self, path: str) -> str:
+        """The raw text of one web page of the world copy, by its path ``web/<host><path>``."""
+        record = self._call("read_web", {"path": path}, path)
+        try:
+            if not path.startswith("web/"):
+                raise PathRefused("not_web", f"{path!r} is not a web page path")
+            target = guard_path(self.root, path)
+            text = target.read_text(encoding="utf-8")
+        except PathRefused as e:
+            record(False, None, e.code)
+            raise
+        except OSError:
+            record(False, None, "not_found")
+            raise EvalError("not_found", f"no web page {path!r}") from None
+        h = text_hash(text)
+        self.reads[h] = text
+        record(True, h, None)
+        return text
+
+    @tool
+    def searched_web(self, query: str, urls: Sequence[str]) -> None:
+        """Record one web search and the URLs it returned, in rank order."""
+        record = self._call("web_search", {"query": query}, None)
+        text = "\n".join(urls)
+        h = text_hash(text)
+        self.reads[h] = text
+        record(True, h, None)
 
     # --- what the agent leaves behind ---------------------------------------------------
 

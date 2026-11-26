@@ -29,10 +29,11 @@ The research agent and the patent agent work on whatever you give them: a folder
 ```sh
 . .venv/bin/activate
 export AKSHA_HOME=var        # keep this walk-through's state in ./var (an install uses the per-user data folder; aksha doctor shows it)
+export AKSHA_SEARCH=world:tilldew   # the world's offline web: its vendor pages and prior art, with noise
 cp -r src/aksha/data/worlds/tilldew/sources my-inputs     # stands in for your own folder
 
 aksha run --agent research --input my-inputs "Research the competitors for Tilldew's solar soil-moisture probe, for smallholder vegetable farmers in India. Compare power (solar, battery, AA, cells), battery life (battery life, years of battery) and connectivity (SMS, 2G, LoRa, gateway). What do farmers say about: accuracy (accura*, wrong reading*, false alert*, still wet, trust*); connectivity (sms, signal, network, gateway); price (price*, expensive, cost*, cheap*, paid)?"
-# uploaded 23 input files
+# uploaded 14 input files
 # session S-...
 # R-0001 research ended complete                                          (exit code 0)
 
@@ -44,16 +45,18 @@ Uploaded files become versioned records of your inputs (`var/inputs/<user>/`). U
 
 ```sh
 aksha upload my-inputs       # nothing changed
-# uploaded 23 input files
+# uploaded 14 input files
 # no work reopened: no input changed, or none that work was built on
 sed -i 's/Too expensive for a two-acre plot./Too expensive, and the battery died./' my-inputs/exports/farmer-reviews.csv
 aksha upload my-inputs
-# uploaded 23 input files
+# uploaded 14 input files
 # R-0002 research ended complete                                          (exit code 0)
 aksha inspect R-0002         # its steps: only the review reading (voice) and the report re-ran
 ```
 
-The patent agent reads the same inputs (invention notes, contributor and disclosure tables, emails, priorities, blank forms, publications) and prepares a counsel-review packet:
+The farm's own files are the uploads; the vendors' pages and the published prior art are on the web the agents search (`web_search`, `fetch_url`), here the world's offline web, which mixes them with noise: a copy of a vendor page on a listing site, a sale site, a glossary, a skin-moisture probe, a mirror of a publication. The agents search, choose what to fetch and cite only what they fetched; `aksha show research.competitors` lists the queries, what was fetched and what was skipped, and why. See [web search and replay](design/web-search-and-replay.md).
+
+The patent agent reads the same inputs (invention notes, contributor and disclosure tables, emails, priorities, blank forms) and searches the web for prior art, and prepares a counsel-review packet:
 
 ```sh
 aksha run --agent patent "Prepare Tilldew's invention candidates for counsel review."
@@ -93,6 +96,21 @@ aksha run --agent research --input my-inputs "Who sells ... and at what price?"
 
 A native System 1 service (an extraction or classification API with its own spans and probabilities) is named per alias with `AKSHA_ALIAS_<ALIAS>=module:Class`, a class built as `cls(alias, env)` that implements the class's contract. The start is refused before any call, naming the setting to set, when the server or a model is missing (`live_config_missing`) or a server not on this machine has no key (`live_key_missing`). `AKSHA_LIVE_SAMPLES=N` asks each classification N times and uses the votes as its distribution. `tests/integration/test_live_mode.py` runs the research agent this way against a stub server on localhost.
 
+## Record a run, replay it offline
+
+`aksha run --record FOLDER` runs one agent to its end in a store of its own inside the folder and records everything the run was given: the message, the uploaded inputs, the answers (`--answer ID=TEXT`, `--approve`), every model answer (each generation, and each fast-class call a tool made), every search and every fetch, then the outputs and the trace (OTLP JSON). `aksha replay FOLDER` runs the same agent again from the recording alone, with no model, no search API and no network, and says whether the outputs are the same:
+
+```sh
+aksha example stillroom stillroom-inputs
+AKSHA_SEARCH=world:stillroom aksha run --agent research --input stillroom-inputs --answer segment=offices --answer geography=EU --record runs/first "Research the competitors for the venture's occupancy sensor."
+# recorded R-0001 research (complete) into runs/first: 173 model calls, 2 searches, 15 fetches
+aksha replay runs/first
+# replayed R-0001 offline from runs/first (complete) in runs/first-replay
+# outputs: the same as recorded (11 outputs)
+```
+
+A live run is recorded the same way: set `AKSHA_MODE=live` with the `AKSHA_LIVE_*` settings above, and `AKSHA_SEARCH=brave` with `AKSHA_BRAVE_API_KEY` (read from the environment, never recorded) and `AKSHA_NETWORK=on`, so each page is fetched over HTTPS under the `aksha.web` egress policy. The replay needs none of them. A small recording made from a fake run ships in `src/aksha/data/recordings/research-occupancy/`: `aksha replay src/aksha/data/recordings/research-occupancy --out replay-1`.
+
 ## The command line, step by step
 
 The research agent runs end to end through `aksha run` on the synthetic `stillroom` world, here configured as a folder every run reads (`AKSHA_SOURCES`) instead of uploaded. Run this from a fresh clone, after `make venv`:
@@ -102,6 +120,7 @@ The research agent runs end to end through `aksha run` on the synthetic `stillro
 export AKSHA_HOME=var        # keep this walk-through's state in ./var (an install uses the per-user data folder; aksha doctor shows it)
 rm -rf var                   # an empty store, so the IDs below match
 export AKSHA_SOURCES=inputs=src/aksha/data/worlds/stillroom/sources   # a configured inputs folder
+export AKSHA_SEARCH=world:stillroom   # the world's offline web: the vendors' pages, with noise
 
 aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research
 # session S-...

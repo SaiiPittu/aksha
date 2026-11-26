@@ -49,17 +49,22 @@ from pathlib import Path
 from typing import Any, Literal, TypeGuard, cast
 from urllib.parse import urlsplit
 
+from aksha import data
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.egress.network import HttpTransport, SocketResolver
+from aksha.adapters.recording.models import Recorded, recorded_adapters, recording_adapters
+from aksha.adapters.recording.sink import JsonlSink, Sink, read_stream
+from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.sandbox import e2b
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
+from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
-from aksha.evals.agents.runtime import EpisodeSource, RuntimeUnderTest
+from aksha.evals.agents.runtime import EpisodeSource, EpisodeWeb, RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
 from aksha.evals.case import Arm
 from aksha.evals.judge import Judge, RuleJudge
@@ -82,6 +87,7 @@ from aksha.runtime.definitions.names import qualify, resolve_kind
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.egress.ports import Network
 from aksha.runtime.egress.types import EgressPolicy
+from aksha.runtime.errors import AkshaError
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.execution.executor import StepExecutor
@@ -105,6 +111,7 @@ from aksha.runtime.models.routing import live_model_name as model_for
 from aksha.runtime.models.types import RunMode
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
+from aksha.runtime.projections.view import load_view
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
 from aksha.runtime.sandbox.errors import SandboxRefused
@@ -126,6 +133,8 @@ from aksha.runtime.tasks.tree import compile_tree
 from aksha.runtime.timers.freshness import lifetimes
 from aksha.runtime.tools.registry import ToolRegistry
 from aksha.runtime.tools.types import ToolDecl
+from aksha.runtime.web.ports import WebFetch, WebSearch
+from aksha.runtime.web.types import WebError, web_record_id
 from aksha.uploads import UploadIngester, profile_named
 
 Backend = Literal["sqlite", "postgres"]
@@ -236,7 +245,26 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_IMAGE_PROFILE``  the image profile of the model reading uploads  none (no vision)
 #                          (``patch28-standard``, ``patch28-hires``,
 #                          ``patch32-high``, ``flat-1120``)
+# ``AKSHA_SEARCH``         the web ``web_search`` and ``fetch_url`` reach: none (``web_off``)
+#                          ``world`` (a world's offline web), ``brave``
+#                          (live search, plain HTTP fetch)
+# ``AKSHA_WEB_WORLD``      the world ``AKSHA_SEARCH=world`` serves: a      none
+#                          bundled world's name or a world folder
+# ``AKSHA_BRAVE_API_KEY``  the live search key (never recorded)            none
+# ``AKSHA_RECORD``         a folder every model call, search and fetch     none
+#                          is appended to (``aksha replay`` reads it)
 # =======================  ==============================================  ==================
+#
+# ``AKSHA_SEARCH`` picks the web ports (ADR-P26 A3). ``world`` (or ``world:<name|folder>``)
+# serves a world's ``web.json``: its search proxy ranks the world's pages, noise mixed in,
+# the same way for a query every time, and a fetch returns the page's file; an offline
+# model of an agent is told the world's hints for it (``with_world_hints``). ``brave``
+# searches the Brave Search API with ``AKSHA_BRAVE_API_KEY`` (``search_key_missing``
+# without it) and fetches each page over HTTP through the fetch tool's egress policy
+# (``aksha.web``), so it needs ``AKSHA_NETWORK=on`` (``network_off`` otherwise). Unset,
+# the web tools answer ``web_off``. ``AKSHA_RECORD`` wraps every model adapter and both web
+# ports so each answer is appended to the folder (``adapters.recording``); ``aksha run
+# --record`` sets it for one run in a store of its own (:func:`record_run`).
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
 # for example ``inputs=src/aksha/data/worlds/stillroom/sources`` for the research and patent
@@ -374,6 +402,15 @@ class RuntimeConfig:
     Read only when ``mode`` is ``live``, and never recorded."""
     image_profile: str | None = None
     """``AKSHA_IMAGE_PROFILE``: the image profile of the model that reads uploads, or None."""
+    search: str | None = None
+    """``AKSHA_SEARCH``: which web the web tools reach (the table above); None for none."""
+    web_world: str | None = None
+    """``AKSHA_WEB_WORLD``: the world ``AKSHA_SEARCH=world`` serves."""
+    search_env: Mapping[str, str] = field(default_factory=dict, repr=False)
+    """``AKSHA_BRAVE_*``: the live search provider's settings, the key among them. Never
+    recorded."""
+    record: Path | None = None
+    """``AKSHA_RECORD``: the folder every model call, search and fetch is recorded into."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -406,6 +443,10 @@ class RuntimeConfig:
             live_env={
                 k: v for k, v in env.items() if k.startswith(("AKSHA_LIVE_", LIVE_ENV_PREFIX)) and v
             },
+            search=env.get("AKSHA_SEARCH") or None,
+            web_world=env.get("AKSHA_WEB_WORLD") or None,
+            search_env={k: v for k, v in env.items() if k.startswith("AKSHA_BRAVE_") and v},
+            record=Path(env["AKSHA_RECORD"]) if env.get("AKSHA_RECORD") else None,
         )
 
     def reentry_setting(self) -> ReentrySetting:
@@ -602,6 +643,36 @@ def session_agent(
             (*agent.sources, *(spec for ext in loaded.extensions for spec in ext.ext.sources))
         ),
     )
+
+
+def world_hinted(adapters: Mapping[str, object], hints: Mapping[str, Any]) -> dict[str, object]:
+    """Each offline adapter that takes a world's hints (``for_world``) given ``hints``.
+
+    A world may tell an agent's offline model what a person who knows its market would
+    know (``web.json`` ``fake``: the searches to make). The model reads them through its
+    own ``for_world``; an adapter without one, and every live adapter, is unchanged.
+    """
+    out: dict[str, object] = {}
+    for alias, adapter in adapters.items():
+        hook = getattr(adapter, "for_world", None)
+        out[alias] = hook(hints) if callable(hook) and hints else adapter
+    return out
+
+
+def with_world_hints(bound: SessionAgent, hints: Mapping[str, Any]) -> SessionAgent:
+    """``bound`` with its offline adapters given a world's ``hints`` (:func:`world_hinted`)."""
+    if not hints or bound.table.mode != "fake":
+        return bound
+    table = bound.table
+    adapters = world_hinted(table.adapters, hints)
+    return replace(bound, table=bind_aliases(table.aliases.values(), table.mode, adapters))
+
+
+def recorded_agent(bound: SessionAgent, sink: Sink) -> SessionAgent:
+    """``bound`` with every model adapter recording its answers into ``sink`` (ADR-P22 A1)."""
+    table = bound.table
+    adapters = recording_adapters(table.adapters, sink)
+    return replace(bound, table=bind_aliases(table.aliases.values(), table.mode, adapters))
 
 
 def load_definitions(
@@ -945,7 +1016,89 @@ def execution_tier(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) ->
                 environments[qualify(ext.ext.name, env.name)] = replace(
                     env, egress=resolve_kind(env.egress, ext.ext.name)
                 )
-    return replace(base, egress=egress, environments=environments)
+    search, web = web_ports(config)
+    if config.record is not None:
+        sink = JsonlSink(config.record)
+        search = None if search is None else RecordingSearch(search, sink)
+        web = None if web is None else RecordingFetch(web, sink)
+    return replace(base, egress=egress, environments=environments, search=search, web=web)
+
+
+def web_world(config: RuntimeConfig) -> Path | None:
+    """The world folder ``AKSHA_SEARCH=world`` serves, or None for another (or no) web."""
+    name, _, arg = (config.search or "").partition(":")
+    if name != "world":
+        return None
+    ref = arg or config.web_world
+    if not ref:
+        raise StoreError("search_invalid", "AKSHA_SEARCH=world serves a world: set "
+                         "AKSHA_WEB_WORLD to a bundled world's name or a world folder")  # fmt: skip
+    folder = Path(ref)
+    if (folder / "web.json").is_file():
+        return folder
+    bundled = data.worlds() / ref
+    if ref.replace("-", "").isalnum() and (bundled / "web.json").is_file():
+        return bundled
+    raise StoreError("search_invalid", f"no world with a web at {ref!r}")
+
+
+def fetched_document(url: str, body: bytes, media_type: str, *, caps: Any = None) -> str:
+    """A binary page a live fetch got, as document ingestion serves it (ADR-P31).
+
+    The bytes are ingested as a document attached at the URL (origin ``attachment``, its
+    parent the URL, its key the page's record ID), named by the URL's last segment:
+    the text is the header and the representation (a PDF's pages, an Office file's text),
+    or the header alone when no representation could be made, so the model is told. A file
+    over a cap (``caps``, the ingestion defaults when None) is refused ``fetch_refused``,
+    nothing kept.
+    """
+    from urllib.parse import urlsplit
+
+    from aksha.extensions.ingest.ingest import ingest
+    from aksha.extensions.ingest.types import Refusal
+
+    name = urlsplit(url).path.rstrip("/").rsplit("/", 1)[-1] or "index"
+    found = ingest(name, body, "attachment", doc_key=web_record_id(url), parent=url,
+                   declared_type=media_type, caps=caps)  # fmt: skip
+    if isinstance(found, Refusal):
+        raise WebError("fetch_refused", f"{url}: {found.cap} {found.value:,} is over the "
+                       f"limit {found.limit:,}; nothing was kept")  # fmt: skip
+    return found.record_text
+
+
+def web_ports(config: RuntimeConfig) -> tuple[WebSearch | None, WebFetch | None]:
+    """The search and fetch ports ``AKSHA_SEARCH`` names (the table above)."""
+    if not config.search:
+        return None, None
+    name, _, arg = config.search.partition(":")
+    if name == "world":
+        root = web_world(config)
+        assert root is not None
+        world = WorldWeb.of_world(root)
+        return world, world
+    if name == "replay":
+        folder = Path(arg)
+        replay = ReplayWeb(read_stream(folder, "search"), read_stream(folder, "fetch"))
+        return replay, replay
+    if name == "brave":  # imported only here: an offline process loads no HTTP client
+        from aksha.adapters.search.brave import BASE_ENV as BRAVE_BASE_ENV
+        from aksha.adapters.search.brave import DEFAULT_BASE_URL as BRAVE_BASE_URL
+        from aksha.adapters.search.brave import KEY_ENV as BRAVE_KEY_ENV
+        from aksha.adapters.search.brave import BraveSearch
+        from aksha.adapters.web.http import HttpFetch
+
+        key = config.search_env.get(BRAVE_KEY_ENV, "")
+        if not key:
+            raise StoreError("search_key_missing", f"AKSHA_SEARCH=brave needs {BRAVE_KEY_ENV}; "
+                             "the key is read from the environment and never recorded")  # fmt: skip
+        if config.network != "on":
+            why = ("AKSHA_SEARCH=brave fetches pages over HTTP: set AKSHA_NETWORK=on (each "
+                   "fetch is checked by the aksha.web egress policy)")  # fmt: skip
+            raise StoreError("network_off", why)
+        base = config.search_env.get(BRAVE_BASE_ENV) or BRAVE_BASE_URL
+        return BraveSearch(key, base), HttpFetch(convert=fetched_document)
+    raise StoreError("search_invalid", f"AKSHA_SEARCH={config.search!r}: use world, "
+                     "world:<name or folder> or brave")  # fmt: skip
 
 
 def open_session(
@@ -966,18 +1119,24 @@ def open_session(
     catalogue = Catalogue(CORE_EVENT_TYPES)
     loaded = load_definitions(config, catalogue=catalogue)
     agents = load_session_agents(config, adapters, loaded=loaded)
+    world = web_world(config)
+    if world is not None:  # an offline model is told the world's hints for its agent
+        hints = world_hints(world)
+        agents = tuple(with_world_hints(a, hints.get(a.agent.name, {})) for a in agents)
+    if config.record is not None:
+        agents = tuple(recorded_agent(a, JsonlSink(config.record)) for a in agents)
     given = {**configured_systems(config, loaded), **(systems or {})}
     every_system = {**extension_systems(config, loaded, skip=given), **given}
     reader = source_reader(config, loaded)
     inputs = input_workspace(config, loaded)
     ingester = None if inputs is None else upload_ingester(config)  # refuses before the store opens
+    tier = execution_tier(config, loaded)  # so does a web it cannot reach
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
     ids = LogIdSource(store)
     router = None
     if len(agents) >= 2:
         routable = tuple(a.routable() for a in agents)
         router = Router(routable, PurposeClassifier(), ids)
-    tier = execution_tier(config, loaded)
     sandbox = tier.gate_availability
     recorded = tier.record()
     agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
@@ -1022,12 +1181,15 @@ def export_trace(
 # The demo (``aksha.interfaces.demo``) runs the research agent and the patent agent on one
 # owner's SQLite store, offline: a fixed clock, each agent's rule-based fake model, the
 # fixture world's ``sources/`` folder copied into the demo's work folder (the only folder a
-# tool reads), and a ledgered mock mailbox standing in for counsel. Nothing here reaches a
-# network or needs a key.
+# tool reads), the world's offline web behind ``web_search`` and ``fetch_url`` (its search
+# proxy, ``adapters.search.world``), and a ledgered mock mailbox standing in for counsel.
+# Nothing here reaches a network or needs a key.
 
 DEMO_START = datetime(2026, 11, 26, 9, 0, 0, tzinfo=UTC)
 """The demo's fixed clock: every run of the demo records the same times."""
 DEMO_OWNER = "founder-1"
+DEMO_WORLD = "stillroom"
+"""The bundled world whose inputs the demo copies and whose web its agents search."""
 DEMO_AGENT_NAMES = ("research", "patent")
 COUNSEL_MAILBOX = "counsel_mail"
 """The system name the patent agent's ``send_packet`` effect is sent to."""
@@ -1084,6 +1246,7 @@ def _setup(
     request: str,
     blobs: BlobStore,
     reader: RecordReader | None = None,
+    tier: ExecutionTier | None = None,
 ) -> LoopSetup:
     kinds = loaded.kinds
     return LoopSetup(
@@ -1105,6 +1268,7 @@ def _setup(
         limits=agent.limits or Limits(),
         blobs=blobs,
         reader=reader,
+        tier=tier or ExecutionTier(),
     )
 
 
@@ -1134,16 +1298,21 @@ def open_demo(
     }
     research, patent = loaded["research"], loaded["patent"]
     folder = FolderSource(INPUTS_SOURCE, sources, "input")
+    web_root = data.worlds() / DEMO_WORLD
+    web = WorldWeb.of_world(web_root)
+    tier = ExecutionTier(search=web, web=web)
+    hints = world_hints(web_root)
+    research_model = world_hinted({"generate": ResearchModel()}, hints.get("research", {}))
     research_setup = _setup(
-        store, research, research.agent, research.registry, ResearchModel(),
-        requests[research.agent.name], blobs, folder,
+        store, research, research.agent, research.registry, research_model["generate"],
+        requests[research.agent.name], blobs, folder, tier,
     )  # fmt: skip
     world = SourceWorld(DEMO_START.date())
     agent = build_patent_agent(world)
     listed = {t.spec.name: t for t in agent.tools if isinstance(t, ToolDecl)}
     patent_setup = _setup(
         store, patent, agent, ToolRegistry(agent, listed, ()), PatentFake(),
-        requests[agent.name], blobs, folder,
+        requests[agent.name], blobs, folder, tier,
     )  # fmt: skip
     send_tools = {"send_packet": ApprovalTool(listed["send_packet"].spec)}
     hashes = {research.agent.name: research.definition_hash, agent.name: patent.definition_hash}
@@ -1225,8 +1394,8 @@ class _RuntimeAdapter:
         bound, digest = self._arms[arm.name]
 
         def build(folder: Path, reader: RecordReader, systems: Mapping[str, object],
-                  source: EpisodeSource) -> Session:  # fmt: skip
-            return self._session(bound, folder, reader, systems, source)
+                  source: EpisodeSource, web: EpisodeWeb | None) -> Session:  # fmt: skip
+            return self._session(bound, folder, reader, systems, source, web)
 
         return self.adapter(build, digest)
 
@@ -1236,9 +1405,10 @@ class _RuntimeAdapter:
         reader: RecordReader,
         systems: Mapping[str, object],
         source: EpisodeSource,
+        web: EpisodeWeb | None = None,
     ) -> Session:
         """The writer session of one episode's runtime store in ``folder``."""
-        return self._session(self.bound, folder, reader, systems, source)
+        return self._session(self.bound, folder, reader, systems, source, web)
 
     def _session(
         self,
@@ -1247,15 +1417,26 @@ class _RuntimeAdapter:
         reader: RecordReader,
         systems: Mapping[str, object],
         source: EpisodeSource,
+        web: EpisodeWeb | None = None,
     ) -> Session:
         folder.mkdir(parents=True, exist_ok=True)
         clock = FakeClock(EVAL_CLOCK_START)
         store = sqlite.open_store(folder / "aksha.sqlite", clock, writer=True,
                                   catalogue=self.catalogue)  # fmt: skip
         sources = (source,) if source.collections else ()
+        tier = ExecutionTier()
+        if web is not None:
+            proxy = episode_web(web)
+            tier = ExecutionTier(search=proxy, web=proxy)
+            bound = with_world_hints(bound, web.hints.get(bound.agent.name, {}))
         return Session(store, clock, (bound,), blobs=FilesystemBlobStore(folder / "blobs"),
                        systems=cast(Mapping[str, SystemOfRecord], systems),
-                       sources=sources, reader=reader)  # fmt: skip
+                       sources=sources, reader=reader, tier=tier)  # fmt: skip
+
+
+def episode_web(web: EpisodeWeb) -> WorldWeb:
+    """The world's search proxy over an episode's web: fetches and searches recorded."""
+    return WorldWeb(load_pages(web.declared), web.read, index=web.index, on_search=web.searched)
 
 
 def eval_agents() -> AgentRegistry:
@@ -1272,7 +1453,7 @@ def eval_agents() -> AgentRegistry:
     registry = AgentRegistry()
     registry.register(
         "scripted",
-        ScriptedResearchAgent,
+        lambda: ScriptedResearchAgent(episode_web),
         mode="fake",
         description="small rule-based research agent over competitor pages and reviews",
     )
@@ -1298,3 +1479,265 @@ def eval_agents() -> AgentRegistry:
 def eval_judge() -> Judge:
     """The fake judge for fake model mode: rule-based, offline, annotate-only."""
     return Judge(model=RuleJudge(), model_id="fake:RuleJudge")
+
+
+# --- Record and replay (ADR-P22 A1) ---------------------------------------------------------
+#
+# ``aksha run ... --record <folder>`` runs one agent to its end in a store of its own inside
+# the folder, with ``AKSHA_RECORD`` set to it: every model call (generation and every
+# fast-class call a tool body makes), every search and every fetch is appended as it is
+# answered (``adapters.recording``). The person's part is recorded too: the message, the
+# uploaded inputs (copied to ``inputs/``) and the answers and approvals given
+# (``recording.json``), then the outputs (``outputs.json``) and the run's trace as OTLP
+# JSON (``trace/``). ``aksha replay <folder>`` runs the same agent again in a fresh store,
+# fully offline: each model call is answered from the recording (``replay`` run mode, a
+# mismatch is ``replay_mismatch``), each search and fetch from the recorded answers
+# (``ReplayWeb``), on a clock fixed at the recorded start, and the outputs are compared
+# with the recorded ones.
+
+RECORDING_FORMAT = "aksha-recording/1"
+RECORDING_FILE = "recording.json"
+OUTPUTS_FILE = "outputs.json"
+RECORDING_INPUTS = "inputs"
+RECORD_SESSION = "S-record"
+MAX_ANSWER_ROUNDS = 50
+
+
+@dataclass(frozen=True)
+class RunScript:
+    """The person's part of a recorded run: the agent, the message, inputs and answers.
+
+    ``answers`` are by question ID (a choice by ``choice``); ``approve`` grants every
+    approval the run asks for. A question with no answer ends the recording waiting on it.
+    """
+
+    agent: str
+    text: str
+    answers: Mapping[str, str] = field(default_factory=dict)
+    approve: bool = False
+    owner: str = "local"
+
+    def as_json(self) -> dict[str, Any]:
+        """The script as ``recording.json`` keeps it."""
+        return {"agent": self.agent, "text": self.text, "answers": dict(self.answers),
+                "approve": self.approve, "owner": self.owner}  # fmt: skip
+
+
+@dataclass(frozen=True)
+class ScriptedRun:
+    """Where a scripted run ended: its run, its state or outcome, what it still waits on."""
+
+    run: str | None
+    outcome: str
+    waiting: tuple[str, ...]
+    outputs: Mapping[str, Any]
+    trace: tuple[Path, ...]
+
+
+def _outputs(session: Session, owner: str) -> dict[str, Any]:
+    """Every latest output of ``owner``, by slot (``research.matrix``, ``kind/key``)."""
+    from aksha.runtime.artifacts.versions import all_versions, current
+    from aksha.runtime.canonical import thaw
+
+    view = load_view(session.store, owner)
+    out: dict[str, Any] = {}
+    for kind, key in sorted({(v.ref.kind, v.ref.key) for v in all_versions(view)},
+                            key=lambda s: (s[0], s[1] or "")):  # fmt: skip
+        found = current(view, kind, key, blobs=session.blobs)
+        if found is not None:
+            out[kind if key is None else f"{kind}/{key}"] = thaw(found.content)
+    return out
+
+
+def drive_script(session: Session, script: RunScript, files: Mapping[str, bytes]) -> ScriptedRun:
+    """Upload ``files``, send the message, answer from the script until the run ends.
+
+    A UTF-8 file goes up as text, any other as its bytes (base64), which ingestion converts.
+    """
+    import base64
+
+    from aksha.runtime.session import named as n
+    from aksha.runtime.session.views import session_status
+
+    owner = script.owner
+
+    def dispatch(command: n.NamedCommand) -> None:
+        receipt = session.dispatch(command)
+        if not receipt.accepted:
+            raise StoreError("script_refused", f"{type(command).__name__}: {receipt.refused}")
+
+    if files:
+        text: dict[str, str] = {}
+        binary: dict[str, str] = {}
+        for rel, body in files.items():
+            try:
+                text[rel] = body.decode("utf-8")
+            except UnicodeDecodeError:
+                binary[rel] = base64.b64encode(body).decode("ascii")
+        dispatch(n.UploadInputs(owner=owner, files=text, binary=binary,
+                                command_id="script-upload"))  # fmt: skip
+    dispatch(n.SendMessage(owner=owner, session=RECORD_SESSION, text=script.text,
+                           agent=script.agent, command_id="script-message"))  # fmt: skip
+    waiting: tuple[str, ...] = ()
+    status = None
+    for round_no in range(MAX_ANSWER_ROUNDS):
+        session.run_until_yield(owner)
+        status = session_status(load_view(session.store, owner), RECORD_SESSION)
+        if status.run is None or status.run.state != "waiting":
+            break
+        moved, missing = False, []
+        for i, w in enumerate(status.waiting_on):
+            cid = f"script-{round_no}-{i}"
+            if w.kind == "approval" and w.approval_id and w.signature:
+                if script.approve:
+                    dispatch(n.Approve(owner=owner, approval_id=w.approval_id,
+                                       shown_signature=w.signature, by="person",
+                                       command_id=cid))  # fmt: skip
+                    moved = True
+                else:
+                    missing.append(f"approval {w.approval_id}")
+                continue
+            ids = [q for q, _ in w.questions] or ["choice"]
+            given = {q: script.answers[q] for q in ids if q in script.answers}
+            if len(given) < len(ids):
+                missing += [f"{w.kind} {q}" for q in ids if q not in given]
+                continue
+            if len(given) == 1:
+                command = n.AnswerInterrupt(owner=owner, interrupt_id=w.interrupt_id,
+                                            text=next(iter(given.values())), by="person",
+                                            command_id=cid)  # fmt: skip
+            else:
+                command = n.AnswerInterrupt(owner=owner, interrupt_id=w.interrupt_id,
+                                            answers=given, by="person",
+                                            command_id=cid)  # fmt: skip
+            dispatch(command)
+            moved = True
+        if not moved:
+            waiting = tuple(missing)
+            break
+    run = None if status is None or status.run is None else status.run
+    outcome = "waiting" if waiting else (run.outcome or run.state) if run else "not_started"
+    return ScriptedRun(run.run if run else None, str(outcome), waiting,
+                       _outputs(session, owner), ())  # fmt: skip
+
+
+def _trace(session: Session, owner: str, run: str | None, out: Path) -> tuple[Path, ...]:
+    """The run's trace as OTLP JSON files in ``out``; none without the ``otel`` extra."""
+    if run is None:
+        return ()
+    try:
+        return export_trace(session.store, owner, run, out)
+    except AkshaError:
+        return ()
+
+
+def _local_store(folder: Path) -> StorageConfig:
+    return StorageConfig(sqlite_path=folder / "aksha.sqlite", blob_path=folder / "blobs")
+
+
+def record_run(
+    config: RuntimeConfig,
+    folder: Path,
+    script: RunScript,
+    files: Mapping[str, bytes],
+    *,
+    clock: Clock | None = None,
+) -> ScriptedRun:
+    """Run ``script`` to its end with every answer recorded into ``folder`` (section doc).
+
+    The folder must be new or empty. The run's store sits in ``folder/store``, so the
+    recording holds everything the replay needs and the person's own store is untouched.
+    """
+    if folder.exists() and any(folder.iterdir()):
+        raise StoreError("recording_exists", f"{folder} is not empty: record into a new folder")
+    folder.mkdir(parents=True, exist_ok=True)
+    for rel, body in files.items():
+        target = folder / RECORDING_INPUTS / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(body)
+    clock = clock or SystemClock()
+    started = clock.now()
+    cfg = replace(config, storage=_local_store(folder / "store"), record=folder, server_url=None)
+    session = open_session(cfg, clock)
+    try:
+        ended = drive_script(session, script, files)
+        trace = _trace(session, script.owner, ended.run, folder / "trace")
+        binding = {a.agent.name: a.table.mode for a in session.agents.values()}
+    finally:
+        session.store.close()
+    manifest = {
+        "format": RECORDING_FORMAT,
+        "synthetic_notice": "A recording of one run: what the person gave, every model "
+        "answer, every search and fetch. Replay it with aksha replay.",
+        "started_at": started.isoformat(),
+        "mode": config.mode,
+        "modes": binding,
+        "search": (config.search or "none").partition(":")[0],
+        "script": script.as_json(),
+        "inputs": sorted(files),
+        "run": ended.run,
+        "outcome": ended.outcome,
+        "waiting": list(ended.waiting),
+    }
+    (folder / RECORDING_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                                         encoding="utf-8")  # fmt: skip
+    (folder / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True)
+                                       + "\n", encoding="utf-8")  # fmt: skip
+    return replace(ended, trace=trace)
+
+
+@dataclass(frozen=True)
+class Replayed:
+    """A replay's end: the run, whether its outputs equal the recorded ones, and the trace."""
+
+    run: ScriptedRun
+    same: bool
+    differing: tuple[str, ...]
+    out: Path
+
+
+def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
+    """Run a recording again fully offline in ``out`` and compare its outputs (section doc)."""
+    path = folder / RECORDING_FILE
+    if not path.is_file():
+        raise StoreError("recording_missing", f"{folder} holds no {RECORDING_FILE}")
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if manifest.get("format") != RECORDING_FORMAT:
+        raise StoreError("recording_invalid", f"{path}: format {manifest.get('format')!r}")
+    if out.exists() and any(out.iterdir()):
+        raise StoreError("replay_exists", f"{out} is not empty: replay into a new folder")
+    script_raw = manifest["script"]
+    script = RunScript(str(script_raw["agent"]), str(script_raw["text"]),
+                       dict(script_raw.get("answers", {})), bool(script_raw.get("approve")),
+                       str(script_raw.get("owner", "local")))  # fmt: skip
+    inputs = folder / RECORDING_INPUTS
+    files = {
+        p.relative_to(inputs).as_posix(): p.read_bytes()
+        for p in sorted(inputs.rglob("*")) if p.is_file()
+    } if inputs.is_dir() else {}  # fmt: skip
+    recorded = Recorded(read_stream(folder, "models"))
+    cfg = replace(config, storage=_local_store(out / "store"), mode="replay", record=None,
+                  search=f"replay:{folder}", network="off", server_url=None,
+                  live_env={}, search_env={})  # fmt: skip
+    loaded = load_definitions(cfg)
+    adapters = {d.agent.name: recorded_adapters(d.model_aliases.values(), recorded)
+                for d in loaded}  # fmt: skip
+    clock = FakeClock(datetime.fromisoformat(str(manifest["started_at"])))
+    out.mkdir(parents=True, exist_ok=True)
+    session = open_session(cfg, clock, adapters=adapters)
+    try:
+        ended = drive_script(session, script, files)
+        trace = _trace(session, script.owner, ended.run, out / "trace")
+    finally:
+        session.store.close()
+    (out / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True) + "\n",
+                                    encoding="utf-8")  # fmt: skip
+    # The same means the same bytes: outputs.json written again equals the recorded file.
+    # A key named below is where they differ; a byte difference with equal values (a float
+    # that printed otherwise) is named as the file itself.
+    want = json.loads((folder / OUTPUTS_FILE).read_text(encoding="utf-8"))
+    differing = tuple(sorted(k for k in set(want) | set(ended.outputs)
+                             if want.get(k) != ended.outputs.get(k)))  # fmt: skip
+    if not differing and (out / OUTPUTS_FILE).read_bytes() != (folder / OUTPUTS_FILE).read_bytes():
+        differing = (OUTPUTS_FILE,)
+    return Replayed(replace(ended, trace=trace), not differing, differing, out)

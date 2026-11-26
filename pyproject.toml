@@ -86,6 +86,7 @@ aksha = [
     "data/README.md",
     "data/worlds/**/*",
     "data/suites/**/*",
+    "data/recordings/**/*",
 ]
 
 [tool.setuptools_scm]

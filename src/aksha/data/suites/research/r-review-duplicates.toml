@@ -8,5 +8,5 @@ worlds = ["stillroom", "stillroom-v2"]
 relation = "invariance"
 opening = "What do customers say? What do customers say about: battery (batter*, not battery powered); stillness (sit*, sat, seated, still, do not move, barely move); setup (cabl*, electrician, socket*, wiring, install*, setup); privacy (privacy, works council, image)?"
 expect = ["counts.reviews_unique", "counts.review_themes_unique", "facts.KF-32", "facts.KF-33", "traps.T-REVIEWDUP"]
-criteria = ["research.unique_reviews", "citation.exists", "trap.T-REVIEWDUP"]
+criteria = ["research.unique_reviews", "citation.exists", "trap.T-REVIEWDUP", "web.noise_unread", "web.fetched_from_results"]
 should = ["research.theme_counts", "citation.overlaps_key", "no_market_percentage"]

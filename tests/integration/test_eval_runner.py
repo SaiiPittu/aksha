@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from aksha.app import eval_agents, eval_judge
+from aksha.app import episode_web, eval_agents, eval_judge
 from aksha.evals.agents.scripted import ScriptedResearchAgent
 from aksha.evals.case import load_suite
 from aksha.evals.errors import EvalError
@@ -119,7 +119,7 @@ class _NameBranching(ScriptedResearchAgent):
 
 def test_an_agent_that_branches_on_the_world_fails_invariance(tmp_path: Path) -> None:
     agents = AgentRegistry()
-    agents.register("scripted", _NameBranching)
+    agents.register("scripted", lambda: _NameBranching(episode_web))
     run = run_suite(
         load_suite(SUITES / "scripted"),
         fixtures_root=FIXTURES,
@@ -141,7 +141,7 @@ def test_a_failing_agent_fails_the_suite_and_names_the_criterion(tmp_path: Path)
             return [[p] for p in pages]
 
     agents = AgentRegistry()
-    agents.register("scripted", _Splitter)
+    agents.register("scripted", lambda: _Splitter(episode_web))
     run = run_suite(
         load_suite(SUITES / "scripted"),
         fixtures_root=FIXTURES,

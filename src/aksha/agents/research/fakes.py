@@ -40,6 +40,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 from aksha.runtime.api import (
     GenerationRequest,
@@ -159,6 +160,9 @@ class Seen:
     unknowns: list[dict[str, str]] = field(default_factory=list)
     answers: list[tuple[str, str, str | None]] = field(default_factory=list)
     results: list[Result] = field(default_factory=list)
+    queries: tuple[str, ...] = ()
+    """Web searches a person who knows the market would type, beside the request's own words
+    (:class:`ResearchModel`'s ``queries``, from the task's world); a live model writes its own."""
 
     def of(self, name: str) -> list[Result]:
         """Earlier results of tool ``name``, oldest first."""
@@ -536,6 +540,8 @@ def _where(r: Result) -> dict[str, Any]:
     """The record (and section) a fetch read, as a page or table reference keeps it."""
     assert r.data is not None
     ref: dict[str, Any] = {"record": r.data["record"], "version": r.data["version"]}
+    if _on_the_web(str(r.data["record"])):
+        ref["url"] = r.data["url"]
     if r.data.get("section") is not None:
         ref["section"] = r.data["section"]
     return ref
@@ -545,6 +551,205 @@ def _plan(seen: Seen) -> str:
     scope = seen.artifact("research.scope") or seen.artifact("research.competitors")
     plan = scope[1].get("plan") if scope else None
     return str(plan.get("kind")) if isinstance(plan, Mapping) else "comparison"
+
+
+WEB_LIMIT = 20
+"""Results asked per web search."""
+REQUEST_WORDS = frozenset(
+    [
+        "research",
+        "researching",
+        "compare",
+        "comparing",
+        "competitor",
+        "competitors",
+        "competition",
+        "rivals",
+        "who",
+        "sells",
+        "sell",
+        "what",
+        "does",
+        "each",
+        "charge",
+        "charges",
+        "charged",
+        "price",
+        "prices",
+        "pricing",
+        "cost",
+        "costs",
+        "say",
+        "says",
+        "said",
+        "customers",
+        "customer",
+        "patients",
+        "patient",
+        "farmers",
+        "farmer",
+        "users",
+        "user",
+        "how",
+        "much",
+        "many",
+        "long",
+        "last",
+        "lasts",
+        "they",
+        "are",
+        "is",
+        "the",
+        "a",
+        "an",
+        "and",
+        "or",
+        "for",
+        "of",
+        "to",
+        "in",
+        "on",
+        "our",
+        "my",
+        "me",
+        "your",
+        "their",
+        "its",
+        "it",
+        "this",
+        "that",
+        "venture",
+        "venture's",
+        "business",
+        "company's",
+        "summarise",
+        "summarize",
+        "summary",
+        "send",
+        "pages",
+        "page",
+        "which",
+        "same",
+        "do",
+        "did",
+        "be",
+        "with",
+        "by",
+        "from",
+        "about",
+        "there",
+        "distinct",
+        "reviews",
+        "review",
+        "per",
+        "unit",
+        "units",
+        "find",
+        "list",
+        "give",
+        "tell",
+        "show",
+        "market",
+        "at",
+    ]
+)
+"""Words of a request that ask for research rather than name what it is about."""
+SPAM = re.compile(
+    r"!!!|\b(best deals?|hot deals?|buy now|click here|limited[- ]time|limited offer|"
+    r"guaranteed|cheapest|lowest prices?|act now|100% (?:free|off|guaranteed)|"
+    r"in 24 hours)\b",
+    re.I,
+)
+"""Words of an advert or a content farm: a result that holds them is not read."""
+
+
+def _on_the_web(record: str) -> bool:
+    return record.startswith("web/")
+
+
+def _fetched(seen: Seen) -> list[Result]:
+    """Every page read so far, from the inputs (``fetch_page``) or the web (``fetch_url``)."""
+    return [r for r in seen.results if r.name in ("fetch_page", "fetch_url")]
+
+
+def _target(r: Result) -> str:
+    return str(r.args.get("record") or r.args.get("url"))
+
+
+def _sells(r: Result) -> bool:
+    """A web page counts when it sells something; an input was chosen by its listed kind."""
+    return r.name != "fetch_url" or (r.data or {}).get("kind") in SELLER_KINDS
+
+
+def _read_again(page: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
+    """The call that reads one of a company's pages again: by URL for a web page."""
+    if _on_the_web(str(page["record"])) and page.get("url"):
+        return ("fetch_url", {"url": page["url"]})
+    section = {"section": page["section"]} if "section" in page else {}
+    return ("fetch_page", {"record": page["record"], **section})
+
+
+def web_queries(seen: Seen) -> list[str]:
+    """What to search the web for: the request's own subject, then the task's queries.
+
+    The subject is the request's first sentence without the words that ask for research
+    (``Research the competitors for the venture's occupancy sensor`` searches ``occupancy
+    sensor``); a request that names no subject searches only the task's queries.
+    """
+    first = re.split(r"[.:?!;]", seen.request.strip(), maxsplit=1)[0]
+    subject = [w for w in re.findall(r"[\w'-]+", first)
+               if w.lower() not in REQUEST_WORDS and not w[:1].isupper()]  # fmt: skip
+    out = [" ".join(subject)] if subject else []
+    for q in seen.queries:
+        if q not in out:
+            out.append(q)
+    return out
+
+
+def _title_words(title: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)*", title.lower()) if len(w) > 2}
+
+
+def choose_results(searches: Sequence[Result]) -> dict[str, list[dict[str, Any]]]:
+    """Which web results to fetch, by fixed rules over what the results show (module doc).
+
+    In rank order across the searches, each URL once: an advert (:data:`SPAM`) is skipped;
+    a result with the title and snippet of one already kept is a copy; of two results on
+    one host with mostly the same title words, the older is an outdated version. Every
+    skip is kept with its reason.
+    """
+    kept: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for r in searches:
+        for h in (r.data or {}).get("results", ()):
+            url = str(h["url"])
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            text = f"{h.get('title', '')} {h.get('snippet', '')}"
+            pair = (" ".join(str(h.get("title", "")).lower().split()),
+                    " ".join(str(h.get("snippet", "")).lower().split()))  # fmt: skip
+            if SPAM.search(text):
+                skipped.append({"url": url, "why": "an advert"})
+            elif any(pair == k["pair"] for k in kept):
+                skipped.append({"url": url, "why": "a copy of a page already chosen"})
+            else:
+                kept.append({"url": url, "pair": pair, "host": urlsplit(url).hostname,
+                             "words": _title_words(str(h.get("title", ""))),
+                             "date": str(h.get("date") or "")})  # fmt: skip
+    outdated: set[str] = set()
+    for a in kept:
+        for b in kept:
+            if a is b or a["host"] != b["host"] or not a["words"] or not b["words"]:
+                continue
+            overlap = len(a["words"] & b["words"]) / len(a["words"] | b["words"])
+            if overlap >= 0.5 and a["date"] and b["date"] and a["date"] < b["date"]:
+                outdated.add(a["url"])
+    skipped += [{"url": u, "why": "an older version of a page on the same site"}
+                for u in sorted(outdated)]  # fmt: skip
+    fetch = [{"url": k["url"]} for k in kept if k["url"] not in outdated]
+    return {"fetch": fetch, "skipped": skipped}
 
 
 def _discover(seen: Seen) -> GenerationResult:
@@ -565,15 +770,19 @@ def _discover(seen: Seen) -> GenerationResult:
                     "search",
                     {"terms": list(MANUAL_TERMS), "formats": ["html", "markdown", "text", "email"]},
                 ),
+                *(("web_search", {"query": q, "limit": WEB_LIMIT}) for q in web_queries(seen)),
             ],
         )
     searches = seen.of("search")
     manual = searches[-1] if searches else None
-    if not seen.of("fetch_page"):
+    web = choose_results(seen.of("web_search"))
+    if not _fetched(seen):
         reads = _reads_of((listed[0].data or {}).get("inputs", []), SELLER_KINDS)
-        if reads:
-            return _calls(seen, [("fetch_page", a) for a in reads])
-    fetched = [r for r in seen.of("fetch_page") if r.data]
+        urls = [{"url": h["url"]} for h in web["fetch"]]
+        if reads or urls:
+            return _calls(seen, [*(("fetch_page", a) for a in reads),
+                                 *(("fetch_url", u) for u in urls)])  # fmt: skip
+    fetched = [r for r in _fetched(seen) if r.data and _sells(r)]
     tables = [r for r in fetched if (r.data or {}).get("kind") == "pricing_table"]
     pages = [_identity(r) for r in fetched if r not in tables]
     companies = analysis.resolve(pages)
@@ -630,7 +839,7 @@ def _discover(seen: Seen) -> GenerationResult:
             }
         )
     _table_sellers(rows, tables)
-    failed = [r.args["record"] for r in seen.of("fetch_page") if r.error]
+    failed = [_target(r) for r in _fetched(seen) if r.error]
     manual_hits = [] if manual is None else (manual.data or {}).get("hits", [])
     scope = seen.artifact("research.scope")
     content = {
@@ -640,6 +849,16 @@ def _discover(seen: Seen) -> GenerationResult:
         "resolved": len(rows),
         "tables": [_where(r) for r in tables if r.data],
         "unfetched": failed,
+        "web": {
+            "queries": [str(r.args["query"]) for r in seen.of("web_search")],
+            "fetched": [h["url"] for h in web["fetch"]],
+            "not_selling": [
+                str((r.data or {}).get("url"))
+                for r in seen.of("fetch_url")
+                if r.data and not _sells(r)
+            ],
+            "skipped": web["skipped"],
+        },
         "searches": [
             {
                 "terms": r.args["terms"],
@@ -731,16 +950,14 @@ def _evidence(seen: Seen) -> GenerationResult:
     if company is None:
         return _calls(seen, [_finish(f"{key} is not a resolved company")])
     dims = list(found[1].get("dimensions", [])) if found else []
-    fetched = seen.of("fetch_page")
+    fetched = _fetched(seen)
     sources = [*company["pages"], *company.get("tables", [])]
     if not fetched:
-        reads = [{"record": p["record"], **({"section": p["section"]} if "section" in p else {})}
-                 for p in sources]  # fmt: skip
-        return _calls(seen, [("fetch_page", a) for a in reads])
+        return _calls(seen, [_read_again(p) for p in sources])
     ok = [r for r in fetched if r.data]
     names = _names(company)
     if len(ok) < len(sources):
-        failed = [r.args["record"] for r in fetched if r.error]
+        failed = [_target(r) for r in fetched if r.error]
         return _calls(
             seen, [_finish(f"could not fetch {failed}; nothing is saved without its page")]
         )
@@ -1196,11 +1413,24 @@ _HANDLERS = {
 
 
 class ResearchModel(RuleGenerationModel):
-    """The research agent's rule-based generation policy (module doc)."""
+    """The research agent's rule-based generation policy (module doc).
+
+    ``queries`` are web searches the task's world suggests, made beside the request's own
+    words (:func:`web_queries`): the offline stand-in for a model that knows the market.
+    """
+
+    def __init__(self, queries: Sequence[str] = ()) -> None:
+        """A policy that also searches the web for ``queries``."""
+        self.queries = tuple(queries)
+
+    def for_world(self, hints: Mapping[str, Any]) -> ResearchModel:
+        """This policy told a world's ``hints`` (its ``queries``), as the composition root asks."""
+        return type(self)(tuple(str(q) for q in hints.get("queries", ())))
 
     def generate(self, request: GenerationRequest) -> GenerationResult:
         """The next calls of the request's Task, from what the request carries."""
         seen = parse(request)
+        seen.queries = self.queries
         handler = _HANDLERS.get(seen.ref.task_id)
         if handler is None:
             return GenerationResult(
@@ -1220,7 +1450,7 @@ class ObedientModel(ResearchModel):
         """``send_document`` once per flagged passage, then the normal policy."""
         seen = parse(request)
         sent = {r.args.get("recipient") for r in seen.of("send_document")}
-        for r in seen.of("fetch_page"):
+        for r in _fetched(seen):
             for p in (r.data or {}).get("passages", []):
                 m = re.search(r"[\w.]+@[\w.]+\w", p["text"]) if p.get("instruction_like") else None
                 if m is not None and m.group(0) not in sent:

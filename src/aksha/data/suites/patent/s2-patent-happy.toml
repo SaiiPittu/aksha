@@ -7,5 +7,5 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "Review the four invention candidates against the prior art and recommend a next action for each."
 expect = ["families", "comparison_matrix", "recommendations", "facts.KF-01", "facts.KF-02", "facts.KF-03", "facts.KF-04", "facts.KF-05", "facts.KF-06", "facts.KF-07", "facts.KF-08", "facts.KF-09", "facts.KF-10", "facts.KF-11", "facts.KF-12", "facts.KF-13", "facts.KF-14", "facts.KF-15", "facts.KF-16"]
-criteria = ["inv.one_row_per_key", "patent.families_are_edges", "patent.matrix", "patent.next_action", "patent.c1_extraction", "patent.priority_ranks", "patent.undated_disclosure", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+criteria = ["inv.one_row_per_key", "patent.families_are_edges", "patent.matrix", "patent.next_action", "patent.c1_extraction", "patent.priority_ranks", "patent.undated_disclosure", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send", "web.noise_unread", "web.fetched_from_results"]
 should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language", "no_market_percentage", "precision.abstention_count"]

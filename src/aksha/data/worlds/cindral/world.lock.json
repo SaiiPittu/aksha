@@ -1,7 +1,7 @@
 {
   "files": {
-    "key.json": "sha256:16494e05d87cccb025cd7acdaf5780bffb4fcb071aa074ea6fdcb3368e124206",
-    "manifest.json": "sha256:732afda1b1afaaa287e2638d3b4900b7828d2f20bd2df7e59989f663580731fa",
+    "key.json": "sha256:9582d9989ea481d5ea2ac8e58d57d0b55a1c5e9ac5480c87400e7d3d89c6f969",
+    "manifest.json": "sha256:4a9517ad742fe5eb5e49b83023886bf83c13218f8f78ed38b75b3b59e81a34e0",
     "sources/brochures/nimbo-clinic-brochure.pdf.txt": "sha256:37150a14ab1b9abff6c213793831976193bfee5ce5d8ecf1e241bf37cbf00ebe",
     "sources/brochures/physiograph-datasheet.pdf.txt": "sha256:a5d1aee924facb69af0fe30b0f2017d0cd84481c0c7056dee5859ab47db65868",
     "sources/decks/waitlist-ranking.pptx.txt": "sha256:c2c151428c2e4de6cce71ab178d5af6fec9d84f0b9dc8da612ed8d6bb1687462",
@@ -9,16 +9,23 @@
     "sources/forms/counsel-intake.md": "sha256:451a1f42897085b2b49609b48beefc3bc292b9c2245eee7cde841d7715a6896d",
     "sources/log/where-we-showed-it.md": "sha256:d22ce17b88d594bba8b026c11d3bef0b99b7243e82f4ff4bcce955f4c495b51c",
     "sources/meetings/2026-02-11-product-review.txt": "sha256:4265af6f3d8c238f22493e7bedc76a892433cd77d193fc704860e59b1c7b067f",
-    "sources/pages/corlew-diary.html": "sha256:5ff6046af8cd7df18d0ed0fd80cedfffa1806b43645a7573c630cd6a7bf39c17",
-    "sources/pages/tidewell-booking.html": "sha256:328c8724557eb79f666f7141b7f10716006d6d40237940864fccfc5d93f1ad94",
     "sources/people/inventors.json": "sha256:38653525f1385c6cdf146d5ac30429b259410318fb0b75fbffce200b21994b02",
     "sources/plans/priorities-2026.csv": "sha256:e7c1df149e0ad8c0189d777d957f839cd8543efbcef73edd7aa4055500f1b6df",
-    "sources/prior-art/SYN-PUB-0201.txt": "sha256:ba67269c4c2f18fe4aed916c8044442599fb2c7a2e785a34f3ee953e80a92cec",
-    "sources/prior-art/SYN-PUB-0202.json": "sha256:12c673a8e9c1588723b03a39596c007f8312888d81d2988524f5c72cef89bb19",
-    "sources/prior-art/SYN-PUB-0203.txt": "sha256:e569664e761550a72d9e5e3a07fa3f7f3dd89c5b43de47125c4316506f1abe0d",
     "sources/reports/uk-clinic-software-survey.pdf.txt": "sha256:0a4b1a3f4927c8ba9a3d7ce5af1c3799787a02b59adceaaaf261f817e0598296",
     "sources/spreadsheets/price-comparison.tsv": "sha256:27898e759fd862fdde8cda0d9abbfaadf585849ef66cce0393b117ec500f26d9",
-    "spec.yaml": "sha256:e15d5338b46c76463f0076d84079ca98fe11b883634612a34ef499bdbaf7e1b8"
+    "spec.yaml": "sha256:e7507c8b337456c4e4eb5c2b863a2b3a149e94f433e1b28c9702ec1418011d06",
+    "web.json": "sha256:0ae52d3616b97030daf9a58ca50d12baaffa1b490a8a056a02393a6e327cdb99",
+    "web/booking-deals.example/clinic-software": "sha256:23e1f07a876daf6ef114ccb4e3a7af6dece384abb64bbb8fcacc1c7927f45589",
+    "web/clinicwords.example/glossary/booking": "sha256:0244dbf6e623378859ff6f8697e57162b851d198337ff1eff72d52228be15fbf",
+    "web/corlew.example/diary": "sha256:5ff6046af8cd7df18d0ed0fd80cedfffa1806b43645a7573c630cd6a7bf39c17",
+    "web/ip-fast.example/file-a-patent": "sha256:f9d273988f68f50bb2752f56c75af8356075bf4c7059f3150354f785eda3a2f2",
+    "web/patentmirror.example/SYN-PUB-0202": "sha256:12c673a8e9c1588723b03a39596c007f8312888d81d2988524f5c72cef89bb19",
+    "web/patents.synthetic.example/SYN-PUB-0201": "sha256:ba67269c4c2f18fe4aed916c8044442599fb2c7a2e785a34f3ee953e80a92cec",
+    "web/patents.synthetic.example/SYN-PUB-0202": "sha256:12c673a8e9c1588723b03a39596c007f8312888d81d2988524f5c72cef89bb19",
+    "web/patents.synthetic.example/SYN-PUB-0203": "sha256:e569664e761550a72d9e5e3a07fa3f7f3dd89c5b43de47125c4316506f1abe0d",
+    "web/restaurant-tables.example/booking-reminders": "sha256:fb6bececd859b3460735b163f79eb2580df863dd47c2397555731c2d10814041",
+    "web/saas-directory.example/corlew-diary": "sha256:5ff6046af8cd7df18d0ed0fd80cedfffa1806b43645a7573c630cd6a7bf39c17",
+    "web/tidewell.example/booking": "sha256:328c8724557eb79f666f7141b7f10716006d6d40237940864fccfc5d93f1ad94"
   },
   "world": "cindral"
 }

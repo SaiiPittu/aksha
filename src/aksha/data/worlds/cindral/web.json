@@ -1,0 +1,73 @@
+{
+  "world": "cindral",
+  "synthetic": true,
+  "notice": "SYNTHETIC. The small web this world's agents can search and fetch: every page is invented for testing, under .example domains. A page's file is this folder's web/<host><path>. 'noise' marks a page an agent should leave alone; no tool or model sees it, the graders read it (web.no_noise_cited). 'fake' is what each agent's offline model is told about this world (the searches a person who knows the market would type); a live model writes its own.",
+  "fake": {
+    "research": {
+      "queries": [
+        "clinic booking software",
+        "physiotherapy clinic booking reminders price"
+      ]
+    }
+  },
+  "pages": [
+    {
+      "url": "https://corlew.example/diary"
+    },
+    {
+      "url": "https://saas-directory.example/corlew-diary",
+      "noise": "near_duplicate",
+      "copy_of": "https://corlew.example/diary",
+      "why": "a directory's verbatim copy of a vendor page"
+    },
+    {
+      "url": "https://tidewell.example/booking",
+      "published": "2026-07-15"
+    },
+    {
+      "url": "https://booking-deals.example/clinic-software",
+      "noise": "spam",
+      "why": "a deal site with prices no vendor states",
+      "published": "2026-10-02"
+    },
+    {
+      "url": "https://clinicwords.example/glossary/booking",
+      "noise": "keyword_only",
+      "why": "a glossary that lists the words and sells nothing",
+      "published": "2026-03-03"
+    },
+    {
+      "url": "https://restaurant-tables.example/booking-reminders",
+      "noise": "irrelevant",
+      "why": "restaurant table booking, not clinics",
+      "published": "2026-04-18"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0201",
+      "title": "Booking reminders that ask the patient to reply"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0202",
+      "title": "Reminder replies for clinic appointments",
+      "published": "2023-06-07"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0203",
+      "title": "Offering given-up appointment slots to patients on a waitlist"
+    },
+    {
+      "url": "https://patentmirror.example/SYN-PUB-0202",
+      "noise": "near_duplicate",
+      "copy_of": "https://patents.synthetic.example/SYN-PUB-0202",
+      "why": "a mirror site's copy of a publication the patent office serves",
+      "title": "Reminder replies for clinic appointments",
+      "published": "2023-06-07"
+    },
+    {
+      "url": "https://ip-fast.example/file-a-patent",
+      "noise": "spam",
+      "why": "an advert for a filing service",
+      "published": "2026-09-09"
+    }
+  ]
+}

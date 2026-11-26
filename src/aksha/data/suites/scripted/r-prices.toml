@@ -18,5 +18,7 @@ criteria = [
   "citation.exists",
   "citation.overlaps_key",
   "trap.T-PRICE",
+  "web.noise_unread",
+  "web.fetched_from_results",
 ]
 judge = ["judge.unknown_price_explained"]

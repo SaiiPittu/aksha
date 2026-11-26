@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication": "SYN-PUB-0101",
+  "office": "SYN-Office-3",
+  "kind_code": "B1",
+  "title": "Soil probe with two-frequency capacitance measurement",
+  "dates": {"priority": "2020-03-15", "filing": "2021-03-12", "grant": "2023-07-04"},
+  "priority_claims": [{"number": "SYN-PRI-2020-0315", "date": "2020-03-15"}],
+  "url": "https://patents.synthetic.example/SYN-PUB-0101",
+  "status": [{"wording": "Granted", "source": "SYN-Office-3 register", "as_of": "2026-09-01"}],
+  "abstract": "A soil probe measures capacitance at a low and a high excitation frequency and estimates salinity from the ratio of the two values.",
+  "description": "The probe applies two excitation frequencies to its electrodes and records the capacitance at each. Because salt changes the capacitance differently at the two frequencies, the ratio gives an estimate of pore-water salinity, which is reported beside the moisture estimate.",
+  "claims": [
+    {"number": 1, "depends_on": null, "text": "A method of measuring soil, comprising: measuring a probe capacitance at two excitation frequencies; and estimating pore-water salinity from the ratio of the two capacitance values."},
+    {"number": 2, "depends_on": 1, "text": "The method of claim 1, wherein the salinity estimate is reported beside the moisture estimate."}
+  ]
+}

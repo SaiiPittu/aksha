@@ -208,7 +208,7 @@ def passages(found: ReturnedText, fmt: str) -> tuple[list[Segment], list[SpanDra
         a, b = (s.start, s.end) if fmt in ("html", "json") else _line_of(raw, s.start, s.end)
         if s.kind == "paragraph" and fmt not in ("html", "json"):
             a, b = _line_of(raw, s.start, s.start)[0], _line_of(raw, s.end - 1, s.end)[1]
-        out.append(SpanDraft(SOURCE_NAME, found.record_id, found.version, a, b))
+        out.append(SpanDraft(found.source, found.record_id, found.version, a, b))
     return segs, out
 
 
@@ -292,6 +292,30 @@ def _pipe_tables(found: ReturnedText) -> list[tuple[list[str], list[dict[str, An
     if header is not None and rows:
         out.append((header, rows))
     return out
+
+
+class OneRecord:
+    """A record reader holding one text: a fetched web page, read as the inputs are.
+
+    The publication and document views of :class:`SourceWorld` read through it, so a page
+    fetched by URL is recognised and read by the same rules as an uploaded file.
+    """
+
+    def __init__(self, text: ReturnedText) -> None:
+        """Serve ``text`` under its own record ID."""
+        self.text = text
+
+    def read(self, source: str, record_id: str) -> ReturnedText | None:
+        """The text, when ``record_id`` names it."""
+        return self.text if record_id == self.text.record_id else None
+
+    def records(self, source: str, collection: str) -> tuple[str, ...]:
+        """The one record ID."""
+        return (self.text.record_id,)
+
+    def serves(self, source: str) -> bool:
+        """Whether ``source`` is the one text's source."""
+        return source == self.text.source
 
 
 @dataclass

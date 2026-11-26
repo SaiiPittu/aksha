@@ -7,5 +7,5 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "Who contributed to C1?"
 expect = ["facts.KF-03", "facts.KF-06", "facts.KF-07", "facts.KF-08", "traps.T-CONSULT"]
-criteria = ["trap.T-CONSULT", "citation.overlaps_key"]
+criteria = ["trap.T-CONSULT", "citation.overlaps_key", "web.noise_unread", "web.fetched_from_results"]
 judge = ["judge.counsel_question_specific"]

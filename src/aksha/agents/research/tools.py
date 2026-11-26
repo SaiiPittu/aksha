@@ -42,7 +42,10 @@ from aksha.runtime.api import (
     ToolDecl,
     ToolOutcome,
     ToolSpec,
+    fetch_text,
+    fetch_url_spec,
     visible,
+    web_search_tool,
 )
 
 from . import parsing, reading
@@ -85,7 +88,8 @@ def _input(text: ReturnedText) -> InputRef:
 
 
 def _drafts(text: ReturnedText, passages: tuple[parsing.Passage, ...]) -> tuple[SpanDraft, ...]:
-    return tuple(SpanDraft(SOURCE, text.record_id, text.version, p.start, p.end) for p in passages)
+    return tuple(SpanDraft(text.source, text.record_id, text.version, p.start, p.end)
+                 for p in passages)  # fmt: skip
 
 
 def _query(ctx: ToolContext, tool: str, args: Mapping[str, Any], hits: list[str]) -> InputRef:
@@ -167,29 +171,28 @@ def search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
     return ToolOutcome(Ok(data, reads=(read,)))
 
 
-def fetch_page(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """Any record as a page: its identity and numbered passages, one citation span each."""
-    record = str(args["record"])
-    found = _read(ctx, record)
-    if isinstance(found, Err):
-        return ToolOutcome(found)
+def _page(
+    ctx: ToolContext, found: ReturnedText, section: int | None, extra: Mapping[str, Any]
+) -> ToolOutcome:
+    """A returned text read as a page: its identity and numbered passages, one span each."""
+    record = found.record_id
     fmt = reading.record_format(record, found.text)
-    section = args.get("section")
-    segs = reading.section_of(found, fmt, None if section is None else int(section))
+    segs = reading.section_of(found, fmt, section)
     if segs is None:
         return ToolOutcome(Err("no_section", f"{record} has no section {section}", item=record))
-    page, read = reading.read_page(ctx.models, found, fmt, SOURCE, segs)
+    page, read = reading.read_page(ctx.models, found, fmt, found.source, segs)
     data = {
+        **extra,
         "record": record,
         "version": found.version,
         "format": fmt,
-        **({} if section is None else {"section": int(section)}),
+        **({} if section is None else {"section": section}),
         **read.as_json(),
         "published": page.published,
         "title": page.title,
         "product": page.product,
         "brand": page.brand,
-        "url": page.url,
+        "url": extra.get("url", page.url),
         "passages": [p.as_json(n) for n, p in enumerate(page.passages)],
     }
     if read.needs_reader:
@@ -197,8 +200,31 @@ def fetch_page(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
             "the fast readers left " + ", ".join(read.unresolved) + " unresolved: read the "
             "passages yourself and cite them"
         )
-    spans = _drafts(found, page.passages)
-    return ToolOutcome(Ok(data, spans=spans, reads=(_input(found),)))
+    return ToolOutcome(Ok(data, spans=_drafts(found, page.passages), reads=(_input(found),)))
+
+
+def fetch_page(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+    """Any input record as a page: its identity and numbered passages, one citation span each."""
+    record = str(args["record"])
+    found = _read(ctx, record)
+    if isinstance(found, Err):
+        return ToolOutcome(found)
+    section = args.get("section")
+    return _page(ctx, found, None if section is None else int(section), {})
+
+
+def fetch_url(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+    """A web page by URL, read as :func:`fetch_page` reads an input (the same view).
+
+    The page is fetched through the runtime's web handle, so its text is one the runtime
+    returned and its passages are minted as spans of the source ``web``. ``url`` is the URL
+    asked for; ``final_url`` the one that answered (after redirects).
+    """
+    fetched = fetch_text(ctx, str(args["url"]))
+    if isinstance(fetched, Err):
+        return ToolOutcome(fetched)
+    extra = {"url": fetched.page.url, "final_url": fetched.page.final_url}
+    return _page(ctx, fetched.text, None, extra)
 
 
 def read_table(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
@@ -309,6 +335,18 @@ _LIST_RETRY = RetryPolicy(timeout_ms=600_000, max_retries=1)
 _INPUTS = frozenset(COLLECTIONS)
 
 TOOLS = (
+    web_search_tool(AGENT),
+    ToolDecl(
+        fetch_url_spec(
+            AGENT,
+            "Fetch a web page by URL and read it as fetch_page reads an input: its kind, then "
+            "numbered, citable passages (who it is from, when, each stated price, claims, "
+            "relationships, hidden text). Cite a passage, never a search snippet.",
+            retry=_FETCH_RETRY,
+            model_aliases=ALIASES,
+        ),
+        fetch_url,
+    ),
     ToolDecl(
         ToolSpec(
             "list_inputs",

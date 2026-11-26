@@ -69,7 +69,9 @@ def test_the_research_happy_path_passes_in_both_worlds(research: SuiteRun) -> No
 def test_the_research_agent_reads_only_through_the_episode(research: SuiteRun) -> None:
     for rec in research.records.values():
         calls = [e for e in rec.events if e["type"] == "episode.tool_called"]
-        assert calls and {c["payload"]["tool"] for c in calls} <= {"list_sources", "read_source"}
+        tools = {c["payload"]["tool"] for c in calls}
+        assert calls and tools <= {"list_sources", "read_source", "web_search", "read_web"}
+        assert {"web_search", "read_web"} <= tools  # the world's web, through the episode too
     rows = [json.loads(line) for line in (research.out / "results.jsonl").read_text().splitlines()]
     assert {r["conditions"]["agent_definition_basis"] for r in rows} == {"declared"}
 

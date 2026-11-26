@@ -328,13 +328,19 @@ src/aksha/
 │   │   ├── clock.py                         observe_time, recorded_date, ClockSource, date_change
 │   │   ├── freshness.py                     lifetimes, recheck_timers: max_age_s as a recheck per fetch or save
 │   │   └── firing.py                        fire_due (expiry, recheck, reminder) and tick, the session's pass
-│   └── egress/                              P26 egress policy
-│       ├── __init__.py                      what is built, what is planned
-│       ├── types.py                         EgressPolicy (deny by default; "*" any public host)
-│       ├── check.py                         check_url, check_destination: scheme, lists, resolved addresses; pure
-│       ├── errors.py                        EgressRefused (egress_refused)
-│       ├── ports.py                         HttpClient, Resolver, Transport, HttpRequest, HttpResponse, Network
-│       └── client.py                        PolicedHttpClient (check after DNS, every redirect), RefusingHttpClient, EgressDecision
+│   ├── egress/                              P26 egress policy
+│   │   ├── __init__.py                      what is built, what is planned
+│   │   ├── types.py                         EgressPolicy (deny by default; "*" any public host)
+│   │   ├── check.py                         check_url, check_destination: scheme, lists, resolved addresses; pure
+│   │   ├── errors.py                        EgressRefused (egress_refused)
+│   │   ├── ports.py                         HttpClient, Resolver, Transport, HttpRequest, HttpResponse, Network
+│   │   └── client.py                        PolicedHttpClient (check after DNS, every redirect), RefusingHttpClient, EgressDecision
+│   └── web/                                 P26 A3 web search and fetch as ports
+│       ├── __init__.py                      a snippet is a pointer, a fetched page a record
+│       ├── types.py                         SearchHit, SearchResults, FetchedPage, WebError, web_record_id, WEB_EGRESS (aksha.web)
+│       ├── ports.py                         WebSearch, WebFetch (Protocols)
+│       ├── attempt.py                       AttemptWeb (ToolContext.web): a fetched page kept as a returned text, so it can be cited
+│       └── tools.py                         web_search_tool, fetch_url_spec, fetch_text, page_read: the generic web tools
 ├── adapters/                                ADAPTERS: implement runtime ports
 │   ├── __init__.py                          families and the import rule
 │   ├── storage/                             event store backends
@@ -369,6 +375,18 @@ src/aksha/
 │   ├── egress/                              the network under the runtime's HTTP client (ADR-P26)
 │   │   ├── __init__.py                      what is built
 │   │   └── network.py                       SocketResolver, HttpTransport: connect to the checked address, TLS by host name
+│   ├── search/                              web search ports (ADR-P26 A3), picked by AKSHA_SEARCH
+│   │   ├── __init__.py                      a world's offline web, or a live provider
+│   │   ├── world.py                         WorldWeb: a world's web.json pages, ranked with noise, deterministic; search and fetch
+│   │   └── brave.py                         BraveSearch: a live search API, its key from the environment
+│   ├── web/                                 web fetch ports (ADR-P26 A3)
+│   │   ├── __init__.py                      what is built
+│   │   └── http.py                          HttpFetch: one GET through the fetch tool's egress-policed client
+│   ├── recording/                           record and replay a run (ADR-P22 A1)
+│   │   ├── __init__.py                      every model call, search and fetch, kept and answered again
+│   │   ├── sink.py                          JsonlSink, read_stream: a recording's JSON Lines streams
+│   │   ├── models.py                        recording_adapters, Recorded, recorded_adapters: every model call by what was asked
+│   │   └── web.py                           RecordingSearch, RecordingFetch, ReplayWeb: searches and fetches answered again
 │   └── systems/                             SystemOfRecord implementations the outbox sends to (ADR-P03)
 │       ├── __init__.py                      each keeps its own ledger by idempotency key
 │       └── mailbox.py                       MailboxSystem: a mock mailbox ledgered in a JSON file, fsync
@@ -449,7 +467,8 @@ src/aksha/
 │   │   ├── change.py                        change.stale_set, unchanged_set, research.scope_change
 │   │   ├── citations.py                     citation.exists, overlaps_key, edge_excerpts
 │   │   ├── traps.py                         one check per planted trap: handled, missed, fell for it
-│   │   └── forbidden.py                     five text checks with negative sets, no_unbound_send
+│   │   ├── forbidden.py                     five text checks with negative sets, no_unbound_send
+│   │   └── web.py                           web.no_noise_cited (an invariant), web.noise_unread, web.fetched_from_results
 │   ├── judge.py                             the optional judge: calibration, may_gate, RuleJudge
 │   ├── relations.py                         invariance and directional runs through the maps
 │   ├── metrics.py                           pass@k, pass^k, k_effective, Wilson, cost, clusters

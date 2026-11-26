@@ -5,6 +5,10 @@ of one body. The agent loop hands it to the body in its ``ToolContext`` and, onc
 body returns, mints the body's span drafts against :attr:`AttemptReader.returned`, so a
 body can cite only a passage the runtime itself read for it, in that attempt. Without a
 configured reader every read returns None, and a draft is refused as before.
+
+A page the attempt's web handle fetched (``ToolContext.web``, ADR-P26 A3) is kept the same
+way, through :meth:`AttemptReader.keep`, which only the runtime's web handle calls: a body
+can cite a page the runtime fetched for it, never text it wrote itself.
 """
 
 from __future__ import annotations
@@ -39,6 +43,10 @@ class AttemptReader:
     def serves(self, source: str) -> bool:
         """Whether ``inner`` serves ``source``; with no reader, none is served."""
         return self._inner is not None and self._inner.serves(source)
+
+    def keep(self, text: ReturnedText) -> None:
+        """Keep ``text`` as returned in this attempt (the runtime's web handle only)."""
+        self._returned.append(text)
 
     @property
     def returned(self) -> tuple[ReturnedText, ...]:

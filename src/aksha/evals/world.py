@@ -27,10 +27,28 @@ from pathlib import Path
 from typing import Any
 
 from aksha.evals.errors import EvalError
+from aksha.runtime.web.types import web_record_id
 
 LOCK_FILE = "world.lock.json"
-OUT_OF_REACH = ("key.json", "spec.yaml", "manifest.json", LOCK_FILE)
-"""Files beside ``sources/`` that no tool path may resolve to."""
+WEB_FILE = "web.json"
+OUT_OF_REACH = ("key.json", "spec.yaml", "manifest.json", LOCK_FILE, WEB_FILE)
+"""Files beside ``sources/`` that no tool path may resolve to. ``web.json`` names which of
+the world's web pages are noise, so no tool reaches it either."""
+
+
+@dataclass(frozen=True)
+class WebPageDecl:
+    """One page of a world's web as its ``web.json`` declares it, for the graders.
+
+    ``file`` is the page's path in the world (``web/<host><path>``, the record ID a fetch
+    gives it); ``noise`` its kind when it is noise, and ``copy_of`` the original a copy
+    copies (a URL, or ``upload:<path>``).
+    """
+
+    url: str
+    file: str
+    noise: str | None = None
+    copy_of: str | None = None
 
 
 @dataclass(frozen=True)
@@ -48,6 +66,27 @@ class World:
     def sources(self) -> Path:
         """``root / "sources"``: the only folder a tool may read."""
         return self.root / "sources"
+
+    @property
+    def web(self) -> Path:
+        """``root / "web"``: the world's web pages, served by its search proxy, never inputs."""
+        return self.root / "web"
+
+    def file(self, rel: str) -> Path:
+        """The world file a citation names: a web page (``web/...``) or a source."""
+        return self.root / rel if rel.startswith("web/") else self.sources / rel
+
+    def web_pages(self) -> tuple[WebPageDecl, ...] | None:
+        """The pages ``web.json`` declares; None for a world with no web."""
+        path = self.root / WEB_FILE
+        if not path.is_file():
+            return None
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return tuple(
+            WebPageDecl(str(p["url"]), web_record_id(str(p["url"])), p.get("noise"),
+                        p.get("copy_of"))
+            for p in raw.get("pages", ())
+        )  # fmt: skip
 
     @property
     def key_path(self) -> Path:
@@ -183,6 +222,15 @@ def _stems(rename: Mapping[str, str]) -> dict[str, str]:
     return out
 
 
+def _files(world: World) -> set[str]:
+    """Every source path (relative to ``sources/``) and web page path (``web/...``)."""
+    out = {p.relative_to(world.sources).as_posix() for p in world.sources.rglob("*")}
+    if world.web.is_dir():
+        out |= {p.relative_to(world.root).as_posix() for p in world.web.rglob("*")
+                if p.is_file()}  # fmt: skip
+    return out
+
+
 def derive_path_map(base: World, variant: World, rename: Mapping[str, str]) -> dict[str, str]:
     """Base path to variant path for every source file whose name the rename changes.
 
@@ -191,8 +239,7 @@ def derive_path_map(base: World, variant: World, rename: Mapping[str, str]) -> d
     so a rename that the map cannot explain is caught, not guessed.
     """
     stems = _stems(rename)
-    base_files = {p.relative_to(base.sources).as_posix() for p in base.sources.rglob("*")}
-    var_files = {p.relative_to(variant.sources).as_posix() for p in variant.sources.rglob("*")}
+    base_files, var_files = _files(base), _files(variant)
     out: dict[str, str] = {}
     for rel in sorted(base_files - var_files):
         mapped = rel

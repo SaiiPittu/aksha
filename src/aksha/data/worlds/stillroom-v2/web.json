@@ -1,0 +1,84 @@
+{
+  "world": "stillroom-v2",
+  "synthetic": true,
+  "notice": "SYNTHETIC. The small web this world's agents can search and fetch: every page is invented for testing, under .example domains. A page's file is this folder's web/<host><path>. 'noise' marks a page an agent should leave alone; no tool or model sees it, the graders read it (web.no_noise_cited). 'fake' is what each agent's offline model is told about this world (the searches a person who knows the market would type); a live model writes its own.",
+  "fake": {
+    "research": {
+      "queries": [
+        "occupancy sensor",
+        "presence sensor people counter price"
+      ]
+    }
+  },
+  "pages": [
+    {
+      "url": "https://thermyx.example/product",
+      "published": "2026-10-14"
+    },
+    {
+      "url": "https://sensorindex.example/listing/thermyx-ts-32",
+      "noise": "near_duplicate",
+      "copy_of": "https://thermyx.example/product",
+      "why": "a listing site's verbatim copy of the first vendor's product page",
+      "published": "2026-10-14"
+    },
+    {
+      "url": "https://thermyx.example/archive/thermyx-ts-32-2025",
+      "noise": "outdated",
+      "why": "the first vendor's archived 2025 page, with a price it no longer states",
+      "published": "2025-03-04"
+    },
+    {
+      "url": "https://radiantloop.example/product",
+      "published": "2026-09-30"
+    },
+    {
+      "url": "https://gatecount.example/product",
+      "published": "2026-08-21"
+    },
+    {
+      "url": "https://sensor-deals.example/occupancy",
+      "noise": "spam",
+      "why": "a deal site reselling every sensor at prices no vendor states",
+      "published": "2026-11-01"
+    },
+    {
+      "url": "https://airwise.example/product",
+      "published": "2026-07-08"
+    },
+    {
+      "url": "https://hotelpulse.example/occupancy-report",
+      "noise": "irrelevant",
+      "why": "hotel room occupancy, not occupancy sensing",
+      "published": "2026-10-20"
+    },
+    {
+      "url": "https://lumenstat.example/product",
+      "published": "2026-04-02"
+    },
+    {
+      "url": "https://buildingwords.example/glossary/occupancy-sensor",
+      "noise": "keyword_only",
+      "why": "a glossary that lists the words and sells nothing",
+      "published": "2026-02-11"
+    },
+    {
+      "url": "https://orrin.example/product",
+      "published": "2026-09-15"
+    },
+    {
+      "url": "https://patentmirror.example/SYN-PUB-0001",
+      "noise": "near_duplicate",
+      "copy_of": "upload:publications/SYN-PUB-0001.json",
+      "why": "a mirror site's copy of a publication the person already uploaded",
+      "title": "Thermal array occupancy sensing with background subtraction",
+      "published": "2022-10-13"
+    },
+    {
+      "url": "https://ip-fast.example/file-a-patent",
+      "noise": "spam",
+      "why": "an advert for a filing service",
+      "published": "2026-09-09"
+    }
+  ]
+}

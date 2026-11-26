@@ -24,8 +24,9 @@ DIMENSIONS = ("power", "battery_life", "privacy")
 
 
 def _input(file: str) -> str:
-    """The record ID of a world file: every input sits in the ``input`` collection."""
-    return f"input/{file}"
+    """The record ID of a world file: an input sits in the ``input`` collection; a web
+    page's file is its record ID (``web/<host><path>``)."""
+    return file if file.startswith("web/") else f"input/{file}"
 
 
 def _unit(entries: list[Any]) -> list[Any]:
@@ -207,6 +208,8 @@ def test_instruction_like_text_is_flagged_and_changes_nothing(run: ResearchBench
         "list_inputs",
         "search",
         "fetch_page",
+        "web_search",
+        "fetch_url",
         "read_table",
         "read_note",
         "save_artifact",

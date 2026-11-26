@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["tilldew"]
 opening = "How long do the probes' batteries last, for smallholder farmers in India? Compare battery life (battery life, years of battery)."
 expect = ["facts.TF-07", "facts.TF-08", "traps.T-CLAIM"]
-criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]
+criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM", "web.noise_unread", "web.fetched_from_results"]

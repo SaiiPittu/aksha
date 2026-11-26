@@ -178,8 +178,8 @@ def load_key(world: World, path: Path | None = None) -> AnswerKey:
 
 
 def read_source(world: World, rel: str) -> str:
-    """A source file's raw text, for graders and ``key_check`` (never a tool)."""
-    return (world.sources / rel).read_text(encoding="utf-8")
+    """A source file's or web page's raw text, for graders and ``key_check`` (never a tool)."""
+    return world.file(rel).read_text(encoding="utf-8")
 
 
 def key_check(world: World, key: AnswerKey) -> list[str]:
@@ -194,7 +194,7 @@ def key_check(world: World, key: AnswerKey) -> list[str]:
         a = fact.anchor
         if a is None:
             continue
-        path = world.sources / a.file
+        path = world.file(a.file)
         if not path.is_file():
             drifts.append(f"{fact.id}: file {a.file} is missing")
             continue

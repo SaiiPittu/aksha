@@ -14,9 +14,12 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
+from aksha.evals.agents.runtime import EpisodeWeb, WebFor
 from aksha.evals.episode import Episode
 from aksha.evals.errors import EvalError, ToolFault
+from aksha.runtime.web.types import web_record_id
 
 Step = tuple[Any, ...]
 
@@ -109,10 +112,46 @@ RETRIES = 3
 def _read(ep: Episode, path: str) -> str | None:
     for _ in range(RETRIES + 1):
         try:
-            return ep.read_source(path)
+            return ep.read_web(path) if path.startswith("web/") else ep.read_source(path)
         except ToolFault:
             continue
     return None
+
+
+_SPAM = re.compile(r"!!!|\b(buy now|click here|limited time|guaranteed|lowest prices?)\b", re.I)
+
+
+def _results(ep: Episode, web_for: WebFor | None) -> list[str]:
+    """The competitor pages to read: the world's web results, or its uploaded pages.
+
+    On a web, the agent searches what the world says a person in the market would search
+    for and reads each result, skipping an advert, a result with the title and snippet of
+    one already kept (a copy) and the older of two results on one host with the same
+    leading title words (an outdated version). A world with no web holds its pages in its
+    ``competitors`` folder.
+    """
+    web = EpisodeWeb.of(ep)
+    if web is None or web_for is None:
+        return list(ep.list_sources("competitors"))
+    search = web_for(web)
+    kept: list[tuple[str, str, str, str, str]] = []
+    seen: set[str] = set()
+    for query in web.hints.get("research", {}).get("queries", ()):
+        for h in search.search(str(query), limit=20).hits:
+            host = urlsplit(h.url).hostname or ""
+            lead = " ".join(h.title.lower().split()[:2])
+            if h.url in seen:
+                continue
+            seen.add(h.url)
+            if _SPAM.search(f"{h.title} {h.snippet}"):
+                continue
+            if any((k[1], k[2]) == (h.title, h.snippet) for k in kept):
+                continue
+            kept.append((h.url, h.title, h.snippet, f"{host}|{lead}", h.date or ""))
+    newest: dict[str, str] = {}
+    for _url, _t, _s, family, date in kept:
+        newest[family] = max(newest.get(family, ""), date)
+    return [web_record_id(url) for url, _t, _s, family, date in kept if date == newest[family]]
 
 
 @dataclass
@@ -128,18 +167,24 @@ class _Page:
 
 
 class ScriptedResearchAgent:
-    """A small rule-based research agent over competitor pages and reviews."""
+    """A small rule-based research agent over competitor pages and reviews.
+
+    ``web_for`` builds the search port over an episode's web (the composition root's
+    world search proxy); without one, or in a world with no web, the agent reads the
+    world's ``competitors`` folder.
+    """
 
     name = "scripted"
     mode = "fake"
 
+    def __init__(self, web_for: WebFor | None = None) -> None:
+        """Search the web through what ``web_for`` builds."""
+        self.web_for = web_for
+
     def run(self, episode: Episode) -> None:
         """Read every competitor page and the reviews; save competitors, edges and a summary."""
-        pages = [
-            page
-            for page in (self._page(episode, p) for p in episode.list_sources("competitors"))
-            if page is not None
-        ]
+        paths = _results(episode, self.web_for)
+        pages = [page for page in (self._page(episode, p) for p in paths) if page is not None]
         entities = self._resolve(pages)
         for i, group in enumerate(entities, start=1):
             self._save_entity(episode, f"E{i}", group)
@@ -153,6 +198,8 @@ class ScriptedResearchAgent:
         if text is None:
             return None
         brand = _BRAND.search(text)
+        if path.startswith("web/") and brand is None:
+            return None  # a web result that offers no product is not a competitor's page
         h1 = _H1.search(text)
         published = _PUBLISHED.search(text)
         prices = [

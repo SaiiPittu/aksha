@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "List C4's disclosures."
 expect = ["facts.KF-11"]
-criteria = ["patent.undated_disclosure"]
+criteria = ["patent.undated_disclosure", "web.noise_unread", "web.fetched_from_results"]

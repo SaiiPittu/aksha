@@ -10,14 +10,16 @@ from typing import Any
 
 import pytest
 
+from aksha import data
 from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.patent import checks, rules
 from aksha.agents.patent.agent import AGENT
 from aksha.agents.patent.fakes import ADAPTERS, parse
 from aksha.agents.patent.tools import build_tools
-from aksha.agents.patent.world import NotInWorld, SourceWorld
+from aksha.agents.patent.world import NotInWorld, OneRecord, SourceWorld
 from aksha.runtime.api import Err, GenerationRequest, Message, Ok, ToolCall, ToolContext
 from aksha.runtime.grounding.parts import part_version
+from aksha.runtime.grounding.types import ReturnedText
 from tests.support.fast import models_for
 from tests.support.patent import AGENT_DIR, TODAY, sources
 
@@ -179,8 +181,20 @@ def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
     forms = {t["template"] for t in w.templates()["templates"]}
     assert forms == {"tilldew-idf", "tilldew-filing-sheet"}
     assert [i["relates_to"] for i in w.priorities()["items"]] == ["TD-1", "TD-3", "TD-2"]
-    assert w.publication_ids() == [f"SYN-PUB-010{n}" for n in range(1, 6)]
-    assert w.publication("SYN-PUB-0104")["claims"][1]["depends_on"] == 1
+    # The publications are on the world's web, not among the inputs: each is read by
+    # content from its page as fetch_url reads it (OneRecord), whatever its format.
+    assert w.publication_ids() == []
+    pages = {}
+    for n in range(1, 6):
+        rel = f"web/patents.synthetic.example/SYN-PUB-010{n}"
+        text = (data.worlds() / "tilldew" / rel).read_text(encoding="utf-8")
+        pages[n] = SourceWorld(TODAY).over(
+            OneRecord(ReturnedText("web", rel, "v1", text)), None, w.models
+        )
+    assert [p.publication_ids() for p in pages.values()] == [
+        [f"SYN-PUB-010{n}"] for n in range(1, 6)
+    ]
+    assert pages[4].publication("SYN-PUB-0104")["claims"][1]["depends_on"] == 1
 
 
 def test_a_disclosure_row_is_quoted_by_its_own_cells_whatever_the_column_order(

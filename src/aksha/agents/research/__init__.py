@@ -2,8 +2,9 @@
 
 It works for anyone: the request names the market, the segment and what to compare, and
 the inputs are whatever the person uploaded (pages, notes, exports, emails, PDF text). It
-scopes the question (asking only what changes the result), lists its inputs, reads every
-page that sells something and resolves one company reachable under two names into one
+scopes the question (asking only what changes the result), lists its inputs, searches the
+web and fetches the results worth reading (a snippet is never cited), reads every page that
+sells something and resolves one company reachable under two names into one
 record with the excerpt that proves it (a search snippet never supports a claim), keeps
 conflicting prices side by side with their pages and dates, reads the review exports
 (dates, geographies, cross-posted duplicates counted once, a vendor's claim kept apart

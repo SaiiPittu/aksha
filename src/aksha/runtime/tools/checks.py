@@ -32,6 +32,7 @@ from aksha.runtime.execution.types import STEP_SEMANTICS
 from aksha.runtime.tools.arguments import is_json_pointer
 from aksha.runtime.tools.loader_added import RUNTIME_OWNER
 from aksha.runtime.tools.types import EFFECT_CLASSES, ToolDecl, ToolSpec
+from aksha.runtime.web.types import BUILTIN_EGRESS
 
 if TYPE_CHECKING:
     from aksha.runtime.definitions.loader import LoadedExtension
@@ -72,7 +73,8 @@ def rights_of(agent: Agent, extensions: Sequence[LoadedExtension]) -> ToolRights
         fast_aliases=frozenset(
             a.name for a in agent.model_aliases if a.model_class in ("extraction", "classification")
         ),
-        egress=frozenset(qualify(e.ext.name, p.name) for e in named for p in e.ext.egress),
+        egress=frozenset(qualify(e.ext.name, p.name) for e in named for p in e.ext.egress)
+        | frozenset(BUILTIN_EGRESS),
     )
 
 

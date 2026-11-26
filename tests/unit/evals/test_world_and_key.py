@@ -40,9 +40,16 @@ def test_committed_locks_hold() -> None:
 
 def test_lock_names_a_changed_file(tmp_path: Path) -> None:
     root = _copy(tmp_path)
-    page = root / "worlds/stillroom/sources/competitors/comp01-kelvra.html"
+    page = root / "worlds/stillroom/sources/notes/C1-self-calibration.md"
     page.write_text(page.read_text() + "<!-- edited -->")
-    assert verify_lock(load_world("stillroom", root)) == ["sources/competitors/comp01-kelvra.html"]
+    assert verify_lock(load_world("stillroom", root)) == ["sources/notes/C1-self-calibration.md"]
+
+
+def test_lock_names_a_changed_web_page(tmp_path: Path) -> None:
+    root = _copy(tmp_path)
+    page = root / "worlds/stillroom/web/kelvra.example/product"
+    page.write_text(page.read_text() + "<!-- edited -->")
+    assert verify_lock(load_world("stillroom", root)) == ["web/kelvra.example/product"]
 
 
 def test_a_world_with_no_lock_reports_the_lock(tmp_path: Path) -> None:
@@ -75,8 +82,12 @@ def test_rename_map_reads_only_its_block() -> None:
 def test_v2_renaming_maps_names_and_paths() -> None:
     maps = renaming(world("stillroom"), world("stillroom-v2"))
     assert maps.names["Brightfield Analytics"] == "Lumenstat"
-    assert maps.paths["competitors/comp05-brightfield.html"] == "competitors/comp05-lumenstat.html"
-    assert len(maps.paths) == 6
+    # The competitor pages are web pages now: their paths map by host, as do the noise pages.
+    assert maps.paths["web/brightfield.example/product"] == "web/lumenstat.example/product"
+    assert maps.paths["web/kelvra.example/archive/kelvra-ts-32-2025"] == (
+        "web/thermyx.example/archive/thermyx-ts-32-2025"
+    )
+    assert len(maps.paths) == 8
     assert (
         maps.text("Dr. Wei Lin met Dr. Lin; Weight stays.")
         == "Dr. Elena Varga met Dr. Varga; Weight stays."
@@ -102,8 +113,8 @@ def test_renamed_anchors_carry_over_exactly() -> None:
 def test_path_map_refuses_an_unexplained_rename(tmp_path: Path) -> None:
     root = _copy(tmp_path, "stillroom")
     _copy(tmp_path, "stillroom-v2")
-    v2 = root / "worlds/stillroom-v2/sources/competitors"
-    (v2 / "comp01-thermyx.html").rename(v2 / "comp01-mystery.html")
+    v2 = root / "worlds/stillroom-v2/web"
+    (v2 / "thermyx.example").rename(v2 / "mystery.example")
     rename = parse_rename_map((root / "worlds/stillroom-v2/spec.yaml").read_text())
     with pytest.raises(EvalError) as e:
         derive_path_map(load_world("stillroom", root), load_world("stillroom-v2", root), rename)

@@ -8,5 +8,5 @@ worlds = ["stillroom", "stillroom-v2"]
 relation = "invariance"
 opening = "What does each competitor charge?"
 expect = ["facts.KF-17", "facts.KF-18", "facts.KF-19", "facts.KF-20", "facts.KF-21", "facts.KF-22", "traps.T-PRICE"]
-criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "trap.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "trap.T-PRICE", "web.noise_unread", "web.fetched_from_results"]
 judge = ["judge.unknown_price_explained"]

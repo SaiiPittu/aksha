@@ -1,0 +1,35 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication": "SYN-PUB-0190",
+  "office": "SYN-Office-3",
+  "kind_code": "A1",
+  "title": "Aquarium water probe with temperature correction",
+  "dates": {
+    "priority": "2022-06-01",
+    "filing": "2023-05-30",
+    "publication": "2023-12-07"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2022-0601",
+      "date": "2022-06-01"
+    }
+  ],
+  "url": "https://patents.synthetic.example/SYN-PUB-0190",
+  "status": [
+    {
+      "wording": "Application published",
+      "source": "document"
+    }
+  ],
+  "abstract": "A probe for aquarium water estimates its salt content from conductivity and corrects the estimate for water temperature.",
+  "description": "The probe sits in the aquarium and reports the salt content to a display, so the keeper can top up fresh water.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "An aquarium probe comprising a conductivity cell and a thermistor, wherein the salt content is corrected for temperature."
+    }
+  ]
+}

@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["cindral"]
 opening = "What does each competitor charge independent physiotherapy clinics in the UK for booking software?"
 expect = ["facts.CF-01", "facts.CF-02", "facts.CF-06", "traps.T-PRICE"]
-criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE", "web.noise_unread", "web.fetched_from_results"]

@@ -30,12 +30,16 @@ from aksha.runtime.api import (
     ToolDecl,
     ToolOutcome,
     ToolSpec,
+    fetch_text,
+    fetch_url_spec,
+    page_read,
     part_version,
+    web_search_tool,
     where_part,
 )
 
 from . import rules
-from .world import NotInWorld, SourceWorld, days_between, query_id, query_version
+from .world import NotInWorld, OneRecord, SourceWorld, days_between, query_id, query_version
 
 AGENT = "patent"
 RECIPIENT = {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$"}
@@ -208,6 +212,20 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
         data = world.publication(str(args["id"]))
         spans = _spans(world, data["file"])
         return ToolOutcome(Ok(data, spans=spans, reads=(_whole(world, data["file"]),)))
+
+    def fetch_url(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        fetched = fetch_text(ctx, str(args["url"]))
+        if isinstance(fetched, Err):
+            return ToolOutcome(fetched)
+        record = fetched.record_id
+        world = bound.over(OneRecord(fetched.text), ctx.run_date, ctx.models)
+        found = world.publication_ids()
+        if found:
+            data = {"kind": "publication", **world.publication(found[0])}
+        else:
+            data = {"kind": world.kind(record), **world.document(record)}
+        data = {"url": fetched.page.url, "final_url": fetched.page.final_url, **data}
+        return ToolOutcome(Ok(data, spans=_spans(world, record), reads=(page_read(fetched),)))
 
     def fill_form(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date, ctx.models)
@@ -432,6 +450,17 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
             fetch_publication,
         ),
         (
+            fetch_url_spec(
+                AGENT,
+                "Fetch a web page by URL. A publication reads as fetch_publication reads one "
+                "(identifiers, dates, URL, every status wording as written, claims, text); any "
+                "other page as a document. Cite what it returns, never a search snippet.",
+                model_aliases=ALIASES,
+                retry=_SLOW,
+            ),
+            fetch_url,
+        ),
+        (
             ToolSpec(
                 "fill_form",
                 AGENT,
@@ -471,4 +500,4 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
             send_packet,
         ),
     ]
-    return tuple(ToolDecl(spec, _guard(body)) for spec, body in specs)
+    return (web_search_tool(AGENT), *(ToolDecl(spec, _guard(body)) for spec, body in specs))

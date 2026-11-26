@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["tilldew"]
 opening = "Prepare Tilldew's invention candidates for counsel review."
 expect = ["facts.TF-31", "traps.T-STATUS"]
-criteria = ["trap.T-STATUS", "citation.exists"]
+criteria = ["trap.T-STATUS", "citation.exists", "web.noise_unread", "web.fetched_from_results"]

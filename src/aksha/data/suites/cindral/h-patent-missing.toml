@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["cindral"]
 opening = "Prepare Cindral's invention candidates for counsel review."
 expect = ["facts.CF-27", "traps.T-MISSING"]
-criteria = ["trap.T-MISSING", "citation.exists"]
+criteria = ["trap.T-MISSING", "citation.exists", "web.noise_unread", "web.fetched_from_results"]

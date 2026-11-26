@@ -13,7 +13,7 @@ from aksha.evals.state import fold
 from tests.support.evals import OPEN, case, run_episode, world
 
 KF17 = {
-    "file": "competitors/comp01-kelvra.html",
+    "file": "web/kelvra.example/product",
     "exact": "EUR 249 per unit",
     "start": 671,
     "end": 687,
@@ -49,11 +49,14 @@ def test_a_symlink_out_of_the_tool_root_is_refused(tmp_path: Path) -> None:
         guard_path(tmp_path / "sources", "link.txt")
 
 
-def test_the_episode_world_copy_holds_only_sources(tmp_path: Path) -> None:
+def test_the_episode_world_copy_holds_only_sources_and_web_pages(tmp_path: Path) -> None:
     rec = run_episode(ScriptedAgent([("list", "")]), tmp_path)
     root = rec.sources.parent
-    assert sorted(p.name for p in root.iterdir()) == ["sources"]
-    assert not any(p.name in ("key.json", "spec.yaml", "manifest.json") for p in root.rglob("*"))
+    assert sorted(p.name for p in root.iterdir()) == ["sources", "web"]
+    held = ("key.json", "spec.yaml", "manifest.json", "web.json")
+    assert not any(p.name in held for p in root.rglob("*"))
+    # the web declaration (which pages are noise) sits beside the copy, out of reach
+    assert (root.parent / "web.json").is_file()
 
 
 def test_an_agent_asking_for_the_key_is_refused_and_recorded(tmp_path: Path) -> None:

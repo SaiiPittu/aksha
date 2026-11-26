@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "Fill in the C1 disclosure form."
 expect = ["facts.KF-05", "traps.T-GAP"]
-criteria = ["trap.T-GAP", "precision.known_values"]
+criteria = ["trap.T-GAP", "precision.known_values", "web.noise_unread", "web.fetched_from_results"]

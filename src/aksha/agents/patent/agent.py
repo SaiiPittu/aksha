@@ -12,9 +12,10 @@ each by its content, never by its name or folder.
 2. ``candidate[Cn]``, one instance per listed candidate, holds the per-candidate work as
    its children, each reading what the one before saved: ``extract`` (the only Task that
    reads the raw records; it asks the person, an ``input`` interrupt on that instance
-   only, for a value the note leaves undecided), ``prior_art`` (search and fetch,
-   families by priority), ``compare`` (the element-by-family matrix) and ``recommend``
-   (the rule table).
+   only, for a value the note leaves undecided), ``prior_art`` (search the uploaded
+   publications and the web, fetch what matches and leave the noise, families by
+   priority), ``compare`` (the element-by-family matrix) and ``recommend`` (the rule
+   table).
 3. ``table`` gathers every candidate's recommendation; ``select`` asks the person to
    choose (a ``choice`` interrupt) and saves the selection.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills each blank
@@ -181,6 +182,8 @@ def tasks() -> tuple[Task, ...]:
                 "read_priorities",
                 "search_publications",
                 "fetch_publication",
+                "web_search",
+                "fetch_url",
                 SAVE,
             ),
             writes=("extraction", "prior_art", "comparison", "recommendation"),
@@ -206,7 +209,13 @@ def tasks() -> tuple[Task, ...]:
                     extracts=True,
                     needs=("extract",),
                     reads=("extraction", "portfolio"),
-                    tools=("search_publications", "fetch_publication", SAVE),
+                    tools=(
+                        "search_publications",
+                        "fetch_publication",
+                        "web_search",
+                        "fetch_url",
+                        SAVE,
+                    ),
                     writes=("prior_art",),
                     done=checks.prior_art_saved,
                 ),

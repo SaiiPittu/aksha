@@ -3,10 +3,12 @@
 ``ResearchBench`` loads ``src/aksha/agents/research`` through the real loader, opens a
 store, and wires the loop's setup the way the composition root would: the rule-based
 model (or any generation adapter), the folder of the chosen fixture world's ``sources/``
-as the record reader (tools never see ``key.json``), the artifact store with the
-agent's kinds and relations. ``restart`` closes the store and opens it again with a fresh
-executor, as a new process after a kill would. ``key`` loads the world's answer key, for
-graders only.
+as the record reader (tools never see ``key.json``), the world's offline web behind
+``web_search`` and ``fetch_url`` (its search proxy; ``web=None`` runs with no web), the
+artifact store with the agent's kinds and relations. A model that takes the world's hints
+(``for_world``) is given them, as the composition root does. ``restart`` closes the store
+and opens it again with a fresh executor, as a new process after a kill would. ``key``
+loads the world's answer key, for graders only.
 """
 
 from __future__ import annotations
@@ -21,9 +23,11 @@ import aksha.agents
 from aksha import data
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
+from aksha.adapters.search.world import WorldWeb, world_hints
 from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage.sqlite import open_store
 from aksha.agents.research.fakes import ADAPTERS as FAKE_ADAPTERS
+from aksha.app import world_hinted
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactVersion
 from aksha.runtime.artifacts.versions import current
@@ -40,6 +44,7 @@ from aksha.runtime.loop.types import DriveResult, LoopSetup
 from aksha.runtime.models.routing import bind_aliases
 from aksha.runtime.models.types import RunMode
 from aksha.runtime.projections.view import LogView, load_view
+from aksha.runtime.sandbox.tier import ExecutionTier
 from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
 from tests.support.events import START
@@ -84,11 +89,14 @@ class ResearchBench:
         reader: RecordReader | None = None,
         agent_changes: Mapping[str, Any] | None = None,
         mode: RunMode = "fake",
+        web: WorldWeb | bool | None = True,
     ) -> None:
         self.tmp = tmp
         self.path = tmp / "aksha.sqlite"
         self.clock = FakeClock(START)
-        self.model = model
+        hints = world_hints(WORLDS / world).get("research", {})
+        self.model = world_hinted({"generate": model}, hints)["generate"]
+        self.web = WorldWeb.of_world(WORLDS / world) if web is True else web or None
         self.mode = mode
         self.world = world
         self.loaded = load()
@@ -127,6 +135,7 @@ class ResearchBench:
             limits=agent.limits or Limits(),
             blobs=self.blobs,
             reader=self.reader,
+            tier=ExecutionTier(search=self.web, web=self.web),
         )
 
     def start(self) -> None:

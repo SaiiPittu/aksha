@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.10"
+API_VERSION = "2.11"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -68,6 +68,9 @@ record holding several kinds is decided section by section (ADR-P07 G4).
 2.10 (27 Nov 2026, decision 38) added invalidation modes: the trailing fields
 ``Agent.invalidation`` (``off`` by default) and ``ToolSpec.edits``, and the names
 ``InvalidationMode`` and ``EditSpec``, and ``RecordReader.serves``.
+2.11 (27 Nov 2026) added the web (ADR-P26 A3): the trailing field ``ToolContext.web``,
+``web_search_tool``, ``fetch_url_spec``, ``fetch_text``, ``FetchedText``, ``page_read``,
+``WEB_SOURCE``, ``WEB_EGRESS`` and ``web_record_id``.
 """
 
 Version = tuple[int, int]

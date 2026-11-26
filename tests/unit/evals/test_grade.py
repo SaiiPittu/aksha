@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from aksha.app import episode_web
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.criteria import REGISTRY
@@ -22,7 +23,7 @@ from tests.support.evals import case, graded, key, run_episode, world
 
 @pytest.fixture(scope="module")
 def research(tmp_path_factory: pytest.TempPathFactory) -> EpisodeRecord:
-    return run_episode(ScriptedResearchAgent(), tmp_path_factory.mktemp("research"))
+    return run_episode(ScriptedResearchAgent(episode_web), tmp_path_factory.mktemp("research"))
 
 
 def test_the_cascade_runs_layers_in_order_and_names_the_first_failure() -> None:
@@ -46,7 +47,7 @@ def test_a_passing_episode_passes_and_should_results_never_fail_it(research: Epi
     assert v.outcome == "pass"
     assert v.result("patent.matrix") is not None
     assert v.result("patent.matrix").outcome == "fail"  # type: ignore[union-attr]
-    assert v.must_passed == (4, 4)  # the two listed, plus the two invariants every case runs
+    assert v.must_passed == (5, 5)  # the two listed, plus the three invariants every case runs
 
 
 def test_a_failed_must_fails_the_episode(research: EpisodeRecord) -> None:

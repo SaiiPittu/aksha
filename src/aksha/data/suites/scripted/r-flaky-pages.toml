@@ -10,4 +10,4 @@ faults = "flaky-pages"
 k = 5
 opening = "Who are the competitors?"
 expect = ["counts.competitors_resolved"]
-criteria = ["research.competitor_count", "citation.exists", "inv.one_row_per_key"]
+criteria = ["research.competitor_count", "citation.exists", "inv.one_row_per_key", "web.noise_unread", "web.fetched_from_results"]
