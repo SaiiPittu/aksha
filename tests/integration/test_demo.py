@@ -120,3 +120,21 @@ def test_an_existing_folder_the_demo_did_not_write_is_refused(tmp_path: Path) ->
     )  # fmt: skip
     assert out.returncode == 2 and "not written by the demo" in out.stderr
     assert keep.read_text(encoding="utf-8") == "not the demo's"
+
+
+def test_the_readmes_demo_excerpt_matches_a_run(demo: tuple[dict[str, Any], str]) -> None:
+    """The numbers the README quotes from the demo are the ones a run reports."""
+    report, stdout = demo
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    research, patent = len(report["kept"]["research"]), len(report["kept"]["patent"])
+    deliveries = report["mailbox"]["deliveries"]
+    quoted = (
+        f"rebuilt {len(report['rebuilt'])}: ",
+        f"kept {patent} patent outputs: ",
+        f"kept all {research} research outputs: nothing they read moved",
+        f"mailbox: {deliveries} deliveries for {report['mailbox']['keys']} idempotency keys",
+        "recovery asked the mailbox by key 1 time, sent 0 times",
+    )
+    for line in quoted:
+        assert line in readme, line
+        assert line in stdout, line

@@ -68,7 +68,7 @@ Its key adds `changes_from_base` and `expected_after_change`: which outputs go s
 
 ## The general world, `tilldew`
 
-Tilldew makes a solar-powered soil-moisture probe and an irrigation alert service for smallholder vegetable farms in India, with readings by SMS. It exists to prove that the research and patent agents are general: no agent module names anything in it, and both agents pass its suite (`evals/suites/tilldew/`) with the same code they run on stillroom. It differs from stillroom on purpose wherever a fixture-tuned agent would break:
+Tilldew makes a solar-powered soil-moisture probe and an irrigation alert service for smallholder vegetable farms in India, with readings by SMS. It exists to prove that the research and patent agents are general: no agent module names anything in it, and both agents pass its suite (`src/aksha/data/suites/tilldew/`) with the same code they run on stillroom. It differs from stillroom on purpose wherever a fixture-tuned agent would break:
 
 | What | stillroom | tilldew |
 |---|---|---|

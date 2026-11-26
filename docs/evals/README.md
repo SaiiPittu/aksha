@@ -12,12 +12,12 @@ aksha eval selftest                  the grader self-tests for every world
 aksha eval run scripted              self-tests, then every case of the suite
 aksha eval run research --agent scripted --case r-prices
 aksha eval run change --k 3          the resume-against-fresh case, once per arm
-aksha eval report var/evals/scripted-0 --suite scripted
+aksha eval report <AKSHA_HOME>/evals/scripted-0 --suite scripted
 aksha eval key-check                 recompute every key's anchors and counts
 aksha eval lock stillroom            rewrite a world's world.lock.json after an edit
 ```
 
-`aksha eval run <suite>` writes into `var/evals/<suite>-<seed>/`:
+`aksha eval run <suite>` writes into `<AKSHA_HOME>/evals/<suite>-<seed>/` (`var/evals/` in a checkout run through `make`; `aksha doctor` prints the home):
 
 | Path | What it holds |
 |---|---|
@@ -36,7 +36,7 @@ The first line of `report.txt` is always the self-test result with its mutation 
 
 ## Writing a case
 
-A suite is a folder `evals/suites/<suite>/` holding `suite.toml` and one TOML file per case:
+A suite is a folder `src/aksha/data/suites/<suite>/` holding `suite.toml` and one TOML file per case:
 
 ```toml
 id = "r-duplicate-competitor"
@@ -57,7 +57,7 @@ faults = "flaky-pages"               # a fault profile from suite.toml, optional
 xfail = false                        # a bad case committed before its fix
 ```
 
-A comparison case adds arms and the pairs to compare (decision 36's resume against fresh, `evals/suites/change/`):
+A comparison case adds arms and the pairs to compare (decision 36's resume against fresh, `src/aksha/data/suites/change/`):
 
 ```toml
 compare = [["resume", "fresh"]]
@@ -154,7 +154,7 @@ The agent under test is a port (`aksha.evals.ports.AgentUnderTest`): a `name`, a
 3. When the run ends, the adapter's `export` saves the agent's artifacts in the schema above, renaming fields and resolving span IDs to file, text and offsets; it computes nothing a grader checks. A patent family is named by its priority number (the key's letters are the key's own).
 4. It is registered in `aksha.app.eval_agents()` through `_RuntimeAdapter`, which declares the agent definition's hash, so result rows name the definition, not the adapter's source.
 
-`evals/suites/scripted/` runs the same kind of cases through `ScriptedResearchAgent`, a small rule-based agent that reads the competitor pages and reviews and never the key; it is what the runner is tested with.
+`src/aksha/data/suites/scripted/` runs the same kind of cases through `ScriptedResearchAgent`, a small rule-based agent that reads the competitor pages and reviews and never the key; it is what the runner is tested with.
 
 ## Results on 26 Nov 2026
 

@@ -128,7 +128,7 @@ grep -nE '^\+.*\b(US|EP|WO|JP|CN|KR|DE|GB)[ -]?[0-9]{4,}' "$WORKDIR/diff.patch" 
 # Absolute home paths, email addresses and anything shaped like a key
 grep -nE '^\+.*(/home/[a-z]|/Users/[A-Za-z]|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16})' "$WORKDIR/diff.patch"
 # New fixture files that do not say they are synthetic
-for f in $(git diff --diff-filter=A --name-only "origin/$BASE..$HEAD_OID" -- 'fixtures/**'); do
+for f in $(git diff --diff-filter=A --name-only "origin/$BASE..$HEAD_OID" -- 'src/aksha/data/**'); do
   git show "$HEAD_OID:$f" | grep -qi 'synthetic' || echo "UNLABELLED $f"
 done
 ```
@@ -145,7 +145,7 @@ Do not write findings while you are still learning the PR.
 
 ### 1A: Reconnaissance (no findings)
 
-1. List every changed file and its layer (`runtime/`, `adapters/<family>/`, `extensions/`, `agents/`, `interfaces/`, `app.py`, `tests/`, `docs/`, `fixtures/`).
+1. List every changed file and its layer (`runtime/`, `adapters/<family>/`, `extensions/`, `agents/`, `interfaces/`, `app.py`, `tests/`, `docs/`, `data/`).
 2. Map which primitive each change belongs to, and which ports, event types, boundaries and dedup keys it adds or changes.
 3. Trace every new write path to the event store, every new tool, every new event type and every new external call from its entry to the store.
 4. Note which test proves each guarantee the PR claims.

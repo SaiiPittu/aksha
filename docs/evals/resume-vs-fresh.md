@@ -4,7 +4,7 @@
 
 ## What runs
 
-The case is `evals/suites/change/change-scope-resume-vs-fresh.toml`. The research agent runs as it ships, on its rule-based fake, against the Stillroom world. The person's request names the segment (offices), the agent asks for the geography, and the scripted user answers "EU". When that request run has finished and its outputs are exported, the change step applies the change set `scope-eu-uk`. It adds one dated line to the priorities note the scope Task reads: "the market research covers the European Union and the United Kingdom". The adapter records the source change in the runtime (`ApplySourceChange`), and the runtime opens one rebuild run and re-enters only the work that read the moved note, directly or through lineage. The same episode runs once per arm:
+The case is `src/aksha/data/suites/change/change-scope-resume-vs-fresh.toml`. The research agent runs as it ships, on its rule-based fake, against the Stillroom world. The person's request names the segment (offices), the agent asks for the geography, and the scripted user answers "EU". When that request run has finished and its outputs are exported, the change step applies the change set `scope-eu-uk`. It adds one dated line to the priorities note the scope Task reads: "the market research covers the European Union and the United Kingdom". The adapter records the source change in the runtime (`ApplySourceChange`), and the runtime opens one rebuild run and re-enters only the work that read the moved note, directly or through lineage. The same episode runs once per arm:
 
 | Arm | `run.started{reentry}` | Resume policy | Definition hash |
 |---|---|---|---|
@@ -12,7 +12,7 @@ The case is `evals/suites/change/change-scope-resume-vs-fresh.toml`. The researc
 | `resume` | `resume` | the agent's own | the shipped one |
 | `resume_scope_exempt` | `resume` | `research.scope` added to `premise_exempt` | a different one, so this arm is never pooled with the other two |
 
-Each arm is graded against the change set's derived key (`fixtures/worlds/stillroom/changes/scope-eu-uk/key.json`). The `scope` and `review_summary` outputs must be saved again after the change (`change.stale_set`). The `competitor` outputs must not be (`change.unchanged_set`, the early-cutoff check). The saved scope must name the regions EU and UK, and the review summary's in-scope theme counts must equal the key's (`research.scope_change`). For those counts, battery goes from 2 to 5 and stillness from 4 to 5 of the 40 unique reviews, and setup (5) and privacy (2) do not move. Citations and the two send invariants are checked as on every episode.
+Each arm is graded against the change set's derived key (`src/aksha/data/worlds/stillroom/changes/scope-eu-uk/key.json`). The `scope` and `review_summary` outputs must be saved again after the change (`change.stale_set`). The `competitor` outputs must not be (`change.unchanged_set`, the early-cutoff check). The saved scope must name the regions EU and UK, and the review summary's in-scope theme counts must equal the key's (`research.scope_change`). For those counts, battery goes from 2 to 5 and stillness from 4 to 5 of the 40 unique reviews, and setup (5) and privacy (2) do not move. Citations and the two send invariants are checked as on every episode.
 
 ## Results (k = 3 rollouts per arm)
 

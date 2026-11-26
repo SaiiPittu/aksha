@@ -105,10 +105,10 @@ So the design must keep the wire standard and the names replaceable. What breaks
 
    | Exporter | Package (optional extra) | When |
    |---|---|---|
-   | OTLP JSON Lines file, `.aksha/traces/{run}/{segment}.otlp.jsonl` | `aksha[otel]`: `opentelemetry-sdk~=1.45.2`, `opentelemetry-exporter-otlp-json-file==0.66b2` (Beta, 29 Oct 2026; no protobuf or gRPC; 18 MB installed, measured 25 Nov 2026) | Default. Offline |
-   | OTLP/HTTP, protobuf body, to `{endpoint}/v1/traces` | `aksha[otel-http]` adds `opentelemetry-exporter-otlp-proto-http==1.45.2` (Production/Stable, 29 Oct 2026, requires `opentelemetry-sdk~=1.45.2`, `opentelemetry-proto` and `requests`; PyPI JSON, 25 Nov 2026) | Only when `--otlp-endpoint URL` is passed, or `--otlp` with the standard `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`; headers from `OTEL_EXPORTER_OTLP_HEADERS` |
+   | OTLP JSON Lines file, `.aksha/traces/{run}/{segment}.otlp.jsonl` | `aksha-harness[otel]`: `opentelemetry-sdk~=1.45.2`, `opentelemetry-exporter-otlp-json-file==0.66b2` (Beta, 29 Oct 2026; no protobuf or gRPC; 18 MB installed, measured 25 Nov 2026) | Default. Offline |
+   | OTLP/HTTP, protobuf body, to `{endpoint}/v1/traces` | `aksha-harness[otel-http]` adds `opentelemetry-exporter-otlp-proto-http==1.45.2` (Production/Stable, 29 Oct 2026, requires `opentelemetry-sdk~=1.45.2`, `opentelemetry-proto` and `requests`; PyPI JSON, 25 Nov 2026) | Only when `--otlp-endpoint URL` is passed, or `--otlp` with the standard `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` or `OTEL_EXPORTER_OTLP_ENDPOINT`; headers from `OTEL_EXPORTER_OTLP_HEADERS` |
 
-   An inherited environment variable alone never turns on network export, so an offline run cannot call out by accident (my choice). HTTP, not gRPC, because some backends take only HTTP. Export runs after a segment ends, as `aksha trace RUN` or `aksha run --trace`, over a read-only store; because IDs are derived, re-exporting overwrites rather than duplicates. `make venv` installs `aksha[otel,dev]`; without the extra, `aksha trace` exits with an install hint and `aksha inspect` still works. The SDK is imported lazily inside the extension only.
+   An inherited environment variable alone never turns on network export, so an offline run cannot call out by accident (my choice). HTTP, not gRPC, because some backends take only HTTP. Export runs after a segment ends, as `aksha trace RUN` or `aksha run --trace`, over a read-only store; because IDs are derived, re-exporting overwrites rather than duplicates. `make venv` installs `aksha-harness[otel,dev]`; without the extra, `aksha trace` exits with an install hint and `aksha inspect` still works. The SDK is imported lazily inside the extension only.
 
 9. **Every event type has a mapping row.** An event type with no row becomes a span event `aksha.unmapped {type}` and fails a test, so a new event type cannot vanish from traces.
 
@@ -141,7 +141,7 @@ Built on 26 Nov 2026 in `src/aksha/extensions/otel/`, with `aksha inspect` and `
 1. B1, where the projection lives (D1, D4). `build_trace` is in the extension (`extensions/otel/trace.py`), importing only `aksha.runtime.api`, so the runtime has no tracing module and imports no OpenTelemetry package (the dependency rule, with planted companions for `opentelemetry` and `fastapi`). The run inspector (D10) is `runtime/session/views.inspect_run`.
 2. B2, segments (D2). A run's events split into segments at a run-level HOLD (suspension) and wherever the writing process changed (`boot`).
 3. B3, the span tree (D2). Every Task instance is an `invoke_agent {agent}` span; the workflow and pure-code variants are not distinguished yet. Outbox facts are span events (`aksha.effect.*`) on the tool step that enqueued them, not `aksha.effect` spans, and carry no `authorised_by` link. A command receipt appears only when its event names the run.
-4. B4, the exporter (D8). Only the OTLP JSON Lines file exporter is built, on `opentelemetry-sdk~=1.45.2` and `opentelemetry-exporter-otlp-json-file==0.66b2` in the extra `aksha[otel]`; `make venv` installs it. The file is `<out>/<run>/<segment>.otlp.jsonl`, `var/traces` beside the store by default, and is replaced on every export. OTLP/HTTP (`aksha[otel-http]`) is not built.
+4. B4, the exporter (D8). Only the OTLP JSON Lines file exporter is built, on `opentelemetry-sdk~=1.45.2` and `opentelemetry-exporter-otlp-json-file==0.66b2` in the extra `aksha-harness[otel]`; `make venv` installs it. The file is `<out>/<run>/<segment>.otlp.jsonl`, `var/traces` beside the store by default, and is replaced on every export. OTLP/HTTP (`aksha-harness[otel-http]`) is not built.
 5. B5, content (D5). The event store holds no model messages, so the only content the switch governs is a tool result's text: the span modes add `gen_ai.tool.call.result`, the event modes a span event holding it.
 6. B6, the name guard (D4). A test refuses a `gen_ai.*` string literal anywhere in the package outside `semconv.py`, with a planted companion; `semconv_otel_genai_0_1_0.json` is not committed.
 
@@ -195,7 +195,7 @@ The rule behind the table: if a projection, a stop policy, a budget or an approv
 
 ### Plane 2 instrumentation (Proposed)
 
-1. P2-1, where the dependency lives. The runtime still imports no OpenTelemetry package (D1, and `test_runtime_never_imports_opentelemetry` still holds). The runtime declares a small `Telemetry` port with a no-op default; adapters and interfaces get an OpenTelemetry-backed implementation from `aksha/adapters/telemetry/otel.py`, which depends on `opentelemetry-api` and `opentelemetry-sdk` in a new optional extra, `aksha[ops]` (name proposed). Without the extra, every plane-2 call is a no-op, and a laptop run pays nothing.
+1. P2-1, where the dependency lives. The runtime still imports no OpenTelemetry package (D1, and `test_runtime_never_imports_opentelemetry` still holds). The runtime declares a small `Telemetry` port with a no-op default; adapters and interfaces get an OpenTelemetry-backed implementation from `aksha/adapters/telemetry/otel.py`, which depends on `opentelemetry-api` and `opentelemetry-sdk` in a new optional extra, `aksha-harness[ops]` (name proposed). Without the extra, every plane-2 call is a no-op, and a laptop run pays nothing.
 2. P2-2, spans. Live spans use the general OpenTelemetry semantic conventions v1.45.0 (already pinned by D3 for `error.type` and `process.*`; I did not re-read the HTTP and database pages for this section):
 
    | Span | Kind | Key attributes |
@@ -252,7 +252,7 @@ class Telemetry(Protocol):
 
 NO_TELEMETRY: Telemetry                                  # the default; every call is a no-op
 
-# aksha/adapters/telemetry/otel.py (needs aksha[ops])
+# aksha/adapters/telemetry/otel.py (needs aksha-harness[ops])
 def otel_telemetry(*, service_name: str = "aksha", endpoint: str | None,
                    headers: Mapping[str, str] | None, file_dir: Path | None) -> Telemetry: ...
 
@@ -351,12 +351,12 @@ def build_trace(events: Sequence["Event"], *, store_id: str,
                 capture: CaptureMode = "NO_CONTENT") -> tuple[TraceSegment, ...]: ...   # pure
 def unmapped_types(events: Iterable["Event"]) -> frozenset[str]: ...
 
-# aksha/extensions/otel/export.py (proposal). Imports the SDK lazily; needs aksha[otel].
+# aksha/extensions/otel/export.py (proposal). Imports the SDK lazily; needs aksha-harness[otel].
 def to_readable_spans(segment: TraceSegment, *, store_id: str) -> list["ReadableSpan"]: ...
 def export_file(segment: TraceSegment, out_dir: Path, *, store_id: str) -> Path: ...  # FileSpanExporter
 def export_otlp_http(segment: TraceSegment, *, store_id: str, endpoint: str | None = None,
                      headers: Mapping[str, str] | None = None,
-                     timeout_s: float = 10.0) -> bool: ...                            # needs aksha[otel-http]
+                     timeout_s: float = 10.0) -> bool: ...                            # needs aksha-harness[otel-http]
 def read_file(path: Path) -> TraceSegment: ...        # parse OTLP JSON Lines back, for tests
 
 # aksha/interfaces/cli/trace.py (proposal). `aksha trace RUN [--out DIR] [--otlp | --otlp-endpoint URL]`

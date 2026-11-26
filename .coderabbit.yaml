@@ -80,7 +80,7 @@ reviews:
         - Sources cite the design's own records, public papers, standards or public posts by their authors;
           no external harness or product is named as the source of a design.
         - Nothing names a private person, client or project; the repository is public.
-    - path: "fixtures/**"
+    - path: "src/aksha/data/**"
       instructions: |
         Every fixture is synthetic and must say so in the file or in its world's manifest.json. Patent and
         publication identifiers use the SYN- prefix; flag any real-looking patent number. Do not review the
