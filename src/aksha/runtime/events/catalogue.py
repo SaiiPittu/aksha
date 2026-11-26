@@ -101,6 +101,8 @@ RUN_STARTED = EventTypeSpec(
             # regenerates, and its key (one rebuild run per agent and source version).
             "for_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
             "rebuild_key": {"type": "string", "pattern": "^rebuild:"},
+            # Decision 36: whether this run's re-entries may resume their session.
+            "reentry": {"enum": ["fresh", "resume"]},
             # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
             # class, native), with its hash; never a configuration value or a key.
             "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},
@@ -1131,6 +1133,46 @@ _TASK_PATH: Mapping[str, Any] = {
     "type": "string",
     "pattern": "^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$",
 }
+_COUNT: Mapping[str, Any] = {"type": "integer", "minimum": 0}
+_FRESH_REASONS = frozenset(
+    {
+        "resume_disabled", "session_missing", "sessions_split", "definition_changed",
+        "prior_failed", "prior_looping", "prior_overflow", "tainted_session",
+        "premise_changed", "mostly_stale", "budget_exceeded",
+    }
+)  # fmt: skip
+"""The re-entry fresh reasons (decision 36): ``context.reentry.FRESH_REASONS``, kept equal."""
+_REENTRY: Mapping[str, Any] = {
+    "type": "object",
+    "properties": {
+        "mode": {"enum": ["fresh", "resume"]},
+        "reason": {"enum": sorted(_FRESH_REASONS)},
+        "setting": {"enum": ["fresh", "resume"]},
+        "from_turn": {"type": "integer", "minimum": 1},
+        "as_of_seq": _COUNT,
+        "session": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "run": {"type": "string", "minLength": 1},
+                    "instance": {"type": "string", "minLength": 1},
+                    "from_turn": {"type": "integer", "minimum": 1},
+                    "through_turn": {"type": "integer", "minimum": 1},
+                },
+                "required": ["run", "instance", "from_turn", "through_turn"],
+                "additionalProperties": False,
+            },
+        },
+        "read_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "new_reads": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "session_turns": _COUNT,
+        "session_chars": _COUNT,
+        "stale_chars": _COUNT,
+    },
+    "required": ["mode", "setting", "from_turn", "as_of_seq", "session", "read_runs"],
+    "additionalProperties": False,
+}
 TASK_ENTERED = EventTypeSpec(
     name="task.entered",
     schema={
@@ -1159,6 +1201,8 @@ TASK_ENTERED = EventTypeSpec(
                 "required": ["origin", "name"],
                 "additionalProperties": False,
             },
+            # Decision 36: a re-entry's mode, why, and what its context reads.
+            "reentry": _REENTRY,
         },
         "required": ["cause", "task", "key", "writer"],
         "additionalProperties": False,

@@ -1,5 +1,5 @@
 {
-  "api_version": "2.2",
+  "api_version": "2.3",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1) -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None) -> None",
@@ -15,7 +15,7 @@
     "ClassificationRequest": "class ClassificationRequest(step_id: 'str', alias: 'str', state: 'str', questions: 'tuple[QuestionSpec, ...]', state_inputs: 'tuple[str, ...]' = ()) -> None",
     "ClassificationResult": "class ClassificationResult(answers: 'tuple[tuple[str, ClassAnswer], ...]', usage: 'Usage' = Usage(input_tokens=0, output_tokens=0, cost_micro_usd=0)) -> None",
     "ConfidenceThresholds": "class ConfidenceThresholds(accept_at: 'float' = 0.9, reject_at: 'float' = 0.2, null_at: 'float' = 0.5, margin: 'float | None' = None, fitted_on: 'str | None' = None) -> None",
-    "ContextPolicy": "class ContextPolicy(result_cap_chars: 'int' = 8000, read_cap_chars: 'int' = 12000, read_block_cap_chars: 'int' = 40000, context_limit_chars: 'int' = 100000, masking: 'bool' = True, high_water_chars: 'int' = 60000, low_water_chars: 'int' = 45000, keep_recent_pairs: 'int' = 3, exempt_tools: 'frozenset[str]' = frozenset(), summary: 'SummaryPolicy | None' = SummaryPolicy(alias='generate', trigger_chars=None, keep_recent_pairs=3, max_per_instance=2)) -> None",
+    "ContextPolicy": "class ContextPolicy(result_cap_chars: 'int' = 8000, read_cap_chars: 'int' = 12000, read_block_cap_chars: 'int' = 40000, context_limit_chars: 'int' = 100000, masking: 'bool' = True, high_water_chars: 'int' = 60000, low_water_chars: 'int' = 45000, keep_recent_pairs: 'int' = 3, exempt_tools: 'frozenset[str]' = frozenset(), summary: 'SummaryPolicy | None' = SummaryPolicy(alias='generate', trigger_chars=None, keep_recent_pairs=3, max_per_instance=2), resume: 'ResumePolicy' = ResumePolicy(min_prior_turns=2, headroom_chars=15000, max_stale_permille=500, loop_repeats=3, premise_exempt=frozenset())) -> None",
     "DeclaredInterrupt": "class DeclaredInterrupt(kind: \"Literal['input', 'choice']\", label: 'str') -> None",
     "EffectClass": "EffectClass = typing.Literal['read', 'store', 'external', 'exec', 'model', 'reserved']",
     "EffectSpec": "class EffectSpec(system: 'str | None', key_fields: 'tuple[str, ...]', semantics: 'StepSemantics', on_unknown: \"Literal['tell_model', 'interrupt']\" = 'tell_model', record_fields: 'tuple[str, ...]' = (), receipt_kind: 'str | None' = None) -> None",
@@ -56,6 +56,7 @@
     "Reducer": "class Reducer: apply(self, state: 'S', event: 'Event', artifacts: 'ArtifactsView') -> 'S'; initial(self, args: 'Hashable') -> 'S'; name (property) (self) -> 'str'; reads (property) (self) -> 'frozenset[str]'",
     "RelationKind": "class RelationKind(name: 'str', src: 'tuple[str, ...]', dst: 'tuple[str, ...]', labels: 'tuple[str, ...]' = (), symmetric: 'bool' = False, transitive: 'bool' = False, cites: \"Literal['one', 'per_end']\" = 'one') -> None",
     "RelationRequest": "class RelationRequest(kind: 'str', src: 'End', dst: 'End', evidence: 'tuple[Excerpt, ...]' = (), label: 'str | None' = None) -> None",
+    "ResumePolicy": "class ResumePolicy(min_prior_turns: 'int' = 2, headroom_chars: 'int' = 15000, max_stale_permille: 'int' = 500, loop_repeats: 'int' = 3, premise_exempt: 'frozenset[str]' = frozenset()) -> None",
     "RetryPolicy": "class RetryPolicy(timeout_ms: 'int' = 10000, max_retries: 'int' = 2, retry_on: 'frozenset[str]' = frozenset({'timeout', 'transient'}), backoff_ms: 'tuple[int, ...]' = (500, 1000)) -> None",
     "ReturnedText": "class ReturnedText(source: 'SpanSource', record_id: 'str', version: 'str', text: 'str') -> None",
     "RuleClassificationModel": "class RuleClassificationModel: answer(self, spec: 'QuestionSpec', state: 'str') -> 'ClassAnswer'; capabilities; classify(self, request: 'ClassificationRequest') -> 'ClassificationResult'; confidence; keywords; model_class",

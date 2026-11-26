@@ -89,7 +89,7 @@ Extends: the event store and projections (P01). Status: in the first code pull r
 
 ## Next step: resume a Task instance after a rebuild
 
-Status: the first milestone ships the fresh form; resume with masking is designed and waits for a measurement (decisions 30 to 32 and 34).
+Status (26 Nov 2026): both forms are built (decision 36). Fresh is the default; a run opts into resume with `run.started{reentry: "resume"}` (a request run from its agent's `RoutableAgent.reentry`, a rebuild run from its opener or the runs it rebuilds for), and the choice and its reason are recorded on each re-entry ([ADR-P08](adr/ADR-P08-context-assembly-and-compaction.md) amendments B1 to B7). What still waits is the measurement that decides the default: `evals/cases/change-scope-resume-vs-fresh.json`, run on a live model.
 
 When a source changes, invalidation (P05) re-enters only the writers whose outputs went out of date. The question is what a re-entered Task instance sees first. There are two answers, and the first milestone takes the simpler one.
 

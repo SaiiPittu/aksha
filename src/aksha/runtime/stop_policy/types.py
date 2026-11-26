@@ -28,7 +28,9 @@ from typing import TYPE_CHECKING, Literal, get_args
 from aksha.runtime.budgets.types import Budget, Limits
 
 if TYPE_CHECKING:
+    from aksha.runtime.artifacts.ports import BlobStore
     from aksha.runtime.budgets.meter import Meter
+    from aksha.runtime.context.types import ContextPolicy
     from aksha.runtime.events.envelope import NewEvent
     from aksha.runtime.projections.view import LogView
     from aksha.runtime.tasks.tree import CompiledTree
@@ -135,6 +137,9 @@ class StopView:
     ``budget`` is the run's budget when the caller narrows it (else the one recorded on
     ``run.started``); ``agent_policies`` are the agent-wide opt-ins, applied to every leaf
     Task outside its own. ``meter`` is filled by evaluation's first step.
+    ``context_policy`` is the agent's context policy, which the re-entry choice reads
+    (decision 36); None is the default policy. ``blobs`` is the blob store the choice
+    reads offloaded step payloads through (a port, not data: it is read, never written).
     """
 
     log: LogView
@@ -144,6 +149,8 @@ class StopView:
     budget: Budget | None = None
     agent_policies: tuple[StopPolicyOptIn, ...] = ()
     meter: Meter | None = None
+    context_policy: ContextPolicy | None = None
+    blobs: BlobStore | None = None
 
 
 # --- verdicts and preparation ----------------------------------------------------------

@@ -30,7 +30,7 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``RuleClassificationModel``, ``RuleGenerationModel``; and the fixed-point helpers
    ``ppm``, ``distribution_ppm``, ``decimal_string``.
 8. Limits and context (P14, P08): ``Budget``, ``Limits``, ``Backoff``, ``ContextPolicy``,
-   ``SummaryPolicy``.
+   ``SummaryPolicy``, ``ResumePolicy``.
 9. Grounding (P13): ``SpanDraft`` (what a read tool's ``Ok`` asks the runtime to mint),
    ``RecordReader`` and ``ReturnedText`` (the reader a body reads records through, and
    what it returns),
@@ -55,7 +55,7 @@ from aksha.runtime.artifacts.types import (
     SaveRequest,
 )
 from aksha.runtime.budgets.types import Backoff, Budget, Limits
-from aksha.runtime.context.types import ContextPolicy, SummaryPolicy
+from aksha.runtime.context.types import ContextPolicy, ResumePolicy, SummaryPolicy
 from aksha.runtime.definitions.types import Agent, Extension, Projection
 from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.egress.types import EgressPolicy
@@ -194,6 +194,7 @@ __all__ = [
     "Reducer",
     "RelationKind",
     "RelationRequest",
+    "ResumePolicy",
     "RetryPolicy",
     "ReturnedText",
     "RuleClassificationModel",

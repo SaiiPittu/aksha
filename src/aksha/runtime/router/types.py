@@ -33,11 +33,20 @@ class RoutableAgent:
     """A loaded agent as the router sees it: its name and its ``purpose`` line (ADR-P20 S1).
 
     ``definition_hash`` is recorded on the ``run.started`` the route opens, when given.
+    ``reentry`` is the re-entry setting a request run of this agent records (decision 36):
+    ``resume`` opts its re-entries into resuming the existing session; None and
+    ``fresh`` record ``fresh``, the default.
     """
 
     name: str
     purpose: str
     definition_hash: str | None = None
+    reentry: Literal["fresh", "resume"] | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse an unknown re-entry setting."""
+        if self.reentry not in (None, "fresh", "resume"):
+            raise ValueError(f"unknown re-entry setting {self.reentry!r}")
 
 
 @dataclass(frozen=True)

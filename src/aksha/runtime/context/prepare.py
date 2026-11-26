@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind
 from aksha.runtime.context.assembly import GENERATE, assemble_context
+from aksha.runtime.context.reentry import recorded_choice
 from aksha.runtime.context.summary import (
     SummaryOutcome,
     latest_compaction,
@@ -101,13 +102,19 @@ def prepare_context(
     plan = first.plan
     if plan is None:
         return Prepared(first)
-    turns = instance_turns(before, instance.run, instance.instance, blobs=blobs)
+    choice = recorded_choice(before, instance)
+    start = 1 if choice is None else choice.from_turn
+    turns = tuple(
+        t
+        for t in instance_turns(before, instance.run, instance.instance, blobs=blobs)
+        if t.number >= start
+    )  # a summary covers the entry's own turns only (decision 36)
     through = summary_through(before, step, turns, plan, policy)
     if through is None:
         return Prepared(build())
     refused = None if approve_summary is None else approve_summary(before)
     if refused is not None:
         return Prepared(build(), None, refused)
-    previous = latest_compaction(before, instance.run, instance.instance)
+    previous = latest_compaction(before, instance.run, instance.instance, since_turn=start)
     outcome = summarise(executor, table, step, turns, through, policy, previous)
     return Prepared(build(), outcome)

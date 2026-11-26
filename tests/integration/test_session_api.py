@@ -7,11 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from aksha.app import RuntimeConfig
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.session import named as n
 from aksha.runtime.session.capabilities import capabilities
 from aksha.runtime.session.errors import CommandIdReused
 from aksha.runtime.session.views import inspect_run
+from aksha.runtime.storage.errors import StoreError
 from tests.support.session import OWNER, SESSION, SessionBench
 
 
@@ -226,3 +228,25 @@ def test_the_inspector_reads_a_run_without_booting(bench: SessionBench) -> None:
     assert report is not None and report["outcome"] == "complete"
     assert [s["kind"] for s in report["steps"]][:1] == ["model"]
     assert inspect_run(load_view(bench.session.store, OWNER), "R-9999") is None
+
+
+@pytest.mark.parametrize(("value", "recorded"), [(None, "fresh"), ("fresh", "fresh"),
+                                                 ("resume", "resume")])  # fmt: skip
+def test_a_request_run_records_the_configured_reentry_setting(
+    tmp_path: Path, value: str | None, recorded: str
+) -> None:
+    """Decision 36: a session's request runs can opt into resume; fresh is the default."""
+    b = SessionBench(tmp_path) if value is None else SessionBench(tmp_path, reentry=value)
+    try:
+        b.session.dispatch(send(b, "Write a note"))
+        assert b.payloads("run.started")[0]["reentry"] == recorded
+    finally:
+        b.close()
+
+
+def test_an_unknown_reentry_setting_is_refused(tmp_path: Path) -> None:
+    assert RuntimeConfig.from_env({}).reentry_setting() == "fresh"
+    assert RuntimeConfig.from_env({"AKSHA_REENTRY": "resume"}).reentry_setting() == "resume"
+    with pytest.raises(StoreError) as caught:
+        SessionBench(tmp_path, reentry="sometimes")
+    assert caught.value.code == "reentry_invalid"

@@ -37,8 +37,8 @@ def test_no_policy_hashes_as_the_default() -> None:
 
 def test_policy_version_is_in_the_hash(monkeypatch: pytest.MonkeyPatch) -> None:
     before = policy_hash(BASE)
-    monkeypatch.setattr(policy_module, "CONTEXT_POLICY_VERSION", 2)
-    assert policy_material(BASE)["version"] == 2
+    monkeypatch.setattr(policy_module, "CONTEXT_POLICY_VERSION", 99)
+    assert policy_material(BASE)["version"] == 99
     assert policy_hash(BASE) != before
 
 

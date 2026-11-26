@@ -30,8 +30,14 @@ own boundary (U9). An agent with an open run regenerates its work in place inste
    is held by a person's stop or the writer's own instance is held. An agent with an open
    run is not opened again; its run regenerates the work in place.
 
-Decision 34 chose a fresh context with a rebuild brief for the first milestone;
-:func:`rebuild_brief` is that brief. Resume with masking (decision 36) comes next.
+7. Re-entry setting (decision 36): ``run.started{reentry}`` says whether the run's
+   re-entries may resume their writer's session; the opener names it, or the run
+   inherits ``resume`` only when every run it rebuilds for chose ``resume``. Fresh is
+   the default.
+
+Decision 34 chose a fresh context with a rebuild summary for the first milestone;
+:func:`rebuild_brief` builds it. Resume on the existing session (decision 36) is
+``context.reentry``; fresh stays the default until it is measured.
 """
 
 from __future__ import annotations
@@ -41,6 +47,7 @@ from collections.abc import Iterable, Mapping
 from aksha.runtime.artifacts.types import ArtifactRef, InputRef
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.canonical import sha256_hex
+from aksha.runtime.context.reentry import ReentrySetting, inherited_setting
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
@@ -71,12 +78,14 @@ def rebuild_starts(
     definition_hashes: Mapping[str, str] | None = None,
     agents: Iterable[str] | None = None,
     sandbox: Availability | None = None,
+    reentry: ReentrySetting | None = None,
 ) -> tuple[NewEvent, ...]:
     """The ``run.started{cause: rebuild}`` facts the owner's log calls for now (module doc).
 
     Allocates run IDs from ``ids``; appends nothing. ``agents`` limits the opening to
     those agents (a loop that drives one agent); ``sandbox`` is the sandbox backend's
-    availability, asked for a headless rebuild (rule 6).
+    availability, asked for a headless rebuild (rule 6). ``reentry`` is the re-entry
+    setting the runs record (rule 7); None inherits it from the runs rebuilt for.
     """
     only = None if agents is None else frozenset(agents)
     iv = invalidation_view(view)
@@ -113,6 +122,7 @@ def rebuild_starts(
         }
         if headless:
             payload["headless"] = True
+        payload["reentry"] = reentry or inherited_setting(view, for_runs)
         if definition_hashes and agent in definition_hashes:
             payload["definition_hash"] = definition_hashes[agent]
         out.append(NewEvent("run.started", payload, run=ids.next(view.owner, "R")))
@@ -127,6 +137,7 @@ def open_rebuild_runs(
     definition_hashes: Mapping[str, str] | None = None,
     agents: Iterable[str] | None = None,
     sandbox: Availability | None = None,
+    reentry: ReentrySetting | None = None,
 ) -> tuple[str, ...]:
     """Open the rebuild runs the owner's log calls for; return their run IDs (module doc).
 
@@ -135,7 +146,7 @@ def open_rebuild_runs(
     """
     starts = rebuild_starts(
         load_view(store, owner), ids, definition_hashes=definition_hashes, agents=agents,
-        sandbox=sandbox,
+        sandbox=sandbox, reentry=reentry,
     )  # fmt: skip
     for start in starts:
         store.append(owner, REBUILD_BOUNDARY, (start,))

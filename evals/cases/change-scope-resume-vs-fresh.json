@@ -1,0 +1,93 @@
+{
+  "format": "aksha.eval_case/1",
+  "id": "change-scope-resume-vs-fresh",
+  "description": "The person amends the research scope after a finished request run. The runtime rebuilds every output that read the scope, once with fresh re-entries and once with re-entries allowed to resume their own session (decision 36). The two arms are compared on correctness against the answer key, model turns, tool calls and tokens. The measurement decides which mode becomes the default; until then the default stays fresh.",
+  "kind": "guard",
+  "origin": "hand_written",
+  "source": "requirement: resume against fresh on the scope-change scenario (decision 36)",
+  "category": "change",
+  "agents": ["research"],
+  "worlds": ["stillroom"],
+  "relation": "none",
+  "opening": {
+    "request": "Research the market for a camera-free ceiling occupancy sensor for facilities and workplace teams in 200 to 2,000 person offices.",
+    "answers": [
+      {"question_about": "segment and geography", "answer": "offices, European Union first"}
+    ]
+  },
+  "change_steps": [
+    {
+      "after": "run.ended:request",
+      "change": {
+        "type": "scope_amendment",
+        "artifact": "research.scope",
+        "field": "geography",
+        "from": "European Union first",
+        "to": "European Union and United Kingdom",
+        "by": "person"
+      },
+      "restart": false,
+      "then": "drive_rebuilds"
+    }
+  ],
+  "arms": [
+    {
+      "name": "fresh",
+      "run_started": {"reentry": "fresh"},
+      "context_policy": {},
+      "expect_reentry": {"modes": ["fresh"], "reasons": ["resume_disabled"]}
+    },
+    {
+      "name": "resume",
+      "run_started": {"reentry": "resume"},
+      "context_policy": {},
+      "expect_reentry": {
+        "modes": ["fresh", "resume"],
+        "reasons": [
+          "session_missing", "sessions_split", "definition_changed", "prior_failed",
+          "prior_looping", "prior_overflow", "tainted_session", "premise_changed",
+          "mostly_stale", "budget_exceeded"
+        ],
+        "note": "A Task that renders the scope as a declared read sees its premise change and falls back to fresh (premise_changed); Tasks that read the scope through a tool may resume. The share of re-entries that resumed is a reported metric."
+      }
+    },
+    {
+      "name": "resume_scope_not_premise",
+      "run_started": {"reentry": "resume"},
+      "context_policy": {"resume": {"premise_exempt": ["research.scope"]}},
+      "expect_reentry": {
+        "modes": ["fresh", "resume"],
+        "reasons": [
+          "session_missing", "sessions_split", "definition_changed", "prior_failed",
+          "prior_looping", "prior_overflow", "tainted_session", "mostly_stale",
+          "budget_exceeded"
+        ],
+        "note": "Optional arm: the scope kind is declared premise-exempt, so direct readers of the scope can resume too. It changes the agent definition hash, so it is reported beside the other two and never pooled with them."
+      }
+    }
+  ],
+  "compare": [["resume", "fresh"], ["resume_scope_not_premise", "fresh"]],
+  "metrics": [
+    {"id": "correctness", "from": "criteria", "per": "arm"},
+    {"id": "model_turns", "from": "step.completed of model steps in the rebuild runs", "per": "arm"},
+    {"id": "tool_calls", "from": "step.completed of tool steps in the rebuild runs", "per": "arm"},
+    {"id": "input_tokens", "from": "step.completed{usage.input_tokens} in the rebuild runs", "per": "arm"},
+    {"id": "output_tokens", "from": "step.completed{usage.output_tokens} in the rebuild runs", "per": "arm"},
+    {"id": "context_chars", "from": "step.started{context_chars} of model steps in the rebuild runs", "per": "arm"},
+    {"id": "resume_share", "from": "task.entered{reentry.mode} in the rebuild runs", "per": "arm"},
+    {"id": "fresh_reasons", "from": "task.entered{reentry.reason} in the rebuild runs", "per": "arm"},
+    {"id": "early_cutoff_rate", "from": "invalidation view: readers left current_by_cutoff", "per": "arm"}
+  ],
+  "expect": [
+    "expected_after_scope_change.stale",
+    "expected_after_scope_change.unchanged",
+    "expected_after_scope_change.competitors"
+  ],
+  "criteria": ["change.stale_set", "change.unchanged_set", "citation.exists"],
+  "should": ["research.competitor_count", "research.prices"],
+  "modes": {
+    "fake": {"k": 1, "purpose": "harness plumbing only: a scripted model answers the same in both arms, so a fake run checks that both arms run, record their modes and produce metrics; it cannot show that one mode is better"},
+    "live": {"k": 5, "tier": 2, "purpose": "the comparison that decides the default"}
+  },
+  "key_status": "The answer key has no scope-change section yet: the expect references above resolve to key_ref_missing, so correctness is ungradeable until the derived key lists the stale and unchanged artifact refs after the amendment. Turns, tool calls, tokens and the re-entry modes are measurable now."
+}
