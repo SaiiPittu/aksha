@@ -55,6 +55,26 @@ class RetryPolicy:
 
 
 @dataclass(frozen=True)
+class EditSpec:
+    """What a tool edits or overwrites: one record of a versioned source (decision 38).
+
+    ``record`` is a JSON pointer to the argument that names the record; with
+    ``collection`` the argument is a path inside it and the record ID is
+    ``<collection>/<argument>``. ``overwrite`` marks a tool that replaces the whole record
+    (a write) rather than changing part of it against text the model quotes (an edit).
+    In a run whose agent declared ``edit_guard`` or more, the runtime checks the target
+    before the body runs (``invalidation.guard``): a record whose version changed since
+    the instance last read it is refused, and so is an overwrite of an existing record the
+    instance never read. ``source`` is the versioned source the record is read through.
+    """
+
+    source: str
+    record: str
+    collection: str | None = None
+    overwrite: bool = False
+
+
+@dataclass(frozen=True)
 class ToolSpec:
     """Everything the runtime knows about a tool before calling it. ``schema`` is JSON Schema.
 
@@ -65,7 +85,9 @@ class ToolSpec:
     pointer to a hit's stable identity in a recorded query; ``egress`` names the egress
     policy of a tool whose body reaches the network. ``model_aliases`` names the agent's
     extraction and classification aliases the body may ask through ``ToolContext.models``
-    (ADR-P07 G1); the loader refuses one the agent does not declare.
+    (ADR-P07 G1); the loader refuses one the agent does not declare. ``edits`` names the
+    record a ``store`` or ``exec`` tool edits or overwrites, for the edit-time check of
+    decision 38 (``EditSpec``).
     """
 
     name: str
@@ -86,6 +108,7 @@ class ToolSpec:
     sandbox: SandboxNeeds | None = None
     model_alias: str | None = None
     model_aliases: frozenset[str] = frozenset()
+    edits: EditSpec | None = None
 
 
 @dataclass(frozen=True)

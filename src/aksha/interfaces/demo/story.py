@@ -120,6 +120,7 @@ def _start(rt: DemoRuntime, agent: str) -> str:
         "agent": agent,
         "cause": "request",
         "definition_hash": setup.definition_hash,
+        "invalidation": setup.agent.invalidation,
         "budget": {"model_turns": budget.model_turns, "tool_calls": budget.tool_calls,
                    "active_ms": budget.active_ms},
     }  # fmt: skip

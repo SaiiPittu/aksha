@@ -62,6 +62,8 @@ AGENT = Agent(
     name="scribe",
     purpose="Write one short note for a request.",
     instructions="prompts/instructions.md",
+    # An amended answer must reach the note written from it (ADR-P27 D5, decision 38).
+    invalidation="rebuild",
     reads=(),
     artifacts=(ArtifactKind("note", NOTE),),
     tools=(ToolDecl(PUBLISH, _never), ToolUse("save_artifact")),

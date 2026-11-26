@@ -259,6 +259,8 @@ AGENT = Agent(
         "reviews and needs, every claim cited to a record read."
     ),
     instructions="prompts/instructions.md",
+    # Its sources move under it, and its findings must follow (decision 38).
+    invalidation="rebuild",
     reads=tuple(f"record:{c}" for c in tools.COLLECTIONS),
     artifacts=(SCOPE, COMPETITORS, PROFILE, NEEDS, MATRIX, FINDINGS, TESTS),
     relations=(

@@ -388,6 +388,8 @@ def build_agent(world: SourceWorld) -> Agent:
             "only after a person approves it."
         ),
         instructions="prompts/instructions.md",
+        # Prior art and the papers move, and an approved packet must follow (decision 38).
+        invalidation="rebuild",
         reads=tuple(f"record:{c}" for c in COLLECTIONS),
         artifacts=KINDS,
         tools=(*build_tools(world), ToolUse(SAVE)),

@@ -83,8 +83,10 @@ class Log:
     def view(self) -> LogView:
         return load_view(self.store, OWNER)
 
-    def start(self, run: str = RUN, *, agent: str = AGENT, cause: str = "request") -> None:
-        payload: dict[str, Any] = {"agent": agent, "cause": cause}
+    def start(
+        self, run: str = RUN, *, agent: str = AGENT, cause: str = "request", **extra: Any
+    ) -> None:
+        payload: dict[str, Any] = {"agent": agent, "cause": cause, **extra}
         if cause == "rebuild":
             payload["rebuild_key"] = f"rebuild:{OWNER}/{agent}/1"
             payload["for_runs"] = ["R-0001"]

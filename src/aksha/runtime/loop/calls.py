@@ -21,7 +21,9 @@ listed them. For each position ``tNN/cMM``:
               (``loop.tier``: egress decisions and exec records go on the step,
               and an exec step is its own kill boundary), an artifact reader over
               its ``reads_kinds`` as the log stood before the step (ADR-P09 D3),
-              the reads it declares (``Ok.reads``), its saves through the one save
+              the reads it declares (``Ok.reads``; an edit of a declared target
+              is first checked by ``invalidation.guard`` when the agent opted in,
+              decision 38), its saves through the one save
               path with what they confirm (``invalidation.saving``: a diff review
               for a rebuilt human-reviewed version, revocations and review voids,
               ADR-P05 D1, D9), the capped model view, and its span drafts minted
@@ -70,6 +72,8 @@ from aksha.runtime.interrupts.approvals import (
 )
 from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
+from aksha.runtime.invalidation.guard import edit_refusal
+from aksha.runtime.invalidation.modes import guards_edits, run_mode, tracks_versions
 from aksha.runtime.invalidation.reading import ViewArtifactReader
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
@@ -265,7 +269,16 @@ def run_position(
                                attempt, reader, run_date, http, exe, dates, versions,
                                models if spec.model_aliases else None)  # fmt: skip
 
+        guarded = spec.edits is not None and guards_edits(run_mode(view, ref.run))
+
         def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
+            # An edit is checked first, inside the step, so a resumed step keeps its answer.
+            if guarded and spec.edits is not None:
+                refused = edit_refusal(setup.view(), setup.reader, tool=spec.name,
+                                       edit=spec.edits, args=args, run=ref.run,
+                                       instance=ref.instance)  # fmt: skip
+                if refused is not None:
+                    return _shown(ToolOutcome(refused), cap)
             # Each attempt reads through a fresh reader (its drafts are minted over what it
             # returned), records its dates in a fresh time-read collector (its dates are the
             # reads it made), and reaches the network and the sandbox through its own handles.
@@ -365,13 +378,14 @@ def _dispatched(
             )
         )  # fmt: skip
     kinds = setup.artifacts.kinds if setup.artifacts is not None else setup.kinds
-    events.extend(
-        recheck_timers(
-            view, read, [v.ref for v in saved_versions], setup.record_lifetimes(), kinds,
-            WriterId(setup.agent.name, ref.task_path, ref.key),
-            run=ref.run, instance=ref.instance, step=str(step),
-        )
-    )  # fmt: skip
+    if tracks_versions(run_mode(view, ref.run)):  # a recheck only feeds rebuilds (decision 38)
+        events.extend(
+            recheck_timers(
+                view, read, [v.ref for v in saved_versions], setup.record_lifetimes(), kinds,
+                WriterId(setup.agent.name, ref.task_path, ref.key),
+                run=ref.run, instance=ref.instance, step=str(step),
+            )
+        )  # fmt: skip
     try:
         minted = mint_for_result(
             outcome, returned, spec=spec, index=span_index(view), run=ref.run,

@@ -40,6 +40,13 @@ disagree with them after a crash. Each read of a version gets one state:
 A version is ``invalidated`` if any read moved or is gone, else ``dirty`` if any is
 unsettled, else ``current_by_cutoff`` if any is equivalent, else ``current``.
 
+6. Modes (decision 38). Only a version written by a run whose agent declared ``rebuild``
+   (``run.started{invalidation}``; a run that records none predates the setting and
+   reads as ``rebuild``) is evaluated. A version of an ``off``, ``edit_guard`` or
+   ``notify`` run is ``current`` with no read states, so it is never a stale mark, never
+   in the rebuild plan, never a reason to refuse an effect, open a diff review or revoke
+   an approval. Its reads stay on the version as provenance (ADR-P04).
+
 Amendment from the build: the ADR's "one pass in save order" holds for every read of an
 earlier version, but rule 2 also looks at the newer version of a slot, which is saved
 later. The view therefore evaluates versions in save order with memoised recursion,
@@ -59,6 +66,12 @@ from aksha.runtime.artifacts.types import ArtifactRef, ArtifactVersion, InputRef
 from aksha.runtime.artifacts.versions import all_versions, unaccepted_revisions
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.grounding.types import STATEMENT_SOURCE
+from aksha.runtime.invalidation.modes import (
+    UNRECORDED_MODE,
+    InvalidationMode,
+    run_modes,
+    tracks_versions,
+)
 from aksha.runtime.invalidation.reviews import approved_refs, open_reviews, reviews
 from aksha.runtime.invalidation.sources import record_key, source_facts
 from aksha.runtime.invalidation.types import (
@@ -214,6 +227,7 @@ class _Walk:
         self.facts = source_facts(view)
         self.statements = superseded_statements(view)
         self.lines = runs_for(view)
+        self.modes = run_modes(view)
         slots: dict[tuple[str, str | None], list[ArtifactVersion]] = {}
         for v in sorted(self.all, key=lambda v: v.ref.version):
             if str(v.ref) not in self.unaccepted:
@@ -301,6 +315,9 @@ class _Walk:
             return self.done[ref]
         if ref in self.busy:  # a newer version that read this one: assume it settled
             return ("current", (), ())
+        if v.run is not None and not tracks_versions(self.modes.get(v.run, UNRECORDED_MODE)):
+            self.done[ref] = ("current", (), ())  # rule 6: the agent did not opt in
+            return self.done[ref]
         self.busy.add(ref)
         statuses: list[ReadStatus] = []
         waits: list[tuple[str, ...]] = []
@@ -446,6 +463,10 @@ class ReadChecker:
     def version(self, ref: str) -> ArtifactVersion | None:
         """The stored version ``ref`` names, accepted or not."""
         return self._walk.by_ref.get(ref)
+
+    def mode(self, run: str) -> InvalidationMode:
+        """The invalidation mode ``run`` recorded (decision 38; unrecorded reads ``rebuild``)."""
+        return self._walk.modes.get(run, UNRECORDED_MODE)
 
 
 def expiry_read(ref: ArtifactRef) -> InputRef:

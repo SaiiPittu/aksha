@@ -4,7 +4,8 @@ A masked result's body is replaced by a stub naming the step, its size, what it 
 and the spans it minted; the call and its arguments stay, so a tool pair is never split.
 The plan for a turn is a pure function of the log and the policy:
 
-1. **Stale** results are hidden first and always (decision 32): a result that read an
+1. **Stale** results are hidden first and always (decision 32), in a run whose agent
+   declared ``notify`` or ``rebuild`` (decision 38): a result that read an
    artifact version, a source record or a query result the invalidation view now reads
    as ``moved`` or ``gone`` for the instance's run (ADR-P05 D4: the sibling rule and
    early cutoff apply, so another run's version and an equal rebuild hide nothing),
@@ -50,6 +51,7 @@ from aksha.runtime.context.types import (
 )
 from aksha.runtime.execution.errors import StepIdInvalid
 from aksha.runtime.execution.types import StepId
+from aksha.runtime.invalidation.modes import masks_stale
 from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import Message, ToolCall
 from aksha.runtime.projections.view import LogView
@@ -127,9 +129,13 @@ def stale_reads(
     record or query result at another version) or ``gone`` (the version's writer was
     withdrawn, or the record left its source). A newer artifact version this instance,
     or the ``session`` it resumed, saved itself is not stale: it supersedes (rule 3).
-    ``checker`` reuses one evaluation of the view across a turn's pairs.
+    ``checker`` reuses one evaluation of the view across a turn's pairs. A run whose
+    agent declared ``off`` or ``edit_guard`` (decision 38) has no stale reads: nothing of
+    its context is masked or announced as stale.
     """
     check = checker or ReadChecker(view, blobs=blobs)
+    if not masks_stale(check.mode(run)):
+        return ()
     mine = _prefixes(run, instance, session)
     out: list[StaleRead] = []
     for read in pair.reads:
