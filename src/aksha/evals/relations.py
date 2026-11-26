@@ -118,8 +118,21 @@ def _relations(state: GradedState, maps: Renaming | None) -> Counter[str]:
         if r.excerpt is not None:
             f, e = str(r.excerpt.get("file")), str(r.excerpt.get("exact"))
             ex = (maps.path(f), maps.text(e)) if maps else (f, e)
-        out[canonical_json({"type": r.type, "excerpt": ex, "label": r.label})] += 1
+        src, dst = (_endpoint(r.src, maps), _endpoint(r.dst, maps)) if maps else (r.src, r.dst)
+        out[
+            canonical_json(
+                {"type": r.type, "src": src, "dst": dst, "excerpt": ex, "label": r.label}
+            )
+        ] += 1
     return out
+
+
+def _endpoint(ref: str, maps: Renaming) -> str:
+    """A relation endpoint through the maps: ``page:<path>`` through the path map."""
+    prefix, sep, rest = ref.partition(":")
+    if sep and maps.path(rest) != rest:
+        return f"{prefix}:{maps.path(rest)}"
+    return str(maps.apply(ref))
 
 
 def compare_outputs(

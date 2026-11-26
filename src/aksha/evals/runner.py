@@ -40,7 +40,7 @@ from aksha.evals.report import exit_code, write_reports
 from aksha.evals.results import ResultsWriter, SuiteResults, criteria_json, project_results
 from aksha.evals.selftest.run import relation_self_test, self_test
 from aksha.evals.state import fold
-from aksha.evals.world import World, load_world, lock_digest, renaming
+from aksha.evals.world import World, load_change_set, load_world, lock_digest, renaming
 
 RUN_MARKER = ".aksha-eval-run"
 """The file that marks a folder as an eval run's output, safe to clear for the next run."""
@@ -137,6 +137,11 @@ def run_suite(
     validate_suite(suite, keys)
     chosen = [suite.case(c) for c in cases] if cases else list(suite.cases)
     modes = {c.id: agents.get(agent_override or c.agents[0]).mode for c in chosen}
+    for c in chosen:
+        if (k or c.k or suite.k) < 1:
+            raise EvalError(
+                "k_invalid", f"case {c.id}: k must be at least 1, got {k or c.k or suite.k}"
+            )
     distinct = set(modes.values())
     mode = distinct.pop() if len(distinct) == 1 else ("mixed" if distinct else "fake")
     prepare_out(out)
@@ -169,7 +174,14 @@ def run_suite(
                     h = env.reset(case, r, agent=name, mode=reg.mode)
                     env.run(h, reg.factory())
                     rec = env.finalize(h)
-                    v = grade(rec, case, keys[wname], world, REGISTRY, judge=judge)
+                    v = grade(
+                        rec,
+                        case,
+                        grading_key(world, keys[wname], rec),
+                        world,
+                        REGISTRY,
+                        judge=judge,
+                    )
                     records[(case.id, wname, r)] = rec
                     verdicts[(case.id, wname, r)] = v
                     writer.episode(
@@ -215,6 +227,20 @@ def run_suite(
         writer.close()
     reports = write_reports(results, out)
     return SuiteRun(results, out, reports, exit_code(results), records, verdicts)
+
+
+def grading_key(world: World, key: AnswerKey, rec: EpisodeRecord) -> AnswerKey:
+    """The key an episode is graded against: the last applied change set's derived key.
+
+    An episode whose change steps applied a change set that carries its own ``key.json`` is
+    graded against that key; one with no such change set, against its world's key.
+    """
+    for e in rec.events:
+        if e["type"] == "episode.change_applied":
+            cs = load_change_set(world, str(e["payload"]["change_set"]))
+            if cs.key is not None:
+                key = load_key(world, cs.key)
+    return key
 
 
 def _rel(path: Path | None, out: Path) -> str:

@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from aksha.app import eval_agents
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
 from aksha.evals.agents.tools import episode_tools
 from aksha.evals.bundle import EpisodeRecord, check_chain, read_bundle
@@ -20,11 +21,14 @@ from aksha.evals.environment import Environment
 from aksha.evals.episode import Episode
 from aksha.evals.errors import EvalError, ToolFault
 from aksha.evals.faults import FaultProfile, FaultRule
+from aksha.evals.key import load_key
+from aksha.evals.relations import compare_outputs
 from aksha.evals.report import render_text, suite_rate, verdict
 from aksha.evals.results import SuiteResults
-from aksha.evals.runner import RUN_MARKER, prepare_out
+from aksha.evals.runner import RUN_MARKER, grading_key, prepare_out, run_suite
+from aksha.evals.selftest import mutants
 from aksha.evals.state import fold
-from aksha.evals.world import load_world, renaming, verify_lock, write_lock
+from aksha.evals.world import Renaming, load_world, renaming, verify_lock, write_lock
 from aksha.runtime.tools.bodies import call_body
 from aksha.runtime.tools.types import Err, Ok, ToolContext
 from tests.support.evals import FIXTURES, OPEN, SUITES, case, graded, run_episode, world
@@ -44,7 +48,7 @@ def test_a_prices_case_fails_on_a_double_send_it_never_lists(research: EpisodeRe
     prices = load_suite(SUITES / "scripted").case("r-prices")
     assert "inv.one_row_per_key" not in (*prices.criteria, *prices.should)
     assert graded(research, prices).outcome == "pass"
-    twice = research.edited(ledger=lambda rows: [*rows, dict(rows[0])])
+    twice = mutants.double_send(research, load_key(world()))
     v = graded(twice, prices)
     assert v.outcome == "fail"
     assert v.first_failure is not None and v.first_failure.id == "inv.one_row_per_key"
@@ -207,14 +211,17 @@ def test_a_change_set_cannot_write_outside_the_world_copy(
     w = load_world("stillroom", changing_world)
     env = Environment(w, open_store=OPEN, out=tmp_path)
     h = env.reset(case(), 0, agent="scripted", mode="fake")
-    with pytest.raises(EvalError) as e:
-        env.apply_change(h, ChangeStep(after="x", change_set="c1"))
-    assert e.value.code == "change_set_broken"
-    assert not (h.folder / "world" / "escape.md").exists()
-    meta.write_text(json.dumps({"added": {"notes/x.md": "../../../key.json"}}))
-    with pytest.raises(EvalError) as e:
-        env.apply_change(h, ChangeStep(after="x", change_set="c1"))
-    assert e.value.code == "change_set_broken"
+    try:
+        with pytest.raises(EvalError) as e:
+            env.apply_change(h, ChangeStep(after="x", change_set="c1"))
+        assert e.value.code == "change_set_broken"
+        assert not (h.folder / "world" / "escape.md").exists()
+        meta.write_text(json.dumps({"added": {"notes/x.md": "../../../key.json"}}))
+        with pytest.raises(EvalError) as e:
+            env.apply_change(h, ChangeStep(after="x", change_set="c1"))
+        assert e.value.code == "change_set_broken"
+    finally:
+        env.finalize(h)
 
 
 def test_the_world_lock_covers_change_sets(changing_world: Path) -> None:
@@ -396,3 +403,77 @@ def test_registrations_carry_a_definition_hash() -> None:
     from aksha.evals.registry import definition_hash
 
     assert definition_hash(Declared) == ("sha256:abc", "declared")  # type: ignore[arg-type]
+
+
+# --- review findings: send order, the ledger at the gate, relation endpoints, keys, k ----
+
+
+class _GuessedApproval:
+    name = "guesser"
+    mode = "fake"
+
+    def run(self, episode: Episode) -> None:
+        episode.save("packet", "C1", {})
+        episode.send(RECIPIENT, "send", target_ref="packet/C1", approval_id="A-0001")
+        episode.request_approval("packet/C1", "send", RECIPIENT)
+
+
+def test_an_approval_granted_after_the_send_does_not_cover_it(tmp_path: Path) -> None:
+    rec = run_episode(_GuessedApproval(), tmp_path)
+    r = graded(rec, case()).result("no_unbound_send")
+    assert r is not None and r.outcome == "fail"
+    assert any("granted after the send" in e for e in r.evidence)
+
+
+def test_a_ledger_that_differs_from_the_chain_is_refused_at_the_gate(
+    research: EpisodeRecord,
+) -> None:
+    assert research.ledger, "the scripted research agent sends once"
+    assert check_chain(research) is None
+    dropped = replace(research, ledger=())
+    assert check_chain(dropped) == "ledger.jsonl is not the chain's deliveries"
+    assert graded(dropped, case()).cause == "store_fold_failed"
+    changed = replace(research, ledger=({**research.ledger[0], "recipient": "y@fixture.example"},))
+    assert check_chain(changed) == "ledger.jsonl is not the chain's deliveries"
+
+
+def test_invariance_compares_relation_endpoints(research: EpisodeRecord) -> None:
+    state = fold(research.events)
+    assert state.relations, "the scripted research agent records relations"
+    moved = replace(state, relations=[replace(state.relations[0], dst="competitor/elsewhere")])
+    same = Renaming(names={}, paths={})
+    assert compare_outputs(state, state, same, set())[0] == []
+    problems, _ = compare_outputs(state, moved, same, set())
+    assert any(p.startswith("relation only in base") for p in problems)
+
+
+def test_a_change_set_with_a_derived_key_grades_against_it(
+    changing_world: Path, tmp_path: Path
+) -> None:
+    w = load_world("stillroom", changing_world)
+    base = load_key(w)
+    c = case(change_steps=(ChangeStep(after="episode.output_saved", change_set="c1"),))
+    env = Environment(w, open_store=OPEN, out=tmp_path)
+    h = env.reset(c, 0, agent="scripted", mode="fake")
+    env.run(h, ScriptedAgent([("save", "note", "a", {"x": 1})]))
+    rec = env.finalize(h)
+    assert grading_key(w, base, rec) is base  # c1 carries no key of its own
+    data = json.loads(w.key_path.read_text())
+    data.setdefault("counts", {})["derived_marker"] = 1
+    (w.root / "changes" / "c1" / "key.json").write_text(json.dumps(data))
+    assert grading_key(w, base, rec).data["counts"]["derived_marker"] == 1
+
+
+def test_a_non_positive_k_is_refused_before_any_episode(tmp_path: Path) -> None:
+    with pytest.raises(EvalError) as e:
+        run_suite(
+            load_suite(SUITES / "scripted"),
+            fixtures_root=FIXTURES,
+            agents=eval_agents(),
+            open_store=OPEN,
+            out=tmp_path / "out",
+            k=-1,
+            selftests=False,
+        )
+    assert e.value.code == "k_invalid"
+    assert not (tmp_path / "out").exists()

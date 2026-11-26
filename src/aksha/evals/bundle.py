@@ -17,8 +17,9 @@ every source text the agent read (by hash) and a few facts about the run into a 
 The gate does not trust a flag for the store. :func:`check_chain` walks ``chain.jsonl``
 from the store's genesis (recorded in ``meta.json`` as ``store_identity``) with the
 runtime's own hashing, checks the last hash equals ``chain_head`` (the store's head when the
-episode ended) and that ``events.jsonl`` is exactly the chain's ``episode.*`` events. An
-edited ``events.jsonl``, a changed chain row, or a store whose rows no longer hash to its
+episode ended), that ``events.jsonl`` is exactly the chain's ``episode.*`` events, and that
+``ledger.jsonl`` is exactly the chain's ``episode.effect_sent`` payloads in order. An
+edited ``events.jsonl`` or ledger, a changed chain row, or a store whose rows no longer hash to its
 head (an edited ``store.sqlite``) each make the episode ``ungradeable``. Like the store's
 own chain this is tamper-evident, not tamper-proof: someone who rewrites the chain, the head
 and ``meta.json`` together is caught only by an anchor held elsewhere.
@@ -240,6 +241,9 @@ def check_chain(rec: EpisodeRecord) -> str | None:
     )
     if canonical_json(projected) != canonical_json([dict(e) for e in rec.events]):
         return "events.jsonl is not the chain's episode events"
+    sent = [e["payload"] for e in projected if e["type"] == "episode.effect_sent"]
+    if canonical_json(sent) != canonical_json([dict(r) for r in rec.ledger]):
+        return "ledger.jsonl is not the chain's deliveries"
     return None
 
 

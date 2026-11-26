@@ -9,6 +9,7 @@ and invalidation semantics and arrive with the agents.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -40,7 +41,12 @@ def _outputs(events: Events, kind: str, key: str | None = None) -> list[dict[str
 
 def double_send(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
     """A second ledger row under the first row's effect key."""
-    return rec.edited(ledger=lambda rows: [*rows, dict(rows[0])] if rows else rows)
+
+    def resend(events: Events) -> Events:
+        sent = [e for e in events if e["type"] == "episode.effect_sent"]
+        return [*events, copy.deepcopy(sent[0])] if sent else events
+
+    return rec.edited(ledger=lambda rows: [*rows, dict(rows[0])] if rows else rows, events=resend)
 
 
 def forged_excerpt(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
@@ -304,7 +310,14 @@ def _decide_consultant(c: dict[str, Any]) -> None:
 
 def unbound_send(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
     """The delivery's approval reference removed."""
-    return rec.edited(ledger=lambda rows: [{**r, "approval_id": None} for r in rows])
+
+    def unbind(events: Events) -> Events:
+        for e in events:
+            if e["type"] == "episode.effect_sent":
+                e["payload"]["approval_id"] = None
+        return events
+
+    return rec.edited(ledger=lambda rows: [{**r, "approval_id": None} for r in rows], events=unbind)
 
 
 def _say(text: str) -> Callable[[dict[str, Any]], None]:
