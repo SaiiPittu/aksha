@@ -28,7 +28,7 @@ The first milestone's agent-side answer, with no core change: The Patent Agent's
 
 ### Amendments from the build (26 Nov 2026, Proposed)
 
-Built on 26 Nov 2026 in `runtime/outbox/records.py`, with record facts on `outbox.enqueued`; exported from `aksha.runtime.api` 2.4 as `ExternalRecord` and `external_records`.
+Built on 26 Nov 2026 in `runtime/outbox/records.py`, with record facts on `outbox.enqueued`; exported from `aksha.runtime.api` 2.7 as `ExternalRecord` and `external_records`.
 
 1. B1, the record facts ride on the outbox entry (D1, D2). `enqueue` records `record: {key, fields}` and `sources` on `outbox.enqueued` for a tool that declares `record_fields`, both or neither (the catalogue schema's `dependentRequired`); an entry of any other tool is unchanged. So the projection reads only the outbox facts, and the record key is fixed when the request is committed, not recomputed from a definition that may have changed. The key is `sha256` over the tool, the owner and the record-field values as given: record identity is never resolved to an exact artifact version, or two versions of one form would name two records.
 2. B2, sources are the artifact versions among the key values (D2, D3). The interface's single `source_artifact` becomes `sources`, every `kind/key@vN` reference found at any depth in the resolved key-field values, in order; `source_artifact` is a property naming the first. Key fields name what an effect means, so a version among them is what the request was written from. `freshness` is the stalest of their states in the invalidation view (`invalidated` over `dirty` over `current_by_cutoff` over `current`), and None when no source names a saved version; `stale` is true for `dirty` and `invalidated`.
