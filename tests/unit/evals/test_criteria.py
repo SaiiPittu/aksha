@@ -40,7 +40,7 @@ def test_citation_exists_takes_a_unique_quote_without_offsets(tmp_path: Path) ->
 
 
 def test_a_whole_file_citation_does_not_overlap_tightly(tmp_path: Path) -> None:
-    text = (world().sources / KF23["file"]).read_text()
+    text = world().file(KF23["file"]).read_text()
     whole = {"file": KF23["file"], "exact": text, "start": 0, "end": len(text)}
     steps: list[tuple[Any, ...]] = [("save", "note", "a", {}, [whole])]
     assert _outcome(tmp_path / "a", steps, "citation.exists") == "pass"
@@ -99,10 +99,11 @@ def test_the_scripted_research_agent_handles_its_traps(tmp_path: Path) -> None:
 
 
 def test_six_competitor_records_fall_for_the_duplicate(tmp_path: Path) -> None:
-    pages = sorted(p.name for p in (world().sources / "competitors").iterdir())
+    # the six vendor pages, on the world's web
+    pages = sorted(p.file for p in world().web_pages() or () if p.file.endswith("/product"))
+    assert len(pages) == 6
     steps = [
-        ("save", "competitor", p, {"name": p}, [{"file": f"competitors/{p}", "exact": "<title>"}])
-        for p in pages
+        ("save", "competitor", p, {"name": p}, [{"file": p, "exact": "<title>"}]) for p in pages
     ]
     rec = run_episode(ScriptedAgent(steps), tmp_path)
     r = graded(rec, case(criteria=("trap.T-DUP",))).result("trap.T-DUP")

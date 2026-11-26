@@ -47,8 +47,7 @@ def test_every_planted_trap_is_on_a_page_the_agent_reads(suite: str) -> None:
             continue
         reads = READS[c.agents[0]]
         files = _trap_files(c.trap_id)
-        sources = world().sources
-        shapes = [kind_of(f, (sources / f).read_text("utf-8")) for f in files]
+        shapes = [kind_of(f, world().file(f).read_text("utf-8")) for f in files]
         assert files and all(s in reads for s in shapes), (c.id, files, shapes)
 
 

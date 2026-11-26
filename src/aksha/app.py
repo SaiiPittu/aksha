@@ -59,16 +59,11 @@ from aksha.adapters.recording.sink import JsonlSink, Sink, read_stream
 from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.sandbox import e2b
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
-from aksha.adapters.search.brave import BASE_ENV as BRAVE_BASE_ENV
-from aksha.adapters.search.brave import DEFAULT_BASE_URL as BRAVE_BASE_URL
-from aksha.adapters.search.brave import KEY_ENV as BRAVE_KEY_ENV
-from aksha.adapters.search.brave import BraveSearch
 from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
-from aksha.adapters.web.http import HttpFetch
 from aksha.evals.agents.runtime import EpisodeSource, EpisodeWeb, RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
 from aksha.evals.case import Arm
@@ -1060,7 +1055,13 @@ def web_ports(config: RuntimeConfig) -> tuple[WebSearch | None, WebFetch | None]
         folder = Path(arg)
         replay = ReplayWeb(read_stream(folder, "search"), read_stream(folder, "fetch"))
         return replay, replay
-    if name == "brave":
+    if name == "brave":  # imported only here: an offline process loads no HTTP client
+        from aksha.adapters.search.brave import BASE_ENV as BRAVE_BASE_ENV
+        from aksha.adapters.search.brave import DEFAULT_BASE_URL as BRAVE_BASE_URL
+        from aksha.adapters.search.brave import KEY_ENV as BRAVE_KEY_ENV
+        from aksha.adapters.search.brave import BraveSearch
+        from aksha.adapters.web.http import HttpFetch
+
         key = config.search_env.get(BRAVE_KEY_ENV, "")
         if not key:
             raise StoreError("search_key_missing", f"AKSHA_SEARCH=brave needs {BRAVE_KEY_ENV}; "

@@ -904,7 +904,8 @@ def cmd_sandbox(ctx: Context, args: argparse.Namespace) -> int:
 def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
     """Copy a bundled synthetic world's input files into a new folder, to try ``--input``.
 
-    Only ``sources/`` is copied, never the world's answer key. With no world named, it
+    Only ``sources/`` is copied, never the world's answer key or its web (the pages its
+    offline web serves, which ``AKSHA_SEARCH=world:<name>`` reaches). With no world named, it
     lists the bundled ones. A folder that already holds files is refused, so nothing of
     the person's is overwritten.
     """
@@ -927,6 +928,9 @@ def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
     count = sum(1 for p in target.rglob("*") if p.is_file())
     ctx.say(f"copied {count} synthetic input files of {args.world} to {target}")
     ctx.say(f'next: aksha run --agent research --input {target} "<your request>"')
+    if (data.world_path(args.world) / "web.json").is_file():
+        ctx.say(f"its vendor pages are on the world's offline web: set AKSHA_SEARCH=world:"
+                f"{args.world} so web_search and fetch_url reach them")  # fmt: skip
     return wire.EXIT_OK
 
 

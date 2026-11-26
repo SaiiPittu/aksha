@@ -245,7 +245,7 @@ class _Reader:
         for p in self.paths:
             for _ in range(3):
                 try:
-                    episode.read_source(p)
+                    episode.read_web(p) if p.startswith("web/") else episode.read_source(p)
                     break
                 except ToolFault:
                     continue
@@ -255,8 +255,9 @@ def test_faults_fire_alike_on_renamed_files(tmp_path: Path) -> None:
     base, variant = world("stillroom"), world("stillroom-v2")
     maps = renaming(base, variant)
     assert maps.paths, "the variant renames at least one file"
-    paths = sorted(p.relative_to(base.sources).as_posix() for p in base.sources.rglob("*.html"))
-    profile = FaultProfile("half", (FaultRule("read_source", "timeout", 500_000),))
+    # the vendor pages, on the world's web: the variant renames their hosts
+    paths = sorted(p.relative_to(base.root).as_posix() for p in base.web.rglob("product"))
+    profile = FaultProfile("half", (FaultRule("read_web", "timeout", 500_000),))
     outcomes = []
     for w, ps in ((base, paths), (variant, [maps.path(p) for p in paths])):
         c = case(worlds=(w.name,), faults="half")
@@ -280,7 +281,7 @@ def test_episode_tools_route_reads_through_the_episode(tmp_path: Path) -> None:
         def run(self, episode: Episode) -> None:
             listing, reader = episode_tools(episode)
             ctx = ToolContext("o", "a", "t", None, "s1", 1)
-            files = call_body(listing, ctx, {"folder": "competitors"}).result
+            files = call_body(listing, ctx, {"folder": "notes"}).result
             assert isinstance(files, Ok)
             first = files.data["files"][0]
             seen.append(call_body(reader, ctx, {"path": first}).result)

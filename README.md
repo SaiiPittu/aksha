@@ -65,6 +65,7 @@ The research agent works on a folder of your own files. `aksha example` copies a
 
 ```sh
 aksha example stillroom my-inputs
+export AKSHA_SEARCH=world:stillroom   # the world's offline web: vendor pages mixed with noise
 aksha run --agent research --input my-inputs "Who sells camera-free occupancy sensing for offices, and at what price?"
 #   waiting for input (question) I-0001: aksha answer I-0001 TEXT
 #     asks: Which geography should this cover? ...                       (exit code 3)
@@ -72,7 +73,18 @@ aksha answer I-0001 EU
 # R-0001 research ended complete                                          (exit code 0)
 ```
 
-Then `aksha show` lists every output the agents saved, `aksha show research.matrix` prints one as JSON with every value cited, `aksha inspect R-0001` shows the run's steps and budget, and `aksha verify` checks the hash chain. The patent agent, approvals, uploads that reopen only changed work, and headless runs are in the [quick start](docs/quickstart.md).
+The uploads are the person's own files; the vendors' pages are on the web the agent searches (`web_search`, `fetch_url`), here the world's offline web, which mixes them with copies, an outdated page, an advert and pages that only share a word. The agent chooses what to fetch and cites only fetched pages; a search snippet is never evidence. Then `aksha show` lists every output the agents saved, `aksha show research.matrix` prints one as JSON with every value cited, `aksha inspect R-0001` shows the run's steps and budget, and `aksha verify` checks the hash chain. The patent agent, approvals, uploads that reopen only changed work, and headless runs are in the [quick start](docs/quickstart.md).
+
+## Record a run, replay it offline
+
+```sh
+aksha run --agent research --input my-inputs --answer geography=EU --record runs/first "Who sells camera-free occupancy sensing for offices, and at what price?"
+# recorded R-0001 research (complete) into runs/first: 173 model calls, 3 searches, 15 fetches
+aksha replay runs/first
+# outputs: the same as recorded (11 outputs)
+```
+
+`--record` keeps everything the run was given: the message, the inputs, the answers, every model answer (each generation and each fast-class call), every search and every fetch, then the outputs and the trace (OTLP JSON). `aksha replay` runs the same agent from the recording alone: no model, no search API, no network. A live run is recorded the same way, with `AKSHA_MODE=live` and its `AKSHA_LIVE_*` settings, and `AKSHA_SEARCH=brave` with `AKSHA_BRAVE_API_KEY` and `AKSHA_NETWORK=on` (every page fetch is checked by the `aksha.web` egress policy; keys come from the environment and are never recorded); the replay needs none of them. A recording made from a fake run ships in [`src/aksha/data/recordings/`](src/aksha/data/recordings/README.md). How it works: [web search and replay](docs/design/web-search-and-replay.md).
 
 ## What you get
 

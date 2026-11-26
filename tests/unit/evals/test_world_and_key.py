@@ -113,8 +113,8 @@ def test_renamed_anchors_carry_over_exactly() -> None:
 def test_path_map_refuses_an_unexplained_rename(tmp_path: Path) -> None:
     root = _copy(tmp_path, "stillroom")
     _copy(tmp_path, "stillroom-v2")
-    v2 = root / "worlds/stillroom-v2/sources/competitors"
-    (v2 / "comp01-thermyx.html").rename(v2 / "comp01-mystery.html")
+    v2 = root / "worlds/stillroom-v2/web"
+    (v2 / "thermyx.example").rename(v2 / "mystery.example")
     rename = parse_rename_map((root / "worlds/stillroom-v2/spec.yaml").read_text())
     with pytest.raises(EvalError) as e:
         derive_path_map(load_world("stillroom", root), load_world("stillroom-v2", root), rename)

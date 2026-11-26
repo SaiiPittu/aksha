@@ -21,6 +21,7 @@ Read the product chain first, because every later document answers a requirement
 | 9 | [adr/](adr/) | One ADR per primitive: the options considered, the decision, its cost, and how three different agents stress-tested it | are reviewing or changing one primitive |
 | 10 | [04-decisions-log.md](04-decisions-log.md) | The maintainer's numbered decisions, which the ADRs cite | need to know whether something is decided |
 | 11 | [05-future-directions.md](05-future-directions.md) | What I would build next for an unattended software factory | are planning beyond the first milestone |
+| 12 | [web-search-and-replay.md](web-search-and-replay.md) | How a general agent searches a web mixed with noise, how a world declares its web, and how a run is recorded and replayed offline (ADR-P26 A7 to A11, ADR-P22 R1 to R5) | want to run an agent on the real web, or replay a run |
 
 The code layout, the dependency rule between layers and how to add an agent are in [`../architecture/codebase-structure.md`](../architecture/codebase-structure.md), which lands with the first code change.
 

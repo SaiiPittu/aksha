@@ -22,16 +22,22 @@ src/aksha/data/
       spec.yaml           author-side truth: venture, people, candidates and features, competitors, families
       manifest.json       what a server would know: paths, URLs, publish dates; no answers
       key.json            the answer key: planted facts with anchors, traps, expected counts and outcomes
-      sources/            the ONLY folder any tool may read
+      web.json            the world's web: each page's URL, its date, and which pages are noise (graders only)
+      web/                the pages the world's offline web serves, each at web/<host><path>: the six vendor
+                          product pages (five companies, one of them twice) and the noise around them: a
+                          listing site's copy, the vendor's archived 2025 page, a deal site, a hotel report,
+                          a glossary, a publication mirror and a filing-service advert (.html, .json)
+      sources/            what a person uploads: the only folder the input tools read
         notes/            four engineering notes, one per invention candidate (.md)
         contributors/     contributor records (.csv)
         disclosures/      dated disclosure history (.csv), the trade-show demo record (.md), the consultant email (.eml.txt)
         priorities/       ranked business priorities (.md)
         templates/        blank invention disclosure form and filing-information worksheet (.md)
-        competitors/      six product and pricing pages (.html): five companies, one of them twice
         reviews/          42 customer review rows from two sites with different rating scales (.json)
         publications/     ten publications in five families (.json), one of them as PDF-like text (.pdf.txt)
-    stillroom-v2/         the change-and-recovery variant, same layout, its own key
+    stillroom-v2/         the change-and-recovery variant, same layout, its own key and web
+  recordings/
+    research-occupancy/   one recorded fake run (aksha replay runs it again offline; see its README)
     tilldew/              a world in another domain and layout, to prove the agents general
     cindral/              a third domain whose inputs also have other shapes, to prove them structure-agnostic
 ```
@@ -73,7 +79,8 @@ Tilldew makes a solar-powered soil-moisture probe and an irrigation alert servic
 
 | What | stillroom | tilldew |
 |---|---|---|
-| Folders | `competitors/`, `reviews/`, `notes/`, `contributors/`, `disclosures/`, `templates/`, `publications/` | `vendors/`, `exports/`, `rnd/`, `people/`, `log/`, `mail/`, `forms/`, `prior-art/`, `reports/` |
+| Folders | `reviews/`, `notes/`, `contributors/`, `disclosures/`, `templates/`, `publications/` | `vendors/`, `exports/`, `rnd/`, `people/`, `log/`, `mail/`, `forms/`, `reports/` |
+| On the web | the vendor pages | the vendor pages and the five prior-art publications (`patents.synthetic.example`), with noise: a listing copy, a sale site, a glossary, a skin-moisture probe review, an aquarium probe publication, a publication mirror, a filing advert |
 | Seller pages | HTML with JSON-LD | HTML with JSON-LD or Open Graph tags, and one Markdown page with front matter |
 | Reviews | JSON, `review_id`, `text`, `geography` | CSV, `id`, `comment`, `region`, `stars` |
 | Invention notes | `candidate: C1`, "Mechanism", "Parameters" | `invention: TD-1`, "How it works", "Settings", "Options we rejected", "Test results", "Unresolved" |
