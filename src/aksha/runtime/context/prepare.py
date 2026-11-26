@@ -101,7 +101,7 @@ def prepare_context(
     plan = first.plan
     if plan is None:
         return Prepared(first)
-    turns = instance_turns(before, instance.run, instance.instance)
+    turns = instance_turns(before, instance.run, instance.instance, blobs=blobs)
     through = summary_through(before, step, turns, plan, policy)
     if through is None:
         return Prepared(build())

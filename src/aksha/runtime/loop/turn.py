@@ -80,7 +80,7 @@ def run_turn(
             run_calls(setup, executor, ref, turn, out.result.tool_calls, narrowing_of(prep))
     except StepMismatch:
         return TurnEnd(ref.run, ref.instance, turn, "fault", STEP_MISMATCH, setup.view().seq_read)
-    end = recorded_turn_end(setup.view(), ref, turn)
+    end = recorded_turn_end(setup.view(), ref, turn, blobs=setup.blobs)
     if end is None:
         raise TurnUnfinished(f"{step} returned with a call position that has no recorded end")
     return end

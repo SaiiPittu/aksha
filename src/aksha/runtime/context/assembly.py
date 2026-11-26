@@ -196,7 +196,9 @@ def assemble_context(
     compaction = latest_compaction(v, instance.run, instance.instance)
     covered = compaction.through_turn if compaction else 0
     turns = tuple(
-        t for t in instance_turns(v, instance.run, instance.instance) if covered < t.number < turn
+        t
+        for t in instance_turns(v, instance.run, instance.instance, blobs=blobs)
+        if covered < t.number < turn
     )
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)

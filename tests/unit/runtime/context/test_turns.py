@@ -3,9 +3,17 @@ from pathlib import Path
 
 import pytest
 
+from aksha.adapters.blobs.filesystem import FilesystemBlobStore
+from aksha.runtime.artifacts.blobs import offload
+from aksha.runtime.artifacts.errors import BlobError
 from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.context.turns import NO_RESULT, as_of, instance_turns
+from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, PAYLOAD_CAP_BYTES, Catalogue
+from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import StepId
+from aksha.runtime.loop.classify import recorded_turn_end
+from aksha.runtime.models.codec import generation_result_json
+from aksha.runtime.models.types import GenerationResult, ToolCall
 from aksha.runtime.tasks.types import InstanceRef
 from tests.support.context import RUN, Log, result_view
 
@@ -56,3 +64,60 @@ def test_as_of_reads_the_log_before_a_step_started(log: Log) -> None:
     assert [t.number for t in instance_turns(before, RUN, EDIT.instance)] == [1]
     unstarted = StepId(RUN, EDIT.instance, turn=3)
     assert as_of(full, unstarted).seq_read == full.seq_read
+
+
+def _offloaded_turn(log: Log, blobs: FilesystemBlobStore, text: str) -> None:
+    """A model turn whose reply is over the payload cap, stored as the executor stores it."""
+    step = StepId(RUN, EDIT.instance, turn=1)
+    env = {"run": RUN, "instance": EDIT.instance, "step": str(step)}
+    started = {
+        "kind": "model",
+        "name": "generate",
+        "args_hash": "sha256:" + "0" * 64,
+        "counted": True,
+    }
+    log.store.append("o", "U2a", (NewEvent("step.started", started, **env),))
+    reply = GenerationResult(text, (ToolCall("call-1-1", "run_tests", {}),), "tool_calls")
+    done = {
+        "outcome": "ok", "kind": "model", "name": "generate", "attempts": 1,
+        "value": {"result": generation_result_json(reply)},
+    }  # fmt: skip
+    payload = offload(Catalogue(CORE_EVENT_TYPES), blobs, "step.completed", done)
+    assert payload != done  # the reply is a stub now
+    log.store.append("o", "U2", (NewEvent("step.completed", payload, **env),))
+
+
+def test_an_offloaded_reply_reads_as_recorded(log: Log, tmp_path: Path) -> None:
+    """Decision 25: a reply moved to the blob store is inflated, not sent as its stub."""
+    blobs = FilesystemBlobStore(tmp_path / "blobs")
+    text = "x" * (PAYLOAD_CAP_BYTES + 10)
+    _offloaded_turn(log, blobs, text)
+    (turn,) = instance_turns(log.view(), RUN, EDIT.instance, blobs=blobs)
+    assert turn.text == text and [c.name for c in turn.calls] == ["run_tests"]
+    with pytest.raises(BlobError) as e:
+        instance_turns(log.view(), RUN, EDIT.instance)
+    assert e.value.code == "blob_store_required"
+
+
+def test_an_offloaded_reply_ends_its_turn_as_recorded(log: Log, tmp_path: Path) -> None:
+    """Many small calls: the whole call list moves to the blob store, and still counts."""
+    blobs = FilesystemBlobStore(tmp_path / "blobs")
+    step = StepId(RUN, EDIT.instance, turn=1)
+    env = {"run": RUN, "instance": EDIT.instance, "step": str(step)}
+    started = {"kind": "model", "name": "generate", "args_hash": "sha256:" + "0" * 64,
+               "counted": True}  # fmt: skip
+    log.store.append("o", "U2a", (NewEvent("step.started", started, **env),))
+    calls = tuple(ToolCall(f"call-1-{n}", "run_tests", {"note": "z" * 800}) for n in range(1, 101))
+    done = {
+        "outcome": "ok", "kind": "model", "name": "generate", "attempts": 1,
+        "value": {"result": generation_result_json(GenerationResult(None, calls, "tool_calls"))},
+    }  # fmt: skip
+    payload = offload(Catalogue(CORE_EVENT_TYPES), blobs, "step.completed", done)
+    assert payload != done
+    log.store.append("o", "U2", (NewEvent("step.completed", payload, **env),))
+    # The calls have no recorded results yet, so the turn is unfinished, not a text reply.
+    assert recorded_turn_end(log.view(), EDIT, 1, blobs=blobs) is None
+    for n in range(1, 101):
+        log.tool_result(EDIT, 1, n, "run_tests", result_view("ok"))
+    end = recorded_turn_end(log.view(), EDIT, 1, blobs=blobs)
+    assert end is not None and end.kind not in ("malformed", "text")

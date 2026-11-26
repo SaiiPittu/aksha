@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.budgets.limits import turns_used
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.execution.ports import DurableStepExecutor, IdSource
@@ -79,7 +80,7 @@ def _summary(view: LogView, run: str) -> RunSummary:
     return summary
 
 
-def control_point(view: LogView, run: str) -> ControlPoint:
+def control_point(view: LogView, run: str, *, blobs: BlobStore | None = None) -> ControlPoint:
     """Where ``run`` stands in ``view`` (module doc, point 1). Pure."""
     if _summary(view, run).outcome is not None:
         return ControlPoint("ended")
@@ -91,7 +92,7 @@ def control_point(view: LogView, run: str) -> ControlPoint:
         return nxt
     ref = InstanceRef.parse(run, last.instance)
     turn = int(last.payload.get("turn") or max(1, turns_used(view, run, last.instance)))
-    end = recorded_turn_end(view, ref, turn)
+    end = recorded_turn_end(view, ref, turn, blobs=blobs)
     if end is None:
         return ControlPoint("turn", instance=ref, turn=turn)
     return ControlPoint("candidate", end.candidate())
@@ -106,7 +107,7 @@ def drive(
 ) -> DriveResult:
     """Drive ``run`` until a decision holds it for a person or ends it (module doc)."""
     ends: list[TurnEnd] = []
-    point = control_point(setup.view(), run)
+    point = control_point(setup.view(), run, blobs=setup.blobs)
     for _ in range(max_evaluations):
         if point.state == "ended":
             outcome = _summary(setup.view(), run).outcome

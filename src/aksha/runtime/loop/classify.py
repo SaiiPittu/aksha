@@ -15,6 +15,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 
+from aksha.runtime.artifacts.blobs import inflate
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.context.types import ContextOverLimit
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.execution.types import StepId
@@ -108,19 +110,22 @@ def _completed(view: LogView, prefix: str) -> tuple[dict[str, Event], int]:
     return done, last
 
 
-def recorded_turn_end(view: LogView, ref: InstanceRef, turn: int) -> TurnEnd | None:
+def recorded_turn_end(
+    view: LogView, ref: InstanceRef, turn: int, *, blobs: BlobStore | None = None
+) -> TurnEnd | None:
     """Turn ``turn`` of ``ref``'s end as the log records it, or None while it is unfinished.
 
     Unfinished: the model step has no recorded end, or a call of its reply has none. A turn
     whose context was over the limit records nothing, so it reads as unfinished and runs
-    again; assembling the same log again gives the same answer (ADR-P08 D6).
+    again; assembling the same log again gives the same answer (ADR-P08 D6). Payloads are
+    inflated from ``blobs`` first, so a reply moved to the blob store reads as recorded.
     """
     model = StepId(ref.run, ref.instance, turn=turn)
     done, last = _completed(view, str(model))
     end = done.get(str(model))
     if end is None:
         return None
-    payload = end.payload
+    payload = inflate(end.payload, blobs)
     if payload.get("outcome") != "ok":
         code = payload.get("code")
         kind, reason = model_failure(None if code is None else str(code))
@@ -134,6 +139,6 @@ def recorded_turn_end(view: LogView, ref: InstanceRef, turn: int) -> TurnEnd | N
         step = done.get(str(model.with_call(n)))
         if step is None:
             return None
-        positions.append(position_outcome(n, call.name, step.payload))
+        positions.append(position_outcome(n, call.name, inflate(step.payload, blobs)))
     kind = classify_turn_end(reply, positions)
     return TurnEnd(ref.run, ref.instance, turn, kind, None, last)

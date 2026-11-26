@@ -9,7 +9,8 @@
    the tool step ``.../tNN/cMM`` at its position, with the view it recorded under
    ``value["view"]``, the artifacts it saved, the inputs it read and the spans it minted.
    A call whose step has no ``step.completed`` is shown as ``no_result``, so the call and
-   its result stay paired.
+   its result stay paired. A step's payload is inflated from ``blobs`` first, so a reply
+   or a view moved to the blob store (decision 25) reads as it was recorded.
 """
 
 from __future__ import annotations
@@ -17,6 +18,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from aksha.runtime.artifacts.blobs import inflate
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.context.types import ToolPair, Turn
 from aksha.runtime.events.envelope import Event
@@ -52,7 +55,9 @@ def _mine(sid: StepId | None, run: str, instance: str) -> bool:
     return sid is not None and sid.run == run and sid.instance == instance
 
 
-def instance_turns(view: LogView, run: str, instance: str) -> tuple[Turn, ...]:
+def instance_turns(
+    view: LogView, run: str, instance: str, *, blobs: BlobStore | None = None
+) -> tuple[Turn, ...]:
     """The instance's recorded turns, oldest first (module doc, point 2)."""
     models: dict[int, Event] = {}
     tools: dict[tuple[int, int], Event] = {}
@@ -79,12 +84,11 @@ def instance_turns(view: LogView, run: str, instance: str) -> tuple[Turn, ...]:
     out: list[Turn] = []
     for number in sorted(models):
         event = models[number]
-        value = event.payload.get("value") or {}
+        value = inflate(event.payload, blobs).get("value") or {}
         result = generation_result(value.get("result", {}))
         pairs: list[ToolPair] = []
         for position, call in enumerate(result.tool_calls, start=1):
             step = str(StepId(run, instance, turn=number, call=position))
-            tools.get((number, position))
             pairs.append(
                 _pair(
                     step,
@@ -94,6 +98,7 @@ def instance_turns(view: LogView, run: str, instance: str) -> tuple[Turn, ...]:
                     call.name,
                     call.arguments,
                     tools.get((number, position)),
+                    blobs=blobs,
                     saved=tuple(saved.get(step, ())),
                     reads=tuple(reads.get(step, ())),
                     spans=tuple(spans.get(step, ())),
@@ -112,13 +117,14 @@ def _pair(
     arguments: Mapping[str, Any],
     done: Event | None,
     *,
+    blobs: BlobStore | None = None,
     saved: tuple[str, ...] = (),
     reads: tuple[InputRef, ...] = (),
     spans: tuple[str, ...] = (),
 ) -> ToolPair:
     if done is None:
         return ToolPair(step, turn, position, call_id, tool, arguments, NO_RESULT, NO_RESULT)
-    p = done.payload
+    p = inflate(done.payload, blobs)
     value = p.get("value")
     recorded = value.get(VIEW_FIELD) if isinstance(value, Mapping) else None
     view = view_from_json(recorded) if isinstance(recorded, Mapping) else None
