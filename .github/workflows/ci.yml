@@ -121,11 +121,27 @@ jobs:
       - name: PostgreSQL tests, required
         run: make test-postgres
 
+  package:
+    # The distributions as a user gets them: build the sdist and wheel, twine check --strict,
+    # then install the wheel into a fresh virtual environment outside the repository and run
+    # aksha --help, doctor, demo and a bundled eval there (tests/package). No upload.
+    name: Package (build, check, install the wheel)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # setuptools-scm reads the version from git
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: make venv PY=3.12
+      - run: make release-check
+
   # One check to require on main, so adding or renaming a job above never needs a settings change.
   ci-ok:
     name: CI passed
     if: always()
-    needs: [lint, typecheck, test-sqlite, test-postgres]
+    needs: [lint, typecheck, test-sqlite, test-postgres, package]
     runs-on: ubuntu-24.04
     steps:
       - name: Every job succeeded
