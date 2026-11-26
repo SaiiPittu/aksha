@@ -7,7 +7,8 @@
 2. :func:`instance_turns` reads one instance's recorded model turns: each model step
    ``<run>/<instance>/tNN`` that ended ``ok`` with its reply, and for each call in the reply
    the tool step ``.../tNN/cMM`` at its position, with the view it recorded under
-   ``value["view"]``, the artifacts it saved, the inputs it read and the spans it minted.
+   ``value["view"]``, the artifacts it saved, the inputs it read, the spans it minted and
+   the span ID of each of its drafts (``value["spans"]``).
    A call whose step has no ``step.completed`` is shown as ``no_result``, so the call and
    its result stay paired. A step's payload is inflated from ``blobs`` first, so a reply
    or a view moved to the blob store (decision 25) reads as it was recorded.
@@ -28,6 +29,9 @@ from aksha.runtime.execution.types import StepId
 from aksha.runtime.models.codec import generation_result
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tools.results import VIEW_FIELD, view_from_json
+
+SPANS_FIELD = "spans"
+"""The field of a tool step's recorded value that lists each span draft's ID, in order."""
 
 NO_RESULT = "no_result"
 """The outcome shown for a call whose tool step has no recorded end."""
@@ -128,7 +132,9 @@ def _pair(
     value = p.get("value")
     recorded = value.get(VIEW_FIELD) if isinstance(value, Mapping) else None
     view = view_from_json(recorded) if isinstance(recorded, Mapping) else None
+    listed = value.get(SPANS_FIELD) if isinstance(value, Mapping) else None
+    cites = tuple(str(s) for s in listed) if isinstance(listed, list | tuple) else ()
     return ToolPair(
         step, turn, position, call_id, tool, arguments, str(p["outcome"]), p.get("code"), view,
-        saved, reads, spans,
+        saved, reads, spans, cites,
     )  # fmt: skip

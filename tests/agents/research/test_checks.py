@@ -1,0 +1,126 @@
+"""The research agent's completion checks fail on what they guard, and pass otherwise."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from typing import Any
+
+from aksha.agents.research import checks
+
+
+@dataclass
+class _Version:
+    content: Mapping[str, Any]
+
+
+@dataclass
+class _Event:
+    type: str
+    payload: Mapping[str, Any]
+
+
+@dataclass
+class _Log:
+    events: list[_Event] = field(default_factory=list)
+
+
+@dataclass
+class _View:
+    """The parts of a ``TaskView`` the checks read."""
+
+    slots: dict[tuple[str, str | None], Mapping[str, Any]]
+    key: str | None = None
+    log: _Log = field(default_factory=_Log)
+
+    def latest(self, kind: str, key: str | None = None) -> _Version | None:
+        found = self.slots.get((kind, key))
+        return None if found is None else _Version(found)
+
+
+def _company(key: str, *pages: str, evidence: bool = False) -> dict[str, Any]:
+    out: dict[str, Any] = {"key": key, "pages": [{"record": p} for p in pages]}
+    out["merge_evidence"] = (
+        [{"cite": {"span": "EX-1", "quote": "x is the new name for y"}}] if evidence else []
+    )
+    return out
+
+
+def test_scope_needs_segment_and_geography() -> None:
+    view = _View({("scope", None): {"segment": {"value": "offices"}, "geography": {"value": ""}}})
+    assert not checks.scope_done(view).ok
+    view.slots[("scope", None)] = {"segment": {"value": "offices"}, "geography": {"value": "EU"}}
+    assert checks.scope_done(view).ok
+
+
+def test_discover_refuses_a_merge_without_its_relation() -> None:
+    content = {"companies": [_company("a", "p/1", "p/2", evidence=True), _company("b", "p/3")],
+               "resolved": 2, "pages_found": 3}  # fmt: skip
+    view = _View({("competitors", None): content})
+    assert "same_entity_as" in checks.discover_done(view).message
+    view.log.events.append(_Event("relation.saved", {"kind": "research.same_entity_as"}))
+    assert checks.discover_done(view).ok
+
+
+def test_discover_refuses_a_page_under_two_companies_and_a_wrong_count() -> None:
+    twice = {
+        "companies": [_company("a", "p/1"), _company("b", "p/1")],
+        "resolved": 2,
+        "pages_found": 2,
+    }
+    assert not checks.discover_done(_View({("competitors", None): twice})).ok
+    miscount = {
+        "companies": [_company("a", "p/1"), _company("b", "p/2")],
+        "resolved": 3,
+        "pages_found": 2,
+    }
+    assert not checks.discover_done(_View({("competitors", None): miscount})).ok
+
+
+def _profile(**cells: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {c: [{"value": "x"}] for c in checks.CELLS}
+    return {**base, "conflicts": [], **cells}
+
+
+def test_profile_refuses_two_prices_without_a_conflict() -> None:
+    two = [{"value": "229"}, {"value": "199"}]
+    view = _View({("profile", "k"): _profile(unit_price=two)}, key="k")
+    assert "conflict" in checks.profile_done(view).message
+    kept = _profile(unit_price=two, conflicts=[{"field": "unit_price"}])
+    assert checks.profile_done(_View({("profile", "k"): kept}, key="k")).ok
+
+
+def test_profile_refuses_an_empty_cell() -> None:
+    view = _View({("profile", "k"): _profile(privacy=[])}, key="k")
+    assert not checks.profile_done(view).ok
+
+
+def test_needs_must_say_n_of_m_in_this_sample() -> None:
+    need = {"theme": "battery", "phrase": "7 of 40 reviews in this sample", "evidence": [{}] * 7}
+    good = {"sample": {"rows": 42, "unique": 40, "duplicates": [{}, {}]}, "needs": [need]}
+    assert checks.needs_done(_View({("needs", None): good})).ok
+    share = {**need, "phrase": "17.5% of customers"}
+    assert not checks.needs_done(_View({("needs", None): {**good, "needs": [share]}})).ok
+    miscount = {**need, "evidence": [{}] * 6}
+    assert not checks.needs_done(_View({("needs", None): {**good, "needs": [miscount]}})).ok
+
+
+def test_report_needs_every_row_and_proposal_thresholds() -> None:
+    slots: dict[tuple[str, str | None], Mapping[str, Any]] = {
+        ("competitors", None): {"companies": [{"key": "a"}, {"key": "b"}]},
+        ("matrix", None): {"rows": [{"key": "a"}]},
+        ("findings", None): {"findings": [], "unknowns": []},
+        ("tests", None): {"tests": [{"id": "T1", "threshold": {"status": "proposal"}}]},
+    }
+    assert not checks.report_done(_View(slots)).ok
+    slots[("matrix", None)] = {"rows": [{"key": "a"}, {"key": "b"}]}
+    assert checks.report_done(_View(slots)).ok
+    slots[("tests", None)] = {"tests": [{"id": "T1", "threshold": {"status": "decided"}}]}
+    assert not checks.report_done(_View(slots)).ok
+
+
+def test_the_run_completes_only_with_its_four_outputs() -> None:
+    slots: dict[tuple[str, str | None], Mapping[str, Any]] = {(k, None): {} for k in checks.OUTPUTS}
+    assert checks.outputs_exist(_View(slots)).ok
+    del slots[("tests", None)]
+    assert checks.outputs_exist(_View(slots)).keys == ("tests",)

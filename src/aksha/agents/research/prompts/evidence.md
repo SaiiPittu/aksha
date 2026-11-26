@@ -1,0 +1,1 @@
+For this one company, fetch each of its pages and save its profile: unit price, subscription, power, battery life and privacy, each entry cited with its page and date, or an explicit unknown. Keep differing prices as a conflict with both values.

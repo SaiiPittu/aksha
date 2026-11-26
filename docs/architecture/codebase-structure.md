@@ -169,6 +169,8 @@ src/aksha/
 │   │   ├── errors.py                        MintRefused (class_violation)
 │   │   ├── spans.py                         mint_spans, mint_for_result, statement_span, spans_shown, span_index
 │   │   ├── verify.py                        verify_citation and verify_content: the one verifier; pure
+│   │   ├── ports.py                         RecordReader (Protocol): the reader a tool body reads records through
+│   │   ├── reading.py                       AttemptReader: one attempt's reads, the texts drafts are minted over
 │   │   └── facts.py                         citation.bound, the evidence a save is verified against
 │   ├── models/                              P07 model interface and routing by model class
 │   │   ├── __init__.py                      what is built, what is planned
@@ -291,6 +293,9 @@ src/aksha/
 │   ├── blobs/                               BlobStore implementations (decision 25)
 │   │   ├── __init__.py                      each passes tests/contract/blobs
 │   │   └── filesystem.py                    FilesystemBlobStore: read-only files named by hash
+│   ├── sources/                             versioned sources a tool body reads through (ADR-P13 D1)
+│   │   ├── __init__.py                      the record readers
+│   │   └── folder.py                        FolderSource: a folder of files, versions by content hash
 │   ├── anchor/                              AnchorSink implementations (chain anchors outside the store)
 │   │   ├── __init__.py                      a sink is only as good as the writer's inability to rewrite it
 │   │   └── file.py                          FileAnchorSink: JSON Lines, fsync, idempotent per seq
@@ -308,8 +313,17 @@ src/aksha/
 │       └── process.py                       ProcessGroupUnit: SIGTERM, then SIGKILL to the group
 ├── extensions/                              EXTENSIONS: one folder per extension (none yet)
 │   └── __init__.py                          imports aksha.runtime.api only
-├── agents/                                  AGENTS: one folder per agent (none yet)
-│   └── __init__.py                          imports aksha.runtime.api and named extensions
+├── agents/                                  AGENTS: one folder per agent
+│   ├── __init__.py                          imports aksha.runtime.api and named extensions
+│   └── research/                            the research agent (scenarios 1, 11, 12)
+│       ├── __init__.py                      what it does, where each part lives
+│       ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
+│       ├── tools.py                         search, fetch_page, read_reviews, read_note
+│       ├── parsing.py                       pages, review exports and notes as exact passages; pure
+│       ├── analysis.py                      entity resolution, price conflicts, review samples; pure
+│       ├── checks.py                        completion checks over a TaskView; pure
+│       ├── fakes.py                         ResearchModel: the offline rule-based policy
+│       └── prompts/                         the instructions and one prompt per Task
 └── interfaces/                              INTERFACES: how people reach the runtime (none yet)
     └── __init__.py                          calls the session API through aksha.app
 ```
@@ -335,7 +349,7 @@ One row per primitive. "Built" exists and is tested. "Planned" is the modules ea
 | P10 tool registry | `tools/` | none for the first milestone |
 | P11 policy gate | `policy/` (with headless option B: `resolve_ask` in `gate.py`, `headless` on `GateInput` and `run.started`, `sandbox_required` in `headless.py`) | the start command that calls `headless_start_refusal` and writes `run.started{headless}` (P19); `--headless` on the CLI |
 | P12 sandbox | `sandbox/types.py` | `sandbox/ports.py` (`SandboxBackend`); `adapters/sandbox/refusing.py`, `bwrap.py` |
-| P13 grounding | `grounding/` (tool-minted spans with their text in `excerpts.minted`, span reuse on a repeated read, the S1 shown set with `excerpts.shown`, statement spans, `verify_citation` with all five D2 checks and record-grain `stale_source` (S2), per-field `CitePolicy` with `value_in_quote` (S3), `Unknown` and `ungrounded_value`, `citation.bound`), the save-path hook in `artifacts/store.py`, span-checked relation evidence | the fast-model verifier that only demotes (D6, with P07); the provider-citation adapter (D7); minting from `tree` and `exec` sources by a tool; superseded statements written by an interrupt answer (P17); the step executor calling `mint_for_result` (P06); fuzzy re-anchoring for display |
+| P13 grounding | `grounding/` (tool-minted spans with their text in `excerpts.minted`, span reuse on a repeated read, the S1 shown set with `excerpts.shown`, statement spans, `verify_citation` with all five D2 checks and record-grain `stale_source` (S2), per-field `CitePolicy` with `value_in_quote` (S3), `Unknown` and `ungrounded_value`, `citation.bound`, the `RecordReader` port and the loop's per-attempt `AttemptReader` that drafts are minted over (D1), with `adapters/sources/folder.py`), the save-path hook in `artifacts/store.py`, span-checked relation evidence | the fast-model verifier that only demotes (D6, with P07); the provider-citation adapter (D7); minting from `tree` and `exec` sources by a tool; superseded statements written by an interrupt answer (P17); fuzzy re-anchoring for display |
 | P14 budgets | `budgets/` (budget accounting and `Meter`, the turn, stop-veto and restart limits, `attempt_number`, the automatic-start count, the fixed backoff, `budget.reached` and `budget.granted`); the budget interrupt in `stop_policy/core.py`; its `finalize` answer (P24) | the automatic-start window enforced on the start paths; narrowing down the Task tree beyond `Budget.narrow` |
 | P15 Task model | `tasks/` (the compiled tree with the v1 refusals and the state table, key sources read from the log with `keys.listed` and the `KeyLister` port, status as a projection with withdrawal and the S3 return, `TaskView`, checks run safely, the parent rule with `on_child_blocked="partial"` (S1), vetoes and the stop-veto limit counted from the log, the scheduler's pick order with `needs`, suspension and pending reviews, entry and the no-turn finish on entry, withdrawal voiding open interrupts, re-entry by writer key, the run outcome, the supervisor rule with its activation and no-progress limits); `keyed_child_unsupported` and `concurrency_unsupported` in the loader; the Run stop policy relays the pick (`stop_policy/core.py`) | the work board projection (an extension, v2 cut row 9); concurrency above 1; keyed children below the top level |
 | P16 stop policy | `stop_policy/` (the derived stack; evaluation with the hold first, judging inner to outer, the limits outer to inner and one `stop.decided` per candidate; the Run, Task and interrupt policies; the budget interrupt, the turn limit and the stop-veto limit, the retry cap; goal, plan, forced tool and todo reminder; `compose_prep` and the gate narrowing; `hold_reason` with the S1 scopes and the session scope (`SessionScope`, P17 S5), `rebuild_blocked` in the rebuild-run opener, the full TC-4 audit with its mutation test); `awaiting_person` | follow-up input as a finish veto (S2, P27); recovery's resume record through `evaluate_stop` (it writes its own today); the agent loop that offers a candidate at every turn end |

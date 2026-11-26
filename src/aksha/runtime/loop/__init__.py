@@ -29,9 +29,12 @@ Amendments from the build (where the code differs from the ADR's first text):
    turn has no recorded end runs that turn (the resume mid-turn), and a recorded turn end
    no decision has judged is judged once.
 
-Planned: the ``model`` route (a tool that runs a routed model call), the runtime's reader
-for span drafts (a tool's drafts are minted against no returned text today, so a draft is
-refused ``class_violation``), exec calls inside a ``KillableUnit``, read-only positions in
-parallel (committed in position order), and a replaceable loop (ADR-P06 "Where this
-stops").
+7. A dispatched body reads records through a fresh ``AttemptReader`` over the setup's
+   ``RecordReader`` (ADR-P13 D1); its span drafts are minted over the texts that reader
+   returned, and the step records each draft's span ID (``value["spans"]``), which the
+   model is shown after the result. Without a reader a draft is refused ``class_violation``.
+
+Planned: the ``model`` route (a tool that runs a routed model call), exec calls inside a
+``KillableUnit``, read-only positions in parallel (committed in position order), and a
+replaceable loop (ADR-P06 "Where this stops").
 """

@@ -32,6 +32,8 @@ What an agent or extension declares, grouped by the primitive that owns it:
 8. Limits and context (P14, P08): ``Budget``, ``Limits``, ``Backoff``, ``ContextPolicy``,
    ``SummaryPolicy``.
 9. Grounding (P13): ``SpanDraft`` (what a read tool's ``Ok`` asks the runtime to mint),
+   ``RecordReader`` and ``ReturnedText`` (the reader a body reads records through, and
+   what it returns),
    ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
    ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one).
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
@@ -57,7 +59,14 @@ from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
-from aksha.runtime.grounding.types import CitePolicy, SpanDraft, Unknown, maybe_unknown
+from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.grounding.types import (
+    CitePolicy,
+    ReturnedText,
+    SpanDraft,
+    Unknown,
+    maybe_unknown,
+)
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.fixed import decimal_string, distribution_ppm, ppm
@@ -178,10 +187,12 @@ __all__ = [
     "Projection",
     "QuestionSpec",
     "Read",
+    "RecordReader",
     "Reducer",
     "RelationKind",
     "RelationRequest",
     "RetryPolicy",
+    "ReturnedText",
     "RuleClassificationModel",
     "RuleExtractionModel",
     "RuleGenerationModel",

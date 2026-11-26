@@ -1,0 +1,1 @@
+Read the customer reviews. Count cross-posted duplicates once, note dates, geographies, sites and rating scales, and save the customer needs, each with "N of M reviews in this sample" and the reviews that support it.

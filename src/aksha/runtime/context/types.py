@@ -129,7 +129,9 @@ class ToolPair:
     ``view`` is the result's capped model view; None for a step that recorded none (a
     refusal, a skip, a crash before it ended), which the model sees as its outcome and code.
     ``saved`` are the artifact refs the step saved, ``reads`` the inputs it recorded and
-    ``spans`` the citation spans it minted.
+    ``spans`` the citation spans it minted. ``cites`` is the span ID of each of the
+    result's span drafts, in draft order (a repeated passage keeps its first ID); the model
+    is shown them after the result, so it can cite what it read (ADR-P13 D1).
     """
 
     step: str
@@ -144,13 +146,16 @@ class ToolPair:
     saved: tuple[str, ...] = ()
     reads: tuple[InputRef, ...] = ()
     spans: tuple[str, ...] = ()
+    cites: tuple[str, ...] = ()
 
     @property
     def text(self) -> str:
-        """What the model is shown as this call's result."""
-        if self.view is not None:
+        """What the model is shown as this call's result, then the span IDs it may cite."""
+        if self.view is None:
+            return canonical_json({"status": "error", "code": self.code or self.outcome})
+        if not self.cites:
             return self.view.text
-        return canonical_json({"status": "error", "code": self.code or self.outcome})
+        return f"{self.view.text}\n{canonical_json({'citation_spans': list(self.cites)})}"
 
     @property
     def arguments_text(self) -> str:
