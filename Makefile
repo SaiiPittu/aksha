@@ -2,7 +2,7 @@ PY ?= 3.12
 VENV := .venv
 BIN := $(VENV)/bin
 
-.PHONY: venv venv-postgres test test-postgres lint format typecheck check
+.PHONY: venv venv-postgres test test-postgres lint format typecheck check demo
 
 ## Create .venv and install the package with dev tools, the server and the trace exporter.
 venv:
@@ -34,3 +34,7 @@ typecheck:
 	$(BIN)/mypy
 
 check: lint typecheck test
+
+## The change-and-recovery demo: offline, fake models, no keys, about 20 seconds. Writes var/demo/.
+demo:
+	$(BIN)/python -m aksha.interfaces.demo
