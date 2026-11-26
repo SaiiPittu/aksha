@@ -228,11 +228,6 @@ class StepExecutor:
         if self._outbox is None:
             raise EffectNeedsOutbox(message=f"{step_id}: {name} has no outbox worker to run it")
         worker = self._outbox
-        target = spec.system or name
-        if not worker.serves(target):  # before anything is committed, so nothing is half-sent
-            raise EffectNeedsOutbox(
-                message=f"{step_id}: {name} sends to {target!r}, which the outbox worker lacks"
-            )
         policy = replace(worker.policy(name), semantics=spec.semantics, on_unknown=spec.on_unknown)
         hashed = hash_args(request)
         self.drain_late()
@@ -246,10 +241,12 @@ class StepExecutor:
         if started is not None:
             key = started.payload.get("outbox_key")
             if not isinstance(key, str):  # refused before its entry: the refusal is re-judged
+                self._require_system(worker, step_id, name, spec)
                 return self._refused_effect(step_id, name, request, spec, approval_id, resolve)
         elif self._stop_pending(step_id.run):
             return self._skip(step_id, "tool", name)
         else:
+            self._require_system(worker, step_id, name, spec)
             view = load_view(self._store, self._owner)
             try:
                 out = enqueue(view, name, request, spec, approval_id=approval_id, step=step_id,
@@ -276,6 +273,20 @@ class StepExecutor:
         stored = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         assert stored is not None
         return self._recorded(step_id, stored, replayed=False)
+
+    @staticmethod
+    def _require_system(worker: OutboxWorker, step_id: StepId, name: str, spec: EffectSpec) -> None:
+        """Refuse a new entry whose system the worker lacks, before anything is committed.
+
+        A recorded step returns its result and an enqueued entry is finished by the worker,
+        so only a step about to enqueue is checked: nothing is left half-sent, and a replay
+        of a finished step needs no system.
+        """
+        target = spec.system or name
+        if not worker.serves(target):
+            raise EffectNeedsOutbox(
+                message=f"{step_id}: {name} sends to {target!r}, which the outbox worker lacks"
+            )
 
     def recorded(self, step_id: StepId) -> StepResult | None:
         """The recorded result of ``step_id``, or None when it has no ``step.completed``."""
