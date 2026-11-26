@@ -48,6 +48,7 @@ from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
+from aksha.runtime.context.reentry import INSTRUCTION_FLAG
 from aksha.runtime.context.turns import SPANS_FIELD, as_of
 from aksha.runtime.definitions.names import resolve_kind
 from aksha.runtime.events.envelope import NewEvent
@@ -131,6 +132,15 @@ def _outcome(position: int, tool: str, result: StepResult) -> PositionOutcome:
     return position_outcome(position, tool, payload)
 
 
+FLAGS_FIELD = "flags"
+"""The recorded value's field re-entry reads a tool result's flags from (decision 36)."""
+
+
+def _flagged(data: Mapping[str, Any]) -> bool:
+    flags = data.get(FLAGS_FIELD)
+    return isinstance(flags, (list, tuple)) and INSTRUCTION_FLAG in flags
+
+
 def _shown(
     outcome: ToolOutcome,
     cap: int,
@@ -139,10 +149,18 @@ def _shown(
     events: tuple[NewEvent, ...] = (),
     extra: Mapping[str, Any] | None = None,
 ) -> StepOutput:
-    """A step output whose recorded value is the capped view of ``outcome`` (ADR-P10 D7)."""
+    """A step output whose recorded value is the capped view of ``outcome`` (ADR-P10 D7).
+
+    A result whose data flags instruction-like text (``data["flags"]`` holding
+    ``INSTRUCTION_FLAG``, as a ``recall`` of a record citing such a source does) keeps the
+    flag on the recorded value, where re-entry's taint check reads it (decision 36): the
+    rendered view alone may hold no instruction-like text.
+    """
     value: dict[str, Any] = {VIEW_FIELD: view_json(render_result(outcome, cap)), **(extra or {})}
     if signal is not None:
         value[SIGNAL_FIELD] = signal
+    if isinstance(outcome.result, Ok) and _flagged(outcome.result.data):
+        value[FLAGS_FIELD] = [INSTRUCTION_FLAG]
     if isinstance(outcome.result, Err):
         return StepOutput(value, outcome="error", code=outcome.result.code, events=events)
     return StepOutput(value, events=events)
