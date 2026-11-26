@@ -1,0 +1,20 @@
+SYNTHETIC FIXTURE. Invented for testing; not a real company or team.
+
+Vantlow platform team - log tool shortlist, notes from 3 November 2026
+Written by the platform lead (synthetic)
+
+Where we are
+  We ship a hosted CI runner product (vantlow.example). Today our logs go to a
+  self-hosted search cluster that two of us babysit.
+  Volume last month: about 600 GB ingested across prod and staging, roughly
+  1.4 billion log lines.
+
+What matters
+  1. Search over the last 30 days answers in seconds during an incident.
+  2. Spend we can forecast a quarter ahead.
+  3. Alert rules that post to our on-call webhook.
+
+Shortlist so far
+  Siltgrove, Ferrowind, Quarnel, Emberwick.
+  Pull pricing pages, the benchmarks people keep linking, and what people say
+  on the builder forum threads.

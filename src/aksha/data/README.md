@@ -40,6 +40,7 @@ src/aksha/data/
     research-occupancy/   one recorded fake run (aksha replay runs it again offline; see its README)
     tilldew/              a world in another domain and layout, to prove the agents general
     cindral/              a third domain whose inputs also have other shapes, to prove them structure-agnostic
+    vantlow/              a held-out research-only world (log management), written blind to the agent code
 ```
 
 ## The base world, `stillroom`
@@ -127,3 +128,7 @@ The key records values, not judgements about the law. Where a trap touches inven
 3. Update `manifest.json` with each new file's path, collection, URL and publish date.
 4. Write `key.json`: counts, facts with quote and position anchors computed from the files as written, the expected matrix and recommendations, and the traps. Check that every anchor's `exact` text appears at its position.
 5. For a variant, keep the base's real dates and numbers except the inputs you mean to change, list those under `changes_from_base`, and give the expected stale and unchanged sets under `expected_after_change`.
+
+## The held-out research world, `vantlow`
+
+Vantlow, a developer-tools startup, is shortlisting a hosted log-management product. The world was written from the world format alone, without reading the research agent's code or its offline models, so a failure here points at something the agent learned from the other worlds' tasks rather than at the world. Prices are metered (per GB ingested with included quotas, per TB ingested, per million log lines), a vendor's own query benchmark sits beside an independent one, and the reviews are forum posts in three saved HTML threads. Its traps are of other kinds: a rebrand rather than an acquisition, a price conflict across that rebrand, a vendor benchmark against an independent benchmark in another file, a hidden aside between forum posts, cross-posts across threads, a billing unit that does not convert to bytes, a free quota with no paid price, and a reply that quotes another post (`src/aksha/data/suites/vantlow/`, 9 cases). Its author-side truth is `worlds/vantlow/spec.yaml`.

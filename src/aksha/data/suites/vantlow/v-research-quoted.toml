@@ -1,0 +1,10 @@
+id = "v-research-quoted"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-QUOTED"
+category = "capability"
+agents = ["research"]
+worlds = ["vantlow"]
+opening = "How many engineers on the forums complain about the cost of log ingest, for seed-stage developer-tools startups in North America? What do engineers say about: ingest cost (price*, cost*, bill*, expensive, cheap*, overage*); query speed (slow*, fast*, latency, query speed); retention (retention, retain*, days of logs)?"
+expect = ["facts.VF-13", "counts.review_themes_unique", "traps.T-QUOTED"]
+criteria = ["research.unique_reviews", "research.theme_counts", "citation.exists"]

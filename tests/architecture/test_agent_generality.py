@@ -7,6 +7,7 @@ file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``ci
 ``rimefold``. Only the offline models (``fakes.py``, ``fakes_*.py``) may know a fixture, and no
 other module imports them. Each guard fails on a planted value.
 file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``cindral`` or ``kelasora``. Only the
+file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``cindral`` or ``vantlow``. Only the
 offline models (``fakes.py``, ``fakes_*.py``) may know a fixture, and no other module
 imports them. Each guard fails on a planted value.
 """
@@ -36,6 +37,8 @@ FIXTURE_TERMS = (
     "Varrow", "Tundrel", "Ines Okafor",
     "Kelasora", "Pintaria", "TutorGrid", "Gridwise", "Ruang Bimbel", "Belajarin", "Akara",
     "Ratna Wulandari",
+    "Vantlow", "Siltgrove", "Ferrowind", "Brackpond", "Quarnel", "Emberwick", "Builder Shed",
+    "Open Ingest Bench", "SYN-FP",
     # candidate, element and family identifiers
     "C1", "C2", "C3", "C4", "TD-1", "TD-2", "TD-3", "F1", "F3", "P-05", "SYN-P-03",
     "SYN-PUB", "SYN-PRI", "SYN-Office", "CA-2025-11",

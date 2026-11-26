@@ -1,0 +1,10 @@
+id = "v-research-freetier"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-FREETIER"
+category = "capability"
+agents = ["research"]
+worlds = ["vantlow"]
+opening = "Which hosted log tools have a free plan for seed-stage developer-tools startups in North America, and what do their paid plans cost?"
+expect = ["facts.VF-06", "facts.VF-14", "traps.T-FREETIER"]
+criteria = ["research.prices", "citation.exists"]
