@@ -30,13 +30,22 @@ RunState = Literal["running", "waiting", "ended"]
 
 @dataclass(frozen=True)
 class Waiting:
-    """One open interrupt a person can answer: its ID, kind and label."""
+    """One open interrupt a person can answer: its ID, kind, label and what it asks.
+
+    ``questions`` are the interrupt's ``(id, text)`` pairs and ``options`` a choice's
+    options, as raised; for an approval, ``tool`` is the tool it would run and ``facts``
+    the facts its approval rule showed (the target and the recipient, for a send).
+    """
 
     interrupt_id: str
     kind: str
     label: str | None = None
     approval_id: str | None = None
     signature: str | None = None
+    questions: tuple[tuple[str, str], ...] = ()
+    options: tuple[str, ...] = ()
+    tool: str | None = None
+    facts: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,11 +87,21 @@ def _waiting(view: LogView) -> dict[str | None, list[Waiting]]:
             continue
         approval_id = i.payload.get("approval")
         approval = by_approval.get(str(approval_id)) if approval_id else None
+        questions = tuple(
+            (str(q.get("id", "")), str(q.get("text", "")))
+            for q in i.payload.get("questions", ()) if isinstance(q, Mapping)
+        )  # fmt: skip
+        facts = i.payload.get("facts")
         out.setdefault(i.run, []).append(
             Waiting(
                 i.id, i.kind, i.payload.get("label"),
                 approval_id=None if approval is None else approval.approval_id,
                 signature=None if approval is None else approval.signature,
+                questions=questions,
+                options=tuple(str(o) for o in i.payload.get("options", ())),
+                tool=None if approval is None else approval.body.tool,
+                facts=tuple(sorted((str(k), str(v)) for k, v in facts.items()))
+                if isinstance(facts, Mapping) else (),
             )
         )  # fmt: skip
     return out

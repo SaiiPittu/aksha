@@ -18,6 +18,14 @@ holds it for its one invocation. It does two jobs, and only on the thread that h
 Every read is owner-scoped: an ID of another owner reads exactly like an unknown one
 (D9). Nothing here keeps state a restart would lose; the executors and outbox workers it
 caches per owner are rebuilt from the store.
+
+An approved effect needs the system of record it names. :meth:`Session.dispatch` refuses
+an ``Approve`` whose effect names a system this session has none for
+(``system_unavailable``, a stored receipt), so nothing is granted that cannot run and the
+run keeps waiting on the same approval. A run that reaches such an effect anyway (it was
+approved by a process that had the system) cannot move, and only that run waits: driving
+skips it and :meth:`Session.unavailable` says why, so the owner's other runs and commands
+go on. Nothing about the skip is stored; the next process with the system drives it.
 """
 
 from __future__ import annotations
@@ -36,6 +44,7 @@ from aksha.runtime.cancellation.requests import runs_to_resume_for_stop
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.definitions.types import Agent
+from aksha.runtime.execution.errors import EffectNeedsOutbox
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
@@ -52,6 +61,7 @@ from aksha.runtime.interrupts.commands import (
     reject,
 )
 from aksha.runtime.interrupts.reducers import approvals, interrupts
+from aksha.runtime.interrupts.types import ApprovalView
 from aksha.runtime.invalidation.commands import (
     accept_review,
     apply_source_change,
@@ -99,6 +109,9 @@ AGENT_REQUIRED = "agent_required"
 
 NOT_FOUND = "not_found"
 """The refusal of a command naming an item the owner does not have (D9)."""
+
+SYSTEM_UNAVAILABLE = "system_unavailable"
+"""The refusal of an approval whose effect names a system of record this session lacks."""
 
 DEFAULT_MAX_PASSES = 100_000
 """More passes than any run needs: a bound on a runtime bug, never a run limit."""
@@ -212,6 +225,7 @@ class Session:
         self.reader = reader
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
         self._executors: dict[str, StepExecutor] = {}
+        self._unavailable: dict[str, dict[str, str]] = {}
         startable = {
             a.name: Startable(a.routable(), a.run_fields())
             for a in agents
@@ -241,6 +255,10 @@ class Session:
         if isinstance(command, n.AnswerInterrupt):
             return self._answer(command)
         if isinstance(command, n.Approve):
+            missing = self._missing_system(command.owner, command.approval_id)
+            if missing is not None:
+                return self._refuse(command, "approve", command.owner, _args(command),
+                                    SYSTEM_UNAVAILABLE, missing)  # fmt: skip
             return approve(self.store, command.owner, command.approval_id,
                            command.shown_signature, by=command.by,
                            command_id=command.command_id)  # fmt: skip
@@ -319,6 +337,42 @@ class Session:
             command_id=command.command_id,
         )
 
+    def _missing_system(self, owner: str, approval_id: str) -> str | None:
+        """Why a requested approval's effect cannot run here, or None when it can."""
+        view = load_view(self.store, owner)
+        approval = approvals(view).get(approval_id)
+        if approval is None or approval.state != "requested":
+            return None
+        return self._system_missing(view, approval)
+
+    def _blocked(self, owner: str) -> dict[str, str]:
+        """Runs holding a granted, unused approval whose effect has no system here."""
+        view = load_view(self.store, owner)
+        out: dict[str, str] = {}
+        for approval in approvals(view).values():
+            if approval.state != "granted" or approval.run is None:
+                continue
+            why = self._system_missing(view, approval)
+            if why is not None:
+                out[approval.run] = f"{SYSTEM_UNAVAILABLE}: {why}"
+        return out
+
+    def _system_missing(self, view: LogView, approval: ApprovalView) -> str | None:
+        agent = self._agent_of_run(view, approval.run)
+        spec = None if agent is None else agent.approval_specs().get(approval.body.tool)
+        if spec is None or spec.external is None:
+            return None
+        system = spec.external.system or spec.name
+        if system in self.systems:
+            return None
+        waits = (
+            "nothing was approved and it still waits"
+            if approval.state == "requested"
+            else ("the approved send waits until a process with that system resumes the run")
+        )
+        return (f"{approval.approval_id}: {spec.name} sends to the system of record "
+                f"{system!r}, which this runtime has none for; {waits}")  # fmt: skip
+
     def _approval_tool_command(self, command: n.EditAction | n.Handoff) -> CommandReceipt:
         view = load_view(self.store, command.owner)
         approval = approvals(view).get(command.approval_id)
@@ -394,8 +448,16 @@ class Session:
         candidate ADR-P18 D3 gives it, so a stop sent while a run is held ends it
         ``stopped`` without waiting for an answer that will never come.
         """
+        blocked = self._blocked(owner)
+        self._unavailable.setdefault(owner, {}).update(blocked)
         for run in self.runnable(owner):
-            state = drive_pass(self._setup(owner, run), self._executor(owner), run)
+            if run in self._unavailable[owner]:
+                continue
+            try:
+                state = drive_pass(self._setup(owner, run), self._executor(owner), run)
+            except EffectNeedsOutbox as e:
+                self._unavailable[owner][run] = f"{e.code}: {e.message}"
+                continue
             if state == "running":
                 return True
             stopping = state == "held" and run in runs_to_resume_for_stop(
@@ -430,10 +492,19 @@ class Session:
         """
 
         def driver(run: RunSummary, steps: DurableStepExecutor, /) -> None:
-            drive(self._setup(owner, run.run), steps, run.run)
+            try:
+                drive(self._setup(owner, run.run), steps, run.run)
+            except EffectNeedsOutbox as e:
+                self._unavailable.setdefault(owner, {})[run.run] = f"{e.code}: {e.message}"
 
+        blocked = self._blocked(owner)
+        self._unavailable.setdefault(owner, {}).update(blocked)
         return resume_owner(self.store, owner, driver, clock=self.clock, loaded=self.loaded(),
-                            outbox=self._outbox(owner))  # fmt: skip
+                            outbox=self._outbox(owner), skip=blocked)  # fmt: skip
+
+    def unavailable(self, owner: str) -> Mapping[str, str]:
+        """``owner``'s runs this process skipped, each with why (an effect with no system)."""
+        return MappingProxyType(dict(self._unavailable.get(owner, {})))
 
     def status(self, owner: str, session: str) -> SessionStatus:
         """Where ``session`` stands (``views.session_status``)."""

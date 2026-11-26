@@ -110,6 +110,10 @@ class OutboxWorker:
         """The owner whose entries this worker runs."""
         return self._owner
 
+    def serves(self, system: str) -> bool:
+        """Whether this worker holds the system of record ``system`` (an entry's target)."""
+        return system in self._systems
+
     @property
     def authority(self) -> Authority | None:
         """The re-check of a person's authority, which ``enqueue`` also runs."""

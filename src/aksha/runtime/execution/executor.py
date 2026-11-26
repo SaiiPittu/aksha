@@ -228,6 +228,11 @@ class StepExecutor:
         if self._outbox is None:
             raise EffectNeedsOutbox(message=f"{step_id}: {name} has no outbox worker to run it")
         worker = self._outbox
+        target = spec.system or name
+        if not worker.serves(target):  # before anything is committed, so nothing is half-sent
+            raise EffectNeedsOutbox(
+                message=f"{step_id}: {name} sends to {target!r}, which the outbox worker lacks"
+            )
         policy = replace(worker.policy(name), semantics=spec.semantics, on_unknown=spec.on_unknown)
         hashed = hash_args(request)
         self.drain_late()
