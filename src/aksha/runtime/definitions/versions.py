@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.7"
+API_VERSION = "2.8"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -49,6 +49,12 @@ recorded read), ``ApprovalRule.expires_after_s`` and ``ArtifactKind.max_age_s``.
 2.7 (26 Nov 2026, ADR-P29) added ``TransientEffectError``, so a contributed system of
 record can ask for a retry, and external record state's ``ExternalRecord`` and
 ``external_records``.
+2.8 (26 Nov 2026, ADR-P09) added what memory needs from the core: the trailing fields
+``SaveRequest.supersedes`` (a save that replaces its slot's latest version for every
+reader) and ``ToolContext.artifacts`` (a read tool's ``ArtifactReader`` over its
+``reads_kinds``, answering ``ArtifactSnapshot``), ``TaskView.called``, the projection
+``ended_runs`` and its ``RunEnded``, and the instruction-pattern check
+``instruction_text`` with its flag ``INSTRUCTION_FLAG``.
 """
 
 Version = tuple[int, int]

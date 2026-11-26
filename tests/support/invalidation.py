@@ -176,6 +176,7 @@ class Bench:
         origin: Origin = "task",
         review: str | None = None,
         instance: str | None = None,
+        supersedes: str | None = None,
     ) -> Saved:
         """Save ``slot`` (``kind/key`` or ``kind``) after reading ``reads``, as one step.
 
@@ -195,7 +196,8 @@ class Bench:
         pending = tuple(reads)
         recorded = reads_to_record(view, pending, run=run, instance=instance, step=step)
         saved = self.artifacts.save(
-            view, SaveRequest(kind_name, key or None, content), writer=writer, run=run,
+            view, SaveRequest(kind_name, key or None, content, supersedes=supersedes),
+            writer=writer, run=run,
             instance=instance, step=step, writes=frozenset(KINDS), pending_reads=pending,
             origin=origin,
         )  # fmt: skip

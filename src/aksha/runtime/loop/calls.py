@@ -19,12 +19,13 @@ listed them. For each position ``tNN/cMM``:
    dispatch   the body (read, store and exec tools) with the attempt's record
               reader, its HTTP client and, for an exec tool, its exec API
               (``loop.tier``: egress decisions and exec records go on the step,
-              and an exec step is its own kill boundary), the reads it declares
-              (``Ok.reads``), its saves through the
-              one save path with what they confirm (``invalidation.saving``: a diff
-              review for a rebuilt human-reviewed version, revocations and review
-              voids, ADR-P05 D1, D9), the capped model view, and its span drafts
-              minted over the texts the reader returned (ADR-P13 D1)
+              and an exec step is its own kill boundary), an artifact reader over
+              its ``reads_kinds`` as the log stood before the step (ADR-P09 D3),
+              the reads it declares (``Ok.reads``), its saves through the one save
+              path with what they confirm (``invalidation.saving``: a diff review
+              for a rebuilt human-reviewed version, revocations and review voids,
+              ADR-P05 D1, D9), the capped model view, and its span drafts minted
+              over the texts the reader returned (ADR-P13 D1)
    reserved   ``finish`` (signal ``finish``) or ``ask`` (``interrupt.raised``)
    approval   a granted approval of this exact action runs it through the
               outbox; otherwise ``approval.requested`` and its interrupt
@@ -48,6 +49,7 @@ from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
 from aksha.runtime.context.turns import SPANS_FIELD, as_of
+from aksha.runtime.definitions.names import resolve_kind
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ids import highest
 from aksha.runtime.execution.ports import DurableStepExecutor
@@ -66,6 +68,7 @@ from aksha.runtime.interrupts.approvals import (
 )
 from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
+from aksha.runtime.invalidation.reading import ViewArtifactReader
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
 from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, run_session, with_records
@@ -228,11 +231,14 @@ def run_position(
         run_date = recorded_date(view, ref.run)
         unit = ExecUnit() if spec.effect == "exec" else None
 
+        kinds = frozenset(resolve_kind(k, spec.owner) for k in spec.reads_kinds)
+        versions = ViewArtifactReader(view, kinds, setup.blobs) if kinds else None
+
         def ctx(
             reader: AttemptReader, http: HttpFor, exe: BoxedExec | None, dates: TimeReads
         ) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
-                               attempt, reader, run_date, http, exe, dates)  # fmt: skip
+                               attempt, reader, run_date, http, exe, dates, versions)  # fmt: skip
 
         def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
             # Each attempt reads through a fresh reader (its drafts are minted over what it

@@ -1,4 +1,10 @@
-"""The ``BlobStore`` port: content-addressed bytes outside the event store (decision 25).
+"""The artifact store's ports: ``BlobStore`` and ``ArtifactReader``.
+
+``ArtifactReader`` (ADR-P09 D3) is what a read tool that declares ``reads_kinds`` is given
+in ``ToolContext.artifacts``: the owner's versions of those kinds as the log stood before
+the step started, read-only, so a body can read artifacts without a store handle.
+
+The ``BlobStore`` port: content-addressed bytes outside the event store (decision 25).
 
 A blob is a byte string stored once under the SHA-256 of its bytes, for content too large
 for an event payload (over 64 KiB) or too binary for JSON (ADR-P01 D7, ADR-P04 D10). The
@@ -21,6 +27,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from aksha.runtime.artifacts.types import ArtifactSnapshot
+
 
 class BlobStore(Protocol):
     """Content-addressed, write-once byte storage."""
@@ -35,4 +43,20 @@ class BlobStore(Protocol):
 
     def has(self, ref: str) -> bool:
         """Whether a blob named ``ref`` is stored (its bytes are not re-hashed)."""
+        ...
+
+
+class ArtifactReader(Protocol):
+    """Read-only versions of the kinds a tool declares in ``reads_kinds`` (ADR-P09 D3).
+
+    Asking for any other kind raises ``KindNotReadable``, so a body reads only what the
+    loader checked it may read (ADR-P10 rights).
+    """
+
+    def latest(self, kind: str) -> tuple[ArtifactSnapshot, ...]:
+        """The current version of every slot of ``kind`` (full name), sorted by key."""
+        ...
+
+    def get(self, ref: str) -> ArtifactSnapshot | None:
+        """The version ``ref`` names (``kind/key@vN``), or None when the log lacks it."""
         ...

@@ -94,7 +94,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P06 | Agent loop and turn | built | `run_turn` and `drive` over projections; every turn end goes to stop-policy evaluation |
 | P07 | Model interface and routing by class | built | Extraction, classification and generation contracts, thresholds with an abstention band, cascades, rule-based fakes, replay, a live generation adapter |
 | P08 | Context assembly and compaction | built | Context as a projection, observation masking, recorded summaries (on by default) |
-| P09 | Memory | designed | |
+| P09 | Memory | built | An extension: memory records as cited artifacts, `recall` as the intake Task's first call, supersession that invalidates the outputs that used a record, episodes as a projection. `forget` hides a record from recall; it does not erase it (ADR-P30) |
 | P10 | Tool registry and schemas | built | One declared spec per tool with one effect class |
 | P11 | Policy gate and permissions | built | Deny by default, one checker in code, headless mode that never asks |
 | P12 | Sandbox and execution environment | built | A bubblewrap backend (allowlisted root, network off, cleared environment, hard limits, process-group kill), the `refuse` backend, policies that only narrow, the exec record on every step |

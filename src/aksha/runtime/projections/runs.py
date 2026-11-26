@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 from aksha.runtime.events.envelope import Event
-from aksha.runtime.projections.view import ArtifactsView
+from aksha.runtime.projections.view import ArtifactsView, LogView
 
 
 @dataclass(frozen=True)
@@ -68,3 +68,65 @@ RUNS = Runs()
 def open_runs(state: RunsState) -> tuple[str, ...]:
     """The IDs of runs with no outcome yet, sorted."""
     return tuple(sorted(r for r, s in state.items() if s.outcome is None))
+
+
+@dataclass(frozen=True)
+class RunEnded:
+    """One ended run as ``ended_runs`` reads it back (ADR-P09 D6, D11).
+
+    ``completed`` lists the Task instances whose latest completion check in the run passed,
+    in the order they first passed; ``outputs`` the artifact versions the run saved, in
+    commit order; ``blockers`` what ``run.ended`` recorded.
+    """
+
+    run: str
+    agent: str
+    outcome: str
+    reason: str
+    blockers: tuple[str, ...] = ()
+    completed: tuple[str, ...] = ()
+    outputs: tuple[str, ...] = ()
+
+
+def ended_runs(view: LogView, agents: frozenset[str]) -> tuple[RunEnded, ...]:
+    """Every ended run of ``agents`` in the owner's ``view``, in the order they ended.
+
+    The tenant is the view's owner: a log view never holds another owner's events.
+    """
+    agent_of: dict[str, str] = {}
+    checks: dict[str, dict[str, bool]] = {}
+    outputs: dict[str, list[str]] = {}
+    out: list[RunEnded] = []
+    for e in view.events:
+        run = e.run or ""
+        if e.type == "run.started":
+            agent_of[run] = str(e.payload.get("agent"))
+        elif agent_of.get(run) not in agents:
+            continue
+        elif e.type == "completion_check.evaluated":
+            key = e.payload.get("key")
+            task = str(e.payload.get("task"))
+            instance = task if key is None else _keyed(task, str(key))
+            checks.setdefault(run, {})[instance] = bool(e.payload.get("ok"))
+        elif e.type == "artifact.saved":
+            outputs.setdefault(run, []).append(str(e.payload.get("ref")))
+        elif e.type == "run.ended":
+            p = e.payload
+            out.append(
+                RunEnded(
+                    run=run,
+                    agent=agent_of[run],
+                    outcome=str(p["outcome"]),
+                    reason=str(p.get("reason", "")),
+                    blockers=tuple(str(b) for b in p.get("blockers", ())),
+                    completed=tuple(i for i, ok in checks.get(run, {}).items() if ok),
+                    outputs=tuple(outputs.get(run, ())),
+                )
+            )
+    return tuple(out)
+
+
+def _keyed(task: str, key: str) -> str:
+    """The instance ID of ``task`` at ``key``: the key rides on the top-level segment."""
+    head, sep, rest = task.partition("/")
+    return f"{head}[{key}]{sep}{rest}"
