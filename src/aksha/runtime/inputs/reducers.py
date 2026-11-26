@@ -12,7 +12,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from aksha.runtime.inputs.types import INPUT_CONSUMED, INPUT_QUEUED, RENDERED_LANES, QueuedInput
+from aksha.runtime.inputs.types import (
+    DOCUMENT_FACTS,
+    DOCUMENT_STORED,
+    INPUT_CONSUMED,
+    INPUT_QUEUED,
+    RENDERED_LANES,
+    KnownDocument,
+    QueuedInput,
+)
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.types import InstanceRef
 
@@ -81,3 +89,29 @@ def consumed_by_step(view: LogView, ref: InstanceRef) -> Mapping[str, tuple[Queu
         if step is not None and step.startswith(prefix):
             out.setdefault(step, []).append(i)
     return MappingProxyType({k: tuple(v) for k, v in out.items()})
+
+
+def known_documents(view: LogView) -> Mapping[str, KnownDocument]:
+    """Each input path's latest document, by path, from the ``document.stored`` facts."""
+    out: dict[str, KnownDocument] = {}
+    for e in view.events:
+        if e.type == DOCUMENT_STORED:
+            p = e.payload
+            path = str(p["path"])
+            out[path] = KnownDocument(path, str(p["doc_key"]), int(p["version"]), str(p["blob"]))
+    return MappingProxyType(out)
+
+
+def documents_after(view: LogView, seq: int) -> tuple[tuple[str, Mapping[str, object]], ...]:
+    """The ``document.*`` facts committed right after the receipt at ``seq``, in order.
+
+    An upload commits its receipt first, then its document facts, then the source change.
+    """
+    out: list[tuple[str, Mapping[str, object]]] = []
+    for e in view.events:
+        if e.seq <= seq:
+            continue
+        if e.type not in DOCUMENT_FACTS:
+            break
+        out.append((e.type, e.payload))
+    return tuple(out)

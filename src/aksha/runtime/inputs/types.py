@@ -1,4 +1,4 @@
-"""Input values (ADR-P27): the three lanes, a queued input and the event and refusal names.
+"""Input values: the three lanes (ADR-P27), and uploaded documents (the ingest extension).
 
 A **lane** is what a person's message to an open run is: ``steer`` (rendered before the
 target instance's next model call), ``follow_up`` (rendered when the instance proposes to
@@ -8,8 +8,9 @@ question, which supersedes the answer and reaches invalidation).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 Lane = Literal["steer", "follow_up", "amend"]
 LANES: frozenset[str] = frozenset(get_args(Lane))
@@ -51,3 +52,33 @@ class QueuedInput:
     lane: str
     text: str
     seq: int
+
+
+DOCUMENT_STORED = "document.stored"
+DOCUMENT_GAP = "document.gap"
+DOCUMENT_REFUSED = "document.refused"
+DOCUMENT_FACTS: frozenset[str] = frozenset({DOCUMENT_STORED, DOCUMENT_GAP, DOCUMENT_REFUSED})
+DOC_PREFIX = "D"
+"""Doc keys are ``D-0001``, counted from the owner's log."""
+
+
+@dataclass(frozen=True)
+class KnownDocument:
+    """An input path's latest document, from its last ``document.stored``."""
+
+    path: str
+    doc_key: str
+    version: int
+    blob: str
+
+
+@dataclass(frozen=True)
+class IngestedInput:
+    """One path an upload writes: the bytes the workspace serves and the facts to record.
+
+    ``facts`` are ``(event type, payload)`` pairs, empty when the path's bytes did not move.
+    """
+
+    path: str
+    data: bytes
+    facts: tuple[tuple[str, Mapping[str, Any]], ...]

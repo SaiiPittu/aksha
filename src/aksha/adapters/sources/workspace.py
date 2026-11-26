@@ -130,7 +130,9 @@ class InputWorkspace:
             try:
                 data.decode("utf-8")
             except UnicodeDecodeError:
-                raise UploadRefused(f"{p}: not UTF-8 text (extract a PDF's text first)") from None
+                raise UploadRefused(
+                    f"{p}: not UTF-8 text, and no ingester is configured to convert it"
+                ) from None
         folder = self.folder(owner)
         changed: list[str] = []
         for p, data in sorted(checked.items()):

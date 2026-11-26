@@ -7,7 +7,10 @@ change confirms (D9). It asks each ``VersionedSource`` for the owner's versions,
 them with the versions the owner's log last knew, and records only what moved:
 
 1. A source whose version differs from the last recorded one (or that was never recorded)
-   is checked record by record, for every record the owner has read from it.
+   is checked record by record, for every record the owner has read from it. A source
+   never recorded before is recorded when one of its read records moved, or when the
+   owner has recorded queries to re-execute: a file no work read yet can still change
+   what a listing or a search returns (amendment from the ingestion build, 26 Nov 2026).
 2. A record whose version differs from the one last known (recorded by a change, or else
    the newest read of it) is recorded with its new version, or None when it is gone.
 3. Only when something is recorded are the owner's recorded queries re-executed, each
@@ -105,6 +108,7 @@ def record_source_changes(
     owner = view.owner
     facts = source_facts(view)
     read = read_inputs(view, "record")
+    queried = run_query is not None and bool(read_inputs(view, "query") or facts.queries)
     moved_sources: dict[str, str] = {}
     moved_records: dict[str, str | None] = {}
     for source in sources:
@@ -115,7 +119,7 @@ def record_source_changes(
         changed = _moved_records(source, owner, read, facts.records)
         if source.name == CLOCK_SOURCE:
             changed = {CLOCK_RECORD: source.record_version(owner, CLOCK_RECORD)}
-        if prior is not None or changed:
+        if prior is not None or changed or (queried and source.name != CLOCK_SOURCE):
             moved_sources[source.name] = now
             moved_records.update(changed)
     number = facts.source_version

@@ -37,6 +37,17 @@ postgres = ["psycopg[binary]>=3.2"]
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
 # The trace exporter extension (ADR-P21 D8): OTLP JSON Lines files, offline.
 otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.66b2"]
+# The ingest extension's parsers: PDF (BSD-3-Clause), Word, PowerPoint and Excel (MIT),
+# images (MIT-CMU). Without them those types are named gaps; text, CSV, JSON, HTML and
+# email need only the standard library. HEIC needs pillow-heif, installed separately:
+# its binary wheels are GPL-2.0 (they bundle an x265 encoder), so no extra here names it.
+ingest = [
+    "pypdf>=7.1.1,<8",
+    "python-docx>=1.2.0,<2",
+    "python-pptx>=1.0.2,<2",
+    "openpyxl>=3.1.5,<4",
+    "pillow>=13.0.0,<14",
+]
 
 [dependency-groups]
 # Development tools (PEP 735): never an extra a user of the package sees.
@@ -129,6 +140,12 @@ warn_unreachable = true
 mypy_path = "src"
 files = ["src/aksha", "tests"]
 exclude = ["^scratch-pad/", "^web/"]
+
+[[tool.mypy.overrides]]
+# The ingest extension's parsers are an optional extra; some ship no type information.
+module = ["pypdf", "pypdf.*", "docx", "docx.*", "pptx", "pptx.*", "openpyxl", "openpyxl.*",
+          "PIL", "PIL.*", "pillow_heif", "pillow_heif.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 # The PostgreSQL driver is an optional extra. Without it installed, its types are Any; with

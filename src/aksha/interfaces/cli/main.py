@@ -35,13 +35,14 @@ opens the store.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import shutil
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 import aksha
 from aksha import data
@@ -63,7 +64,7 @@ from aksha.interfaces.cli.client import Client, ServerError, find_server
 from aksha.interfaces.cli.pending import PENDING_FILE, PendingIds, invocation_key
 from aksha.runtime.definitions.errors import LoadError
 from aksha.runtime.errors import AkshaError
-from aksha.runtime.inputs.reducers import queued_inputs
+from aksha.runtime.inputs.reducers import documents_after, queued_inputs
 from aksha.runtime.interrupts.reducers import approvals, interrupts
 from aksha.runtime.models.errors import BindRefused
 from aksha.runtime.projections.view import load_view
@@ -317,15 +318,16 @@ SKIPPED_PARTS = frozenset({".git", "__pycache__", ".venv", "node_modules"})
 """Folders an input folder's upload never walks into."""
 
 
-def collect_inputs(paths: Sequence[str]) -> tuple[dict[str, str], list[str]]:
-    """The files under ``paths`` as ``{relative path: text}``, and what was skipped and why.
+def collect_inputs(paths: Sequence[str]) -> tuple[dict[str, bytes], list[str]]:
+    """The files under ``paths`` as ``{relative path: bytes}``, and what was skipped and why.
 
     A folder contributes every file below it, at its path relative to the folder; a file
-    contributes itself, under its name. Hidden files, and files that are not UTF-8 text
-    (a PDF: extract its text first), are skipped and reported. Raises ``FileNotFoundError``
-    for a path that does not exist.
+    contributes itself, under its name. Hidden files and folders are skipped. Every other
+    file goes up as its bytes: the runtime types it from its content and converts it (a
+    PDF, an Office file, an email, an image), so nothing is skipped for being binary.
+    Raises ``FileNotFoundError`` for a path that does not exist.
     """
-    files: dict[str, str] = {}
+    files: dict[str, bytes] = {}
     skipped: list[str] = []
     for raw in paths:
         path = Path(raw).expanduser()
@@ -340,11 +342,20 @@ def collect_inputs(paths: Sequence[str]) -> tuple[dict[str, str], list[str]]:
             parts = rel.split("/")
             if any(x.startswith(".") or x in SKIPPED_PARTS for x in parts):
                 continue
-            try:
-                files[rel] = file.read_bytes().decode("utf-8")
-            except UnicodeDecodeError:
-                skipped.append(f"{rel}: not UTF-8 text (extract a PDF's text to .txt first)")
+            files[rel] = file.read_bytes()
     return files, skipped
+
+
+def upload_command(owner: str, files: Mapping[str, bytes], command_id: str) -> n.UploadInputs:
+    """``UploadInputs`` for ``files``: UTF-8 text in ``files``, anything else in ``binary``."""
+    text: dict[str, str] = {}
+    binary: dict[str, str] = {}
+    for rel, body in files.items():
+        try:
+            text[rel] = body.decode("utf-8")
+        except UnicodeDecodeError:
+            binary[rel] = base64.b64encode(body).decode("ascii")
+    return n.UploadInputs(owner=owner, files=text, binary=binary, command_id=command_id)
 
 
 def _upload(ctx: Context, paths: Sequence[str]) -> int | None:
@@ -359,7 +370,7 @@ def _upload(ctx: Context, paths: Sequence[str]) -> int | None:
     if not files:
         ctx.say("no input files to upload")
         return wire.EXIT_USAGE
-    command = n.UploadInputs(owner=ctx.owner, files=files, command_id=ctx.command_id())
+    command = upload_command(ctx.owner, files, ctx.command_id())
     client = ctx.server()
     if client is not None:
         receipt = client.dispatch(command)
@@ -373,7 +384,48 @@ def _upload(ctx: Context, paths: Sequence[str]) -> int | None:
     if not receipt.accepted:
         return _refused(ctx, receipt)
     ctx.say(f"uploaded {len(files)} input files")
+    if client is None:
+        for line in _document_lines(ctx, receipt.seq):
+            ctx.say(line)
     return None
+
+
+def _document_lines(ctx: Context, seq: int) -> list[str]:
+    """One line per document the upload committed at ``seq`` recorded: what was done."""
+    store = open_reader(ctx.config)
+    try:
+        facts = documents_after(load_view(store, ctx.owner), seq)
+    finally:
+        store.close()
+    return document_lines(facts)
+
+
+def document_lines(facts: Sequence[tuple[str, Mapping[str, Any]]]) -> list[str]:
+    """What a person reads about each uploaded document: its key, type and what was dropped."""
+    lines: list[str] = []
+    for kind, p in facts:
+        if kind == "document.stored":
+            line = f"  {p['path']}: {p['doc_key']} v{p['version']}, {p['detected_type']}"
+            rep = p.get("representation")
+            if isinstance(rep, Mapping):
+                how = "as given" if rep.get("served") == "as_given" else "converted"
+                line += f", {how}, {rep.get('chars')} characters"
+                for dropped in rep.get("dropped") or ():
+                    line += f"; not included: {dropped}"
+            route = p.get("route")
+            if isinstance(route, Mapping) and route.get("kind") == "header_only":
+                line += f"; not shown: {route.get('reason')}"
+            elif isinstance(route, Mapping) and route.get("kind") == "native_image":
+                size = f"{route.get('width')}x{route.get('height')}"
+                line += (f"; sent copy {size} for {route.get('profile')}, about "
+                         f"{route.get('tokens')} image tokens")  # fmt: skip
+            lines.append(line)
+        elif kind == "document.gap":
+            lines.append(f"  {p['path']}: not readable: {p['reason']}, {p['detail']}")
+        elif kind == "document.refused":
+            where = p.get("path") or p.get("name")
+            lines.append(f"  {where}: refused: {p['cap']} {p['value']}, over {p['limit']}")
+    return lines
 
 
 def cmd_upload(ctx: Context, args: argparse.Namespace) -> int:
@@ -695,6 +747,7 @@ EXTRAS = {
     "server": ("fastapi", "uvicorn"),
     "otel": ("opentelemetry.sdk", "opentelemetry.exporter.otlp.json.file"),
     "postgres": ("psycopg",),
+    "ingest": ("pypdf", "docx", "pptx", "openpyxl", "PIL"),
 }
 """Each optional extra and the modules it installs (``pyproject.toml``)."""
 

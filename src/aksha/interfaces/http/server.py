@@ -16,7 +16,8 @@ POST     ``/interrupts/{interrupt}/answer``          ``AnswerInterrupt`` (``amen
 POST     ``/approvals/{approval}/approve``           ``Approve`` (body ``shown_signature``)
 POST     ``/approvals/{approval}/reject``            ``Reject``
 POST     ``/runs/{run}/stop``                        ``Stop``
-POST     ``/inputs``                                 ``UploadInputs`` (body ``files``: path to text)
+POST     ``/inputs``                                 ``UploadInputs`` (``files``: path to text,
+                                                     ``binary``: path to base64 bytes)
 POST     ``/runs/{run}/steer``                       ``Steer`` (body ``text``, ``lane``,
                                                      ``instance``; ADR-P27)
 GET      ``/sessions/{session}``                     the session's status
@@ -206,14 +207,21 @@ def create_app(
     @app.post(f"{API}/inputs")
     async def inputs(request: Request, x_aksha_user: str = Header()) -> JSONResponse:
         body = await json_body(request)
-        files = body.get("files")
+        files = body.get("files", {})
+        binary = body.get("binary", {})
+        maps = (files, binary)
         if (
-            not isinstance(files, dict)
-            or not files
-            or not all(isinstance(k, str) and isinstance(v, str) for k, v in files.items())
-        ):
-            return error(422, "validation", "files maps each relative path to its UTF-8 text")
-        return command(x_aksha_user, "UploadInputs", {"files": files}, body)
+            not all(isinstance(m, dict) for m in maps)
+            or not (files or binary)
+            or not all(isinstance(k, str) and isinstance(v, str) for m in maps
+                       for k, v in m.items())
+        ):  # fmt: skip
+            return error(422, "validation", "files maps each relative path to its UTF-8 text, "
+                         "binary to its bytes in base64")  # fmt: skip
+        args: dict[str, Any] = {"files": files}
+        if binary:
+            args["binary"] = binary
+        return command(x_aksha_user, "UploadInputs", args, body)
 
     @app.post(f"{API}/runs/{{run}}/steer")
     async def steer(run: str, request: Request, x_aksha_user: str = Header()) -> JSONResponse:

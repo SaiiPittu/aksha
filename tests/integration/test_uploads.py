@@ -65,7 +65,7 @@ def _starts(tmp: Path) -> dict[str, dict[str, object]]:
         store.close()
 
 
-def test_collect_inputs_takes_a_folder_at_its_relative_paths_and_skips_binaries(
+def test_collect_inputs_takes_a_folder_at_its_relative_paths_binaries_included(
     tmp_path: Path,
 ) -> None:
     (tmp_path / "data" / "sub").mkdir(parents=True)
@@ -74,8 +74,8 @@ def test_collect_inputs_takes_a_folder_at_its_relative_paths_and_skips_binaries(
     (tmp_path / "data" / "scan.pdf").write_bytes(b"%PDF\xff")
     (tmp_path / "one.csv").write_text("x\n", encoding="utf-8")
     files, skipped = collect_inputs([str(tmp_path / "data"), str(tmp_path / "one.csv")])
-    assert files == {"sub/a.md": "a", "one.csv": "x\n"}
-    assert [s.split(":")[0] for s in skipped] == ["scan.pdf"]
+    assert files == {"sub/a.md": b"a", "scan.pdf": b"%PDF\xff", "one.csv": b"x\n"}
+    assert skipped == []
 
 
 def test_research_runs_on_an_uploaded_folder_and_a_changed_file_reopens_only_its_work(

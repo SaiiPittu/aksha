@@ -53,14 +53,19 @@ from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION
+from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.errors import EffectNeedsOutbox
 from aksha.runtime.execution.executor import StepExecutor
-from aksha.runtime.execution.ids import LogIdSource
+from aksha.runtime.execution.ids import LogIdSource, highest
 from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
 from aksha.runtime.execution.recovery import RecoveryReport, recover_on_startup, resume_owner
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.inputs.commands import steer
+from aksha.runtime.inputs.ports import DocumentIngester
+from aksha.runtime.inputs.reducers import known_documents
+from aksha.runtime.inputs.types import DOC_PREFIX
+from aksha.runtime.inputs.uploads import upload_bytes
 from aksha.runtime.interrupts.amend import amend
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.interrupts.commands import (
@@ -239,6 +244,7 @@ class Session:
         inputs: InputWorkspace | None = None,
         run_query: QueryRunner | None = None,
         rebuilds: bool = False,
+        ingester: DocumentIngester | None = None,
     ) -> None:
         """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads.
 
@@ -248,6 +254,8 @@ class Session:
         ``reader``). ``run_query`` re-executes a recorded query when a source change is
         recorded. With ``rebuilds``, :meth:`step` opens the rebuild runs a recorded change
         calls for (ADR-P05 D8) once no open run can move, so an upload reaches its work.
+        ``ingester`` converts every uploaded file before it reaches ``inputs``
+        (``runtime/inputs/ports.py``); without one, uploads must be UTF-8 text.
         """
         self.store = store
         self.clock = clock
@@ -261,6 +269,7 @@ class Session:
         self.tier = tier or ExecutionTier()
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
         self.inputs = inputs
+        self.ingester = ingester
         self.run_query = run_query
         self.rebuilds = rebuilds
         self._executors: dict[str, StepExecutor] = {}
@@ -378,17 +387,40 @@ class Session:
     def _upload(self, command: n.UploadInputs) -> CommandReceipt:
         """Write the files, then record what moved as one source change (ADR-P05 D6).
 
-        The change set's name is a hash of the uploaded paths and texts, so a retry of the
+        With an ingester configured, every file's bytes go through it first: the workspace
+        gets what it returns (a converted file's header and representation under the same
+        path, one more path per attachment) and its ``document.*`` facts commit with the
+        source change. Without one, a file must be UTF-8 text (``binary`` is refused).
+
+        The change set's name is a hash of the uploaded paths and bytes, so a retry of the
         same upload derives the same command ID and returns the stored receipt. A repeat
         whose bytes did move what is on disk (``A``, then ``B``, then ``A`` again) is not a
         retry: its stored receipt is for an earlier upload, so what this one moved is
         recorded under a name that also carries the inputs' version before it.
         """
         assert self.inputs is not None
-        files = {str(p): str(t).encode("utf-8") for p, t in command.files.items()}
+        try:
+            files = upload_bytes(command)
+        except ValueError as e:
+            return self._refuse(command, "upload_inputs", command.owner,
+                                {"paths": sorted({*command.files, *command.binary})},
+                                UPLOAD_REFUSED, str(e))  # fmt: skip
+        facts: tuple[NewEvent, ...] = ()
+        serve = files
+        if self.ingester is not None:
+            try:
+                view = load_view(self.store, command.owner)
+                put = None if self.blobs is None else self.blobs.put
+                done = self.ingester.ingest(files, known_documents(view),
+                                            highest(view.events, DOC_PREFIX) + 1, put)  # fmt: skip
+            except ValueError as e:
+                return self._refuse(command, "upload_inputs", command.owner,
+                                    {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
+            serve = {i.path: i.data for i in done}
+            facts = tuple(NewEvent(t, dict(p)) for i in done for t, p in i.facts)
         before = self.inputs.version(command.owner)
         try:
-            changed = self.inputs.put(command.owner, files)
+            changed = self.inputs.put(command.owner, serve)
         except ValueError as e:
             return self._refuse(command, "upload_inputs", command.owner,
                                 {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
@@ -397,12 +429,12 @@ class Session:
             named.update(p.encode("utf-8") + b"\0" + hashlib.sha256(files[p]).hexdigest().encode())
         name = "upload:" + named.hexdigest()[:16]
         receipt = apply_source_change(self.store, command.owner, self._versioned(), name,
-                                      run_query=self.run_query,
+                                      run_query=self.run_query, facts=facts,
                                       command_id=command.command_id)  # fmt: skip
         if receipt.duplicate and changed:
             receipt = apply_source_change(self.store, command.owner, self._versioned(),
                                           f"{name}:after:{before}",
-                                          run_query=self.run_query)  # fmt: skip
+                                          run_query=self.run_query, facts=facts)  # fmt: skip
         return receipt
 
     def _send(self, command: n.SendMessage) -> CommandReceipt:
