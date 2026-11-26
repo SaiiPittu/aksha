@@ -33,6 +33,7 @@ from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
 from aksha.runtime.cancellation.command import stop
 from aksha.runtime.cancellation.ending import honour_stop
 from aksha.runtime.cancellation.requests import runs_to_resume_for_stop
+from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.execution.executor import StepExecutor
@@ -118,6 +119,7 @@ class SessionAgent:
     relations: Mapping[str, RelationKind] = field(default_factory=lambda: MappingProxyType({}))
     context_policy: ContextPolicy | None = None
     run_extra: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    reentry: ReentrySetting | None = None
 
     @property
     def name(self) -> str:
@@ -159,6 +161,10 @@ class SessionAgent:
             reader=reader,
             **extra,
         )
+
+    def routable(self) -> RoutableAgent:
+        """The agent as the router and a request run's ``run.started`` see it (decision 36)."""
+        return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry)
 
     def run_fields(self) -> dict[str, Any]:
         """What ``run.started`` records for this agent beyond its name and cause."""
@@ -207,8 +213,7 @@ class Session:
         self.ids: IdSource = ids if ids is not None else LogIdSource(store)
         self._executors: dict[str, StepExecutor] = {}
         startable = {
-            a.name: Startable(RoutableAgent(a.name, a.agent.purpose, a.definition_hash),
-                              a.run_fields())
+            a.name: Startable(a.routable(), a.run_fields())
             for a in agents
         }  # fmt: skip
         self._start = start_spec(startable, self.ids, self.sandbox)

@@ -54,6 +54,7 @@ from aksha.evals.registry import AgentRegistry
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.budgets.types import Limits
+from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.definitions.hashing import run_started_fields
 from aksha.runtime.definitions.loader import LoadedDefinition, discover, load_agents
 from aksha.runtime.definitions.modules import import_value
@@ -74,7 +75,6 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
-from aksha.runtime.router.types import RoutableAgent
 from aksha.runtime.sandbox.types import STRENGTHS, Availability, Strength
 from aksha.runtime.session.capabilities import CapabilityRecord, capabilities
 from aksha.runtime.session.service import Session, SessionAgent
@@ -150,6 +150,8 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_SANDBOX``        ``<backend>:<strength>`` the operator provides  none
 # ``AKSHA_SERVER_URL``     the server a CLI command talks to               the server file
 # ``AKSHA_SOURCES``        ``<source>=<folder>`` pairs (``os.pathsep``)    each spec's ``root``
+# ``AKSHA_REENTRY``        re-entry setting a request run records:         ``fresh``
+#                          ``fresh`` or ``resume`` (decision 36)
 # =======================  ==============================================  ==================
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
@@ -186,6 +188,7 @@ class RuntimeConfig:
     sandbox: str | None = None
     server_url: str | None = None
     sources: Mapping[str, Path] = field(default_factory=dict)
+    reentry: str = "fresh"
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -205,7 +208,19 @@ class RuntimeConfig:
             sandbox=env.get("AKSHA_SANDBOX") or None,
             server_url=env.get("AKSHA_SERVER_URL") or None,
             sources=_source_settings(env.get("AKSHA_SOURCES", "")),
+            reentry=env.get("AKSHA_REENTRY") or "fresh",
         )
+
+    def reentry_setting(self) -> ReentrySetting:
+        """The re-entry setting (``AKSHA_REENTRY``) every request run records (decision 36).
+
+        Fresh stays the default until the resume-against-fresh evaluation decides.
+        """
+        if self.reentry not in ("fresh", "resume"):
+            raise StoreError(
+                "reentry_invalid", f"AKSHA_REENTRY={self.reentry!r}: use fresh or resume"
+            )
+        return cast(ReentrySetting, self.reentry)
 
     def sandbox_availability(self) -> Availability | None:
         """The declared sandbox (``AKSHA_SANDBOX``), or None when none is declared."""
@@ -285,8 +300,12 @@ def session_agent(
     adapters: Mapping[str, object] | None = None,
     *,
     commit: tuple[str, bool] = ("unknown", False),
+    reentry: ReentrySetting | None = None,
 ) -> SessionAgent:
-    """One loaded definition bound to its models, as a session runs it."""
+    """One loaded definition bound to its models, as a session runs it.
+
+    ``reentry`` is the setting its request runs record (decision 36); None is ``fresh``.
+    """
     agent = loaded.agent
     if adapters is None:
         if mode != "fake":
@@ -312,6 +331,7 @@ def session_agent(
         relations=loaded.relations,
         context_policy=agent.context_policy,
         run_extra=extra,
+        reentry=reentry,
     )
 
 
@@ -335,11 +355,14 @@ def load_session_agents(
     ``adapters`` overrides the model adapters of an agent by name (tests, scripted runs);
     ``loaded`` are definitions already loaded, so they are not loaded twice.
     """
+    reentry = config.reentry_setting()
     if loaded is None:
         loaded = load_definitions(config, catalogue=catalogue)
     commit = runtime_commit()
     return tuple(
-        session_agent(d, config.mode, (adapters or {}).get(d.agent.name), commit=commit)
+        session_agent(
+            d, config.mode, (adapters or {}).get(d.agent.name), commit=commit, reentry=reentry
+        )
         for d in loaded
     )
 
@@ -423,7 +446,7 @@ def open_session(
     ids = LogIdSource(store)
     router = None
     if len(agents) >= 2:
-        routable = tuple(RoutableAgent(a.name, a.agent.purpose, a.definition_hash) for a in agents)
+        routable = tuple(a.routable() for a in agents)
         router = Router(routable, PurposeClassifier(), ids)
     sandbox = config.sandbox_availability()
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,

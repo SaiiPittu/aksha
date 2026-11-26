@@ -16,6 +16,7 @@ from aksha.runtime.context.reentry import (
     inherited_setting,
     instruction_text,
     reentry_setting,
+    supplier_runs,
 )
 from aksha.runtime.context.types import ContextPolicy, ResumePolicy, Segment, StaleRead
 from aksha.runtime.events.catalogue import (
@@ -227,3 +228,31 @@ def test_the_rebuild_summary_belongs_to_the_current_entry_only() -> None:
     assert rebuild_entry(log(rebuilt), ref) is not None
     later = entered("scheduler")
     assert rebuild_entry(log(rebuilt, later), ref) is None  # a later entry ends it
+
+
+def event(type_: str, run: str | None, **payload: object) -> Event:
+    return Event(type_, dict(payload), run=run, seq=1, owner="o", at=AT, boot=0,
+                 schema_version=1)  # fmt: skip
+
+
+def test_supplier_runs_name_every_run_that_decides_a_read_kinds_current_version() -> None:
+    """Codex review on #56: a declared read saved in a third run must be loaded by a replay.
+
+    A replay scoped to ``runs_to_load`` reads versions from ``artifact.saved`` events, so
+    the runs that saved a read kind, and the runs that proposed or accepted a revision of
+    it, are listed; other kinds and owner-level events are not.
+    """
+    view = log(
+        event("artifact.saved", "R-0001", kind="a.scope", key=None, ref="a.scope@v1"),
+        event("artifact.saved", "R-0002", kind="a.extract", key="C1", ref="a.extract/C1@v1"),
+        event("artifact.saved", "R-0003", kind="a.other", key=None, ref="a.other@v1"),
+        event("interrupt.raised", "R-0004", kind="review", revision="a.scope@v2"),
+        event("review.accepted", "R-0005", revision="a.scope@v2"),
+        event("review.accepted", "R-0006", revision="not a ref"),
+        event("artifact.saved", None, kind="a.scope", key=None, ref="a.scope@v3"),
+    )
+    assert supplier_runs(view, {"a.scope"}) == {"R-0001", "R-0004", "R-0005"}
+    assert supplier_runs(view, {"a.scope", "a.extract"}) == {
+        "R-0001", "R-0002", "R-0004", "R-0005"
+    }  # fmt: skip
+    assert supplier_runs(view, ()) == frozenset()

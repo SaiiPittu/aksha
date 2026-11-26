@@ -33,11 +33,13 @@ rebuild run's ``for_runs`` (stress fix F1): its segments are that instance's own
 since its entry, preceded by the segments it resumed itself. The choice is computed once,
 inside the stop decision that re-enters the instance, and recorded on
 ``task.entered{reentry}`` with ``as_of_seq``, the segments, ``read_runs`` (every run whose
-events the context reads, so a replay loads them all), the inputs new since the session
-(``new_reads``, F5) and the measured sizes. Assembly reads the record and never
-recomputes the choice, so a restart sends the same bytes; :func:`reentry_divergences`
-recomputes it to check a replay. Step payloads are read through the blob store
-(``blobs``), so an offloaded reply or result is sized, checked and shown whole.
+events the context reads, so a replay loads them all: the session's runs, the writer's run,
+and every run that saved or reviewed a version of a kind the instance reads), the inputs
+new since the session (``new_reads``, F5) and the measured sizes. Assembly reads the
+record and never recomputes the choice, so a restart sends the same bytes;
+:func:`reentry_divergences` recomputes it to check a replay. Step payloads are read
+through the blob store (``blobs``), so an offloaded reply or result is sized, checked and
+shown whole.
 """
 
 from __future__ import annotations
@@ -78,7 +80,7 @@ from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.errors import TaskUnknown
 from aksha.runtime.tasks.status import run_state
 from aksha.runtime.tasks.tree import CompiledTree
-from aksha.runtime.tasks.types import InstanceRef
+from aksha.runtime.tasks.types import FromField, InstanceRef
 
 ReentrySetting = Literal["fresh", "resume"]
 """A run's setting (``run.started{reentry}``): whether its re-entries may resume."""
@@ -513,8 +515,9 @@ def choose_reentry(
     pairs = tuple(p for b in blocks for t in b.turns for p in t.pairs)
     count = sum(len(b.turns) for b in blocks)
     seen = (*_session_reads(view, session), *_old_reads(view, entries))
-    runs = tuple(sorted({ref.run, *(r for r, _ in origins), *(s.run for s in session)}))
-    fresh_runs = tuple(sorted({ref.run, *(r for r, _ in origins)}))
+    suppliers = supplier_runs(view, _read_kinds(tree, ref, seen))
+    runs = tuple(sorted({ref.run, *(r for r, _ in origins), *(s.run for s in session), *suppliers}))
+    fresh_runs = tuple(sorted({ref.run, *(r for r, _ in origins), *suppliers}))
     checker = ReadChecker(view, blobs=blobs)
     chars, stale = _sizes(view, ref.run, ref.instance, blocks, session, checker)
     rp = policy.resume
@@ -556,6 +559,50 @@ def choose_reentry(
     if chars - stale + rp.headroom_chars > policy.high_water_chars:
         return made("budget_exceeded")
     return made(None)
+
+
+def _read_kinds(tree: CompiledTree, ref: InstanceRef, seen: Iterable[InputRef]) -> frozenset[str]:
+    """The artifact kinds the choice and the context read.
+
+    The declared reads, the kinds their keys are listed in, and the kind of every artifact
+    version the session or the old version read.
+    """
+    kinds: set[str] = set()
+    for read in tree.reads(ref.task_path):
+        kinds.add(read.kind)
+        if isinstance(read.keys, FromField):
+            kinds.add(read.keys.kind)
+    kinds.update(ArtifactRef.from_input(r).kind for r in seen if r.kind == "artifact")
+    return frozenset(kinds)
+
+
+def supplier_runs(view: LogView, kinds: Iterable[str]) -> frozenset[str]:
+    """The runs whose events decide which version of ``kinds`` is current (F10).
+
+    A version is current by its ``artifact.saved`` and by the diff reviews that propose or
+    accept a revision of it (ADR-P05 D1), so the runs of all three are listed. Without them
+    a replay scoped to :func:`runs_to_load` reads an older or no version of a declared read
+    whose writer ran in a third run, and the recomputed choice diverges.
+    """
+    wanted = frozenset(kinds)
+    out: set[str] = set()
+    for e in view.events:
+        if e.run is None:
+            continue
+        if e.type == "artifact.saved":
+            if e.payload.get("kind") in wanted:
+                out.add(e.run)
+        elif (e.type == "interrupt.raised" and e.payload.get("kind") == "review") or (
+            e.type == "review.accepted"
+        ):
+            revision = str(e.payload.get("revision", ""))
+            try:
+                kind = ArtifactRef.parse(revision).kind
+            except ValueError:
+                continue
+            if kind in wanted:
+                out.add(e.run)
+    return frozenset(out)
 
 
 def _old_reads(view: LogView, entries: Iterable[RebuildEntry]) -> tuple[InputRef, ...]:
