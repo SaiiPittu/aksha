@@ -6,8 +6,9 @@ transaction (U2); its dedup key is ``cite:{carrier}#{n}``. :func:`evidence` buil
 log: the span index, the record versions the log last recorded (record grain, S2), the
 steps that failed, and, for an instance that resumed an earlier session (decision 36), the
 spans shown inside that session's turns: those count as shown to this instance too, because
-the resumed context shows them again. A stale one is still refused (``stale_source``). All
-pure.
+the resumed context shows them again. A stale one is still refused (``stale_source``),
+unless the last span recheck since its record moved found its text unchanged in the new
+version (``kept_spans``, ADR-P13 amendment M1). All pure.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.grounding.types import Verified
 from aksha.runtime.grounding.verify import Evidence
+from aksha.runtime.invalidation.keying import kept_spans
 from aksha.runtime.invalidation.sources import source_facts
 from aksha.runtime.projections.view import LogView
 
@@ -70,14 +72,38 @@ def resumed_spans(view: LogView, run: str, instance: str) -> frozenset[str]:
     ``from_turn`` to the last of ``through_turn``, so an answer shown between two of its
     turns counts too); one shown in a turn the resumed context leaves out does not.
     """
+    out: set[str] = set()
+    for e in _resumed_events(view, run, instance):
+        if e.type == "excerpts.minted":
+            out.update(str(i) for i in e.payload.get("shown", ()))
+        elif e.type == "excerpts.shown":
+            out.update(str(i) for i in e.payload["spans"])
+    return frozenset(out)
+
+
+def resumed_reads(view: LogView, run: str, instance: str) -> frozenset[str]:
+    """The reads, as text, recorded inside the session ``instance`` resumed in ``run``.
+
+    The resumed context shows those tool results again, so a scoped claim (ADR-P13 M1)
+    may name them as its scope; one whose record moved since is still refused.
+    """
+    return frozenset(
+        str(_whole(InputRef.from_json(e.payload["input"])))
+        for e in _resumed_events(view, run, instance)
+        if e.type == "read.recorded"
+    )
+
+
+def _resumed_events(view: LogView, run: str, instance: str) -> list[Any]:
+    """The events of each segment's instance within the segments' turns (``resumed_spans``)."""
     latest: Mapping[str, Any] | None = None
     for e in view.events:
         if e.type == "task.entered" and e.run == run and e.instance == instance:
             latest = e.payload
     choice = latest.get("reentry") if latest is not None else None
     if not isinstance(choice, Mapping) or choice.get("mode") != "resume":
-        return frozenset()
-    out: set[str] = set()
+        return []
+    out: list[Any] = []
     for seg in choice.get("session", ()):
         if not isinstance(seg, Mapping):
             continue
@@ -87,14 +113,12 @@ def resumed_spans(view: LogView, run: str, instance: str) -> frozenset[str]:
         if not seqs:
             continue
         first, last = min(seqs), max(seqs)
-        for e in view.events:
-            if e.run != srun or e.instance != sinst or not first <= e.seq <= last:
-                continue
-            if e.type == "excerpts.minted":
-                out.update(str(i) for i in e.payload.get("shown", ()))
-            elif e.type == "excerpts.shown":
-                out.update(str(i) for i in e.payload["spans"])
-    return frozenset(out)
+        out.extend(
+            e
+            for e in view.events
+            if e.run == srun and e.instance == sinst and first <= e.seq <= last
+        )
+    return out
 
 
 def _turn_of(step: str | None, run: str, instance: str) -> int | None:
@@ -126,4 +150,6 @@ def evidence(
         artifact=artifact,
         failed_steps=failed_steps(view),
         resumed_spans=resumed_spans(view, run, instance),
+        kept_spans=kept_spans(view),
+        resumed_reads=resumed_reads(view, run, instance),
     )

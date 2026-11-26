@@ -59,6 +59,8 @@ def run_opened(session: str, run: str, agent: RoutableAgent) -> NewEvent:
     payload["reentry"] = agent.reentry or "fresh"
     if agent.invalidation is not None:
         payload["invalidation"] = agent.invalidation
+    if agent.invalidation_keys is not None:
+        payload["invalidation_keys"] = agent.invalidation_keys
     return NewEvent(RUN_STARTED, payload, run=run, session=session)
 
 

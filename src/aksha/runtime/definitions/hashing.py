@@ -53,6 +53,7 @@ def definition_hash(
     tools_hash: str,
     context_hash: str | None = None,
     invalidation: str | None = None,
+    invalidation_keys: str | None = None,
 ) -> str:
     """The agent definition version hash of the agent in ``folder`` (``sha256:<64 hex>``).
 
@@ -62,6 +63,8 @@ def definition_hash(
     the runtime's ``CONTEXT_POLICY_VERSION``, which no file of the agent shows.
     ``invalidation`` is the agent's resolved invalidation mode (decision 38): a definition
     that declares none gets the runtime's default, which no file of the agent shows either.
+    ``invalidation_keys`` (ADR-P05 M2) is hashed only when it is not the default ``reads``,
+    so a definition written before the setting keeps its hash.
     """
     material = {
         "agent": [list(pair) for pair in file_hashes(folder)],
@@ -79,6 +82,8 @@ def definition_hash(
     }
     if invalidation is not None:
         material["invalidation"] = invalidation
+    if invalidation_keys is not None and invalidation_keys != "reads":
+        material["invalidation_keys"] = invalidation_keys
     return "sha256:" + sha256_hex(material)
 
 
@@ -100,6 +105,7 @@ def run_started_fields(
         "runtime_commit": runtime_commit,
         "dirty": dirty,
         "invalidation": loaded.agent.invalidation,
+        "invalidation_keys": loaded.agent.invalidation_keys,
     }
 
 

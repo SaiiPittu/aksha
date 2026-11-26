@@ -36,7 +36,9 @@ own boundary (U9). An agent with an open run regenerates its work in place inste
    the default.
 8. Modes (decision 38): only versions of runs whose agent declared ``rebuild`` are ever
    invalidated (``invalidation.view`` rule 6), so only such agents get a rebuild run, and
-   the run records ``invalidation: rebuild`` on its ``run.started``.
+   the run records ``invalidation: rebuild`` on its ``run.started``, and the keying of
+   the runs it rebuilds for (ADR-P05 M2): ``citations`` only when every one keyed on
+   citations, else ``reads``.
 
 Decision 34 chose a fresh context with a rebuild summary for the first milestone;
 :func:`rebuild_brief` builds it. Resume on the existing session (decision 36) is
@@ -53,6 +55,7 @@ from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.context.reentry import ReentrySetting, inherited_setting
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
+from aksha.runtime.invalidation.keying import inherited_keys
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
 from aksha.runtime.invalidation.types import EXPIRED, ReadStatus, RebuildBrief, RebuildEntry
 from aksha.runtime.invalidation.view import (
@@ -131,6 +134,7 @@ def rebuild_starts(
             "for_runs": for_runs,
             "rebuild_key": key,
             "invalidation": "rebuild",
+            "invalidation_keys": inherited_keys(view, for_runs),
         }
         if headless:
             payload["headless"] = True

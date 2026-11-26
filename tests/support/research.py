@@ -146,6 +146,7 @@ class ResearchBench:
             "definition_hash": self.loaded.definition_hash,
             "budget": {"model_turns": budget.model_turns, "tool_calls": budget.tool_calls,
                        "active_ms": budget.active_ms},
+            "invalidation_keys": self.agent.invalidation_keys,
         }  # fmt: skip
         self.store.append(OWNER, "U1", (NewEvent("run.started", payload, run=RUN),))
 

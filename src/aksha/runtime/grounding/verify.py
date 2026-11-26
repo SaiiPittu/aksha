@@ -12,7 +12,11 @@ copy it); and the quote is at least ``MIN_QUOTE_CHARS`` long or the whole span
 :func:`verify_content` walks saved content: every node a policy's field pattern matches
 must hold a cite or (where allowed) an explicit unknown, else ``ungrounded_value``; every
 cite anywhere is verified, under :data:`ANY_FORM` outside a declared field; and an
-unknown outside a ``may_be_unknown`` field is ``unknown_not_allowed``.
+unknown outside a ``may_be_unknown`` field is ``unknown_not_allowed``. A scoped claim
+(``grounding.claims``: an absence or coverage claim) anywhere, a declared field included,
+is grounded by its scope: one with no scope, a malformed one, or one naming a search or a
+record the instance never read is refused (``scope_missing``, ``scope_invalid``,
+``scope_not_read``); a valid one adds no result.
 
 Everything the verifier reads is in :class:`Evidence`, built from the owner's event store
 by the artifact store's save path, so the verifier itself reads nothing else.
@@ -27,6 +31,13 @@ from typing import Any
 
 from aksha.runtime.artifacts.hashing import resolve
 from aksha.runtime.artifacts.types import ArtifactRef
+from aksha.runtime.grounding.claims import (
+    ScopedClaim,
+    claim_nodes,
+    is_claim_node,
+    parse_claim,
+    scope_problem,
+)
 from aksha.runtime.grounding.types import (
     ANY_FORM,
     MIN_QUOTE_CHARS,
@@ -74,6 +85,12 @@ class Evidence:
     failed_steps: frozenset[str] = frozenset()
     resumed_spans: frozenset[str] = frozenset()
     """The spans shown inside the turns of the session this instance resumed, if it did."""
+    resumed_reads: frozenset[str] = frozenset()
+    """The reads recorded inside the session this instance resumed, as text, whole: a
+    scoped claim may name them (ADR-P13 M1)."""
+    kept_spans: frozenset[str] = frozenset()
+    """Spans whose record moved but whose text the last recheck found unchanged in the new
+    version (``excerpts.rechecked``, ADR-P13 amendment M1): still citable."""
 
 
 def _err(code: Any, pointer: str, message: str) -> CiteError:
@@ -116,7 +133,7 @@ def _span(cite: SpanCite, ev: Evidence, policy: CitePolicy, at: str) -> Verified
         return _err("span_not_seen", at, f"{cite.span} was never shown to {ev.instance}")
     if span.source != STATEMENT_SOURCE and span.record_id in ev.records:
         now = ev.records[span.record_id]
-        if now != span.version:
+        if now != span.version and span.span_id not in ev.kept_spans:
             current = "gone" if now is None else f"at version {now}"
             return _err(
                 "stale_source", at,
@@ -283,6 +300,9 @@ def verify_content(
                     out.append(_err("unknown_not_allowed", at, f"{policy.field} needs a value"))
                 elif (problem := _unknown(node, evidence, at)) is not None:
                     out.append(problem)
+            elif is_claim_node(node):
+                if (refused := _claim(node, evidence, at)) is not None:
+                    out.append(refused)
             elif isinstance(node, Mapping) and "cite" in node:
                 out.append(_cite_node(node, evidence, policy, at))
             else:
@@ -295,4 +315,18 @@ def verify_content(
             out.append(_err("unknown_not_allowed", at, "no field here may be unknown"))
         else:
             out.append(_cite_node(node, evidence, ANY_FORM, at))
+    for at, node in claim_nodes(content):
+        if at not in governed and (refused := _claim(node, evidence, at)) is not None:
+            out.append(refused)
     return tuple(out)
+
+
+def _claim(node: Mapping[str, Any], ev: Evidence, at: str) -> CiteError | None:
+    """A scoped claim's refusal (``grounding.claims``), or None when its scope holds."""
+    claim = parse_claim(node, at)
+    if isinstance(claim, ScopedClaim):
+        problem = scope_problem(claim, ev.reads | ev.resumed_reads, ev.records)
+        if problem is None:
+            return None
+        claim = problem
+    return _err(claim.code, claim.pointer, claim.message)

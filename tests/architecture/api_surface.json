@@ -1,7 +1,7 @@
 {
-  "api_version": "2.11",
+  "api_version": "2.12",
   "surface": {
-    "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off') -> None",
+    "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off', invalidation_keys: 'InvalidationKeys' = 'reads') -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
     "ArtifactKind": "class ArtifactKind(name: 'str', schema: 'type | Mapping[str, Any]', keyed: 'bool' = False, reviewable: 'bool' = False, lifecycle: 'bool' = False, derived: 'Callable[..., Mapping[str, Any]] | None' = None, readiness: 'tuple[Check, ...]' = (), writers: \"Literal['one', 'chain']\" = 'one', canon_exclude: 'tuple[str, ...]' = (), list_keys: 'Mapping[str, str]' = <factory>, canonicalize: 'Callable[[Mapping[str, Any]], Mapping[str, Any]] | None' = None, save: \"Literal['any', 'tool_only']\" = 'any', summary: 'str | None' = None, cites: 'tuple[CitePolicy, ...]' = (), max_age_s: 'int | None' = None) -> None",
     "ArtifactReader": "class ArtifactReader: get(self, ref: 'str') -> 'ArtifactSnapshot | None'; latest(self, kind: 'str') -> 'tuple[ArtifactSnapshot, ...]'",
@@ -51,6 +51,7 @@
     "InputRef": "class InputRef(kind: 'InputKind', id: 'str', version: 'str', path: 'str | None' = None, entry_hash: 'str | None' = None) -> None",
     "InstanceRef": "class InstanceRef(run: 'str', task_path: 'str', key: 'str | None' = None) -> None",
     "InstanceStatus": "InstanceStatus = typing.Literal['new', 'running', 'suspended', 'done', 'blocked', 'withdrawn']",
+    "InvalidationKeys": "InvalidationKeys = typing.Literal['reads', 'citations']",
     "InvalidationMode": "InvalidationMode = typing.Literal['off', 'edit_guard', 'notify', 'rebuild']",
     "Judgement": "class Judgement(name: 'str', outcome: 'Outcome', value: 'str | bool | tuple[str, ...] | None', reason: 'str', spans: 'tuple[SpanRef, ...]' = (), step: 'str | None' = None) -> None",
     "KeySource": "class KeySource(origin: \"Literal['source', 'artifact']\", name: 'str', path: 'str | None' = None, unless: 'Check | None' = None) -> None",

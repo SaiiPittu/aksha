@@ -16,6 +16,7 @@ from aksha.runtime.budgets.types import Budget, Limits
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
+from aksha.runtime.invalidation.keying import DEFAULT_KEYS, InvalidationKeys
 from aksha.runtime.invalidation.modes import DEFAULT_MODE, InvalidationMode
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.types import ModelAdapterSpec, ModelAlias
@@ -83,6 +84,11 @@ class Agent:
     invalidation the agent's runs get (decision 38, ``invalidation.modes``): ``off`` (the
     default), ``edit_guard``, ``notify`` or ``rebuild``; the loader refuses any other
     value (``invalidation_unknown``) and hashes the mode into the definition.
+    ``invalidation_keys`` is what the agent's saved versions are keyed on (ADR-P05 M2,
+    ``invalidation.keying``): ``reads`` (the default: every read is a dependency) or
+    ``citations`` (the cited spans, scoped claims and definitions a version rests on are
+    strong dependencies, every other read weak); the loader refuses any other value
+    (``invalidation_keys_unknown``) and hashes it into the definition.
     """
 
     name: str
@@ -106,3 +112,4 @@ class Agent:
     requires_api: str = ">=2.0,<3"
     concurrency: int = 1
     invalidation: InvalidationMode = DEFAULT_MODE
+    invalidation_keys: InvalidationKeys = DEFAULT_KEYS

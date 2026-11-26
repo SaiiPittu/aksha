@@ -297,9 +297,11 @@ def run_position(
             if unit is not None:
                 session = run_session(view, setup.owner, ref.run)
                 exe = exec_for(setup, spec, str(step), attempt, unit, session)
-            models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner)
+            models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner,
+                                    setup.agent.name)  # fmt: skip
             outcome = body(ctx(reader, http, exe, dates, models))
-            out = _dispatched(setup, ref, step, spec, outcome, reader.returned, dates.reads)
+            extra = (*dates.reads, *models.reads)  # definition reads (ADR-P05 M2) after dates
+            out = _dispatched(setup, ref, step, spec, outcome, reader.returned, extra)
             if models.records:
                 out = replace(out, value={**(out.value or {}), MODEL_CALLS_FIELD: models.records})
             return with_records(out, http, exe)
@@ -336,9 +338,10 @@ def _dispatched(
     refused save or mint turns the whole result into the error the model reads, and
     nothing it asked for commits.
 
-    ``dates`` are the attempt's time reads (ADR-P25 D4): recorded with the body's own
-    reads, after them. Each record read from a source with a lifetime, and each saved
-    version of a kind with one, schedules its recheck in the same result (ADR-P25 D3).
+    ``dates`` are the attempt's time reads (ADR-P25 D4), then the definition reads its
+    fast-class calls made (ADR-P05 M2): recorded with the body's own reads, after them.
+    Each record read from a source with a lifetime, and each saved version of a kind with
+    one, schedules its recheck in the same result (ADR-P25 D3).
     """
     cap = setup.policy().result_cap_chars
     if outcome.saves and spec.effect not in SAVING_EFFECTS:

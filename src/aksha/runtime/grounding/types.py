@@ -59,10 +59,14 @@ CiteCode = Literal[
     "value_not_in_quote",
     "unknown_not_allowed",
     "unknown_invalid",
+    "scope_missing",
+    "scope_invalid",
+    "scope_not_read",
 ]
 """Every refusal the verifier gives. The ADR's nine, plus ``cite_invalid`` (a cite object
 of no form), ``span_not_of_source`` (a relation excerpt whose span is another record's),
-``value_not_in_quote`` (S3), ``unknown_not_allowed`` and ``unknown_invalid`` (D5)."""
+``value_not_in_quote`` (S3), ``unknown_not_allowed`` and ``unknown_invalid`` (D5), and the
+three a scoped claim is refused with (``grounding.claims``, amendment M1)."""
 
 _POINTER_PART = re.compile(r"^(\*|[^/]*)$")
 

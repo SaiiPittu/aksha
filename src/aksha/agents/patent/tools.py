@@ -131,7 +131,8 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
         data = world.candidates()
         read = InputRef("query", query_id("list_candidates", args),
                         query_version([*data["candidates"], *data["unread"]]))  # fmt: skip
-        return ToolOutcome(Ok(data, reads=(read,)))
+        # The listing's query ID, so a claim over what it lists can name it as its scope.
+        return ToolOutcome(Ok({**data, "query": read.id}, reads=(read,)))
 
     def read_note(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date, ctx.models)
@@ -184,7 +185,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
         data = world.templates()
         read = InputRef("query", query_id("list_templates", args),
                         query_version(data["templates"]))  # fmt: skip
-        return ToolOutcome(Ok(data, reads=(read,)))
+        return ToolOutcome(Ok({**data, "query": read.id}, reads=(read,)))
 
     def read_template(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         world = bound.over(ctx.reader, ctx.run_date, ctx.models)

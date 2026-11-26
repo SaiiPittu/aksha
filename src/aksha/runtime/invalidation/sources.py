@@ -25,7 +25,11 @@ ADR-P25 adds two inputs, through the same writer:
    ``time/clock``, is checked against the owner's ``time:clock`` reads, and it is recorded
    even when nothing read it yet: its caller (``timers.clock.date_change``) asks only when
    an open run or an older read makes the new date matter.
-5. ``expired`` (D3) lists the records and artifact versions whose freshness lifetime ran
+5. Citation keying (amendment M2): for each moved record of a source that can hand back
+   its text (``RecordTexts``), every span minted over the record is compared with the new
+   text, and one ``excerpts.rechecked`` fact records each as ``kept``, ``changed`` or
+   ``gone``, with the source change's number.
+6. ``expired`` (D3) lists the records and artifact versions whose freshness lifetime ran
    out: one ``source.expired`` fact names them, counted as a source change.
 
 ``source_facts`` is the projection over those facts that the invalidation view reads.
@@ -33,12 +37,14 @@ ADR-P25 adds two inputs, through the same writer:
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from types import MappingProxyType
 
 from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.events.envelope import NewEvent
-from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
+from aksha.runtime.grounding.spans import span_index
+from aksha.runtime.invalidation.keying import SpanCheck, recheck, rechecked_event
+from aksha.runtime.invalidation.ports import QueryRunner, RecordTexts, VersionedSource
 from aksha.runtime.invalidation.types import (
     CLOCK_RECORD,
     CLOCK_SOURCE,
@@ -114,6 +120,8 @@ def record_source_changes(
     unseen: dict[str, str] = {}  # never recorded, no read record moved: queries decide
     moved_sources: dict[str, str] = {}
     moved_records: dict[str, str | None] = {}
+    checks: dict[str, SpanCheck] = {}
+    index = None
     for source in sources:
         now = source.version(owner)
         prior = facts.sources.get(source.name)
@@ -125,6 +133,9 @@ def record_source_changes(
         if prior is not None or changed:
             moved_sources[source.name] = now
             moved_records.update(changed)
+            if changed and isinstance(source, RecordTexts):
+                index = index or span_index(view)
+                checks.update(recheck(index, source.name, changed, _text_of(source)))
         elif queried and cause == "command" and source.name != CLOCK_SOURCE:
             unseen[source.name] = now
     number = facts.source_version
@@ -141,6 +152,9 @@ def record_source_changes(
         number += 1
         events.extend(_changed(view, number, cause, moved_sources, moved_records, change_set,
                                run_query, facts, hashes))  # fmt: skip
+        rechecked = rechecked_event(number, checks)
+        if rechecked is not None:
+            events.append(rechecked)
     gone = sorted({r.id for r in expired if r.kind == "record"})
     versions = sorted({f"{r.id}@{r.version}" for r in expired if r.kind == "artifact"})
     if gone or versions:
@@ -193,6 +207,16 @@ def _changed(
 def _queries(view: LogView, facts: SourceFacts) -> dict[str, str]:
     """Every recorded query of the owner to the result-set hash last known for it."""
     return {**read_inputs(view, "query"), **facts.queries}
+
+
+def _text_of(source: RecordTexts) -> Callable[[str], str | None]:
+    name = str(getattr(source, "name", ""))
+
+    def text(record_id: str) -> str | None:
+        found = source.read(name, record_id)
+        return None if found is None else found.text
+
+    return text
 
 
 def _moved_records(

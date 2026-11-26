@@ -45,11 +45,13 @@ from aksha.runtime.api import (
     ToolUse,
     VersionedSourceSpec,
     artifact_keys,
+    kind_question,
 )
 
 from . import checks
 from .tools import build_tools
 from .world import COLLECTIONS, SOURCE_NAME, SourceWorld
+from .world import KINDS as DOC_KINDS
 
 OBJECT: dict[str, Any] = {"type": "object"}
 
@@ -296,7 +298,13 @@ def _fields(*specs: tuple[str, str, str]) -> tuple[FieldSpec, ...]:
 
 
 MODEL_ALIASES = (
-    ModelAlias("doc_kind", "classification", allow_adapted=True, on_exhausted="unknown"),
+    ModelAlias(
+        "doc_kind",
+        "classification",
+        allow_adapted=True,
+        on_exhausted="unknown",
+        questions=(kind_question(DOC_KINDS),),
+    ),
     ModelAlias(
         "note_structure",
         "extraction",
@@ -399,6 +407,9 @@ def build_agent(world: SourceWorld) -> Agent:
         instructions="prompts/instructions.md",
         # Prior art and the papers move, and an approved packet must follow (decision 38).
         invalidation="rebuild",
+        # A version rests on what it cites and on its scoped claims (the portfolio's
+        # listings); one that cites nothing stays keyed on every read (ADR-P05 M2).
+        invalidation_keys="citations",
         reads=tuple(f"record:{c}" for c in COLLECTIONS),
         artifacts=KINDS,
         tools=(*build_tools(world), ToolUse(SAVE)),

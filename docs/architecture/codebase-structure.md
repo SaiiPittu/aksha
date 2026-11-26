@@ -157,10 +157,13 @@ src/aksha/
 │   ├── invalidation/                        P05 invalidation, early cutoff, rebuilds, diff reviews
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── types.py                         VersionedSourceSpec, ReadStatus, VersionState, RebuildEntry, DiffReview
-│   │   ├── ports.py                         VersionedSource, QueryRunner, InputWorkspace (Protocols): outside the core
+│   │   ├── ports.py                         VersionedSource, RecordTexts, QueryRunner, InputWorkspace (Protocols): outside the core
 │   │   ├── sources.py                       the one writer of source.changed and query.reexecuted; source_facts
 │   │   ├── modes.py                         the four invalidation modes an agent opts into (decision 38)
 │   │   ├── guard.py                         the edit-time check: stale_edit, unread_overwrite (edit_guard and up)
+│   │   ├── keying.py                        citation keying (M2): strong and weak reads, span rechecks, notices
+│   │   ├── notices.py                       evidence.noticed in a source change's transaction (M2)
+│   │   ├── definitions.py                   DefinitionSource: each agent's alias definitions as a versioned source (M2)
 │   │   ├── view.py                          the invalidation view: four states, early cutoff, the sibling rule, supersession
 │   │   ├── reading.py                       ViewArtifactReader: a read tool's versions of its reads_kinds, as of its step
 │   │   ├── plan.py                          the rebuild plan (modes, holds, rejected writers) and F2
@@ -178,6 +181,7 @@ src/aksha/
 │   │   ├── errors.py                        MintRefused (class_violation)
 │   │   ├── spans.py                         mint_spans, mint_for_result, statement_span, spans_shown, span_index
 │   │   ├── verify.py                        verify_citation and verify_content: the one verifier; pure
+│   │   ├── claims.py                        scoped absence and coverage claims and their refusals (M1)
 │   │   ├── ports.py                         RecordReader (Protocol): the reader a tool body reads records through
 │   │   ├── reading.py                       AttemptReader: one attempt's reads, the texts drafts are minted over
 │   │   ├── parts.py                         where_part, part_version: a read of some rows, versioned by those rows
@@ -195,6 +199,7 @@ src/aksha/
 │   │   ├── codec.py                         results and judgements as recorded JSON, and back
 │   │   ├── steps.py                         generation_step and run_cascade on the durable step executor
 │   │   ├── calls.py                         ToolModelCalls: a body's extraction and classification calls, recorded on its step (G1)
+│   │   ├── definitions.py                   alias_definition: the version of an alias's declared schema (P05 M2)
 │   │   ├── documents.py                     DocumentKind, read_document: decide a record's kind, pick its schema, extract (G3)
 │   │   ├── options.py                       resolve_questions: options read from a saved artifact (S1)
 │   │   ├── adapted.py                       AdaptedClassificationModel: generation under a forced choice

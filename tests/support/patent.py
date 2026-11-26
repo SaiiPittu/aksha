@@ -170,6 +170,7 @@ class PatentRig:
             "cause": "request",
             "definition_hash": DEFINITION,
             "budget": {"model_turns": 400, "tool_calls": 800, "active_ms": 10**9},
+            "invalidation_keys": self.agent.invalidation_keys,  # as a loaded agent's start
         }
         self.store.append(OWNER, "U1", (NewEvent("run.started", payload, run=run),))
         return run

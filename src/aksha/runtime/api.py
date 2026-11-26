@@ -61,7 +61,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    records an owner's effects created or revised, with the freshness of each one's source.
 12. Invalidation modes (decision 38): ``InvalidationMode`` (``Agent.invalidation``) and
    ``EditSpec`` (``ToolSpec.edits``, the record a tool edits or overwrites, checked at
-   edit time from ``edit_guard`` up).
+   edit time from ``edit_guard`` up). Citation keying (ADR-P05 M2): ``InvalidationKeys``
+   (``Agent.invalidation_keys``: ``reads`` or ``citations``); an absence or coverage claim
+   is plain content (``{"absence": {"statement", "scope"}}``, ADR-P13 M1).
 13. The web (P26 A3): ``web_search_tool``, the generic ``web_search`` tool any agent may
    list; ``fetch_url_spec``, the generic ``fetch_url`` tool's spec, and what an agent's own
    ``fetch_url`` body reads a page through: ``fetch_text`` (the page as a returned text,
@@ -115,6 +117,7 @@ from aksha.runtime.grounding.types import (
     maybe_unknown,
 )
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
+from aksha.runtime.invalidation.keying import InvalidationKeys
 from aksha.runtime.invalidation.modes import InvalidationMode
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.calls import passage_id, span_draft
@@ -263,6 +266,7 @@ __all__ = [
     "InputRef",
     "InstanceRef",
     "InstanceStatus",
+    "InvalidationKeys",
     "InvalidationMode",
     "Judgement",
     "KeySource",

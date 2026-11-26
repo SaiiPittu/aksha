@@ -20,6 +20,10 @@ agent loop gives a dispatched body. For each call it:
    D9), and one hash over every request and answer in order. The accepted values are in the
    tool's result, which the step records too; the summary keeps a step that asks a model
    once per row of a large export under the payload cap.
+5. records, for a call made under the alias's declared fields or questions, a read of
+   the definition it was answered under (``reads``, ``models.definitions``, ADR-P05
+   amendment M2), which the loop records with the tool's own reads, so a value derived
+   under an old schema reopens when the definition changes.
 
 The tool step is the durable unit: a completed step returns its recorded result without
 running the body, so a resume never asks again, and a fake-mode run writes the same bytes.
@@ -36,6 +40,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import Any
 
+from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.errors import AkshaError
 from aksha.runtime.execution.errors import TransientStepError
@@ -45,6 +50,7 @@ from aksha.runtime.models.codec import (
     extraction_result_json,
     judgement_json,
 )
+from aksha.runtime.models.definitions import alias_definition, definition_record
 from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
 from aksha.runtime.models.routing import AliasTable, adapter_name, cascade_for
 from aksha.runtime.models.thresholds import threshold_classification, threshold_extraction
@@ -96,14 +102,33 @@ class ToolModelCalls:
     """``ToolContext.models`` for one dispatched call (module doc)."""
 
     def __init__(
-        self, table: AliasTable, allowed: frozenset[str], tool: str, owner: str = ""
+        self,
+        table: AliasTable,
+        allowed: frozenset[str],
+        tool: str,
+        owner: str = "",
+        agent: str = "",
     ) -> None:
-        """Ask only ``allowed`` aliases of ``table``, for ``tool``'s body."""
+        """Ask only ``allowed`` aliases of ``table``, for ``tool``'s body (of ``agent``)."""
         self._table = table
         self._allowed = allowed
         self._tool = tool
         self._owner = owner
+        self._agent = agent
         self.calls: list[dict[str, Any]] = []
+        self._definitions: dict[str, str] = {}
+
+    @property
+    def reads(self) -> tuple[InputRef, ...]:
+        """The definition reads of the calls made under declared definitions (item 5)."""
+        return tuple(
+            InputRef("record", definition_record(self._agent, alias), version)
+            for alias, version in sorted(self._definitions.items())
+        )
+
+    def _defined(self, alias: str, declared: bool) -> None:
+        if declared and self._agent:
+            self._definitions[alias] = alias_definition(self._table.aliases[alias])
 
     @property
     def records(self) -> list[dict[str, Any]]:
@@ -150,7 +175,9 @@ class ToolModelCalls:
     ) -> tuple[Judgement, ...]:
         """Fill ``fields`` from ``passages`` of ``text`` (module doc, items 2 and 3)."""
         self._alias(alias, "extraction")
-        asked = tuple(fields) if fields is not None else self._table.aliases[alias].fields
+        declared = self._table.aliases[alias].fields
+        asked = tuple(fields) if fields is not None else declared
+        self._defined(alias, bool(asked) and asked == declared)
         state = tuple(
             CitationSpan(
                 passage_id(n), self._owner, p.source, p.record_id, p.version, p.start, p.end,
@@ -182,7 +209,9 @@ class ToolModelCalls:
     ) -> tuple[Judgement, ...]:
         """Answer ``questions`` about ``state`` (module doc, item 3)."""
         self._alias(alias, "classification")
-        asked = tuple(questions) if questions is not None else self._table.aliases[alias].questions
+        declared_q = self._table.aliases[alias].questions
+        asked = tuple(questions) if questions is not None else declared_q
+        self._defined(alias, bool(asked) and asked == declared_q)
         request = ClassificationRequest(
             f"{self._tool}/{alias}", alias, state, asked, tuple(state_inputs)
         )

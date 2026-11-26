@@ -9,6 +9,8 @@ retry returns the first receipt.
    and review voids that change confirms (D9), in one transaction. The caller has already
    applied the change set to its source adapter (a fixture world's per-owner overlay); the
    command reads the adapters and records the facts. Nothing moved: the receipt alone.
+   Citation-keyed versions a moved read did not reopen are noticed in the same transaction
+   (``evidence.noticed``, :mod:`invalidation.notices`, amendment M2).
 2. ``accept_review`` (U4) records ``review.accepted`` and ``interrupt.resolved``. Where
    invalidation revoked an approval of the old version, it records a fresh
    ``approval.requested`` (with its ``interrupt.raised{approval}``) for the revision,
@@ -36,6 +38,7 @@ from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.interrupts.approvals import ApprovalTool, request_events, retarget
 from aksha.runtime.interrupts.approvals import approvals as approval_views
 from aksha.runtime.invalidation.confirm import after, confirmations
+from aksha.runtime.invalidation.notices import notices_for
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
 from aksha.runtime.invalidation.reviews import ReviewRecord, approvals, reviews
 from aksha.runtime.invalidation.sources import SOURCE_CHANGE_BOUNDARY, record_source_changes
@@ -96,7 +99,9 @@ def source_change_spec(
         )  # fmt: skip
         if not events:
             return CommandAccepted(tuple(facts))
-        return CommandAccepted((*facts, *events, *confirmations(view, events)))
+        return CommandAccepted(
+            (*facts, *events, *confirmations(view, events), *notices_for(view, events))
+        )
 
     return CommandSpec("apply_source_change", SOURCE_CHANGE_BOUNDARY, decide)
 
@@ -130,7 +135,8 @@ def check_sources(
     events = record_source_changes(view, sources, cause="recovery", run_query=run_query)
     if not events:
         return ()
-    store.append(owner, SOURCE_CHANGE_BOUNDARY, (*events, *confirmations(view, events)))
+    store.append(owner, SOURCE_CHANGE_BOUNDARY,
+                 (*events, *confirmations(view, events), *notices_for(view, events)))  # fmt: skip
     return tuple(sorted(events[0].payload["sources"]))
 
 

@@ -9,9 +9,10 @@ result-set hashes, and records what they answered as ``source.changed`` and
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.grounding.types import ReturnedText
 
 
 class VersionedSource(Protocol):
@@ -36,6 +37,21 @@ class VersionedSource(Protocol):
 
     def record_version(self, owner: str, record_id: str) -> str | None:
         """The record's current version for the owner; None when the record is gone."""
+        ...
+
+
+@runtime_checkable
+class RecordTexts(Protocol):
+    """A versioned source that can also hand back a record's current text (ADR-P05 M2).
+
+    ``record_source_changes`` compares every span minted over a moved record with the
+    record's new text through it (``excerpts.rechecked``), so citation keying can tell a
+    changed cited span from a change elsewhere in the record. A source without it has its
+    spans taken as changed.
+    """
+
+    def read(self, source: str, record_id: str) -> ReturnedText | None:
+        """The record's text at its current version; None when there is none."""
         ...
 
 

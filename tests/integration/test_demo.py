@@ -3,8 +3,9 @@
 The demo runs as the user runs it, ``python -m aksha.interfaces.demo``, in a child process
 with a real ``SIGKILL`` inside it; its ``--json`` report is checked against the variant
 world's answer key and against what the mock mailbox actually received. It fails when a
-change reopens work outside C1's chain, when research is touched, when recovery sends
-again, or when the hash chain does not verify.
+change reopens work outside C1's chain and the research needs the edited review export is
+counted in (citation keying, ADR-P05 M2), when recovery sends again, or when the hash
+chain does not verify.
 """
 
 from __future__ import annotations
@@ -17,7 +18,14 @@ from typing import Any
 
 import pytest
 
-from aksha.interfaces.demo.world import EDITS, VARIANT, WORLDS, apply_change, copy_base
+from aksha.interfaces.demo.world import (
+    EDITS,
+    UNCITED_EDIT,
+    VARIANT,
+    WORLDS,
+    apply_change,
+    copy_base,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 C1_CHAIN = {
@@ -29,6 +37,9 @@ C1_CHAIN = {
     "patent.table@v2",
     "patent.selection@v2",
 }  # fmt: skip
+NEEDS_CHAIN = {f"research.{kind}@v2" for kind in ("needs", "matrix", "findings", "tests")}
+"""The demo's own edit, one review, reopens the theme counts it is counted in: their
+scope is the whole review export (ADR-P13 M1), and the counts' readers follow."""
 
 
 @pytest.fixture(scope="module")
@@ -48,18 +59,31 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     demo: tuple[dict[str, Any], str],
 ) -> None:
     report, _ = demo
-    assert set(report["rebuilt"]) == C1_CHAIN
+    assert set(report["rebuilt"]) == C1_CHAIN | NEEDS_CHAIN
     first, kept = report["first"], report["kept"]
-    assert report["kept"]["research"] == sorted(first["research"])  # every research output
+    research = {s for s in first["research"] if f"{first['research'][s]}" not in
+                {r.replace("@v2", "@v1") for r in NEEDS_CHAIN}}  # fmt: skip
+    assert set(kept["research"]) == research and research
     others = {s for s in first["patent"] if s.split("/")[-1] in ("C2", "C3", "C4")}
     assert others and others <= set(kept["patent"])
-    assert {r["agent"] for r in report["runs"].values() if r["cause"] == "rebuild"} == {"patent"}
+    rebuilt_by = {r["agent"] for r in report["runs"].values() if r["cause"] == "rebuild"}
+    assert rebuilt_by == {"patent", "research"}
     change = report["change"]
     # Every recorded query re-runs: four candidate searches, the candidate and template
     # listings, and the research agent's two listings and two searches. Only C1's search
     # finds the new publication; the new file is no seller page or review export, so the
     # research listings stay as they were.
     assert (change["queries_rerun"], change["queries_changed"]) == (10, 1)
+    # The review no output cites (the demo's own edit): the patent portfolio read the
+    # export outside what it rests on, so it is noticed and not rebuilt; the research
+    # needs count every review, so they reopen (ADR-P05 M2). Keyed on every read, the
+    # same change reopens the whole patent cascade as well.
+    weak = {w["version"] for w in change["weak"]}
+    assert weak == {"patent.portfolio@v1"}
+    assert change["rechecks_open"] == 1
+    assert {"version": "research.needs@v1", "why": ["scoped record"]} in change["strong"]
+    assert {s["version"] for s in change["strong"]} == set(change["invalidated"])
+    assert change["read_keyed"] > len(change["invalidated"]) + len(change["dirty"])
     key = json.loads((WORLDS / VARIANT / "key.json").read_text("utf-8"))
     action = key["expected_after_change"]["C1_next_action"]
     assert report["next_action"]["before"] == action["before"]
@@ -100,7 +124,7 @@ def test_the_chain_verifies_and_the_demo_is_quick(demo: tuple[dict[str, Any], st
     assert len(stdout.splitlines()) < 60  # readable in under a minute
 
 
-def test_the_change_set_is_the_variant_keys_change_and_nothing_else(tmp_path: Path) -> None:
+def test_the_change_set_is_the_variant_keys_change_and_one_uncited_review(tmp_path: Path) -> None:
     sources = copy_base(tmp_path)
     before = {p.relative_to(sources): p.read_bytes() for p in sources.rglob("*") if p.is_file()}
     change = apply_change(sources)
@@ -108,9 +132,11 @@ def test_the_change_set_is_the_variant_keys_change_and_nothing_else(tmp_path: Pa
     variant = WORLDS / VARIANT / "sources"
     assert {str(p) for p in after.keys() - before.keys()} == set(change.added)
     moved = {str(p) for p in before if before[p] != after[p]}
-    assert moved == {rel for rel, _, _ in EDITS}
+    assert moved == {rel for rel, _, _ in EDITS} | {UNCITED_EDIT[0]}
     for rel, _, new in EDITS:  # each edited line is the variant's line, byte for byte
         assert new.encode() in (variant / rel).read_bytes()
+    rel, old, new = UNCITED_EDIT  # the demo's own edit: that one review, nothing else
+    assert after[Path(rel)] == before[Path(rel)].replace(old.encode(), new.encode())
     for rel in change.added:
         assert (sources / rel).read_bytes() == (variant / rel).read_bytes()
 
@@ -135,7 +161,9 @@ def test_the_readmes_demo_excerpt_matches_a_run(demo: tuple[dict[str, Any], str]
     quoted = (
         f"rebuilt {len(report['rebuilt'])}: ",
         f"kept {patent} patent outputs: ",
-        f"kept all {research} research outputs: nothing they read moved",
+        f"kept {research} of {len(report['first']['research'])} research outputs: ",
+        "weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it",
+        f"the same change would reopen {report['change']['read_keyed']} outputs, not 14",
         f"mailbox: {deliveries} deliveries for {report['mailbox']['keys']} idempotency keys",
         "recovery asked the mailbox by key 1 time, sent 0 times",
     )
