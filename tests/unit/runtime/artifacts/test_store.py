@@ -323,3 +323,12 @@ def test_the_blob_helpers_need_a_blob_store(world: World) -> None:
     with pytest.raises(BlobError) as e:
         ArtifactStore({}).put_blob(b"x")
     assert e.value.code == "blob_store_required"
+
+
+def test_frozen_content_is_checked_against_its_schema(world: World) -> None:
+    """A tool body's arguments are frozen; the schema check reads them as plain JSON."""
+    from aksha.runtime.canonical import freeze
+
+    saved = world.save("line", "n1", freeze({"text": "a", "rows": [1, 2]}))
+    assert str(saved.version.ref) == "notes.line/n1@v1"
+    _refused("schema", world.save, "line", "n2", freeze({"rows": []}))

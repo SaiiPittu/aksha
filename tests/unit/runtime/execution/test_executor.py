@@ -628,3 +628,53 @@ def test_effects_unknown_tells_the_model_or_a_person(h: Harness) -> None:
     child.person.join()
     done = next(p for t, s, p in log(h.store) if t == "step.completed" and s == str(S1))
     assert (done["outcome"], done["on_unknown"]) == ("effects_unknown", "interrupt")
+
+
+# --- the agent loop's records: a refusal, a skip, a recorded result (ADR-P06 D5) ---------
+
+
+def _refusal(step: StepId) -> NewEvent:
+    from aksha.runtime.policy.events import decision_event
+    from aksha.runtime.policy.types import Refuse
+    from aksha.runtime.tools.types import ToolCall
+
+    refused = Refuse("unknown_tool", 1, "no tool named 'nope'", counted=True)
+    sid = str(step)
+    return decision_event(refused, ToolCall("nope", {}, 1), run=step.run,
+                          instance=str(step.instance), step=sid)  # fmt: skip
+
+
+def test_a_refusal_is_the_steps_one_fact_and_is_recorded_once(h: Harness) -> None:
+    ex = h.executor()
+    assert ex.recorded(S1) is None
+    first = ex.refuse(S1, _refusal(S1))
+    assert (first.outcome, first.code, first.replayed) == ("refused", "unknown_tool", False)
+    again = h.restart().refuse(S1, _refusal(S1))
+    assert again.replayed and again.outcome == "refused"
+    assert [t for t, s, _ in log(h.store) if s == str(S1)] == ["step.completed"]
+
+
+def test_refuse_takes_only_a_refusal_of_its_own_step(h: Harness) -> None:
+    ex = h.executor()
+    with pytest.raises(ValueError, match="names step"):
+        ex.refuse(S2, _refusal(S1))
+    ok = facts.step_completed(S1, "tool", "x", "ok", attempts=1)
+    with pytest.raises(ValueError, match="refused"):
+        ex.refuse(S1, ok)
+
+
+def test_a_skip_never_runs_and_is_recorded_once(h: Harness) -> None:
+    ex = h.executor()
+    skipped = ex.skip(S2, "tool", "send", "after_approval")
+    assert (skipped.outcome, skipped.code, skipped.attempts) == ("skipped", "after_approval", 0)
+    assert h.restart().skip(S2, "tool", "send", "after_approval").replayed
+    recorded = h.executor().recorded(S2)
+    assert recorded is not None and recorded.code == "after_approval"
+
+
+def test_a_started_step_is_never_skipped(h: Harness) -> None:
+    ex = h.executor()
+    with pytest.raises(Crash):
+        ex.step(S1, "tool", "t", HASH, Script().crash("t"), StepPolicy())
+    with pytest.raises(StepMismatch, match="never skipped"):
+        h.restart().skip(S1, "tool", "t", "after_finish")

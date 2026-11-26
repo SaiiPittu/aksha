@@ -456,7 +456,8 @@ def _guarded(fn: ast.AST, call: ast.Call, answers: set[str]) -> bool:
             (
                 b
                 for field in ("body", "orelse", "finalbody")
-                if node in (b := getattr(parent, field, [])) and isinstance(b, list)
+                # a lambda's body is one expression, not a block: test the type first
+                if isinstance(b := getattr(parent, field, []), list) and node in b
             ),
             None,
         )
@@ -638,4 +639,39 @@ def headless_reads(root: Path) -> list[Violation]:
                 out.append(
                     Violation(module, f"line {node.lineno}", "headless read outside resolve_ask")
                 )
+    return out
+
+
+LOOP_COMMITS = frozenset({"commit_stop_decision"})
+"""The one write the agent loop's driver makes itself: the stop decision (ADR-P16 D3)."""
+
+STORE_WRITES = frozenset({"append", "commit"})
+"""Method names that write an event store."""
+
+
+def loop_writers(root: Path) -> list[Violation]:
+    """Every write the agent loop makes other than through the step executor (ADR-P06 D3).
+
+    In ``aksha/runtime/loop/``: a call ``x.append(owner, boundary, events)`` (three or more
+    arguments, the ``EventStore.append`` shape, never a list's), a ``.commit(...)`` call,
+    and a call of any ``commit_*`` function but :data:`LOOP_COMMITS`, which only
+    ``drive.py`` may call.
+    """
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime" / "loop").rglob("*.py")):
+        me = module_name(root, f)
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"), filename=str(f))):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _called(node)
+            if name is None:
+                continue
+            args = len(node.args) + len(node.keywords)
+            if isinstance(node.func, ast.Attribute) and name in STORE_WRITES:
+                if name == "commit" or args >= 3:
+                    out.append(Violation(me, name, "the loop writes through the step executor"))
+            elif name.startswith("commit_") and not (
+                name in LOOP_COMMITS and me == "aksha.runtime.loop.drive"
+            ):
+                out.append(Violation(me, name, "only the driver commits, and only a decision"))
     return out

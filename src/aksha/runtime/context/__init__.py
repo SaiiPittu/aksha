@@ -4,8 +4,9 @@ Built: the policy and its hash (``types.py``, ``policy.py``), the instance's rec
 (``turns.py``), rendered reads (``reads.py``), observation masking with the supersede rule
 of decision 32 (``masking.py``), the runtime's messages (``notices.py``), summary
 compaction as a recorded step (``summary.py``), assembly (``assembly.py``) and the turn's
-driver (``prepare.py``). Planned: steering input (S4, P27), resume on the instance's own
-session (decision 36), and the agent loop that calls ``prepare_context`` (P06).
+driver (``prepare.py``). Planned: steering input (S4, P27), and resume on the instance's own
+session (decision 36). The agent loop (``runtime/loop/turn.py``, P06) calls
+``prepare_context`` before every model step.
 
 Amendments from the build (where the code differs from the ADR's first text):
 

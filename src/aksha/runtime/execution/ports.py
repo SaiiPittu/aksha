@@ -5,7 +5,7 @@ implementations are adapters in :mod:`aksha.adapters.clock`. ``IdSource`` hands 
 and other IDs counted from the event store (``execution/ids.py``). ``DurableStepExecutor``
 is what a run's code calls for every step (``execution/executor.py``); an engine could sit
 under it later. ``RunDriver`` is the code that drives one run's steps, which recovery
-calls again to resume a run: the agent loop (ADR-P06) once it is built.
+calls again to resume a run: the agent loop's ``LoopDriver`` (ADR-P06).
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any, Protocol
 
 from aksha.runtime.cancellation.ports import KillableUnit
+from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import (
     Deadline,
     StepId,
@@ -78,6 +79,18 @@ class DurableStepExecutor(Protocol):
         4. Attempts are counted from ``step.failed`` and ``attempt.discarded``.
         5. Only the live attempt's value, on the calling thread, becomes ``step.completed``.
         """
+        ...
+
+    def recorded(self, step_id: StepId) -> StepResult | None:
+        """The recorded result of ``step_id``, or None when it has no ``step.completed``."""
+        ...
+
+    def refuse(self, step_id: StepId, refusal: NewEvent) -> StepResult:
+        """Record the policy gate's refusal of a call (``step.completed{refused}``), once."""
+        ...
+
+    def skip(self, step_id: StepId, kind: StepKind, name: str, code: str) -> StepResult:
+        """Record a step that never starts, ``skipped`` with ``code``, once (ADR-P06 D5)."""
         ...
 
     def effect_step(

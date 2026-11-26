@@ -12,6 +12,6 @@ budget, turn and stop-veto limits), ``builtins.py`` (goal, plan, forced tool and
 reminder), ``stack.py`` (the derived stack and ``compose_prep``), ``hold.py`` (the hold
 predicate, ``rebuild_blocked`` and the TC-4 audit), ``evaluation.py`` (``evaluate_stop``,
 pure) and ``commit.py`` (the one transaction). Not built: the request router's session
-scope (ADR-P23), follow-up input as a finish veto (S2, waits on ADR-P27), and the loop
-that calls this at every turn end (the agent loop primitive).
+scope (ADR-P23), and follow-up input as a finish veto (S2, waits on ADR-P27). The agent loop
+(``runtime/loop/``, ADR-P06) calls this at every turn end.
 """

@@ -77,7 +77,7 @@ from aksha.runtime.cancellation.kill import kill_boundary
 from aksha.runtime.cancellation.ports import KillableUnit
 from aksha.runtime.cancellation.requests import STOP_VIEW_TYPES, stop_before_step
 from aksha.runtime.cancellation.types import RUN_STOPPED, KillOutcome, KillPolicy
-from aksha.runtime.events.envelope import Event
+from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution import facts
 from aksha.runtime.execution.errors import EffectNeedsOutbox, StepMismatch, TransientStepError
 from aksha.runtime.execution.ports import Clock
@@ -270,6 +270,45 @@ class StepExecutor:
             self._append(facts.STEP_RESULT, ended_step_result(entry, step_id))
         stored = self._store.by_dedup_key(self._owner, facts.completed_key(sid))
         assert stored is not None
+        return self._recorded(step_id, stored, replayed=False)
+
+    def recorded(self, step_id: StepId) -> StepResult | None:
+        """The recorded result of ``step_id``, or None when it has no ``step.completed``."""
+        done = self._store.by_dedup_key(self._owner, facts.completed_key(str(step_id)))
+        return None if done is None else self._recorded(step_id, done)
+
+    def refuse(self, step_id: StepId, refusal: NewEvent) -> StepResult:
+        """Record the policy gate's refusal of a call as the step's one fact (ADR-P11 D9).
+
+        ``refusal`` is ``policy.events.decision_event`` of a ``Refuse``: a
+        ``step.completed{outcome: refused}`` with no ``step.started``, since nothing ran. A
+        step already recorded returns its result, so a resumed turn writes nothing twice.
+        """
+        if refusal.type != "step.completed" or refusal.payload.get("outcome") != "refused":
+            raise ValueError("refuse records a step.completed{outcome: refused} only")
+        if refusal.step != str(step_id):
+            raise ValueError(f"the refusal names step {refusal.step}, not {step_id}")
+        found = self.recorded(step_id)
+        if found is not None:
+            return found
+        (stored,) = self._append(facts.STEP_RESULT, refusal)
+        return self._recorded(step_id, stored, replayed=False)
+
+    def skip(self, step_id: StepId, kind: StepKind, name: str, code: str) -> StepResult:
+        """Record a step the run's own state keeps from starting: ``skipped`` with ``code``.
+
+        The agent loop records each call position after a finish, a question, an approval
+        request or a spent budget this way (ADR-P06 D5), so its body never runs. A step
+        that already started is refused: it is not this step's to skip.
+        """
+        found = self.recorded(step_id)
+        if found is not None:
+            return found
+        sid = str(step_id)
+        if self._store.by_dedup_key(self._owner, facts.started_key(sid)) is not None:
+            raise StepMismatch(message=f"{sid} started; a started step is never skipped")
+        event = facts.step_completed(step_id, kind, name, SKIPPED, attempts=0, code=code)
+        (stored,) = self._append(facts.STEP_RESULT, event)
         return self._recorded(step_id, stored, replayed=False)
 
     def drain_late(self) -> int:

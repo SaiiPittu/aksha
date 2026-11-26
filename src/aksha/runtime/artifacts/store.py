@@ -82,7 +82,7 @@ from aksha.runtime.artifacts.types import (
     WriterId,
     sorted_inputs,
 )
-from aksha.runtime.canonical import NotCanonical, nul_path
+from aksha.runtime.canonical import NotCanonical, nul_path, thaw
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.grounding.facts import citation_bound
 from aksha.runtime.grounding.facts import evidence as save_evidence
@@ -541,7 +541,8 @@ def _check_schema(kind: ArtifactKind, content: Mapping[str, Any]) -> None:
     """Check 2's schema half: a JSON Schema, or a dataclass's fields."""
     schema = kind.schema
     if isinstance(schema, Mapping):
-        errors = Draft202012Validator(dict(schema)).iter_errors(content)
+        # A body's arguments are frozen (``tools.bodies``); the validator reads plain JSON.
+        errors = Draft202012Validator(dict(schema)).iter_errors(thaw(content))
         error = min(errors, key=lambda e: list(map(str, e.absolute_path)), default=None)
         if error is not None:
             pointer = "/content" + _json_pointer(error.absolute_path)
