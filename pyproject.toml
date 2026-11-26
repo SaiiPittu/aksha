@@ -1,27 +1,45 @@
 [build-system]
-requires = ["setuptools>=69"]
+# setuptools 77 reads the SPDX license string (PEP 639); setuptools-scm takes the version
+# from the git tag vX.Y.Z, so a tag and the built version cannot disagree.
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aksha"
-version = "0.0.0"
-description = "A small, offline, pluggable agent harness."
+# The distribution name: "aksha" on the package index is an unrelated project. The import
+# name and the command stay `aksha`.
+name = "aksha-harness"
+dynamic = ["version"]
+description = "A headless agent harness that thinks fast and slow: an event-sourced runtime with durable pauses, a policy gate and crash-safe effects."
 readme = "README.md"
 requires-python = ">=3.12"
+# license = "<SPDX id>" and license-files = ["LICENSE"] go here once the maintainer picks a
+# license (docs/releasing.md); the release workflow refuses to build without them.
+keywords = ["agents", "agent-harness", "llm", "event-sourcing", "durable-execution", "evals"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
 # The runtime package uses the standard library plus jsonschema, nothing else.
 dependencies = ["jsonschema>=4.19"]
 
 [project.optional-dependencies]
 # Storage adapters are optional extras; the runtime core never imports them.
-# `make venv` installs dev only; `make venv-postgres` adds the PostgreSQL driver.
+# `make venv` installs the dev group only; `make venv-postgres` adds the PostgreSQL driver.
 postgres = ["psycopg[binary]>=3.2"]
 # The HTTP server of the session API (ADR-P19): ``aksha serve``.
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
 # The trace exporter extension (ADR-P21 D8): OTLP JSON Lines files, offline.
 otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.66b2"]
-# The live model adapter (aksha.adapters.models.live) uses only the standard library; the
-# extra names the opt-in, so `pip install 'aksha[live]'` is how a live run is asked for.
-live = []
+
+[dependency-groups]
+# Development tools (PEP 735): never an extra a user of the package sees.
 dev = [
     "pytest>=8",
     "ruff>=0.6",
@@ -29,6 +47,12 @@ dev = [
     "types-jsonschema",
     "httpx2",  # the test client of starlette, under FastAPI
 ]
+
+[project.urls]
+Homepage = "https://github.com/SaiiPittu/aksha"
+Documentation = "https://github.com/SaiiPittu/aksha/tree/main/docs"
+Repository = "https://github.com/SaiiPittu/aksha"
+Issues = "https://github.com/SaiiPittu/aksha/issues"
 
 [project.scripts]
 aksha = "aksha.interfaces.cli.main:entry"
@@ -41,7 +65,23 @@ where = ["src"]
 include = ["aksha*"]
 
 [tool.setuptools.package-data]
-aksha = ["py.typed"]
+# Listed explicitly so the wheel never depends on what git tracks: the agents' prompts and
+# the bundled synthetic worlds and eval suites (aksha.data), which `aksha demo` and
+# `aksha eval` read from the installed package.
+aksha = [
+    "py.typed",
+    "agents/**/*.md",
+    "agents/**/*.json",
+    "data/README.md",
+    "data/worlds/**/*",
+    "data/suites/**/*",
+]
+
+[tool.setuptools_scm]
+# No version file: aksha.__version__ reads the installed metadata (importlib.metadata).
+# With no tag yet, builds are 0.1.devN+g<sha>: a local version the package index refuses,
+# so only a vX.Y.Z tag builds an uploadable one. Building needs the git history (CI checks
+# out with fetch-depth: 0) or an sdist, which carries its version.
 
 [tool.pytest.ini_options]
 minversion = "8.0"

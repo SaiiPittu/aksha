@@ -18,6 +18,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+from aksha import data
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage.sqlite import open_store
@@ -50,7 +51,7 @@ from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl
 from tests.support.systems import Ledger
 
 ROOT = Path(__file__).resolve().parents[2]
-WORLDS = ROOT / "fixtures" / "worlds"
+WORLDS = data.worlds()
 AGENT_DIR = ROOT / "src" / "aksha" / "agents" / "patent"
 OWNER = "o1"
 AGENT = "patent"

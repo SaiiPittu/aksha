@@ -1,7 +1,8 @@
 """``LiveGenerationModel``: generation over a chat-completions HTTP server (``live`` mode only).
 
-Optional, behind the extra ``aksha[live]``, and never imported by an offline run: the
-binder imports it only in ``live`` mode, when ``AKSHA_ALIAS_GENERATE`` (or another
+Not wired yet: the composition root accepts only ``AKSHA_MODE=fake``, so no released
+command runs it, and no package extra installs it. It is never imported by an offline run:
+the binder imports it only in ``live`` mode, when ``AKSHA_ALIAS_GENERATE`` (or another
 alias's variable) names ``aksha.adapters.models.live:LiveGenerationModel`` (ADR-P07 D9).
 It speaks the widely used ``POST <base>/chat/completions`` shape, so a hosted model and a
 local server on ``localhost`` both fit. It uses only the standard library.

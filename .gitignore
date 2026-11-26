@@ -18,3 +18,7 @@ var/
 
 # Run output (eval results, local stores)
 var/
+
+# Packaging: builds land in dist/.
+dist/
+build/

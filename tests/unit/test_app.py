@@ -5,7 +5,7 @@ import pytest
 
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.storage.sqlite import SQLiteEventStore
-from aksha.app import StorageConfig, open_event_store
+from aksha.app import StorageConfig, data_home, open_event_store, runtime_commit
 from aksha.runtime.storage.errors import StoreError
 
 
@@ -36,14 +36,13 @@ def test_open_event_store_opens_sqlite_when_chosen(tmp_path: Path, clock: FakeCl
         store.close()
 
 
-def test_open_event_store_opens_sqlite_by_default(
-    tmp_path: Path, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    store = open_event_store(StorageConfig.from_env({}), clock, writer=True)
+def test_open_event_store_opens_sqlite_by_default(tmp_path: Path, clock: FakeClock) -> None:
+    store = open_event_store(
+        StorageConfig.from_env({"AKSHA_HOME": str(tmp_path / "home")}), clock, writer=True
+    )
     try:
         assert isinstance(store, SQLiteEventStore)
-        assert (tmp_path / "var" / "aksha.sqlite").exists()
+        assert (tmp_path / "home" / "aksha.sqlite").exists()
     finally:
         store.close()
 
@@ -72,7 +71,7 @@ def test_open_blob_store_is_a_folder_of_blobs(tmp_path: Path) -> None:
 
     config = StorageConfig.from_env({"AKSHA_BLOB_PATH": str(tmp_path / "b")})
     assert config.blob_path == tmp_path / "b"
-    assert StorageConfig.from_env({}).blob_path == Path("var/blobs")
+    assert StorageConfig.from_env({}).blob_path == data_home({}) / "blobs"
     blobs = open_blob_store(config)
     assert isinstance(blobs, FilesystemBlobStore) and blobs.get(blobs.put(b"x")) == b"x"
 
@@ -128,3 +127,30 @@ def test_a_factory_that_builds_no_system_of_record_is_refused(tmp_path: Path) ->
     with pytest.raises(StoreError) as e:
         extension_systems(cfg, [replace(scribe, extensions=(broken,))])
     assert e.value.code == "system_invalid"
+
+
+def test_state_lives_under_aksha_home_or_the_platform_data_folder(tmp_path: Path) -> None:
+    home = Path("/h")
+    assert data_home({"AKSHA_HOME": "state"}) == Path("state")
+    assert data_home({}, platform="linux", home=home) == home / ".local/share/aksha"
+    assert data_home({"XDG_DATA_HOME": "/x"}, platform="linux", home=home) == Path("/x/aksha")
+    # A relative XDG_DATA_HOME is invalid by the XDG spec and is ignored.
+    assert data_home({"XDG_DATA_HOME": "x"}, platform="linux", home=home) == (
+        home / ".local/share/aksha"
+    )
+    assert data_home({}, platform="darwin", home=home) == home / "Library/Application Support/aksha"
+    assert data_home({"LOCALAPPDATA": "/l"}, platform="win32", home=home) == Path("/l/aksha")
+    assert data_home({}, platform="win32", home=home) == home / "AppData/Local/aksha"
+    cfg = StorageConfig.from_env({"AKSHA_HOME": str(tmp_path)})
+    assert (cfg.sqlite_path, cfg.blob_path) == (tmp_path / "aksha.sqlite", tmp_path / "blobs")
+    pinned = StorageConfig.from_env({"AKSHA_HOME": str(tmp_path), "AKSHA_SQLITE_PATH": "a.db"})
+    assert pinned.sqlite_path == Path("a.db") and pinned.blob_path == tmp_path / "blobs"
+
+
+def test_runtime_commit_is_unknown_outside_a_checkout(tmp_path: Path) -> None:
+    # Installed from a wheel, the folder above the package is site-packages' parent, which
+    # may sit inside some other git repository: that repository's commit is not ours.
+    (tmp_path / ".git").mkdir()
+    assert runtime_commit(tmp_path) == ("unknown", False)
+    commit, _ = runtime_commit()
+    assert commit != "unknown"  # the tests run from a checkout

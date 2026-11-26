@@ -1,0 +1,10 @@
+# The source distribution: setuptools-scm adds every file git tracks, then these lines take
+# out what is for working on the repository, not for building or testing the package.
+# tests/package/test_wheel.py lists the sdist and fails if any of them appears.
+prune .claude
+prune .gemini
+prune .github
+prune scratch-pad
+prune web
+exclude .coderabbit.yaml AGENTS.md CLAUDE.md REVIEWING.md
+global-exclude __pycache__ *.py[cod]

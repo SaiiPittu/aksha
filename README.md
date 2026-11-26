@@ -32,7 +32,7 @@ The research agent and the patent agent work on whatever you give them: a folder
 
 ```sh
 . .venv/bin/activate
-cp -r fixtures/worlds/tilldew/sources my-inputs     # stands in for your own folder
+cp -r src/aksha/data/worlds/tilldew/sources my-inputs     # stands in for your own folder
 
 aksha run --agent research --input my-inputs "Research the competitors for Tilldew's solar soil-moisture probe, for smallholder vegetable farmers in India. Compare power (solar, battery, AA, cells), battery life (battery life, years of battery) and connectivity (SMS, 2G, LoRa, gateway). What do farmers say about: accuracy (accura*, wrong reading*, false alert*, still wet, trust*); connectivity (sms, signal, network, gateway); price (price*, expensive, cost*, cheap*, paid)?"
 # uploaded 23 input files
@@ -76,7 +76,7 @@ The research agent runs end to end through `aksha run` on the synthetic `stillro
 ```sh
 . .venv/bin/activate
 rm -rf var                   # an empty store, so the IDs below match
-export AKSHA_SOURCES=inputs=fixtures/worlds/stillroom/sources   # a configured inputs folder
+export AKSHA_SOURCES=inputs=src/aksha/data/worlds/stillroom/sources   # a configured inputs folder
 
 aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research
 # session S-...
@@ -104,7 +104,7 @@ The patent agent runs end to end the same way, up to an approved send. Every wai
 
 ```sh
 rm -rf var                   # an empty store, so the IDs below match
-export AKSHA_SOURCES=inputs=fixtures/worlds/stillroom/sources
+export AKSHA_SOURCES=inputs=src/aksha/data/worlds/stillroom/sources
 
 aksha run "Assess the four invention candidates and prepare the chosen one for counsel." --agent patent
 #   waiting for input (missing detail) I-0001: aksha answer I-0001 TEXT

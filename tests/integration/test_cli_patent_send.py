@@ -21,14 +21,14 @@ from pathlib import Path
 
 import pytest
 
+from aksha import data
 from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS, RuntimeConfig, open_session
 from aksha.interfaces import wire
 from aksha.interfaces.cli.main import main
 from aksha.runtime.session import named as n
 from tests.support.session import env
 
-REPO = Path(__file__).resolve().parents[2]
-WORLDS = REPO / "fixtures" / "worlds" / "stillroom" / "sources"
+WORLDS = data.world_path("stillroom") / "sources"
 REQUEST = "Assess the four invention candidates and prepare the chosen one for counsel."
 GAP = "0.5 m from the vent edge, so its air flow stays outside the footprint."
 RESEARCH = "Who sells camera-free occupancy sensing for offices, and at what price?"

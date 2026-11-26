@@ -17,7 +17,7 @@ from aksha.evals.report import verdict
 from aksha.evals.results import RESULTS_FILE, SuiteResults, project_results
 from aksha.evals.runner import SuiteRun, rebuild_report, run_suite
 from aksha.interfaces.cli.main import main
-from tests.support.evals import FIXTURES, OPEN, REPO, SUITES
+from tests.support.evals import FIXTURES, OPEN, SUITES
 
 
 @pytest.fixture(scope="module")
@@ -211,7 +211,7 @@ def test_cli_runs_a_suite_and_exits_zero(
         [
             "eval",
             "--root",
-            str(REPO),
+            str(FIXTURES),
             "run",
             "scripted",
             "--no-selftest",
@@ -224,22 +224,33 @@ def test_cli_runs_a_suite_and_exits_zero(
     out = capsys.readouterr().out
     assert code == 0, out
     assert out.startswith("self-tests: not run")
-    assert main(["eval", "--root", str(REPO), "report", str(tmp_path), "--suite", "scripted"]) == 0
+    assert (
+        main(["eval", "--root", str(FIXTURES), "report", str(tmp_path), "--suite", "scripted"]) == 0
+    )
 
 
 def test_cli_key_check_list_and_refusals(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["eval", "--root", str(REPO), "key-check"]) == 0
+    assert main(["eval", "--root", str(FIXTURES), "key-check"]) == 0
     assert "stillroom: 0 drifts" in capsys.readouterr().out
-    assert main(["eval", "--root", str(REPO), "list"]) == 0
-    assert main(["--user", "o1", "eval", "--root", str(REPO), "list"]) == 0
+    assert main(["eval", "--root", str(FIXTURES), "list"]) == 0
+    assert main(["--user", "o1", "eval", "list"]) == 0  # the bundled worlds and suites
     assert "agents: patent, research, scripted" in capsys.readouterr().out
-    assert main(["eval", "--root", str(REPO), "run", "no-such-suite"]) == 65
+    assert main(["eval", "--root", str(FIXTURES), "run", "no-such-suite"]) == 65
     assert main(["eval", "frobnicate"]) == 64
 
 
 def test_cli_selftest_passes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     code = main(
-        ["eval", "--root", str(REPO), "selftest", "--world", "stillroom", "--out", str(tmp_path)]
+        [
+            "eval",
+            "--root",
+            str(FIXTURES),
+            "selftest",
+            "--world",
+            "stillroom",
+            "--out",
+            str(tmp_path),
+        ]
     )
     out = capsys.readouterr().out
     assert code == 0, out

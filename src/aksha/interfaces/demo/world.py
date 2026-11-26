@@ -17,7 +17,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-WORLDS = Path(__file__).resolve().parents[4] / "fixtures" / "worlds"
+from aksha import data
+
+WORLDS = data.worlds()
 BASE = "stillroom"
 VARIANT = "stillroom-v2"
 ADDED = ("publications/SYN-PUB-0011.json",)

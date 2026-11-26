@@ -59,6 +59,8 @@ Imports under `if TYPE_CHECKING:` count, because they are still a dependency a r
 src/aksha/
 ├── __init__.py                              package version
 ├── app.py                                   composition root: picks adapters (SQLite by default), wires the demo
+├── data/                                    the bundled synthetic worlds and eval suites, shipped in the wheel
+│   └── __init__.py                          root, worlds, suites, world_path: the one place a world is found
 ├── runtime/                                 THE DOMAIN: agent-neutral core, stdlib + jsonschema only
 │   ├── __init__.py                          the one layout rule and the three import rules
 │   ├── api.py                               P20 public runtime API; agents and extensions import only this

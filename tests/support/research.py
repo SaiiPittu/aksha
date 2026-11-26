@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import aksha.agents
+from aksha import data
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.sources.folder import FolderSource
@@ -42,8 +43,7 @@ from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
 from tests.support.events import START
 
-REPO = Path(__file__).resolve().parents[2]
-WORLDS = REPO / "fixtures" / "worlds"
+WORLDS = data.worlds()
 AGENT_DIR = Path(aksha.agents.__file__).parent / "research"
 OWNER = "founder-1"
 RUN = "R-0001"

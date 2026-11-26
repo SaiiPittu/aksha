@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from aksha import data
 from aksha.app import eval_store_opener
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase
@@ -16,9 +17,8 @@ from aksha.evals.key import AnswerKey, load_key
 from aksha.evals.ports import AgentUnderTest
 from aksha.evals.world import World, load_world
 
-REPO = Path(__file__).resolve().parents[2]
-FIXTURES = REPO / "fixtures"
-SUITES = REPO / "evals" / "suites"
+FIXTURES = data.root()
+SUITES = data.suites()
 OPEN = eval_store_opener()
 
 

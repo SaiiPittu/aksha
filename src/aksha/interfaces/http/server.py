@@ -27,7 +27,7 @@ GET      ``/verify``                                 the hash chain check (ADR-P
 The SSE stream sends each event with its ``seq`` as the SSE ``id``, then one
 ``synchronized`` event at the tail, then live events and a comment line as a heartbeat
 (D5). A refused receipt is HTTP 409 (404 for an unknown item) with the receipt in the
-error's ``details``. FastAPI is the optional extra ``aksha[server]``.
+error's ``details``. FastAPI is the optional extra ``aksha-harness[server]``.
 """
 
 from __future__ import annotations

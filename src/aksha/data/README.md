@@ -1,6 +1,6 @@
-# Fixtures: synthetic worlds
+# Bundled data: synthetic worlds and eval suites
 
-Everything under `fixtures/` is synthetic. The venture, its people, its competitors, the customer reviews, the disclosure history and every patent publication were made up to test the agents. None of it describes a real company, person, product, offer or patent. Every source file says so in its own content, so a file that gets copied somewhere else still carries the label:
+Everything under `src/aksha/data/` is synthetic. It ships inside the package, so `aksha demo` and `aksha eval` find it after `pip install` with no clone; `aksha.data` is the one place code finds a world or a suite. The venture, its people, its competitors, the customer reviews, the disclosure history and every patent publication were made up to test the agents. None of it describes a real company, person, product, offer or patent. Every source file says so in its own content, so a file that gets copied somewhere else still carries the label:
 
 | Format | Where the label is |
 |---|---|
@@ -16,7 +16,7 @@ Identifiers are made up and look made up: publications are `SYN-PUB-0001` to `SY
 ## Layout
 
 ```text
-fixtures/
+src/aksha/data/
   worlds/
     stillroom/            the base world
       spec.yaml           author-side truth: venture, people, candidates and features, competitors, families

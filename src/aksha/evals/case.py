@@ -1,6 +1,6 @@
 """Eval cases and suites: case files in TOML, labelled by kind and origin (D13-3).
 
-A suite is a folder ``evals/suites/<suite>/`` holding ``suite.toml`` (the suite's name,
+A suite is a folder ``suites/<suite>/`` (:mod:`aksha.data`) holding ``suite.toml`` (its name,
 default rollouts and fault profiles) and one TOML file per case. A case names its worlds
 and points into each world's key by dotted references (``expect``); it never copies an
 expected value, so one case runs unchanged in a base world and its variants.

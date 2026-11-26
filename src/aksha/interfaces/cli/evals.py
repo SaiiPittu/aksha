@@ -3,15 +3,17 @@
 =====================================  ==================================================
 ``aksha eval list``                    suites, their cases and the registered agents
 ``aksha eval run <suite>``             self-tests, then every case k times per world;
-                                       writes ``var/evals/<suite>-<seed>/``
+                                       writes ``<AKSHA_HOME>/evals/<suite>-<seed>/``
 ``aksha eval selftest``                the grader self-tests for every world
 ``aksha eval report <folder>``         rebuild a run's reports from its results store
 ``aksha eval key-check``               recompute every key's anchors and counts
 ``aksha eval lock <world>``            write the world's ``world.lock.json``
 =====================================  ==================================================
 
-Paths default to the repository layout: ``fixtures/`` and ``evals/suites/`` under
-``--root`` (the current folder by default).
+The worlds and suites are read from ``--root``, a folder holding ``worlds/`` and
+``suites/``: by default the ones bundled in the package (:mod:`aksha.data`), so the
+command works from an install with no clone. Results go under ``AKSHA_HOME``
+(:func:`aksha.app.data_home`) unless ``--out`` says otherwise.
 
 ``aksha eval`` keeps its own exit codes, because a suite's result is not a run's: 0 when
 every case passed and the self-tests held, 1 when a case failed, 2 when anything was
@@ -23,13 +25,13 @@ command; :mod:`aksha.interfaces.cli.main` hands every ``aksha eval`` line to it.
 from __future__ import annotations
 
 import argparse
-import subprocess
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from aksha import app
+from aksha import app, data
 from aksha.evals.case import load_suite
 from aksha.evals.criteria import REGISTRY
 from aksha.evals.errors import EvalError
@@ -69,7 +71,8 @@ def main(argv: Sequence[str]) -> int:
 def add_parser(commands: Any) -> None:
     """Add ``eval`` and its subcommands to ``aksha``'s subparsers."""
     p = commands.add_parser("eval", help="run evals over the fixture worlds")
-    p.add_argument("--root", type=Path, default=Path("."), help="repository root")
+    p.add_argument("--root", type=Path, default=None,
+                   help="a folder holding worlds/ and suites/ (default: bundled)")  # fmt: skip
     sub = p.add_subparsers(dest="eval_command", required=True)
 
     ls = sub.add_parser("list", help="list suites, cases and registered agents")
@@ -105,37 +108,33 @@ def add_parser(commands: Any) -> None:
     lk.set_defaults(handler=cmd_lock)
 
 
+def _root(args: argparse.Namespace) -> Path:
+    """The folder holding ``worlds/`` and ``suites/``: ``--root``, else the bundled one."""
+    root: Path = args.root or data.root()
+    return root
+
+
+def _results(name: str) -> Path:
+    """Where a run's results go without ``--out``: under ``AKSHA_HOME``."""
+    return app.data_home(os.environ) / "evals" / name
+
+
 def _worlds(root: Path, names: list[str]) -> list[str]:
     if names:
         return names
-    base = root / "fixtures" / "worlds"
+    base = root / "worlds"
     return sorted(p.name for p in base.iterdir() if (p / "key.json").is_file())
 
 
-def _git(root: Path) -> dict[str, Any]:
-    try:
-        commit = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout.strip()
-        dirty = bool(
-            subprocess.run(
-                ["git", "-C", str(root), "status", "--porcelain"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return {"runtime_commit": "unknown", "dirty": True}
-    return {"runtime_commit": commit, "dirty": dirty}
+def _git() -> dict[str, Any]:
+    """The run conditions: the checkout's commit, or unknown (and so dirty) when installed."""
+    commit, dirty = app.runtime_commit()
+    return {"runtime_commit": commit, "dirty": dirty or commit == "unknown"}
 
 
 def cmd_list(args: argparse.Namespace) -> int:
     """Print suites, cases and agents."""
-    suites = args.root / "evals" / "suites"
+    suites = _root(args) / "suites"
     for folder in sorted(p for p in suites.iterdir() if (p / "suite.toml").is_file()):
         suite = load_suite(folder)
         print(f"{suite.name}: {suite.description}")
@@ -149,11 +148,12 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     """Run a suite and print its text report."""
-    suite = load_suite(args.root / "evals" / "suites" / args.suite)
-    out = args.out or args.root / "var" / "evals" / f"{suite.name}-{args.seed}"
+    root = _root(args)
+    suite = load_suite(root / "suites" / args.suite)
+    out = args.out or _results(f"{suite.name}-{args.seed}")
     run = run_suite(
         suite,
-        fixtures_root=args.root / "fixtures",
+        fixtures_root=root,
         agents=app.eval_agents(),
         open_store=app.eval_store_opener(),
         out=out,
@@ -163,7 +163,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         selftests=not args.no_selftest,
         cases=args.case,
         agent_override=args.agent,
-        conditions=_git(args.root),
+        conditions=_git(),
     )
     print(run.reports["report.txt"].read_text(encoding="utf-8"), end="")
     print(f"written: {out}")
@@ -172,10 +172,11 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_selftest(args: argparse.Namespace) -> int:
     """Run the grader self-tests and print one line per bundle."""
-    out = args.out or args.root / "var" / "evals" / "_selftest"
+    out = args.out or _results("_selftest")
     ok = True
-    for name in _worlds(args.root, args.world):
-        world = load_world(name, args.root / "fixtures")
+    root = _root(args)
+    for name in _worlds(root, args.world):
+        world = load_world(name, root)
         report = self_test(
             world,
             load_key(world),
@@ -212,8 +213,9 @@ def _print(results: SuiteResults) -> None:
 def cmd_key_check(args: argparse.Namespace) -> int:
     """Recompute every key's anchors and derivable counts against its sources."""
     bad = 0
-    for name in _worlds(args.root, args.world):
-        world = load_world(name, args.root / "fixtures")
+    root = _root(args)
+    for name in _worlds(root, args.world):
+        world = load_world(name, root)
         drifts = key_check(world, load_key(world))
         print(f"{name}: {len(drifts)} drifts")
         for d in drifts:
@@ -224,7 +226,7 @@ def cmd_key_check(args: argparse.Namespace) -> int:
 
 def cmd_lock(args: argparse.Namespace) -> int:
     """Write ``world.lock.json`` for one world."""
-    world = load_world(args.world, args.root / "fixtures")
+    world = load_world(args.world, _root(args))
     path = write_lock(world.root)
     print(f"written: {path}")
     return 0
