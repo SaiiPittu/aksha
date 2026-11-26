@@ -134,6 +134,17 @@ invoke_workflow research          R-0001 segment 1   gen_ai.conversation.id=S-01
 
 The Patent Agent's send after a restart (v2 05e section 7.6). Run R-0002's segment 1 ends `suspended`; its `aksha.interrupt approval` span runs 09:14:03 to suspension with `aksha.approval.signature` set. Segment 2 opens at the person's answer, links `resumed_from` segment 1, and records `aksha.interrupt.resolved` at 09:20:11. The handoff run R-0003 is its own trace, `invoke_workflow patent`, 09:20:15 to 09:21:02; under it `aksha.effect send` carries `aksha.effect.outcome=reconciled` and receipt `RC-1`, linked `authorised_by` to the approval span, and `aksha.boot` with `reconciled=1` sits at 09:21:02. A reader sees the approval came first, the send finished only after a restart, and recovery found the receipt instead of sending again. Resuming the run twice more changes nothing, because no new step ran.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+Built on 26 Nov 2026 in `src/aksha/extensions/otel/`, with `aksha inspect` and `aksha trace` in `src/aksha/interfaces/cli/`. Where the code differs from the text above:
+
+1. B1, where the projection lives (D1, D4). `build_trace` is in the extension (`extensions/otel/trace.py`), importing only `aksha.runtime.api`, so the runtime has no tracing module and imports no OpenTelemetry package (the dependency rule, with planted companions for `opentelemetry` and `fastapi`). The run inspector (D10) is `runtime/session/views.inspect_run`.
+2. B2, segments (D2). A run's events split into segments at a run-level HOLD (suspension) and wherever the writing process changed (`boot`).
+3. B3, the span tree (D2). Every Task instance is an `invoke_agent {agent}` span; the workflow and pure-code variants are not distinguished yet. Outbox facts are span events (`aksha.effect.*`) on the tool step that enqueued them, not `aksha.effect` spans, and carry no `authorised_by` link. A command receipt appears only when its event names the run.
+4. B4, the exporter (D8). Only the OTLP JSON Lines file exporter is built, on `opentelemetry-sdk~=1.45.2` and `opentelemetry-exporter-otlp-json-file==0.66b2` in the extra `aksha[otel]`; `make venv` installs it. The file is `<out>/<run>/<segment>.otlp.jsonl`, `var/traces` beside the store by default, and is replaced on every export. OTLP/HTTP (`aksha[otel-http]`) is not built.
+5. B5, content (D5). The event store holds no model messages, so the only content the switch governs is a tool result's text: the span modes add `gen_ai.tool.call.result`, the event modes a span event holding it.
+6. B6, the name guard (D4). A test refuses a `gen_ai.*` string literal anywhere in the package outside `semconv.py`, with a planted companion; `semconv_otel_genai_0_1_0.json` is not committed.
+
 ## Two telemetry planes (decision 21, 25 Nov 2026)
 
 The event store records what happened in an agent run; it does not record how the harness itself behaved while serving it. A session API request that took four seconds, a database append that waited on a lock, a worker that restarted, a queue that grew to 300 pending items: none of these is a fact about a run, and putting them in the event store would mix domain facts with machine noise in the one record that must replay byte for byte. The maintainer's call (decision 21) is two planes:

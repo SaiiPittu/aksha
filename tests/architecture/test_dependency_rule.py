@@ -92,6 +92,21 @@ def test_every_module_imports_and_has_a_docstring() -> None:
             "runtime imports the standard library and jsonschema only",
         ),
         (
+            "aksha/runtime/session/leak.py",
+            "import fastapi\n",
+            "runtime imports the standard library and jsonschema only",
+        ),
+        (
+            "aksha/runtime/session/leak.py",
+            "from opentelemetry import trace\n",
+            "runtime imports the standard library and jsonschema only",
+        ),
+        (
+            "aksha/interfaces/http/leak.py",
+            "from aksha.extensions.otel import trace\n",
+            "interfaces reach adapters, agents and extensions through aksha.app only",
+        ),
+        (
             "aksha/adapters/storage/leak.py",
             "from aksha.adapters.clock import fake\n",
             "adapters import runtime ports and their own family only",
