@@ -565,7 +565,9 @@ class ToolQueryRunner:
     A recorded query's ID is ``<agent>.<tool>?<canonical JSON arguments>``; its version is
     the result-set hash the tool returned as a ``query`` read. Re-executing it calls the same
     tool body again with the same arguments over the owner's current inputs, and answers
-    the version it returns now. A query no loaded tool can answer keeps its last hash.
+    the version it returns now. A query no loaded tool can answer, or whose tool now
+    fails, answers the empty hash, which differs from any recorded one: the work built on it
+    reopens rather than staying current on an answer nobody can check.
     """
 
     def __init__(self, loaded: Sequence[LoadedDefinition], reader: Callable[[str], Any]) -> None:
