@@ -27,7 +27,7 @@ Only a tool declared under the `aksha.web` egress policy (both generic tools are
 
 A live fetch of a PDF or an Office file goes through document ingestion (ADR-P31): the page's text is ingestion's header and representation, so the model reads it the way it reads an uploaded file of that type.
 
-The generic tools are in `runtime/web/tools.py`, exported through `aksha.runtime.api` (API 2.10): `web_search_tool(agent)` and `fetch_url_spec(agent, ...)`. An agent that reads pages its own way writes its own `fetch_url` body over `fetch_text` and keeps the spec: the research agent reads a fetched page exactly as `fetch_page` reads an input (its fast readers decide the kind and extract), and the patent agent reads a fetched publication as `fetch_publication` reads one (a one-record reader, `OneRecord`, under the same `SourceWorld` rules).
+The generic tools are in `runtime/web/tools.py`, exported through `aksha.runtime.api` (API 2.11): `web_search_tool(agent)` and `fetch_url_spec(agent, ...)`. An agent that reads pages its own way writes its own `fetch_url` body over `fetch_text` and keeps the spec: the research agent reads a fetched page exactly as `fetch_page` reads an input (its fast readers decide the kind and extract), and the patent agent reads a fetched publication as `fetch_publication` reads one (a one-record reader, `OneRecord`, under the same `SourceWorld` rules).
 
 A live fetch runs under the runtime's own egress policy `aksha.web`: any public host over HTTPS, never a private, loopback, link-local or metadata address, every redirect checked again, every decision recorded on the step (ADR-P26 D2 to D4). With `AKSHA_NETWORK` off, it is refused `network_off`.
 
