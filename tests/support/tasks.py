@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.storage.sqlite import open_store
@@ -160,13 +160,31 @@ class TaskLog(Log):
 
 
 class StoreLedger:
-    """The same helpers as ``TaskLog``, committing to a real SQLite event store instead."""
+    """The same helpers as ``TaskLog``, committing to a real SQLite event store instead.
+
+    Every ledger a test opens is closed after it by ``close_all`` (an autouse fixture in
+    ``tests/integration/conftest.py``), so no SQLite connection outlives its test.
+    """
+
+    opened: ClassVar[list[StoreLedger]] = []
 
     def __init__(self, path: Path, owner: str = "o") -> None:
         self.path = path
         self.owner = owner
         self.clock = FakeClock(START)
         self.store: EventStore = open_store(path, self.clock, writer=True, catalogue=CORE)
+        self.closed = False
+        StoreLedger.opened.append(self)
+
+    def close(self) -> None:
+        if not self.closed:
+            self.closed = True
+            self.store.close()
+
+    @classmethod
+    def close_all(cls) -> None:
+        while cls.opened:
+            cls.opened.pop().close()
 
     def view(self) -> LogView:
         return load_view(self.store, self.owner)
@@ -223,7 +241,7 @@ class StoreLedger:
 
     def reopen(self) -> StoreLedger:
         """Close the store and open it again, as a restarted process would."""
-        self.store.close()
+        self.close()
         return StoreLedger(self.path, self.owner)
 
 

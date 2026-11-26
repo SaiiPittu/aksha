@@ -106,6 +106,7 @@ def test_checks_are_pure(tmp_path: Path) -> None:
     tree = demo_tree()
     drive(ledger, tree, obedient(("C1",)))
     view = ledger.view()
+    ledger.close()
     ledger.store = Forbidden()
     ledger.clock = Forbidden()  # type: ignore[assignment]
     for node in tree.walk():
