@@ -34,6 +34,9 @@ own boundary (U9). An agent with an open run regenerates its work in place inste
    re-entries may resume their writer's session; the opener names it, or the run
    inherits ``resume`` only when every run it rebuilds for chose ``resume``. Fresh is
    the default.
+8. Modes (decision 38): only versions of runs whose agent declared ``rebuild`` are ever
+   invalidated (``invalidation.view`` rule 6), so only such agents get a rebuild run, and
+   the run records ``invalidation: rebuild`` on its ``run.started``.
 
 Decision 34 chose a fresh context with a rebuild summary for the first milestone;
 :func:`rebuild_brief` builds it. Resume on the existing session (decision 36) is
@@ -127,6 +130,7 @@ def rebuild_starts(
             "cause": REBUILD_CAUSE,
             "for_runs": for_runs,
             "rebuild_key": key,
+            "invalidation": "rebuild",
         }
         if headless:
             payload["headless"] = True

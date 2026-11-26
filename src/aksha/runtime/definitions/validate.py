@@ -30,6 +30,7 @@ from aksha.runtime.definitions.tree_checks import (
 )
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION, satisfies
+from aksha.runtime.invalidation.modes import INVALIDATION_MODES
 from aksha.runtime.models.checks import alias_problems
 from aksha.runtime.models.types import MODEL_CLASSES
 from aksha.runtime.tasks.tree import MAX_CONCURRENCY
@@ -90,6 +91,10 @@ def validate_agent(
     for opt in agent.stop_policies:
         if not is_builtin_opt_in(opt):
             out.add("stop_policies", "unknown_stop_policy", stop_policy_message(opt))
+    if agent.invalidation not in INVALIDATION_MODES:
+        modes = ", ".join(INVALIDATION_MODES)
+        message = f"invalidation {agent.invalidation!r} is not a mode; use one of {modes}"
+        out.add("invalidation", "invalidation_unknown", message)
     if agent.concurrency != MAX_CONCURRENCY:
         message = f"concurrency {agent.concurrency!r} is not built; v1 runs one instance at a time"
         out.add("concurrency", "concurrency_unsupported", message)

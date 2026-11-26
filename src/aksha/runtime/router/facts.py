@@ -51,12 +51,14 @@ def run_opened(session: str, run: str, agent: RoutableAgent) -> NewEvent:
     """The ``run.started{cause: request}`` a route opens, in the session's envelope.
 
     It records the agent's re-entry setting (decision 36), ``fresh`` unless the agent
-    opted into ``resume``.
+    opted into ``resume``, and the agent's invalidation mode (decision 38) when given.
     """
     payload: dict[str, str] = {"agent": agent.name, "cause": REQUEST_CAUSE}
     if agent.definition_hash is not None:
         payload["definition_hash"] = agent.definition_hash
     payload["reentry"] = agent.reentry or "fresh"
+    if agent.invalidation is not None:
+        payload["invalidation"] = agent.invalidation
     return NewEvent(RUN_STARTED, payload, run=run, session=session)
 
 

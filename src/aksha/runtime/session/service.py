@@ -205,7 +205,8 @@ class SessionAgent:
 
     def routable(self) -> RoutableAgent:
         """The agent as the router and a request run's ``run.started`` see it (decision 36)."""
-        return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry)
+        return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry,
+                             self.agent.invalidation)  # fmt: skip
 
     def run_fields(self) -> dict[str, Any]:
         """What ``run.started`` records for this agent beyond its name and cause."""
@@ -818,6 +819,12 @@ class _Overlay:
         if source == self.name:
             return self.own.read(source, record_id)
         return None if self.fallback is None else self.fallback.read(source, record_id)
+
+    def serves(self, source: str) -> bool:
+        """Whether the own reader or the fallback serves ``source``."""
+        if source == self.name:
+            return self.own.serves(source)
+        return self.fallback is not None and self.fallback.serves(source)
 
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         """The collection's record IDs from the reader that serves ``source``."""

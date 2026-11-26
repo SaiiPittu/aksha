@@ -103,6 +103,9 @@ class Inputs:
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         return self.folder.records(source, collection)
 
+    def serves(self, source: str) -> bool:
+        return self.folder.serves(source)
+
     def version(self, owner: str) -> str:
         return self.folder.version(owner)
 

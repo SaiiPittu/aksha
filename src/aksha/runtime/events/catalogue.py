@@ -109,6 +109,9 @@ RUN_STARTED = EventTypeSpec(
             "rebuild_key": {"type": "string", "pattern": "^rebuild:"},
             # Decision 36: whether this run's re-entries may resume their session.
             "reentry": {"enum": ["fresh", "resume"]},
+            # Decision 38: how much of invalidation the run's agent opted into; a run
+            # that records none predates the setting and reads as "rebuild".
+            "invalidation": {"enum": ["off", "edit_guard", "notify", "rebuild"]},
             # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
             # class, native), with its hash; never a configuration value or a key.
             "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},

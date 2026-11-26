@@ -131,6 +131,8 @@ class ToolRegistry:
         out: list[dict[str, Any]] = []
         for name, decl in self._decls.items():
             spec = _plain(decl.spec)
+            if spec.get("edits") is None:  # decision 38: a tool that edits nothing hashes as before
+                spec.pop("edits", None)
             spec["schema"] = self._schemas[name]
             out.append({"name": name, "spec": spec, "has_body": decl.body is not None})
         return out

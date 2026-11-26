@@ -16,6 +16,7 @@ from aksha.runtime.budgets.types import Budget, Limits
 from aksha.runtime.context.types import ContextPolicy
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
+from aksha.runtime.invalidation.modes import DEFAULT_MODE, InvalidationMode
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.types import ModelAdapterSpec, ModelAlias
 from aksha.runtime.outbox.types import SystemOfRecordSpec
@@ -78,7 +79,10 @@ class Agent:
     agent folder, read and hashed by the loader. ``tools`` lists the agent's own tools as
     ``ToolDecl`` and names other tools (loader-added, ``ext.tool``) as ``ToolUse``.
     ``concurrency`` is how many Task instances the scheduler runs at once; v1 accepts only
-    1 (ADR-P15 D5, ``concurrency_unsupported``).
+    1 (ADR-P15 D5, ``concurrency_unsupported``). ``invalidation`` is how much of
+    invalidation the agent's runs get (decision 38, ``invalidation.modes``): ``off`` (the
+    default), ``edit_guard``, ``notify`` or ``rebuild``; the loader refuses any other
+    value (``invalidation_unknown``) and hashes the mode into the definition.
     """
 
     name: str
@@ -101,3 +105,4 @@ class Agent:
     extensions: tuple[str, ...] = ()
     requires_api: str = ">=2.0,<3"
     concurrency: int = 1
+    invalidation: InvalidationMode = DEFAULT_MODE

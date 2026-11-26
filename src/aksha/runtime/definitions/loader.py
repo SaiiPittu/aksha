@@ -100,7 +100,8 @@ def with_context_policy(loaded: LoadedDefinition, policy: ContextPolicy) -> Load
     agent = replace(loaded.agent, context_policy=policy)
     new_hash = definition_hash(loaded.folder, loaded.extensions, API_VERSION,
                              tools_hash=loaded.registry.canonical_hash(),
-                             context_hash=policy_hash(policy))  # fmt: skip
+                             context_hash=policy_hash(policy),
+                             invalidation=agent.invalidation)  # fmt: skip
     return replace(loaded, agent=agent, definition_hash=new_hash)
 
 
@@ -191,6 +192,7 @@ def load_agents(
     every_kind = [qualify(a.name, k.name) for a, *_ in found for k in a.artifacts]
     every_kind += [k for *_, exts in found for e in exts for k in e.kinds]
     refusals += cross_agent_refusals([(a, m) for a, m, *_ in found], every_kind)
+    refusals += _collection_refusals(found)
     if refusals:
         raise LoadError(tuple(refusals))
     definitions = tuple(_definition(a, m, f, exts) for a, m, f, exts in found)
@@ -217,6 +219,37 @@ def _load_named(
         if one is not None and not problems:
             loaded.append(one)
     return tuple(loaded), refusals
+
+
+def _collection_refusals(
+    found: Sequence[tuple[Agent, str, Path, tuple[LoadedExtension, ...]]],
+) -> list[LoadRefusal]:
+    """A collection that two differently named versioned sources declare.
+
+    A recorded read names a record by its ID alone (``notes/N-0004``), and the collection,
+    its first segment, says which source holds it: source moves are matched to reads that
+    way (ADR-P05 D6), and so is the edit-time check's evidence (decision 38). Two sources
+    serving one collection would make a read of one count as a read of the other, so the
+    loader refuses it. An agent's own sources go by their name, an extension's by its full
+    name, as the composition root serves them; one name declared twice is one source.
+    """
+    owner_of: dict[str, str] = {}
+    refusals: list[LoadRefusal] = []
+    for agent, module, _, exts in found:
+        out = Refusals(module)
+        named = [(s.name, s) for s in agent.sources]
+        named += [(qualify(e.ext.name, s.name), s) for e in exts for s in e.ext.sources]
+        for name, spec in named:
+            for collection in spec.collections:
+                held = owner_of.setdefault(collection, name)
+                if held != name:
+                    message = (
+                        f"source {name!r} declares collection {collection!r}, which source "
+                        f"{held!r} already serves; one source serves each collection"
+                    )
+                    out.add("sources", "collection_served_twice", message)
+        refusals += out.items
+    return refusals
 
 
 def _register_event_types(extensions: Iterable[LoadedExtension], catalogue: Catalogue) -> None:
@@ -351,6 +384,7 @@ def _definition(
             API_VERSION,
             tools_hash=registry.canonical_hash(),
             context_hash=policy_hash(agent.context_policy),
+            invalidation=agent.invalidation,
         ),
         file_hashes=file_hashes(folder),
     )

@@ -97,7 +97,36 @@ def spec_refusals(name: str, decl: ToolDecl, *, declarer: str, module: str) -> l
         out.add("tools", "body_missing", f"tool {name!r}: a {spec.effect} tool needs a body")
     _external(name, spec, out)
     _by_class(name, spec, out)
+    _edits(name, spec, out)
     return out.items
+
+
+_EDIT_EFFECTS = frozenset({"store", "exec"})
+"""The effect classes whose bodies may edit a record (decision 38)."""
+
+
+def _edits(name: str, spec: ToolSpec, out: Refusals) -> None:
+    """``edits`` on a store or exec tool, naming a required string argument (decision 38)."""
+    edit = spec.edits
+    if edit is None:
+        return
+    if spec.effect not in _EDIT_EFFECTS:
+        message = f"tool {name!r}: edits is for store and exec tools, not {spec.effect}"
+        out.add("tools", "edits_not_allowed", message)
+        return
+    if not edit.source:
+        out.add("tools", "edits_invalid", f"tool {name!r}: edits names no source")
+    parts = edit.record.split("/")[1:] if is_json_pointer(edit.record) else []
+    if len(parts) != 1:
+        message = f"tool {name!r}: edits.record {edit.record!r} is not a top-level argument"
+        out.add("tools", "edits_invalid", message)
+        return
+    props = spec.schema.get("properties", {})
+    arg = props.get(parts[0]) if isinstance(props, Mapping) else None
+    required = spec.schema.get("required", ())
+    if not isinstance(arg, Mapping) or arg.get("type") != "string" or parts[0] not in required:
+        message = f"tool {name!r}: edits.record names {parts[0]!r}, not a required string argument"
+        out.add("tools", "edits_invalid", message)
 
 
 def _schema(name: str, spec: ToolSpec, out: Refusals) -> None:

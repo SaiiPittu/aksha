@@ -53,6 +53,9 @@ class Reader:
     def records(self, source: str, collection: str) -> tuple[str, ...]:
         return self.inner.records(source, collection)
 
+    def serves(self, source: str) -> bool:
+        return self.inner.serves(source)
+
 
 def _outputs(b: ResearchBench) -> dict[str, Any]:
     return {

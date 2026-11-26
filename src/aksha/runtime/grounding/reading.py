@@ -36,6 +36,10 @@ class AttemptReader:
             return ()
         return tuple(self._inner.records(source, collection))
 
+    def serves(self, source: str) -> bool:
+        """Whether ``inner`` serves ``source``; with no reader, none is served."""
+        return self._inner is not None and self._inner.serves(source)
+
     @property
     def returned(self) -> tuple[ReturnedText, ...]:
         """Every text this attempt's reads returned, in order."""

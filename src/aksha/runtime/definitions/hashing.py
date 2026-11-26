@@ -52,6 +52,7 @@ def definition_hash(
     *,
     tools_hash: str,
     context_hash: str | None = None,
+    invalidation: str | None = None,
 ) -> str:
     """The agent definition version hash of the agent in ``folder`` (``sha256:<64 hex>``).
 
@@ -59,6 +60,8 @@ def definition_hash(
     changes the hash even where file hashes alone would not show it. ``context_hash`` is
     ``context.policy.policy_hash`` of the agent's context policy (ADR-P08 D9): it carries
     the runtime's ``CONTEXT_POLICY_VERSION``, which no file of the agent shows.
+    ``invalidation`` is the agent's resolved invalidation mode (decision 38): a definition
+    that declares none gets the runtime's default, which no file of the agent shows either.
     """
     material = {
         "agent": [list(pair) for pair in file_hashes(folder)],
@@ -74,13 +77,19 @@ def definition_hash(
         "context": context_hash,
         "api_version": api_version,
     }
+    if invalidation is not None:
+        material["invalidation"] = invalidation
     return "sha256:" + sha256_hex(material)
 
 
 def run_started_fields(
     loaded: LoadedDefinition, *, runtime_commit: str, dirty: bool
 ) -> Mapping[str, Any]:
-    """The fields D7 adds to ``run.started``; the composition root reads the commit."""
+    """The fields D7 adds to ``run.started``; the composition root reads the commit.
+
+    ``invalidation`` is the agent's mode (decision 38), so every reader of the log derives
+    what invalidation the run gets from the run's own facts.
+    """
     return {
         "definition_hash": loaded.definition_hash,
         "extension_versions": {
@@ -90,6 +99,7 @@ def run_started_fields(
         "api_version": API_VERSION,
         "runtime_commit": runtime_commit,
         "dirty": dirty,
+        "invalidation": loaded.agent.invalidation,
     }
 
 

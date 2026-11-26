@@ -59,6 +59,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    the tool's ``retry_on``; P03).
 11. External record state (P29): ``ExternalRecord`` and ``external_records``, the outside
    records an owner's effects created or revised, with the freshness of each one's source.
+12. Invalidation modes (decision 38): ``InvalidationMode`` (``Agent.invalidation``) and
+   ``EditSpec`` (``ToolSpec.edits``, the record a tool edits or overwrites, checked at
+   edit time from ``edit_guard`` up).
 """
 
 from __future__ import annotations
@@ -107,6 +110,7 @@ from aksha.runtime.grounding.types import (
     maybe_unknown,
 )
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
+from aksha.runtime.invalidation.modes import InvalidationMode
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.models.calls import passage_id, span_draft
 from aksha.runtime.models.documents import (
@@ -182,6 +186,7 @@ from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.timers.clock import observe_time
 from aksha.runtime.tools.ports import ToolModels
 from aksha.runtime.tools.types import (
+    EditSpec,
     EffectClass,
     Err,
     Ok,
@@ -220,6 +225,7 @@ __all__ = [
     "DeclaredInterrupt",
     "DocumentKind",
     "DocumentReading",
+    "EditSpec",
     "EffectClass",
     "EffectSpec",
     "EgressPolicy",
@@ -246,6 +252,7 @@ __all__ = [
     "InputRef",
     "InstanceRef",
     "InstanceStatus",
+    "InvalidationMode",
     "Judgement",
     "KeySource",
     "Limits",
