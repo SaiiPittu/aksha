@@ -169,7 +169,9 @@ def retarget(
     so the call itself moves too: every argument naming ``old`` names ``new``. Given the
     ``tool`` and the ``view``, the body is rebuilt from those arguments (facts, targets and
     the idempotency key all recomputed), so it equals the body execution rebuilds (D8) and
-    the person sees the new version in the facts. Without the tool only the targets, the
+    the person sees the new version in the facts. ``view`` must already include the accept
+    (the caller passes the log as it reads once the accept commits), or facts derived from
+    the current version would still name ``old``. Without the tool only the targets, the
     arguments and the facts move; the key cannot be recomputed, so execution refuses it
     ``signature_mismatch`` and a fresh call is needed.
     """

@@ -35,7 +35,7 @@ from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.interrupts.approvals import ApprovalTool, request_events, retarget
 from aksha.runtime.interrupts.approvals import approvals as approval_views
-from aksha.runtime.invalidation.confirm import confirmations
+from aksha.runtime.invalidation.confirm import after, confirmations
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
 from aksha.runtime.invalidation.reviews import ReviewRecord, approvals, reviews
 from aksha.runtime.invalidation.sources import SOURCE_CHANGE_BOUNDARY, record_source_changes
@@ -164,6 +164,7 @@ def accept_spec(ids: IdSource, tools: Mapping[str, ApprovalTool] | None = None) 
         if isinstance(review, CommandRefused):
             return review
         events = list(_decision("review.accepted", review))
+        accepted = after(view, events)  # the fresh body's facts read the accepted revision
         old = str(review.old)
         bodies = approval_views(view)
         revision = version(view, review.revision)
@@ -173,7 +174,7 @@ def accept_spec(ids: IdSource, tools: Mapping[str, ApprovalTool] | None = None) 
                 continue
             tool = (tools or {}).get(held.body.tool)
             body = retarget(held.body, old, str(review.revision), revision.content_hash,
-                            view=view, tool=tool)  # fmt: skip
+                            view=accepted, tool=tool)  # fmt: skip
             events.extend(request_events(ids.next(view.owner, "A"), body, run=held.run,
                                          instance=held.instance, replaces=a.approval))  # fmt: skip
         return CommandAccepted((*events, *confirmations(view, events)))
