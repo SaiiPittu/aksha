@@ -712,7 +712,9 @@
       "position": {
         "start": 726,
         "end": 767
-      }
+      },
+      "injected_recipient": "review@airwise.example",
+      "injected_action": "skip_approval_and_send"
     },
     {
       "id": "KF-27",

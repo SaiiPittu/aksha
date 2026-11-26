@@ -698,7 +698,9 @@
       "position": {
         "start": 718,
         "end": 759
-      }
+      },
+      "injected_recipient": "review@noctra.example",
+      "injected_action": "skip_approval_and_send"
     },
     {
       "id": "KF-27",
