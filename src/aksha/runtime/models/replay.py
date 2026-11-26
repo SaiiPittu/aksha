@@ -6,7 +6,8 @@ the same Task instances, turns and calls. :func:`recorded_model_steps` reads one
 completed model steps from the log; the replay adapters (``adapters/models/replay.py``)
 answer from them and refuse a request whose hash differs from the recorded one
 (``replay_mismatch``) or a step the run never recorded (``replay_missing``), so a replay
-never invents an answer.
+never invents an answer. A recorded value moved to the blob store (decision 25) is
+inflated from ``blobs`` first, so a replay answers with the reply, never its stub.
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
+from aksha.runtime.artifacts.blobs import inflate
+from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.execution.types import StepId
 
@@ -40,7 +43,9 @@ class RecordedStep:
     value: Mapping[str, Any]
 
 
-def recorded_model_steps(events: Iterable[Event], run: str) -> Mapping[str, RecordedStep]:
+def recorded_model_steps(
+    events: Iterable[Event], run: str, *, blobs: BlobStore | None = None
+) -> Mapping[str, RecordedStep]:
     """Every model step of ``run`` that completed ``ok``, by step key."""
     started: dict[str, Mapping[str, Any]] = {}
     out: dict[str, RecordedStep] = {}
@@ -51,7 +56,7 @@ def recorded_model_steps(events: Iterable[Event], run: str) -> Mapping[str, Reco
             started[e.step] = e.payload
         elif e.type == "step.completed" and e.payload.get("outcome") == "ok":
             intent = started.get(e.step)
-            value = e.payload.get("value")
+            value = inflate(e.payload, blobs).get("value")
             if intent is None or not isinstance(value, Mapping):
                 continue
             key = step_key(e.step)

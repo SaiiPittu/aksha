@@ -183,3 +183,31 @@ def test_a_step_key_drops_the_run() -> None:
     assert step_key(StepId("R-0009", "scope", turn=1)) == "scope/t01"
     with pytest.raises(Exception, match="step_id_invalid"):
         step_key("nope")
+
+
+def test_an_offloaded_recording_replays_its_value(tmp_path: Path) -> None:
+    """Decision 25: a recorded reply moved to the blob store is read back whole."""
+    from aksha.adapters.blobs.filesystem import FilesystemBlobStore
+    from aksha.runtime.artifacts.blobs import offload
+    from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, PAYLOAD_CAP_BYTES, Catalogue
+    from aksha.runtime.events.envelope import NewEvent
+    from tests.support.context import Log
+
+    log, blobs = Log(tmp_path / "a.sqlite"), FilesystemBlobStore(tmp_path / "blobs")
+    try:
+        log.start()
+        env = {"run": "R-0001", "instance": "collect[acme]", "step": "R-0001/collect[acme]/t01"}
+        started = {"kind": "model", "name": "generate", "args_hash": "sha256:" + "0" * 64,
+                   "counted": True}  # fmt: skip
+        text = "p" * (PAYLOAD_CAP_BYTES + 10)
+        value = {"result": {"text": text, "tool_calls": [], "finish": "text"}}
+        done = {"outcome": "ok", "kind": "model", "name": "generate", "attempts": 1,
+                "value": value}  # fmt: skip
+        payload = offload(Catalogue(CORE_EVENT_TYPES), blobs, "step.completed", done)
+        assert payload != done
+        log.store.append("o", "U2a", (NewEvent("step.started", started, **env),))
+        log.store.append("o", "U2", (NewEvent("step.completed", payload, **env),))
+        recorded = recorded_model_steps(log.store.read("o"), "R-0001", blobs=blobs)
+        assert recorded["collect[acme]/t01"].value["result"]["text"] == text
+    finally:
+        log.close()
