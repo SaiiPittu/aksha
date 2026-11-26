@@ -12,11 +12,13 @@ GET      ``/health``                                 liveness, and the runtime t
 GET      ``/capabilities``                           the capability record (D7)
 POST     ``/commands``                               any named command (``wire`` module doc)
 POST     ``/sessions/{session}/messages``            ``SendMessage``
-POST     ``/interrupts/{interrupt}/answer``          ``AnswerInterrupt``
+POST     ``/interrupts/{interrupt}/answer``          ``AnswerInterrupt`` (``amend``: ADR-P27)
 POST     ``/approvals/{approval}/approve``           ``Approve`` (body ``shown_signature``)
 POST     ``/approvals/{approval}/reject``            ``Reject``
 POST     ``/runs/{run}/stop``                        ``Stop``
 POST     ``/inputs``                                 ``UploadInputs`` (body ``files``: path to text)
+POST     ``/runs/{run}/steer``                       ``Steer`` (body ``text``, ``lane``,
+                                                     ``instance``; ADR-P27)
 GET      ``/sessions/{session}``                     the session's status
 GET      ``/sessions/{session}/events``              SSE from ``?after=`` or ``Last-Event-ID``
 GET      ``/runs``, ``/runs/{run}``                  run statuses; the run inspector's report
@@ -174,7 +176,7 @@ def create_app(
                      x_aksha_user: str = Header()) -> JSONResponse:  # fmt: skip
         body = await json_body(request)
         args = {"interrupt_id": interrupt}
-        args.update({k: body[k] for k in ("text", "answers", "agent") if k in body})
+        args.update({k: body[k] for k in ("text", "answers", "agent", "amend") if k in body})
         return command(x_aksha_user, "AnswerInterrupt", args, body)
 
     @app.post(f"{API}/approvals/{{approval}}/approve")
@@ -212,6 +214,17 @@ def create_app(
         ):
             return error(422, "validation", "files maps each relative path to its UTF-8 text")
         return command(x_aksha_user, "UploadInputs", {"files": files}, body)
+
+    @app.post(f"{API}/runs/{{run}}/steer")
+    async def steer(run: str, request: Request, x_aksha_user: str = Header()) -> JSONResponse:
+        body = await json_body(request)
+        args: dict[str, Any] = {"run_id": run, "text": body.get("text")}
+        if not isinstance(args["text"], str) or not args["text"]:
+            return error(422, "validation", "text is a non-empty string")
+        for key in ("lane", "instance"):
+            if key in body:
+                args[key] = body[key]
+        return command(x_aksha_user, "Steer", args, body)
 
     @app.get(f"{API}/sessions/{{session}}")
     def session(session: str, x_aksha_user: str = Header()) -> dict[str, Any]:

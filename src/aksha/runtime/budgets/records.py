@@ -85,6 +85,8 @@ def is_veto(e: Event) -> bool:
     """
     if e.type != STOP_DECIDED or e.payload.get("candidate") != "finish":
         return False
+    if e.payload.get("inputs"):  # a person's pending input turned the finish (ADR-P27 D4)
+        return False
     if _verdict(e) != "continue":
         return False
     of = e.payload.get("candidate_instance")

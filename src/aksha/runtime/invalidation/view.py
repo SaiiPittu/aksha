@@ -6,8 +6,9 @@ disagree with them after a crash. Each read of a version gets one state:
 
 1. A record read is ``moved`` when the owner's last ``source.changed`` gave the record
    another version, and ``gone`` when it gave None. A query read is ``moved`` when its
-   last ``query.reexecuted`` hash differs. Statements and blobs are ``same`` (a statement
-   is superseded only once ADR-P17 records that; a blob is content-addressed).
+   last ``query.reexecuted`` hash differs. A statement read (an answer, named by its
+   interrupt and answer) is ``moved`` once a later statement span ``supersedes`` its span
+   (an amendment, ADR-P27 D5), else ``same``; a blob is content-addressed, so ``same``.
 2. An artifact read is ``gone`` when the version is not stored or its writer instance is
    withdrawn (S3). Otherwise the slot's newest version that counts for this reader is
    compared with the version read: none newer, ``same`` (``unsettled`` if the version
@@ -49,6 +50,8 @@ from aksha.runtime.artifacts.hashing import entry_hash
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactRef, ArtifactVersion, InputRef, WriterId
 from aksha.runtime.artifacts.versions import all_versions, unaccepted_revisions
+from aksha.runtime.grounding.spans import span_index
+from aksha.runtime.grounding.types import STATEMENT_SOURCE
 from aksha.runtime.invalidation.reviews import approved_refs, open_reviews, reviews
 from aksha.runtime.invalidation.sources import record_key, source_facts
 from aksha.runtime.invalidation.types import (
@@ -133,6 +136,22 @@ def runs_for(view: LogView) -> Mapping[str, frozenset[str]]:
     return MappingProxyType(out)
 
 
+def superseded_statements(view: LogView) -> Mapping[tuple[str, str], str]:
+    """Each superseded answer, by (interrupt, answer), to the answer that replaced it last."""
+    index = span_index(view)
+    by_id = {s.span_id: s for s in index.spans.values() if s.source == STATEMENT_SOURCE}
+    newer = {s.supersedes: s for s in by_id.values() if s.supersedes in by_id}
+    out: dict[tuple[str, str], str] = {}
+    for old in by_id.values():
+        last = newer.get(old.span_id)
+        if last is None:
+            continue
+        while last.span_id in newer:
+            last = newer[last.span_id]
+        out[(old.record_id, old.version)] = last.version
+    return MappingProxyType(out)
+
+
 def withdrawn_writers(view: LogView) -> frozenset[WriterId]:
     """The writer keys whose last lifecycle fact is a ``task.withdrawn`` (S3, ADR-P15 D3).
 
@@ -186,6 +205,7 @@ class _Walk:
         self.by_ref = {str(v.ref): v for v in self.all}
         self.unaccepted = unaccepted_revisions(view)
         self.facts = source_facts(view)
+        self.statements = superseded_statements(view)
         self.lines = runs_for(view)
         slots: dict[tuple[str, str | None], list[ArtifactVersion]] = {}
         for v in sorted(self.all, key=lambda v: v.ref.version):
@@ -297,8 +317,16 @@ class _Walk:
         return self.evaluate(v)[0] in STALE_STATES
 
     def read_state(self, reader: ArtifactVersion, read: InputRef) -> tuple[ReadStatus, str | None]:
-        """One read's status, and the ref it waits on when unsettled."""
-        return self.read_state_for(self.line(reader), read, reader.event_seq)
+        """One read's status, and the ref it waits on when unsettled.
+
+        A superseded statement the reader also read the replacement of is ``same``: the
+        version was saved with the amended answer in view (ADR-P27 D5).
+        """
+        status, waits = self.read_state_for(self.line(reader), read, reader.event_seq)
+        seen = status.now is not None and InputRef("statement", read.id, status.now) in reader.reads
+        if read.kind == "statement" and status.state == "moved" and seen:
+            return ReadStatus(read, "same"), None
+        return status, waits
 
     def read_state_for(
         self, mine: frozenset[str], read: InputRef, saved_seq: int | None = None
@@ -318,6 +346,9 @@ class _Walk:
             return status, None
         if read.kind == "query":
             return self._versioned(read, self.facts.queries), None
+        if read.kind == "statement":
+            now = self.statements.get((read.id, read.version))
+            return ReadStatus(read, "same" if now is None else "moved", now), None
         if read.kind != "artifact":
             return ReadStatus(read, "same"), None
         whole = ArtifactRef.from_input(read)

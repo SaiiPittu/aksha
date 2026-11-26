@@ -180,11 +180,11 @@ def test_another_owners_interrupt_reads_as_unknown(bench: SessionBench) -> None:
 
 
 def test_an_unsupported_command_is_refused_with_a_stored_receipt(bench: SessionBench) -> None:
-    steer = n.Steer(owner=OWNER, run_id="R-0001", text="faster", command_id="c-5")
-    receipt = bench.session.dispatch(steer)
+    change = n.ApplySourceChange(owner=OWNER, change_set="cs-1", command_id="c-5")
+    receipt = bench.session.dispatch(change)
     assert receipt.refused == "unsupported"
     assert bench.payloads("command.refused")[-1]["code"] == "unsupported"
-    assert bench.session.dispatch(steer).duplicate
+    assert bench.session.dispatch(change).duplicate
 
 
 def test_every_listed_command_reaches_its_handler(bench: SessionBench) -> None:
@@ -202,12 +202,13 @@ def test_every_listed_command_reaches_its_handler(bench: SessionBench) -> None:
         "GrantBudget": n.GrantBudget(owner=OWNER, interrupt_id="I-1", extra={"model_turns": 1}),
         "Stop": n.Stop(owner=OWNER, run_id="R-0001"),
         "Finalize": n.Finalize(owner=OWNER, interrupt_id="I-1"),
+        "Steer": n.Steer(owner=OWNER, run_id="R-0001", text="faster"),
     }
     assert set(record.commands) <= set(samples)
     for name in record.commands:
         receipt = bench.session.dispatch(samples[name])
         assert receipt.refused != "unsupported", name
-    assert "Steer" not in record.commands and "ApplySourceChange" not in record.commands
+    assert "Steer" in record.commands and "ApplySourceChange" not in record.commands
 
 
 def test_the_capability_record_describes_the_loaded_agent(bench: SessionBench) -> None:

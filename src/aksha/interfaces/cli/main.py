@@ -1,10 +1,10 @@
 """``aksha``: the command line, in server mode or embedded mode (decision 22, ADR-P19).
 
 Commands that change state (``run``, ``answer``, ``approve``, ``reject``, ``stop``,
-``resume``) find a running server first (``AKSHA_SERVER_URL`` or the server file) and send
-it the command; with no server answering they run embedded: the command opens the store
-as the writer for its one invocation (exit code 8 when another process holds the lock),
-dispatches the command, drives the owner's runs until they yield, and exits. Read
+``steer``, ``resume``) find a running server first (``AKSHA_SERVER_URL`` or the server
+file) and send it the command; with no server answering they run embedded: the command
+opens the store as the writer for its one invocation (exit code 8 when another process
+holds the lock), dispatches the command, drives the owner's runs until they yield, and exits. Read
 commands (``status``, ``inspect``, ``verify``, ``trace``) open a read-only handle and work
 beside a server.
 
@@ -56,6 +56,7 @@ from aksha.interfaces.cli.client import Client, ServerError, find_server
 from aksha.interfaces.cli.pending import PENDING_FILE, PendingIds, invocation_key
 from aksha.runtime.definitions.errors import LoadError
 from aksha.runtime.errors import AkshaError
+from aksha.runtime.inputs.reducers import queued_inputs
 from aksha.runtime.interrupts.reducers import approvals, interrupts
 from aksha.runtime.models.errors import BindRefused
 from aksha.runtime.projections.view import load_view
@@ -107,6 +108,9 @@ class Context:
         self.pending.clear(self.key)
         self.pending.clear(self.key + "/session")
 
+    after_accept: Callable[[], None] | None = None
+    """What a command says once its receipt is accepted, before the run is driven."""
+
     def server(self) -> Client | None:
         """The running server's client, or None to run embedded."""
         url = find_server(self.config.server_url, self.config.server_file())
@@ -154,6 +158,13 @@ def _asked(ctx: Context, w: Waiting) -> None:
 
 def _refused(ctx: Context, receipt: CommandReceipt) -> int:
     ctx.say(f"refused: {receipt.refused} (command {receipt.command_id}, seq {receipt.seq})")
+    if receipt.refused == "lane_required":
+        run = _open_run(ctx) or "RUN"
+        ctx.say("  the session has an open run; say which lane the message is for:")
+        ctx.say(f"    aksha steer {run} TEXT                   steer the running work")
+        ctx.say(f"    aksha steer {run} TEXT --lane follow_up  a note for when it finishes")
+        ctx.say(f"    aksha steer {run} TEXT --lane amend      change what was asked")
+        ctx.say("  or send a new request once the run has ended")
     if receipt.refused == "sandbox_required":
         ctx.say(
             "  a headless run needs a sandbox: set AKSHA_SANDBOX=bwrap (probed), or "
@@ -164,6 +175,17 @@ def _refused(ctx: Context, receipt: CommandReceipt) -> int:
                 "AKSHA_SYSTEMS=counsel_mail=mailbox:<folder> (it delivers to a file, "
                 "never to a person), then approve again")  # fmt: skip
     return wire.EXIT_REFUSED
+
+
+def _open_run(ctx: Context) -> str | None:
+    """The owner's latest open run, read from a read-only handle (for the lane hint)."""
+    store = open_reader(ctx.config)
+    try:
+        runs = run_statuses(load_view(store, ctx.owner))
+    finally:
+        store.close()
+    open_ = [r.run for r in runs if r.state != "ended"]
+    return open_[-1] if open_ else None
 
 
 def _embedded(ctx: Context) -> Session:
@@ -206,6 +228,8 @@ def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target
         ctx.received()
         if not receipt.accepted:
             return _refused(ctx, receipt)
+        if ctx.after_accept is not None:
+            ctx.after_accept()
         if run is None and session_id is not None:
             data = client.get(f"/sessions/{session_id}")
             if data["run"] is None:
@@ -219,6 +243,8 @@ def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target
         ctx.received()
         if not receipt.accepted:
             return _refused(ctx, receipt)
+        if ctx.after_accept is not None:
+            ctx.after_accept()
         if run is None and session_id is not None:
             started = session.status(ctx.owner, session_id).run
             run = None if started is None else started.run
@@ -411,7 +437,8 @@ def cmd_answer(ctx: Context, args: argparse.Namespace) -> int:
 
     def build(cid: str) -> n.NamedCommand:
         return n.AnswerInterrupt(owner=ctx.owner, interrupt_id=args.interrupt, text=text,
-                                 answers=answers, agent=args.agent, command_id=cid)  # fmt: skip
+                                 answers=answers, agent=args.agent, amend=args.amend,
+                                 command_id=cid)  # fmt: skip
 
     return _mutate(ctx, build, _item_target(ctx, "interrupt", args.interrupt))
 
@@ -463,6 +490,32 @@ def cmd_stop(ctx: Context, args: argparse.Namespace) -> int:
         return n.Stop(owner=ctx.owner, run_id=args.run, reason=args.reason, command_id=cid)
 
     return _mutate(ctx, build, (args.run, None))
+
+
+def cmd_steer(ctx: Context, args: argparse.Namespace) -> int:
+    """Send a message to an open run in a lane (ADR-P27): steer, follow_up or amend.
+
+    ``steer`` reaches the run's next model call, ``follow_up`` waits for it to propose a
+    finish, ``amend`` corrects the run's last answered question.
+    """
+
+    def build(cid: str) -> n.NamedCommand:
+        return n.Steer(owner=ctx.owner, run_id=args.run, text=args.text, lane=args.lane,
+                       instance=args.instance, command_id=cid)  # fmt: skip
+
+    ctx.after_accept = lambda: _say_queued(ctx, args.run, args.lane)
+    return _mutate(ctx, build, (args.run, None))
+
+
+def _say_queued(ctx: Context, run: str, lane: str) -> None:
+    """The input the accepted steer queued, read back from a read-only handle."""
+    store = open_reader(ctx.config)
+    try:
+        found = queued_inputs(load_view(store, ctx.owner), run)
+    finally:
+        store.close()
+    if found:
+        ctx.say(f"queued {lane} {found[-1].input_id} for {run}")
 
 
 def cmd_resume(ctx: Context, args: argparse.Namespace) -> int:
@@ -760,6 +813,11 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--answer", action="append", metavar="ID=TEXT",
                    help="the answer to question ID (repeat for each question)")  # fmt: skip
     s.add_argument("--agent", help="for a route question: the agent to route to")
+    s.add_argument(
+        "--amend",
+        action="store_true",
+        help="correct an answer already given (ADR-P27): what read it rebuilds",
+    )
     s.set_defaults(handler=cmd_answer)
 
     s = sub.add_parser("approve", help="grant an approval for the signature you were shown")
@@ -778,6 +836,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("run")
     s.add_argument("--reason", default="Stopped by user")
     s.set_defaults(handler=cmd_stop)
+
+    s = sub.add_parser("steer", help="send a message to an open run: steer, follow_up or amend")
+    s.add_argument("run")
+    s.add_argument("text")
+    s.add_argument("--lane", choices=("steer", "follow_up", "amend"), default="steer",
+                   help="steer the running work (default), add a note for when it "
+                   "finishes, or amend the run's last answered question")  # fmt: skip
+    s.add_argument("--instance", help="the Task instance it is for (default: the run's)")
+    s.set_defaults(handler=cmd_steer)
 
     s = sub.add_parser("resume", help="recover and drive in-flight runs until they yield")
     s.add_argument("run", nargs="?")

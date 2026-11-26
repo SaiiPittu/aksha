@@ -148,7 +148,8 @@ def test_the_event_stream_replays_marks_the_tail_and_follows(
 def test_capabilities_health_and_verify(served: tuple[TestClient, Any]) -> None:
     client, _ = served
     caps = client.get("/api/v1/capabilities").json()
-    assert "SendMessage" in caps["commands"] and "Steer" not in caps["commands"]
+    assert "SendMessage" in caps["commands"] and "Steer" in caps["commands"]
+    assert "ApplySourceChange" not in caps["commands"]
     assert client.get("/api/v1/health").json()["ok"] is True
     client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
                 json={"text": "Write a note", "command_id": "c-1"})  # fmt: skip
@@ -219,3 +220,38 @@ def test_inputs_upload_over_http_and_a_changed_file_reopens_its_work(
                                                         ("R-0002", "complete")]  # fmt: skip
     report = client.get("/api/v1/runs/R-0002", headers=H).json()
     assert {s["step"].split("/")[1] for s in report["steps"]} == {"voice", "report"}
+
+
+def test_a_steer_to_a_waiting_run_is_queued_and_read_after_the_approval(
+    served: tuple[TestClient, Any],
+) -> None:
+    """ADR-P27: ``POST /runs/{run}/steer`` carries a lane; the input is a fact."""
+    client, _ = served
+    client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
+                json={"text": "Write a note and publish it", "command_id": "c-1"})  # fmt: skip
+    run = _wait_run(client, lambda r: r["state"] == "waiting")
+    r = client.post(f"/api/v1/runs/{run['run']}/steer", headers=H,
+                    json={"text": "note text: blue", "lane": "follow_up",
+                          "command_id": "c-2"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["receipt"]["status"] == "accepted"
+    bad = client.post(f"/api/v1/runs/{run['run']}/steer", headers=H,
+                      json={"text": "x", "lane": "sideways", "command_id": "c-3"})  # fmt: skip
+    assert bad.status_code == 409 and bad.json()["error"]["code"] == "lane_unknown"
+    empty = client.post(f"/api/v1/runs/{run['run']}/steer", headers=H, json={})
+    assert empty.status_code == 422
+    unknown = client.post("/api/v1/runs/R-9999/steer", headers=H,
+                          json={"text": "x", "command_id": "c-4"})  # fmt: skip
+    assert unknown.status_code == 404 and unknown.json()["error"]["code"] == "not_found"
+
+
+def test_the_answer_endpoint_carries_amend(served: tuple[TestClient, Any]) -> None:
+    """``amend`` reaches ``AnswerInterrupt``: an open question is not an answer to amend."""
+    client, _ = served
+    client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
+                json={"text": "Ask first please", "command_id": "c-1"})  # fmt: skip
+    run = _wait_run(client, lambda r: r["state"] == "waiting")
+    (waiting,) = run["waiting_on"]
+    r = client.post(f"/api/v1/interrupts/{waiting['interrupt_id']}/answer", headers=H,
+                    json={"text": "blue", "amend": True, "command_id": "c-2"})  # fmt: skip
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_answered", r.text

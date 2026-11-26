@@ -136,6 +136,33 @@ def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: P
     assert "None days" not in json.dumps(thaw(questions))
 
 
+def test_steer_queues_input_for_a_waiting_run(tmp_path: Path) -> None:
+    """ADR-P27: ``aksha steer RUN TEXT --lane``; a bare message to the open run needs one."""
+    code, out = aksha(tmp_path, "run", "Write and publish", "--session", "S-1")
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+    found = re.search(r"aksha approve (A-\d+) --signature (v1:[0-9a-f]{64})", out)
+    assert found is not None
+    code, out = aksha(tmp_path, "run", "note text: blue", "--session", "S-1")
+    assert code == wire.EXIT_REFUSED and "lane_required" in out
+    assert "aksha steer R-0001" in out
+    code, out = aksha(tmp_path, "steer", "R-0001", "note text: blue")
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+    assert "queued steer IN-0001" in out
+    code, out = aksha(tmp_path, "steer", "R-0001", "x", "--lane", "amend")
+    assert code == wire.EXIT_REFUSED and "nothing_to_amend" in out
+    code, out = aksha(tmp_path, "approve", found.group(1), "--signature", found.group(2))
+    assert code == wire.EXIT_OK and "ended complete" in out
+    store = open_store(tmp_path / "var" / "aksha.sqlite", FakeClock(START), writer=False)
+    try:
+        consumed = [thaw(e.payload)["input_id"] for e in store.read("o1")
+                    if e.type == "input.consumed"]  # fmt: skip
+    finally:
+        store.close()
+    assert consumed == ["IN-0001"]
+    code, out = aksha(tmp_path, "steer", "R-0001", "x")
+    assert code == wire.EXIT_REFUSED and "run_ended" in out
+
+
 def test_stop_exits_six(tmp_path: Path) -> None:
     code, out = aksha(tmp_path, "run", "Ask first", "--session", "S-1")
     assert code == wire.EXIT_WAITING_INPUT
