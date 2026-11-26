@@ -1,0 +1,10 @@
+id = "e-research-dup"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["research"]
+worlds = ["kelasora"]
+opening = "Which platforms sell live tutoring classes to after-school tutoring centres in Indonesia?"
+expect = ["facts.EF-06", "traps.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP"]

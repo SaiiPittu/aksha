@@ -1,0 +1,27 @@
+ref,source_site,date,country_code,tool,score_out_of_10,ulasan,lang,synthetic
+SYN-UL-01,ulasanku.example,2026-01-12,ID,Pintaria Kelas,8,Pengajarnya sabar dan materi aljabar jelas.,id,true
+SYN-UL-02,ulasanku.example,2026-01-20,ID,Belajarin Pro,6,"Harganya masuk akal, tapi jadwal kelas sering berubah.",id,true
+SYN-UL-03,edureview.example,2026-01-28,ID,TutorGrid,7,"Good platform, but the per-seat price adds up fast for a centre with five tutors.",en,true
+SYN-UL-04,ulasanku.example,2026-02-05,ID,Ruang Bimbel,5,Koneksi sering putus saat kelas sore.,id,true
+SYN-UL-05,edureview.example,2026-02-14,ID,Pintaria Kelas,9,Students like the teacher dashboard and the weekly quiz.,en,true
+SYN-UL-06,ulasanku.example,2026-02-22,ID,Belajarin Pro,4,Video macet di HP murid yang pakai paket data.,id,true
+SYN-UL-07,edureview.example,2026-03-03,ID,TutorGrid,8,Scheduling across three branches is easy.,en,true
+SYN-UL-08,ulasanku.example,2026-03-11,ID,Pintaria Kelas,3,Terlalu mahal untuk bimbel kecil di kota kami.,id,true
+SYN-UL-09,edureview.example,2026-03-19,ID,Ruang Bimbel,7,The tutors explain geometry step by step.,en,true
+SYN-UL-10,ulasanku.example,2026-04-02,ID,Belajarin Pro,8,Guru tamu dari Jakarta bagus sekali.,id,true
+SYN-UL-11,edureview.example,2026-04-15,ID,TutorGrid,6,"The app is in English only, so our parents cannot read the reports.",en,true
+SYN-UL-12,ulasanku.example,2026-05-06,ID,Belajarin Pro,5,"Belajarin Pro bagus untuk latihan soal, tapi sinyal di daerah kami lemah.",id,true
+SYN-UL-13,edureview.example,2026-05-18,ID,Ruang Bimbel,9,Cheap compared with hiring another teacher.,en,true
+SYN-UL-14,ulasanku.example,2026-06-01,ID,Pintaria Kelas,7,"Jadwal fleksibel, murid bisa pindah kelas sendiri.",id,true
+SYN-UL-15,edureview.example,2026-06-12,ID,TutorGrid,4,Buffering every evening on Indonesian mobile networks.,en,true
+SYN-UL-16,ulasanku.example,2026-07-08,ID,Akara Tutor,6,"Nama baru, aplikasinya sama. Harga belum naik.",id,true
+SYN-UL-17,ulasanku.example,2026-07-21,ID,Ruang Bimbel,8,Admin membantu kami mengatur jadwal ujian.,id,true
+SYN-UL-18,edureview.example,2026-08-02,ID,Akara Tutor,7,Since the rename the reports finally come in Bahasa Indonesia.,en,true
+SYN-UL-19,ulasanku.example,2026-08-14,ID,Pintaria Kelas,6,"Pengajar ganti-ganti terus, murid bingung.",id,true
+SYN-UL-20,edureview.example,2026-08-30,ID,TutorGrid,9,Reschedule requests are handled within an hour.,en,true
+SYN-UL-21,ulasanku.example,2026-09-09,ID,Akara Tutor,5,Kelas malam sering macet kalau hujan.,id,true
+SYN-UL-22,edureview.example,2026-09-22,ID,Ruang Bimbel,6,"Good value, but the cost of the tablet bundle is not on the website.",en,true
+SYN-UL-23,ulasanku.example,2026-10-05,ID,Pintaria Kelas,8,Soal latihannya sesuai kurikulum sekolah.,id,true
+SYN-UL-24,edureview.example,2026-10-19,ID,TutorGrid,7,Fine for our Surabaya branch; expensive for the Bandung one.,en,true
+SYN-UL-25,kelasbagus.example,2026-04-20,ID,Pintaria Kelas,3,Terlalu mahal untuk bimbel kecil di kota kami.,id,true
+SYN-UL-26,kelasbagus.example,2026-09-30,ID,Akara Tutor,5,"Akara Tutor bagus untuk latihan soal, tapi sinyal di daerah kami lemah.",id,true

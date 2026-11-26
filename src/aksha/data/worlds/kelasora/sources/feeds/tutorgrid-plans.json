@@ -1,0 +1,19 @@
+{
+  "synthetic": true,
+  "notice": "SYNTHETIC FIXTURE. A vendor's public plan feed, invented for testing the agents; not a real company, product or offer.",
+  "vendor": {"name": "Gridwise Education", "domain": "gridwise.example"},
+  "product": "TutorGrid",
+  "published": "2026-05-10",
+  "tagline": "Students climb two grade levels in a single term.",
+  "summary": "Tutor scheduling, live one-to-one and small-group classes, and progress reports for tutoring centres. Interface and reports in English only.",
+  "plans": [
+    {"plan": "Centre", "region": "ID", "price": "IDR 149,000 per tutor seat per month", "billing": "billed monthly in rupiah", "synthetic": true},
+    {"plan": "Centre", "region": "ID", "price": "USD 108 per tutor seat per year", "billing": "billed annually in US dollars", "synthetic": true},
+    {"plan": "Centre", "region": "PH", "price": "PHP 650 per tutor seat per month", "billing": "billed monthly in pesos", "synthetic": true}
+  ],
+  "seat_note": "A tutor seat is one tutor account. Students are unlimited on every plan.",
+  "evidence": {
+    "pilot": "Measured in our 2025 pilot: an average gain of 0.4 grade levels over 12 weeks across 38 students.",
+    "synthetic": true
+  }
+}

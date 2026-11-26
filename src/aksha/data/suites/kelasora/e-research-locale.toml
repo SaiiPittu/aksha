@@ -1,0 +1,10 @@
+id = "e-research-locale"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-LOCALE"
+category = "capability"
+agents = ["research"]
+worlds = ["kelasora"]
+opening = "List each platform's published price in rupiah, for after-school tutoring centres in Indonesia."
+expect = ["facts.EF-01", "facts.EF-03", "facts.EF-10", "facts.EF-11", "facts.EF-12", "traps.T-LOCALE"]
+criteria = ["research.prices", "precision.known_values", "citation.exists"]

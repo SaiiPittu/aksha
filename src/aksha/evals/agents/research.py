@@ -57,6 +57,7 @@ ANSWERS: Mapping[str, Mapping[str, str]] = {
     "tilldew": {"segment": "smallholder vegetable farmers", "geography": "India"},
     "cindral": {"segment": "independent physiotherapy clinics", "geography": "UK"},
     "rimefold": {"segment": "regional cold-chain delivery fleets", "geography": "Canada"},
+    "kelasora": {"segment": "after-school tutoring centres", "geography": "Indonesia"},
 }
 """The scripted user's answers to the agent's scope questions, per world, by question ID."""
 

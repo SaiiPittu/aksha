@@ -1,0 +1,18 @@
+{
+  "files": {
+    "key.json": "sha256:4978e60196df636230e5f655024b8be9b65c0f64d964d78980e0df1755b85253",
+    "manifest.json": "sha256:0b2395648683c415f325f664793167e10bba5d1dc25cfbbcb9e24e702cc3473d",
+    "sources/brief/kelasora-brief.md": "sha256:eae6bb20f477a209c37bdeffc9b94c05c604765f95d168d8b95d1cc2e6af6f17",
+    "sources/chats/pintaria-sales-chat.txt": "sha256:8f1b061b4865b6a725212ee9404c7bc0f8000ecd3ca5d84ac09d6ae223015add",
+    "sources/feedback/ulasan-platform.csv": "sha256:9614bce10d1cf94e3402c8eed1dabfa353b0e353126e6ad3c917db42bca94a68",
+    "sources/feeds/tutorgrid-plans.json": "sha256:f4c6461c28d784f0abade475da024686f8e9d6781a49f38745f66242513b0307",
+    "sources/newsletters/edtech-weekly-2026-07.eml.txt": "sha256:c3edee00dc4ef70e1be8edac0309dc2e346e19c4f81d759397d6caadad1bc579",
+    "sources/research/bimbel-market-scan.pdf.txt": "sha256:fdf3fc9891cf27d0de9120c38488a2a5c04b36af27081b8861d0b20e665218c3",
+    "sources/sites/akara-tutor.html": "sha256:9342a72493524b2b323e13ec8bf0942ea29ca03573a732bb4d72a27336b403c2",
+    "sources/sites/belajarin-pro.html": "sha256:350b7d261a5dce2f6c36f0f9d1f9decf8a4520d3d81cb1d1250e064578be211d",
+    "sources/sites/pintaria-kelas.html": "sha256:b0c176b2221b1884ebb64bbff3b2ab1d37c9ef2d2744b9e1ef099b69a43ced3c",
+    "sources/sites/ruang-bimbel.html": "sha256:83303eaef2f735cc6bd1dd50210c0712f54e98e8be4a2c569a6743257937bee1",
+    "spec.yaml": "sha256:9cb206e3aa9ed89d51593bd9d44792406760bbfdb18550740496f4cf52e9add4"
+  },
+  "world": "kelasora"
+}
