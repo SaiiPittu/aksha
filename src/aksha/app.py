@@ -24,6 +24,11 @@ is chosen, so the runtime itself stays standard library plus ``jsonschema``.
 The blob store (decision 25, 26 Nov 2026) holds payload values over the 64 KiB cap and
 large artifact bodies, content-addressed. The filesystem store is the only backend built;
 an object-store backend for unattended runs comes later behind the same port.
+
+Evals (ADR-P22): :func:`eval_agents` is the registry of agents an eval can put through an
+episode, and :func:`eval_store_opener` opens each episode's and each results folder's
+SQLite store on a fake clock fixed at the fixtures' frozen date, so two runs write the same
+bytes. The real agents register in :func:`eval_agents`, one line each.
 """
 
 from __future__ import annotations
@@ -42,6 +47,10 @@ from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
+from aksha.evals.agents.scripted import ScriptedResearchAgent
+from aksha.evals.judge import Judge, RuleJudge
+from aksha.evals.ports import StoreOpener
+from aksha.evals.registry import AgentRegistry
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.budgets.types import Limits
@@ -527,3 +536,42 @@ def open_demo(
     return DemoRuntime(
         store, clock, research_setup, patent_setup, shared, send_tools, worker, box, hashes
     )
+
+
+EVAL_CLOCK_START = datetime(2026, 11, 26, tzinfo=UTC)
+"""Where an eval's fake clock starts: the fixtures' ``frozen_today``."""
+
+
+def eval_store_opener() -> StoreOpener:
+    """Opens an eval store (an episode's or a results folder's) as SQLite on a fake clock."""
+
+    def open_store(path: Path, catalogue: Catalogue) -> EventStore:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return sqlite.open_store(
+            path, FakeClock(EVAL_CLOCK_START), writer=True, catalogue=catalogue
+        )
+
+    return open_store
+
+
+def eval_agents() -> AgentRegistry:
+    """The agents an eval can run, by the name cases list them under.
+
+    The registration hook for the real agents: when an agent's eval adapter exists in
+    ``aksha/evals/agents/<name>.py``, register it here, for example
+    ``registry.register("research", ResearchUnderTest, mode="fake")``. A case naming an
+    agent that is not registered is refused with ``agent_not_registered``.
+    """
+    registry = AgentRegistry()
+    registry.register(
+        "scripted",
+        ScriptedResearchAgent,
+        mode="fake",
+        description="small rule-based research agent over competitor pages and reviews",
+    )
+    return registry
+
+
+def eval_judge() -> Judge:
+    """The fake judge for fake model mode: rule-based, offline, annotate-only."""
+    return Judge(model=RuleJudge(), model_id="fake:RuleJudge")

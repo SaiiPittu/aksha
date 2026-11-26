@@ -1,0 +1,11 @@
+id = "r-duplicate-competitor"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["research"]
+worlds = ["stillroom", "stillroom-v2"]
+relation = "invariance"
+opening = "Who are the competitors?"
+expect = ["counts.competitors_resolved", "competitors.K5", "facts.KF-23", "traps.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "trap.T-DUP"]

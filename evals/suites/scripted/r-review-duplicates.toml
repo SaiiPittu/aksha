@@ -1,0 +1,16 @@
+id = "r-review-duplicates"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-REVIEWDUP"
+category = "capability"
+agents = ["scripted"]
+worlds = ["stillroom", "stillroom-v2"]
+relation = "invariance"
+opening = "What do customers say, and how many distinct reviews are there?"
+expect = [
+  "counts.reviews_unique", "counts.review_themes_unique", "facts.KF-33", "traps.T-REVIEWDUP",
+]
+criteria = ["research.unique_reviews", "citation.exists", "citation.overlaps_key", "trap.T-REVIEWDUP"]
+# Theme counts stay should until theme membership is keyed by review ID; the text check
+# stays should until its negative set gates it.
+should = ["research.theme_counts", "no_market_percentage"]

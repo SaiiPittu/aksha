@@ -1,0 +1,10 @@
+id = "p-missing-documents"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-MISSING"
+category = "capability"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+opening = "What evidence supports C2?"
+expect = ["facts.KF-12", "traps.T-MISSING"]
+criteria = ["trap.T-MISSING", "citation.overlaps_key"]

@@ -12,6 +12,9 @@ beside a server.
 asked, every deny still holds, and the start is refused ``sandbox_required`` unless a
 sandbox is declared (``AKSHA_SANDBOX``). The exit codes are in :mod:`aksha.interfaces.wire`.
 A first Ctrl-C during an embedded run asks the run to stop (ADR-P18 D7) and exits 6.
+
+``aksha eval`` (ADR-P22) is offline and touches no session store: its line goes whole to
+:func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from aksha.app import (
     session_capabilities,
 )
 from aksha.interfaces import wire
+from aksha.interfaces.cli import evals
 from aksha.interfaces.cli.client import Client, ServerError, find_server
 from aksha.interfaces.cli.pending import PENDING_FILE, PendingIds, invocation_key
 from aksha.runtime.definitions.errors import LoadError
@@ -491,6 +495,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("capabilities", help="the capability record")
     s.set_defaults(handler=cmd_capabilities)
+
+    s = sub.add_parser(
+        "eval", help="run evals over the fixture worlds (aksha eval --help)", add_help=False
+    )
+    s.add_argument("rest", nargs=argparse.REMAINDER)
     return p
 
 
@@ -499,6 +508,9 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     """Run one command; returns its exit code (see :mod:`aksha.interfaces.wire`)."""
     stream = out or sys.stdout
     arguments = list(sys.argv[1:] if argv is None else argv)
+    first = _command_index(arguments)
+    if first < len(arguments) and arguments[first] == "eval":
+        return evals.main(arguments[first + 1 :])
     args = build_parser().parse_args(arguments)
     config = RuntimeConfig.from_env(os.environ if env is None else env)
     ctx = Context(config, args.user, stream, arguments)
@@ -523,6 +535,19 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     except AkshaError as e:
         ctx.say(f"refused: {e.code}: {e.message}")
         return wire.EXIT_REFUSED
+
+
+def _command_index(arguments: Sequence[str]) -> int:
+    """Where the command word sits, past the global ``--user`` option."""
+    i = 0
+    while i < len(arguments):
+        if arguments[i] == "--user":
+            i += 2
+        elif arguments[i].startswith("--user="):
+            i += 1
+        else:
+            return i
+    return i
 
 
 def _server_exit(status: int) -> int:

@@ -1,0 +1,11 @@
+id = "s7-replaced-fixtures"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: replaceable fixtures"
+category = "change"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+relation = "directional"
+opening = "Review the four invention candidates against the prior art and recommend a next action for each."
+expect = ["comparison_matrix", "recommendations"]
+criteria = ["patent.matrix", "patent.next_action", "patent.families_are_edges"]

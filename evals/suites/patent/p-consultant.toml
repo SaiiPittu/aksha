@@ -1,0 +1,11 @@
+id = "p-consultant"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CONSULT"
+category = "capability"
+agents = ["patent"]
+worlds = ["stillroom", "stillroom-v2"]
+opening = "Who contributed to C1?"
+expect = ["facts.KF-03", "facts.KF-06", "facts.KF-07", "facts.KF-08", "traps.T-CONSULT"]
+criteria = ["trap.T-CONSULT", "citation.overlaps_key"]
+judge = ["judge.counsel_question_specific"]
