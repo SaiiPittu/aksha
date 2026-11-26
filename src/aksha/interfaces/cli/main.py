@@ -22,7 +22,8 @@ asks the run to stop (ADR-P18 D7) and exits 6.
 ``aksha eval`` (ADR-P22) is offline and touches no session store: its line goes whole to
 :func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes. ``aksha demo``
 goes whole to :func:`aksha.interfaces.demo.__main__.main` the same way (``make demo`` runs
-it), and ``aksha doctor`` reports the version, the paths in use and the extras, opening
+it), ``aksha example`` copies a bundled world's input files into a new folder to try
+``--input`` on, and ``aksha doctor`` reports the version, the paths in use and the extras, opening
 nothing.
 """
 
@@ -31,12 +32,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
 import aksha
+from aksha import data
 from aksha.app import (
     RuntimeConfig,
     data_home,
@@ -649,6 +652,35 @@ def _importable(module: str) -> bool:
         return False
 
 
+def cmd_example(ctx: Context, args: argparse.Namespace) -> int:
+    """Copy a bundled synthetic world's input files into a new folder, to try ``--input``.
+
+    Only ``sources/`` is copied, never the world's answer key. With no world named, it
+    lists the bundled ones. A folder that already holds files is refused, so nothing of
+    the person's is overwritten.
+    """
+    worlds = sorted(p.name for p in data.worlds().iterdir() if (p / "sources").is_dir())
+    if args.world is None:
+        ctx.say("bundled synthetic worlds (aksha example NAME [FOLDER]):")
+        for name in worlds:
+            ctx.say(f"  {name}")
+        return wire.EXIT_OK
+    try:
+        sources = data.world_path(args.world) / "sources"
+    except KeyError:
+        ctx.say(f"no bundled world {args.world!r}; there are {', '.join(worlds)}")
+        return wire.EXIT_USAGE
+    target = Path(args.folder or f"{args.world}-inputs").expanduser()
+    if target.exists() and (not target.is_dir() or any(target.iterdir())):
+        ctx.say(f"{target} is not empty: pick a new folder")
+        return wire.EXIT_USAGE
+    shutil.copytree(sources, target, dirs_exist_ok=True)
+    count = sum(1 for p in target.rglob("*") if p.is_file())
+    ctx.say(f"copied {count} synthetic input files of {args.world} to {target}")
+    ctx.say(f'next: aksha run --agent research --input {target} "<your request>"')
+    return wire.EXIT_OK
+
+
 def cmd_doctor(ctx: Context, args: argparse.Namespace) -> int:
     """The version, the paths in use and which extras are installed; opens nothing."""
     storage = ctx.config.storage
@@ -687,6 +719,11 @@ def build_parser() -> argparse.ArgumentParser:
         "demo", help="the offline change-and-recovery demo (aksha demo --help)", add_help=False
     )
     s.add_argument("rest", nargs=argparse.REMAINDER)
+
+    s = sub.add_parser("example", help="copy a bundled synthetic world's inputs to a folder")
+    s.add_argument("world", nargs="?", help="the world (none: list them)")
+    s.add_argument("folder", nargs="?", help="a new folder (default: <world>-inputs)")
+    s.set_defaults(handler=cmd_example)
 
     s = sub.add_parser("doctor", help="version, paths in use and installed extras")
     s.set_defaults(handler=cmd_doctor)

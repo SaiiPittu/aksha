@@ -73,3 +73,30 @@ def test_aksha_demo_help_names_its_options() -> None:
         capture_output=True, text=True, timeout=60, check=False,
     )  # fmt: skip
     assert out.returncode == 0 and "--work" in out.stdout and "--json" in out.stdout
+
+
+def test_example_copies_a_bundled_worlds_inputs_into_a_new_folder(tmp_path: Path) -> None:
+    from aksha import data
+
+    target = tmp_path / "my-inputs"
+    code, out = run("example", "stillroom", str(target))
+    assert code == 0, out
+    bundled = data.world_path("stillroom") / "sources"
+    copied = sorted(p.relative_to(target) for p in target.rglob("*") if p.is_file())
+    assert copied == sorted(p.relative_to(bundled) for p in bundled.rglob("*") if p.is_file())
+    assert not (target / "key.json").exists()  # the answer key never leaves the package
+    assert f"aksha run --agent research --input {target}" in out
+
+
+def test_example_refuses_a_folder_that_has_files_and_an_unknown_world(tmp_path: Path) -> None:
+    (tmp_path / "mine.txt").write_text("mine", encoding="utf-8")
+    code, out = run("example", "stillroom", str(tmp_path))
+    assert code == 2 and "not empty" in out
+    assert (tmp_path / "mine.txt").read_text(encoding="utf-8") == "mine"
+    code, out = run("example", "nowhere", str(tmp_path / "x"))
+    assert code == 2 and "stillroom" in out and not (tmp_path / "x").exists()
+
+
+def test_example_with_no_world_lists_the_bundled_ones() -> None:
+    code, out = run("example")
+    assert code == 0 and "stillroom" in out and "tilldew" in out
