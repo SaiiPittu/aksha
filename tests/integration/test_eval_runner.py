@@ -164,7 +164,7 @@ def test_an_unregistered_agent_is_refused(tmp_path: Path) -> None:
         run_suite(
             load_suite(SUITES / "research"),
             fixtures_root=FIXTURES,
-            agents=eval_agents(),
+            agents=AgentRegistry(),
             open_store=OPEN,
             out=tmp_path,
         )
@@ -232,7 +232,7 @@ def test_cli_key_check_list_and_refusals(capsys: pytest.CaptureFixture[str]) -> 
     assert "stillroom: 0 drifts" in capsys.readouterr().out
     assert main(["eval", "--root", str(REPO), "list"]) == 0
     assert main(["--user", "o1", "eval", "--root", str(REPO), "list"]) == 0
-    assert "agents: scripted" in capsys.readouterr().out
+    assert "agents: patent, research, scripted" in capsys.readouterr().out
     assert main(["eval", "--root", str(REPO), "run", "no-such-suite"]) == 65
     assert main(["eval", "frobnicate"]) == 64
 

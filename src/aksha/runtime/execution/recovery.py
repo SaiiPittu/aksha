@@ -88,7 +88,7 @@ interrupt other than a diff review classifies a run ``suspended``.
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 
@@ -418,8 +418,13 @@ def resume_owner(
     outbox: OutboxWorker | None = None,
     source_check: SourceCheck | None = None,
     rebuild_check: RebuildCheck | None = None,
+    skip: Collection[str] = (),
 ) -> tuple[str, ...]:
     """Recover ``owner`` again, then resume each of its in-flight runs; return the runs driven.
+
+    A run in ``skip`` is recovered but neither driven nor given a resume record: the
+    caller knows it cannot move in this process (an approved effect with no system of
+    record), so the restart limit does not count a resume that never ran.
 
     ``source_check`` and ``rebuild_check`` are recovery's steps 2 and 8; each rebuild run
     step 8 opened is driven after the in-flight runs, with no resume record.
@@ -433,7 +438,7 @@ def resume_owner(
                            rebuild_check=rebuild_check)  # fmt: skip
     driven: list[str] = []
     for run in report.in_flight:
-        if not _resume_record(store, owner, run, limits):
+        if run in skip or not _resume_record(store, owner, run, limits):
             continue
         runs = rebuild(RUNS, load_view(store, owner))
         steps = StepExecutor(store, owner, clock, outbox=outbox)

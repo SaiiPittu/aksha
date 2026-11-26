@@ -255,3 +255,26 @@ def test_recovery_runs_the_outbox_phases_before_closing_steps(world: World) -> N
     assert len(recovery.reconciled) == 2
     assert recovery.in_flight == ("R-0001",)  # classified last
     assert len(world.ledger.rows) == 2
+
+
+def test_an_effect_whose_system_the_worker_lacks_commits_nothing(world: World) -> None:
+    """Refused before ``step.started``: no entry is left for recovery to trip over."""
+    lacking = EffectSpec(system="nowhere", key_fields=("/document",), semantics="reconcile")
+    with pytest.raises(EffectNeedsOutbox) as e:
+        world.steps().effect_step(S1, "file", PACKET, lacking)
+    assert "nowhere" in e.value.message
+    view = load_view(world.store, "o")
+    assert not entries(view)
+    assert not [ev for ev in view.events if ev.type == "step.started"]
+    assert recover_owner(world.store, "o", LOADED, outbox=None).in_flight == ("R-0001",)
+
+
+def test_a_finished_effect_step_replays_without_its_system(world: World) -> None:
+    """A recorded step returns its result even when this worker lacks the system now."""
+    first = world.steps().effect_step(S1, "file", PACKET, FILE)
+    lacking = OutboxWorker(world.store, "o", world.clock, {"hook": world.hook},
+                           policies={"file": StepPolicy()}, authority=world.authority)  # fmt: skip
+    again = StepExecutor(world.store, "o", world.clock, outbox=lacking).effect_step(
+        S1, "file", PACKET, FILE
+    )
+    assert again.outcome == first.outcome and again.replayed

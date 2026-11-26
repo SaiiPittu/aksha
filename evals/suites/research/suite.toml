@@ -1,6 +1,6 @@
-# The Research Agent's cases (eval design 13.1). They run once the agent's eval adapter is
-# registered in aksha.app.eval_agents; until then a run is refused with agent_not_registered,
-# and the cases are still checked against both keys by the tests.
+# The Research Agent's cases (eval design 13.1), run through its eval adapter
+# (aksha/evals/agents/research.py, registered in aksha.app.eval_agents) and checked against
+# both keys by the tests.
 [suite]
 name = "research"
 description = "Research Agent cases over the Stillroom worlds"

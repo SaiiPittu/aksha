@@ -46,8 +46,9 @@ class KeyDelta:
 
     ``changed`` holds the output keys left out of the unchanged set: every candidate whose
     keyed recommendation or matrix differs, and every keyed entity (a family) the variant
-    adds. ``must_move`` holds the outputs that must differ from their base: the
-    ``recommendation`` or ``matrix`` of a candidate whose matching key section differs.
+    adds, under its label and under each of its priority numbers. ``must_move`` holds the
+    outputs that must differ from their base: the ``recommendation`` or ``matrix`` of a
+    candidate whose matching key section differs.
     """
 
     changed: frozenset[str]
@@ -68,9 +69,10 @@ def key_delta(base: AnswerKey, variant: AnswerKey) -> KeyDelta:
             if _norm(section, b.get(cand)) != _norm(section, v.get(cand)):
                 changed.add(cand)
                 move.add((kind, cand))
-    changed |= set(dict(variant.data.get("families", {}))) - set(
-        dict(base.data.get("families", {}))
-    )
+    families = dict(variant.data.get("families", {}))
+    for label in set(families) - set(dict(base.data.get("families", {}))):
+        changed.add(label)  # an agent names a family by its priority number, never the label
+        changed.update(str(p) for p in dict(families[label]).get("priority_numbers", ()))
     return KeyDelta(frozenset(changed), frozenset(move))
 
 

@@ -18,7 +18,13 @@ from typing import Any
 
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase
-from aksha.evals.criteria.common import all_citations, cites, competitor_output, field_of
+from aksha.evals.criteria.common import (
+    all_citations,
+    cites,
+    competitor_output,
+    family_label,
+    field_of,
+)
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
 from aksha.evals.key import KeyFact
 from aksha.evals.normalize import cell_state, enum_key, is_unknown, name_key, price_of
@@ -193,7 +199,11 @@ def families_are_edges(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) ->
 
 
 def matrix(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
-    """Every comparison cell's state equals the key's, with no extra families."""
+    """Every comparison cell's state equals the key's, with no extra families.
+
+    A family is named by the key's label or by one of its priority numbers
+    (:func:`~aksha.evals.criteria.common.family_label`).
+    """
     want = dict(ctx.key.resolve("comparison_matrix"))
     bad: list[str] = []
     cells = 0
@@ -204,7 +214,7 @@ def matrix(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
             continue
         got = dict(out.content.get("cells", {}))
         for feat, fams in sorted(dict(features).items()):
-            row = {str(k).upper(): v for k, v in dict(got.get(feat, {})).items()}
+            row = {family_label(ctx, k): v for k, v in dict(got.get(feat, {})).items()}
             for fam, state in sorted(dict(fams).items()):
                 cells += 1
                 if cell_state(row.get(fam, "")) != cell_state(state):
@@ -303,9 +313,18 @@ def undated_disclosure(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) ->
 
 
 def _known_facts(ctx: GradeContext, case: EvalCase) -> list[KeyFact]:
+    """The stated values a case checks: those it lists, else those of its own domain.
+
+    A case that lists no stated value is checked against every stated value about what its
+    listed facts are about (a ``candidate`` or a ``competitor``), so a patent case is not
+    failed for the research prices; a case that lists no fact at all gets every one.
+    """
     facts = [f for f in ctx.key.facts.values() if f.kind in KNOWN_VALUE_KINDS]
     listed = [f for f in facts if f.id in case.facts]
-    return listed or facts
+    if listed:
+        return listed
+    about = {a for fid in case.facts if fid in ctx.key.facts for a in ctx.key.facts[fid].about}
+    return [f for f in facts if about & set(f.about)] or facts
 
 
 def known_values(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
@@ -355,11 +374,11 @@ CRITERIA = (
     Criterion("research.unique_reviews", "state", unique_reviews),
     Criterion("research.theme_counts", "state", theme_counts),
     Criterion("patent.families_are_edges", "state", families_are_edges),
-    Criterion("patent.matrix", "state", matrix),
+    Criterion("patent.matrix", "state", matrix, version="2"),
     Criterion("patent.next_action", "state", next_action),
     Criterion("patent.c1_extraction", "state", c1_extraction),
     Criterion("patent.priority_ranks", "state", priority_ranks),
     Criterion("patent.undated_disclosure", "state", undated_disclosure),
-    Criterion("precision.known_values", "state", known_values),
+    Criterion("precision.known_values", "state", known_values, version="2"),
     Criterion("precision.abstention_count", "state", abstention_count),
 )

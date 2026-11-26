@@ -30,6 +30,7 @@ from typing import TextIO
 from aksha.app import (
     RuntimeConfig,
     export_trace,
+    mock_system_notes,
     open_reader,
     open_session,
     session_capabilities,
@@ -45,7 +46,7 @@ from aksha.runtime.models.errors import BindRefused
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.session import named as n
 from aksha.runtime.session.errors import CommandIdReused
-from aksha.runtime.session.service import Session
+from aksha.runtime.session.service import SYSTEM_UNAVAILABLE, Session
 from aksha.runtime.session.types import CommandReceipt
 from aksha.runtime.session.views import (
     RunStatus,
@@ -117,18 +118,45 @@ def _report(ctx: Context, run: RunStatus | None) -> int:
             label = f" ({w.label})" if w.label else ""
             ctx.say(f"  waiting for {w.kind}{label} {w.interrupt_id}: "
                     f"aksha answer {w.interrupt_id} TEXT")  # fmt: skip
+        _asked(ctx, w)
     return wire.run_exit_code(run)
+
+
+def _asked(ctx: Context, w: Waiting) -> None:
+    """What the interrupt asks, so a person knows what they answer or approve."""
+    if w.tool is not None:
+        ctx.say(f"    approves: {w.tool}")
+    for name, value in w.facts:
+        ctx.say(f"    {name}: {value}")
+    several = len(w.questions) > 1
+    for qid, text in w.questions:
+        hint = f" (--answer {qid}=TEXT)" if several else ""
+        ctx.say(f"    asks{hint}: {text}")
+    if w.options:
+        ctx.say(f"    options: {', '.join(w.options)}")
 
 
 def _refused(ctx: Context, receipt: CommandReceipt) -> int:
     ctx.say(f"refused: {receipt.refused} (command {receipt.command_id}, seq {receipt.seq})")
     if receipt.refused == "sandbox_required":
         ctx.say("  a headless run needs a sandbox: set AKSHA_SANDBOX=<backend>:<strength>")
+    if receipt.refused == SYSTEM_UNAVAILABLE:
+        ctx.say("  no system of record for this send; for development, a mock mailbox: "
+                "AKSHA_SYSTEMS=counsel_mail=mailbox:<folder> (it delivers to a file, "
+                "never to a person), then approve again")  # fmt: skip
     return wire.EXIT_REFUSED
 
 
 def _embedded(ctx: Context) -> Session:
+    for note in mock_system_notes(ctx.config):
+        ctx.say(note)
     return open_session(ctx.config)
+
+
+def _say_unavailable(ctx: Context, session: Session) -> None:
+    """The runs this process could not move (an approved send with no system), and why."""
+    for run, why in sorted(session.unavailable(ctx.owner).items()):
+        ctx.say(f"{run} cannot move in this process: {why}")
 
 
 def _report_session(ctx: Context, status: SessionStatus) -> int:
@@ -141,6 +169,7 @@ def _report_session(ctx: Context, status: SessionStatus) -> int:
     for w in status.waiting_on:
         options = f" (aksha answer {w.interrupt_id} --agent NAME)" if w.kind == "route" else ""
         ctx.say(f"session {status.session} waiting for {w.kind} {w.interrupt_id}{options}")
+        _asked(ctx, w)
     return wire.run_exit_code(None, status.waiting_on)
 
 
@@ -184,6 +213,7 @@ def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target
             session.run_until_yield(ctx.owner)
             _report(ctx, run_status(load_view(session.store, ctx.owner), run))
             return wire.EXIT_STOPPED
+        _say_unavailable(ctx, session)
         if run is None and session_id is not None:
             return _report_session(ctx, session.status(ctx.owner, session_id))
         status = None if run is None else run_status(load_view(session.store, ctx.owner), run)
@@ -197,7 +227,8 @@ Target = tuple[str | None, str | None]
 
 
 def _session_from_json(data: dict[str, object]) -> SessionStatus:
-    waiting = tuple(Waiting(**w) for w in data.get("waiting_on") or ())  # type: ignore[attr-defined]
+    rows = data.get("waiting_on") or ()
+    waiting = tuple(wire.waiting_from_json(w) for w in rows)  # type: ignore[attr-defined]
     return SessionStatus(str(data["session"]), None, waiting, int(str(data.get("seq", 0))))
 
 
@@ -321,6 +352,7 @@ def cmd_resume(ctx: Context, args: argparse.Namespace) -> int:
     try:
         session.resume(ctx.owner)
         session.run_until_yield(ctx.owner)
+        _say_unavailable(ctx, session)
         statuses = run_statuses(load_view(session.store, ctx.owner))
     finally:
         session.store.close()
@@ -524,7 +556,11 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     if first < len(arguments) and arguments[first] == "eval":
         return evals.main(arguments[first + 1 :])
     args = build_parser().parse_args(arguments)
-    config = RuntimeConfig.from_env(os.environ if env is None else env)
+    try:
+        config = RuntimeConfig.from_env(os.environ if env is None else env)
+    except StoreError as e:
+        print(f"environment: {e.code}: {e.message}", file=stream)
+        return wire.EXIT_ENVIRONMENT
     ctx = Context(config, args.user, stream, arguments)
     handler: Callable[[Context, argparse.Namespace], int] = args.handler
     try:

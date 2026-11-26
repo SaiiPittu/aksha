@@ -16,7 +16,13 @@ from typing import Any
 
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase
-from aksha.evals.criteria.common import all_citations, cites, competitor_output, field_of
+from aksha.evals.criteria.common import (
+    all_citations,
+    cites,
+    competitor_output,
+    family_output,
+    field_of,
+)
 from aksha.evals.criteria.forbidden import FILE_BY
 from aksha.evals.errors import KeyRefMissing
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
@@ -182,7 +188,7 @@ def t_status(ctx: GradeContext, trap: Trap) -> Check:
     """Both status wordings are kept verbatim, as separate entries."""
     facts = _facts(ctx, trap)
     fam = str(facts[0].about.get("family"))
-    out = ctx.state.get("family_status", fam)
+    out = family_output(ctx, "family_status", fam)
     if out is None:
         return failed(f"no family_status/{fam}", reading="missed")
     wordings = [
@@ -280,11 +286,16 @@ TRAP_CHECKS: Mapping[str, TrapCheck] = {
 }
 
 
+VERSIONS: Mapping[str, str] = {"T-STATUS": "2"}
+"""Trap checks changed since their first version (T-STATUS: a family by priority number)."""
+
+
 def _criterion(trap_id: str, fn: TrapCheck) -> Criterion:
     def check(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
         return fn(ctx, _trap(ctx, trap_id))
 
-    return Criterion(f"trap.{trap_id}", "trap", check, description=fn.__doc__ or "")
+    return Criterion(f"trap.{trap_id}", "trap", check, version=VERSIONS.get(trap_id, "1"),
+                     description=fn.__doc__ or "")  # fmt: skip
 
 
 CRITERIA = tuple(_criterion(t, fn) for t, fn in TRAP_CHECKS.items())

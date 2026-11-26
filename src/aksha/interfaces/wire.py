@@ -166,6 +166,16 @@ def waiting_to_json(w: Waiting) -> dict[str, Any]:
     return dataclasses.asdict(w)
 
 
+def waiting_from_json(data: Mapping[str, Any]) -> Waiting:
+    """One open interrupt back from its wire form (JSON lists back to tuples)."""
+    pairs = ("questions", "facts")
+    fields = {k: v for k, v in data.items() if k in {f.name for f in dataclasses.fields(Waiting)}}
+    for name in pairs:
+        fields[name] = tuple((str(a), str(b)) for a, b in fields.get(name) or ())
+    fields["options"] = tuple(str(o) for o in fields.get("options") or ())
+    return Waiting(**fields)
+
+
 def run_to_json(run: RunStatus) -> dict[str, Any]:
     """The wire form of a run's status."""
     out = dataclasses.asdict(run)
@@ -175,7 +185,7 @@ def run_to_json(run: RunStatus) -> dict[str, Any]:
 
 def run_from_json(data: Mapping[str, Any]) -> RunStatus:
     """A run's status back from its wire form."""
-    waiting = tuple(Waiting(**w) for w in data.get("waiting_on") or ())
+    waiting = tuple(waiting_from_json(w) for w in data.get("waiting_on") or ())
     return RunStatus(str(data["run"]), str(data["agent"]), data.get("session"),
                      data["state"], data.get("outcome"), bool(data.get("headless")),
                      waiting)  # fmt: skip

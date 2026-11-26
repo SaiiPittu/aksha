@@ -72,6 +72,10 @@ Takeaway: "at most once" across two systems is a recorded intent plus a key the 
 2. S2, `EffectSpec` gains two fields and loses one. `record_fields` names which outside record a request revises, which external record state (ADR-P29) reads. `receipt_kind` names an artifact kind that `outbox.completed` saves in the same transaction, so a completion check can read an effect's result: The coding review found that under the first milestone's `handoff` path the push result reaches no Task, because `TaskView` exposes artifacts and not outbox receipts. `needs_approval` moves to `ToolSpec.approval: ApprovalRule | None` (ADR-P10 S1), so approval is declared in one place.
 3. S3, names. The command receipt event is `command.accepted` or `command.refused`, and a system of record's answer is `SystemReceipt`, per ADR-P01 S1. This file has been updated.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, an effect whose system the worker lacks commits nothing (D1). `StepExecutor.effect_step` asks the worker whether it serves the effect's target (`OutboxWorker.serves`, the spec's `system` or else the tool's name) before it commits `step.started` and `outbox.enqueued` for a new entry, and raises `effect_needs_outbox` when it does not; a step already recorded returns its result, and an enqueued entry is finished by the worker, without the check. Before this, the entry was enqueued and the worker then raised `system_unknown`, leaving an entry that every later recovery of the owner tripped over.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

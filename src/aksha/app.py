@@ -47,6 +47,7 @@ from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
+from aksha.evals.agents.runtime import RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
 from aksha.evals.judge import Judge, RuleJudge
 from aksha.evals.ports import StoreOpener
@@ -152,6 +153,7 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_SOURCES``        ``<source>=<folder>`` pairs (``os.pathsep``)    each spec's ``root``
 # ``AKSHA_REENTRY``        re-entry setting a request run records:         ``fresh``
 #                          ``fresh`` or ``resume`` (decision 36)
+# ``AKSHA_SYSTEMS``        ``<system>=<kind>:<folder>`` pairs (``,``)      none
 # =======================  ==============================================  ==================
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
@@ -164,6 +166,16 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # with ``state_dir``: a folder beside the SQLite file (``systems/<full name>``) where a
 # local or fixture system may keep its own ledger. A real adapter may ignore it.
 #
+# ``AKSHA_SYSTEMS`` is opt-in and for development only. It binds a system of record that
+# an effect names (``counsel_mail`` for the patent agent's ``send_packet``) or that an
+# extension contributes (``<extension>.<name>``, replacing the extension's own) to a mock
+# kind the composition root builds. The one kind is ``mailbox``: the ledgered mock mailbox
+# ``make demo`` uses (``adapters.systems.mailbox``), a JSON file ``<folder>/mailbox.json``
+# that delivers once per idempotency key and reaches no one. Nothing is bound by default,
+# so an approval whose effect has no system is refused ``system_unavailable``; a name no
+# loaded agent or extension uses is refused ``system_unknown``, an unknown kind
+# ``system_invalid``. The CLI says on every command that the bound system is a mock.
+#
 # ``AKSHA_SANDBOX`` is a declaration, not a probe: no sandbox backend is built yet
 # (ADR-P12), so the operator names the one the process runs inside, for example
 # ``bwrap:os-jail``. A headless start needs it (ADR-P11 D12); strength ``none`` does not
@@ -175,6 +187,8 @@ SERVER_FILE = "aksha.server.json"
 """Beside the store: the URL of the server holding the writer lock, written by ``serve``."""
 SYSTEMS_DIR = "systems"
 """Beside the store: one state folder per contributed system of record."""
+MOCK_SYSTEM_KINDS = ("mailbox",)
+"""The development systems of record ``AKSHA_SYSTEMS`` can bind (mocks, never real ones)."""
 
 
 @dataclass(frozen=True)
@@ -189,6 +203,8 @@ class RuntimeConfig:
     server_url: str | None = None
     sources: Mapping[str, Path] = field(default_factory=dict)
     reentry: str = "fresh"
+    systems: Mapping[str, tuple[str, Path]] = field(default_factory=dict)
+    """``AKSHA_SYSTEMS``: each bound system's mock kind and folder, by system name."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -209,6 +225,7 @@ class RuntimeConfig:
             server_url=env.get("AKSHA_SERVER_URL") or None,
             sources=_source_settings(env.get("AKSHA_SOURCES", "")),
             reentry=env.get("AKSHA_REENTRY") or "fresh",
+            systems=_system_settings(env.get("AKSHA_SYSTEMS", "")),
         )
 
     def reentry_setting(self) -> ReentrySetting:
@@ -254,6 +271,31 @@ def _source_settings(raw: str) -> dict[str, Path]:
             raise StoreError("source_invalid", f"AKSHA_SOURCES item {item!r}: use name=folder")
         out[name] = Path(folder)
     return out
+
+
+def _system_settings(raw: str) -> dict[str, tuple[str, Path]]:
+    """``AKSHA_SYSTEMS``: ``name=kind:folder`` items separated by commas."""
+    out: dict[str, tuple[str, Path]] = {}
+    for item in (part.strip() for part in raw.split(",") if part.strip()):
+        name, sep, rest = item.partition("=")
+        kind, colon, folder = rest.partition(":")
+        if not sep or not colon or not name or not kind or not folder:
+            raise StoreError("system_invalid",
+                             f"AKSHA_SYSTEMS item {item!r}: use name=mailbox:folder")  # fmt: skip
+        if kind not in MOCK_SYSTEM_KINDS:
+            raise StoreError("system_invalid", f"AKSHA_SYSTEMS item {item!r}: kind {kind!r} is "
+                             f"not one of {list(MOCK_SYSTEM_KINDS)}")  # fmt: skip
+        out[name] = (kind, Path(folder))
+    return out
+
+
+def mock_system_notes(config: RuntimeConfig) -> tuple[str, ...]:
+    """One line per ``AKSHA_SYSTEMS`` binding, saying it is a mock, for every CLI command."""
+    return tuple(
+        f"mock: {name} is a development {kind} at {folder / 'mailbox.json'} (AKSHA_SYSTEMS); "
+        "nothing it receives leaves this machine"
+        for name, (kind, folder) in sorted(config.systems.items())
+    )
 
 
 def _is_strength(value: str) -> TypeGuard[Strength]:
@@ -397,6 +439,37 @@ def extension_systems(
 _SYSTEM_METHODS = ("ledger_id", "apply", "lookup")
 
 
+def effect_system_names(loaded: Sequence[LoadedDefinition]) -> frozenset[str]:
+    """Every system of record the loaded agents' effects name or their extensions declare."""
+    names: set[str] = set()
+    for definition in loaded:
+        for tool in definition.registry.names():
+            spec = definition.registry.get(tool).spec
+            if spec.external is not None:
+                names.add(spec.external.system or spec.name)
+        for ext in definition.extensions:
+            names.update(qualify(ext.ext.name, spec.name) for spec in ext.ext.systems)
+    return frozenset(names)
+
+
+def configured_systems(
+    config: RuntimeConfig, loaded: Sequence[LoadedDefinition]
+) -> dict[str, SystemOfRecord]:
+    """The mock systems ``AKSHA_SYSTEMS`` binds, by name (the table at the top).
+
+    Raises ``StoreError`` ``system_unknown`` for a name no loaded agent or extension uses.
+    """
+    known = effect_system_names(loaded)
+    unknown = sorted(set(config.systems) - known)
+    if unknown:
+        raise StoreError("system_unknown", f"AKSHA_SYSTEMS names {unknown}, which no loaded "
+                         f"agent or extension uses; used: {sorted(known)}")  # fmt: skip
+    return {
+        name: MailboxSystem(folder / "mailbox.json", name)
+        for name, (_, folder) in config.systems.items()
+    }
+
+
 def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> FolderSources:
     """The record reader over every declared versioned source that has a folder.
 
@@ -431,15 +504,16 @@ def open_session(
 ) -> Session:
     """The writer's session: store (writer lock), agents, router, sandbox, systems, reader.
 
-    The systems are the extensions' (:func:`extension_systems`) with ``systems`` added
-    over them by name (tests, scripted runs). Raises ``LockHeld`` when another process
-    holds the writer lock (a server, or another embedded command).
+    The systems are the extensions' (:func:`extension_systems`), then the mocks
+    ``AKSHA_SYSTEMS`` binds (:func:`configured_systems`), then ``systems`` (tests,
+    scripted runs), each replacing the one before by name. Raises ``LockHeld`` when another
+    process holds the writer lock (a server, or another embedded command).
     """
     clock = clock or SystemClock()
     catalogue = Catalogue(CORE_EVENT_TYPES)
     loaded = load_definitions(config, catalogue=catalogue)
     agents = load_session_agents(config, adapters, loaded=loaded)
-    given = dict(systems or {})
+    given = {**configured_systems(config, loaded), **(systems or {})}
     every_system = {**extension_systems(config, loaded, skip=given), **given}
     reader = source_reader(config, loaded)
     store = open_event_store(config.storage, clock, writer=True, catalogue=catalogue)
@@ -680,20 +754,69 @@ def eval_store_opener() -> StoreOpener:
     return open_store
 
 
+class _RuntimeAdapter:
+    """Builds one runtime agent's eval adapter per episode, over sessions built here.
+
+    The adapter (``aksha.evals.agents.<name>``) drives a ``Session`` this factory builds in
+    the episode's ``runtime/`` folder: a SQLite store on the eval clock, a filesystem blob
+    store, the agent loaded from ``agents/<name>`` and bound to its fakes, the adapter's
+    reader over the episode and its systems of record. ``definition_hash`` is the loaded
+    definition's, so result rows name the agent definition, not the adapter's source.
+    """
+
+    def __init__(self, adapter: type[RuntimeUnderTest]) -> None:
+        """Load ``adapter``'s agent once."""
+        self.adapter = adapter
+        catalogue = Catalogue(CORE_EVENT_TYPES)
+        (self.loaded,) = load_agents([DEFAULT_AGENTS / adapter.agent], [], catalogue=catalogue)
+        self.catalogue = catalogue
+        self.definition_hash = self.loaded.definition_hash
+        self.bound = session_agent(self.loaded, "fake", commit=runtime_commit())
+
+    def __call__(self) -> RuntimeUnderTest:
+        """A fresh adapter for one episode."""
+        return self.adapter(self.session)
+
+    def session(self, folder: Path, reader: RecordReader, systems: Mapping[str, object]) -> Session:
+        """The writer session of one episode's runtime store in ``folder``."""
+        folder.mkdir(parents=True, exist_ok=True)
+        clock = FakeClock(EVAL_CLOCK_START)
+        store = sqlite.open_store(folder / "aksha.sqlite", clock, writer=True,
+                                  catalogue=self.catalogue)  # fmt: skip
+        return Session(store, clock, (self.bound,), blobs=FilesystemBlobStore(folder / "blobs"),
+                       systems=cast(Mapping[str, SystemOfRecord], systems),
+                       reader=reader)  # fmt: skip
+
+
 def eval_agents() -> AgentRegistry:
     """The agents an eval can run, by the name cases list them under.
 
-    The registration hook for the real agents: when an agent's eval adapter exists in
-    ``aksha/evals/agents/<name>.py``, register it here, for example
-    ``registry.register("research", ResearchUnderTest, mode="fake")``. A case naming an
-    agent that is not registered is refused with ``agent_not_registered``.
+    The registration hook for the real agents: each adapter in ``aksha/evals/agents/``
+    registers here. ``research`` and ``patent`` run the shipped agents on the runtime with
+    their fake models (:class:`_RuntimeAdapter`); ``scripted`` is the runner's own test
+    agent. A case naming an agent that is not registered is refused ``agent_not_registered``.
     """
+    from aksha.evals.agents.patent import PatentUnderTest
+    from aksha.evals.agents.research import ResearchUnderTest
+
     registry = AgentRegistry()
     registry.register(
         "scripted",
         ScriptedResearchAgent,
         mode="fake",
         description="small rule-based research agent over competitor pages and reviews",
+    )
+    registry.register(
+        "research",
+        _RuntimeAdapter(ResearchUnderTest),
+        mode="fake",
+        description="the research agent on the runtime, rule-based fake model",
+    )
+    registry.register(
+        "patent",
+        _RuntimeAdapter(PatentUnderTest),
+        mode="fake",
+        description="the patent agent on the runtime, rule-based fake model, mock counsel mail",
     )
     return registry
 

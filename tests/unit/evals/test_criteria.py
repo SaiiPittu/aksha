@@ -8,7 +8,7 @@ import pytest
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
 from aksha.evals.criteria.forbidden import NEGATIVE_SETS, PATTERNS, violations
 from aksha.evals.normalize import amount, cell_state, currency, enum_key, name_key, price_of
-from tests.support.evals import case, graded, run_episode, world
+from tests.support.evals import case, graded, key, run_episode, world
 
 KF23 = {
     "file": "competitors/comp06-corvane.html",
@@ -127,3 +127,42 @@ def test_normalisation_matches_meaning_not_shape() -> None:
     assert amount("EUR 249") == 249 and amount(None) is None and amount(True) is None
     assert amount("249.5") is None
     assert price_of({"amount": "EUR 249", "per": "Unit"}) == (249, "EUR", "unit")
+
+
+def test_a_family_named_by_its_priority_number_grades_as_the_keys_family(tmp_path: Path) -> None:
+    """An agent knows a family by its priority number, never by the key's letter."""
+    k = key()
+    number = {label: str(e["priority_numbers"][0]) for label, e in dict(k.data["families"]).items()}
+    steps: list[tuple[Any, ...]] = [
+        ("save", "matrix", cand,
+         {"cells": {feat: {number[f]: state for f, state in dict(fams).items()}
+                    for feat, fams in dict(features).items()}})
+        for cand, features in dict(k.data["comparison_matrix"]).items()
+    ]  # fmt: skip
+    assert _outcome(tmp_path / "a", steps, "patent.matrix") == "pass"
+    trap = k.traps["T-STATUS"]
+    fam = str(k.fact(trap.facts[0]).about["family"])
+    wordings = [{"member": "x", "wording": str(k.fact(f).value)} for f in trap.facts]
+    status: list[tuple[Any, ...]] = [("save", "family_status", number[fam], {"statuses": wordings})]
+    assert _outcome(tmp_path / "b", status, "trap.T-STATUS") == "pass"
+
+
+def test_known_values_with_no_listed_value_reads_the_cases_own_domain(tmp_path: Path) -> None:
+    """A patent case that lists only a gap is not failed for the research prices."""
+    k = key()
+    window = k.facts["KF-02"].value
+    fields = {
+        "quiet_window": {"value": dict(window), "status": "known"},
+        "conception_date": {"value": k.facts["KF-03"].value, "status": "known"},
+    }
+    steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"fields": fields})]
+    got = _outcome(tmp_path, steps, "precision.known_values", expect=("facts.KF-05",))
+    assert got == "pass"
+
+
+def test_a_family_the_variant_adds_is_changed_under_its_priority_number_too() -> None:
+    from aksha.evals.relations import key_delta
+
+    added = dict(key("stillroom-v2").data["families"])["E"]
+    changed = key_delta(key(), key("stillroom-v2")).changed
+    assert "E" in changed and str(added["priority_numbers"][0]) in changed
