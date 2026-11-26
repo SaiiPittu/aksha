@@ -4,6 +4,8 @@
 2. :func:`family_of`: publications grouped into families by a shared priority number.
 3. :func:`form_refusal`: what the form tool refuses (a field marked complete that counsel
    must confirm, a complete field with no value, a template field left out).
+4. :func:`required_missing`: the required fields still missing, which keep a packet from
+   becoming ready.
 
 Nothing here gives a legal opinion: the rule table orders work for counsel; it does not
 judge novelty, and ``not_found`` only ever means "no reference in this search shows it".
@@ -73,6 +75,15 @@ def family_of(publications: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]
         head = numbers[0] if numbers else str(p["id"])
         families.setdefault(head, []).append(str(p["id"]))
     return {k: sorted(v) for k, v in sorted(families.items())}
+
+
+def required_missing(form: Mapping[str, Any]) -> list[str]:
+    """The required fields of a filled form that are ``missing``: the packet is not ready."""
+    return [
+        str(f["field"])
+        for f in form.get("fields", ())
+        if f.get("required") and f.get("status") == "missing"
+    ]
 
 
 def form_refusal(

@@ -23,9 +23,11 @@ from typing import Any
 
 import pytest
 
+from aksha.agents.patent import rules
 from aksha.runtime.interrupts.approvals import approvals
 from aksha.runtime.invalidation.view import invalidation_view
 from tests.support.patent import (
+    GAP_ANSWER,
     PatentRig,
     key,
     norm,
@@ -121,6 +123,9 @@ def test_comparison_matrix_equals_the_key(sent: PatentRig) -> None:
         for x in cmp_["cells"]:  # a non-empty state carries its excerpt
             assert (x["state"] == "not_found") == (x["evidence"] == []), (c, x["element"])
         assert "not a finding that the element is new" in cmp_["note"]
+    c1 = sent.content("comparison", "C1")["closest_families"]
+    closest = {"stillroom": ["A"], "stillroom-v2": ["A", "E"]}[sent.world_name]
+    assert [letters[f] for f in c1] == closest
 
 
 def test_recommendations_equal_the_key_for_all_four(sent: PatentRig) -> None:
@@ -177,7 +182,11 @@ def test_gaps_are_asked_never_filled(sent: PatentRig) -> None:
     assert why["value"] is None and why["status"] == "missing" and why["gap"]["question"]
     c2 = sent.content("extraction", "C2")
     (vent,) = [p for p in c2["parameters"] if p["name"] == "Minimum distance from a vent"]
-    assert vent["value"] is None and vent["status"] == "missing"
+    # Asked, not filled: the value is the person's relayed answer, cited as their statement.
+    assert (vent["value"], vent["status"]) == (GAP_ANSWER, "complete")
+    (asked,) = [e for e in sent.events("interrupt.raised") if e.payload["kind"] == "input"]
+    assert vent["statement"] == {"interrupt": asked.payload["interrupt"], "answer": GAP_ANSWER,
+                                 "by": "person"}  # fmt: skip
     (doc,) = c2["missing_documents"]
     assert (doc["name"], doc["status"]) == ("placement-trial-02.csv", "referenced_not_found")
     assert c2["implementation"]["status"] == "idea_only"
@@ -186,10 +195,15 @@ def test_gaps_are_asked_never_filled(sent: PatentRig) -> None:
 
 
 def test_forms_report_every_field_and_refuse_nothing_silently(sent: PatentRig) -> None:
+    counts = {
+        "disclosure": {"complete": 10, "missing": 0, "needs_counsel_confirmation": 4},
+        "worksheet": {"complete": 2, "missing": 3, "needs_counsel_confirmation": 6},
+    }
     for kind, n in (("disclosure", 14), ("worksheet", 11)):
         form = sent.content(kind, "C1")
         assert len(form["fields"]) == n
-        assert sum(form["counts"].values()) == n
+        assert form["counts"] == counts[kind]
+        assert rules.required_missing(form) == []  # only optional fields wait "until known"
         for f in form["fields"]:
             assert f["status"] in ("complete", "missing", "needs_counsel_confirmation")
             if f["status"] == "complete":
@@ -257,6 +271,26 @@ def test_the_selection_comes_before_any_form_and_one_send_happens(sent: PatentRi
     (a,) = approvals(sent.view()).values()
     assert a.state == "used" and a.body.target_refs() == ("patent.packet/C1@v1",)
     assert len(sent.events("outbox.enqueued")) == 1
+
+
+def test_only_extract_c2_waits_for_its_gap_question(tmp_path: Path) -> None:
+    r = _fresh(tmp_path)
+    try:
+        r.start()
+        assert r.drive().state == "held"
+        (gap,) = r.open_interrupts("input")  # one targeted question, on C2's extraction only
+        assert gap.instance == "candidate[C2]/extract"
+        assert "Minimum distance from a vent" in gap.payload["questions"][0]["text"]
+        for c in ("C1", "C3", "C4"):  # the others went on while C2 waited
+            assert r.current("recommendation", c) is not None, c
+        assert r.current("extraction", "C2") is None and r.current("table") is None
+        assert r.answer_gap().accepted
+        assert r.drive().state == "held" and r.open_interrupts("choice")
+        assert len([e for e in r.events("interrupt.raised") if e.payload["kind"] == "input"]) == 1
+        c1 = r.content("extraction", "C1")  # an open rationale stays a question, unasked
+        assert any(g["quote"] == "Why 20 minutes: to be written up." for g in c1["missing_details"])
+    finally:
+        r.close()
 
 
 # --- 2. approval binding -----------------------------------------------------------------
@@ -334,7 +368,9 @@ def test_switching_worlds_invalidates_exactly_the_c1_chain(tmp_path: Path) -> No
         assert r.content("selection")["selected"] == ["C1"]  # the person's choice is kept
         cmp_ = r.content("comparison", "C1")
         assert "SYN-PRI-2023-0215" in cmp_["families"]
-        assert cmp_["closest_family"] in ("SYN-PRI-2023-0215", "SYN-PRI-2021-0412")
+        # Family E ties family A at the top (both show four of the five elements, two of
+        # them in full): the tie is reported, never broken by sort order.
+        assert cmp_["closest_families"] == ["SYN-PRI-2021-0412", "SYN-PRI-2023-0215"]
         # A human diff review appears for the reviewed packet; v1 stays current until accepted.
         (review,) = r.reviews().values()
         assert (str(review.old), str(review.revision)) == (
@@ -367,12 +403,6 @@ def _ref(r: PatentRig, kind: str, key_: str | None) -> Any:
     return v.ref
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="runtime gap: accept_review retargets the approval's targets to packet v2 but "
-    "keeps the arguments (and idempotency key) naming v1, so execution rebuilds a v1 body "
-    "and refuses signature_mismatch (interrupts/approvals.py retarget)",
-)
 def test_the_fresh_approval_for_the_new_packet_sends_it_once(tmp_path: Path) -> None:
     r = _fresh(tmp_path)
     try:
@@ -383,11 +413,16 @@ def test_the_fresh_approval_for_the_new_packet_sends_it_once(tmp_path: Path) -> 
         (review,) = r.reviews().values()
         assert r.accept(review.interrupt, review.card_hash).accepted
         fresh = r.pending_approval()
+        # The fresh request names the new version in its call and its facts, not only in
+        # its targets, so the person approves what execution will carry out.
+        assert dict(fresh.body.facts)["packet"] == "patent.packet/C1@v2"
+        assert '"patent.packet/C1@v2"' in fresh.body.canonical_args
         assert r.approve(fresh.approval_id, fresh.signature).accepted
         assert r.handoff(fresh.approval_id).accepted
         (row,) = r.ledger.rows.values()
         assert row["packet"] == "patent.packet/C1@v2"
-        assert not r.handoff(fresh.approval_id).accepted and len(r.ledger.rows) == 1
+        again = r.handoff(fresh.approval_id)  # the same command again: its first receipt
+        assert again.duplicate and len(r.ledger.rows) == 1
     finally:
         r.close()
 

@@ -83,6 +83,10 @@ Takeaway: an interrupt is a row, not a blocked thread, and an approval is a sign
 6. S6, an accept with edits mints a statement. `AcceptReview` with `edits` (used to swap C1 for C3 on the selection review) mints a user statement from the edits, so the edited selection stays choice-backed (ADR-P04's `ChoiceBinding`).
 7. S7, `expires_at` gets an owner. Approval expiry stays later; when it ships it is a durable timer of ADR-P25.
 
+### Amendments from the build (26 Nov 2026, Proposed)
+
+1. B1, the fresh request after an accept moves the call, not only its target (D7, D8). The first build moved the revoked body's target to the accepted revision and kept its arguments, facts and idempotency key, so the person was shown the old version and execution, which rebuilds the body from its arguments, refused every approval of it `signature_mismatch`. `retarget` now replaces every argument equal to the old ref with the new one and, given the tool (`accept_review(..., tools=)`), rebuilds the body with `build_body`, so the request equals the body execution rebuilds. Without the tool the targets, arguments and facts move but the key cannot, and execution still refuses it.
+
 Agent-side, no core change: The Research Agent's scope question is one `input` interrupt listing only the missing items, with an extraction step turning the answer into three cited `scope` fields; a field it cannot locate stays `Unknown` and triggers one follow-up.
 
 ## Alternatives considered

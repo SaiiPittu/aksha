@@ -5,8 +5,10 @@ The Task tree, in the order the scheduler runs it:
 1. ``scope`` lists the invention candidates into ``portfolio``.
 2. ``candidate[Cn]``, one instance per listed candidate, holds the per-candidate work as
    its children, each reading what the one before saved: ``extract`` (the only Task that
-   reads the raw records), ``prior_art`` (search and fetch, families by priority),
-   ``compare`` (the element-by-family matrix) and ``recommend`` (the rule table).
+   reads the raw records; it asks the person, an ``input`` interrupt on that instance
+   only, for a value the note leaves undecided), ``prior_art`` (search and fetch,
+   families by priority), ``compare`` (the element-by-family matrix) and ``recommend``
+   (the rule table).
 3. ``table`` gathers every candidate's recommendation; ``select`` asks the person to
    choose (a ``choice`` interrupt) and saves the selection.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills the two
@@ -107,6 +109,7 @@ def tasks() -> tuple[Task, ...]:
                         SAVE,
                     ),
                     writes=("extraction",),
+                    interrupt=DeclaredInterrupt("input", "missing detail"),
                     done=checks.extraction_saved,
                 ),
                 Task(

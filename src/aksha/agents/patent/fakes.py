@@ -359,6 +359,15 @@ class PatentFake(RuleGenerationModel):
         todo = [p for p in linked if p not in done]
         if todo and not ctx.called("read_document"):
             return _reply(*(_call("read_document", i, path=p) for i, p in enumerate(todo, 1)))
+        note = ctx.ok("read_note")[-1][1]
+        undecided = [p for p in note["parameters"] if _undecided(p)]
+        if undecided and not ctx.answers and not ctx.called("ask"):
+            # One targeted question for a value the note leaves undecided; only this
+            # instance waits. An open rationale stays a question for the note's author.
+            names = ", ".join(str(p.get("Parameter")) for p in undecided)
+            return _reply(
+                _call("ask", 1, question=f"{c}: the note leaves {names} undecided. What is it?")
+            )
         content = extraction(c, ctx)
         return _reply(
             _call("save_artifact", 1, kind="extraction", key=c, content=content),
@@ -540,6 +549,10 @@ def _implementation(note: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+def _undecided(param: Mapping[str, Any]) -> bool:
+    return param.get("Value", "") in ("not decided", "")
+
+
 def _clause(text: str, terms: Sequence[str]) -> str | None:
     """The shortest clause of ``text`` (split at sentence and colon marks) holding a term."""
     best: str | None = None
@@ -582,10 +595,19 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             }
         )
     params, gaps = [], []
+    asked = next(
+        (r.get("data", {}).get("interrupt") for n, _, r in ctx.results if n == "ask"), None
+    )
+    answer = ctx.answers[-1].strip() if ctx.answers else None
     for p in note["parameters"]:
         value = p.get("Value", "")
         row = {"name": p.get("Parameter"), "unit": p.get("Unit"), **_q(nf, p["row_text"])}
-        if value in ("not decided", ""):
+        if _undecided(p) and answer:
+            # The person's relayed answer, kept as they gave it and cited as their statement.
+            row["value"] = answer
+            row["status"] = "complete"
+            row["statement"] = {"interrupt": asked, "answer": answer, "by": "person"}
+        elif _undecided(p):
             row["value"] = None
             row["status"] = "missing"
             gaps.append(
@@ -642,12 +664,13 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         )
         m = re.search(r"(CA-\d{4}-\d+), effective (\d{4}-\d{2}-\d{2})", r["agreement_ref"])
         if m:
+            found = any(d["found"] for d in r["agreement_documents"] if d["ref"] == m.group(1))
             agreements.append(
                 {
                     "ref": m.group(1),
                     "effective": m.group(2),
                     "person_id": r["person_id"],
-                    "document": "referenced_not_found",
+                    "document": "found" if found else "referenced_not_found",
                     **_q(contrib["file"], r["agreement_ref"]),
                 }
             )
@@ -891,13 +914,16 @@ def comparison(c: str, ext: Mapping[str, Any], art: Mapping[str, Any]) -> dict[s
             score[fam["family"]] = (
                 score.get(fam["family"], 0) + (state == "disclosed") * 2 + (state == "partial")
             )
-    closest = max(sorted(score), key=lambda f: score[f]) if score else None
+    # The closest families are every family at the top score; a tie stays a tie, never
+    # broken by an identifier's sort order.
+    top = max(score.values(), default=0)
+    closest = sorted(f for f, n in score.items() if n == top and n > 0)
     return {
         "candidate": c,
         "elements": [e["id"] for e in ext["elements"]],
         "families": [f["family"] for f in art["families"]],
         "cells": cells,
-        "closest_family": closest,
+        "closest_families": closest,
         "note": "not_found means this search showed no reference for the element; it is "
         "not a finding that the element is new.",
     }
@@ -1083,7 +1109,14 @@ def disclosure_fields(
             "complete",
             nf,
         ),
-        _field("figure_list", None, "missing", None),
+        _field(
+            "figure_list",
+            None,
+            "needs_counsel_confirmation",
+            None,
+            counsel_question="The note has no drawings. Which figures should an application "
+            "include?",
+        ),
         _field("open_questions_for_counsel", questions + gaps, "complete", None),
     ]
 
@@ -1174,7 +1207,7 @@ def packet(c: str, reads: Mapping[str, tuple[str, Any]]) -> dict[str, Any]:
                 "title": "Prior-art matrix",
                 "comparison": reads["comparison"][0],
                 "families": cmp_["families"],
-                "closest_family": cmp_["closest_family"],
+                "closest_families": cmp_["closest_families"],
                 "cells": [{k: x[k] for k in ("element", "family", "state")} for x in cmp_["cells"]],
             },
             {

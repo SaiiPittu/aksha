@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from aksha.runtime.artifacts.versions import versions
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.interrupts.approvals import (
     DEFINITION_CHANGED,
@@ -18,6 +19,7 @@ from aksha.runtime.interrupts.approvals import (
     approvals,
     build_body,
     request_approval,
+    retarget,
     verify_for_execution,
 )
 from aksha.runtime.interrupts.reducers import interrupts
@@ -127,3 +129,21 @@ def test_verify_refuses_a_changed_definition(bench: Bench) -> None:
     found = verify_for_execution(bench.view(), "A-0001", SEND,
                                  definition_hash="sha256:" + "9" * 64)  # fmt: skip
     assert isinstance(found, Refusal) and found.code == DEFINITION_CHANGED
+
+
+def test_retarget_moves_the_call_so_execution_can_carry_it_out(bench: Bench) -> None:
+    """ADR-P17 D7 and D8: the fresh request after an accepted review is a body execution
+    rebuilds unchanged, so its arguments, facts and idempotency key name the new version."""
+    old = build_body(bench.view(), SEND, ARGS, definition_hash=DEFINITION)
+    assert isinstance(old, ActionBody)
+    bench.save("R-0001", "p.packet/C1", {"forms": 2}, reads=[record("K", "2")])
+    view = bench.view()
+    new_ref = "p.packet/C1@v2"
+    (v2,) = [v for v in versions(view, "p.packet", "C1") if str(v.ref) == new_ref]
+    moved = retarget(old, "p.packet/C1@v1", new_ref, v2.content_hash, view=view, tool=SEND)
+    want = build_body(view, SEND, {**ARGS, "packet": new_ref}, definition_hash=DEFINITION)
+    assert moved == want  # the very body the execution re-check rebuilds
+    assert moved.idempotency_key != old.idempotency_key and moved.args()["packet"] == new_ref
+    bare = retarget(old, "p.packet/C1@v1", new_ref, v2.content_hash)  # no tool to rebuild with
+    assert bare.target_refs() == (new_ref,) and bare.args()["packet"] == new_ref
+    assert bare.idempotency_key == old.idempotency_key  # cannot be recomputed without the tool

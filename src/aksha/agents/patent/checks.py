@@ -75,14 +75,28 @@ def forms_filled(view: Any) -> CheckResult:
 
 
 def packet_saved(view: Any) -> CheckResult:
-    """The packet opens with the counsel section and carries the scope note."""
+    """The packet opens with the counsel section, carries the scope note, and is ready.
+
+    Ready means no required field of either form is ``missing`` (CNS-01): a missing
+    required field keeps the packet from ready, so nothing downstream sends it.
+    """
     p = _own(view, "packet")
     if p is None:
         return CheckResult(False, "save the counsel-review packet")
     sections = p.content.get("sections", [])
     first = sections[0]["title"] if sections else ""
     ok = first == "Needs counsel confirmation" and bool(p.content.get("scope_note"))
-    return CheckResult(ok, "open with 'Needs counsel confirmation' and carry the scope note")
+    if not ok:
+        return CheckResult(False, "open with 'Needs counsel confirmation' and carry the scope note")
+    forms = [_own(view, k) for k in ("disclosure", "worksheet")]
+    if any(f is None for f in forms):
+        return CheckResult(False, "the disclosure form and the worksheet must exist first")
+    missing = [n for f in forms for n in rules.required_missing(f.content)]
+    return CheckResult(
+        not missing,
+        f"a packet with a missing required field is not ready: {missing}",
+        count=len(missing),
+    )
 
 
 def handoff_recorded(view: Any) -> CheckResult:

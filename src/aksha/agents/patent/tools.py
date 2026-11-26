@@ -115,7 +115,7 @@ def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
 
     def read_document(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         path = str(args["path"])
-        if not path.startswith("disclosures/"):
+        if not path.startswith("disclosures/") or ".." in path.split("/"):
             return ToolOutcome(Err("not_allowed", "read_document reads disclosure records only"))
         data = world.document(path)
         return ToolOutcome(Ok(data, reads=(_record(f"{path}#doc", data),)))
@@ -153,8 +153,10 @@ def build_tools(world: SourceWorld) -> tuple[ToolDecl, ...]:
         refused = rules.form_refusal(template, fields)
         if refused is not None:
             return ToolOutcome(Err(refused[0], refused[1], paths=("/fields",)))
-        order = {f["field"]: f["n"] for f in template["fields"]}
-        fields.sort(key=lambda f: order[f["field"]])
+        declared = {f["field"]: f for f in template["fields"]}
+        for f in fields:  # whether a field is required is the template's, never the model's
+            f["required"] = bool(declared[f["field"]]["required"])
+        fields.sort(key=lambda f: declared[f["field"]]["n"])
         counts = {s: sum(1 for f in fields if f["status"] == s) for s in rules.FIELD_STATUSES}
         content = {
             "template": name,

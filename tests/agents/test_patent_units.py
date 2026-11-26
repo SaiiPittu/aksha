@@ -87,6 +87,22 @@ def test_the_reader_reads_only_below_sources(w1: SourceWorld) -> None:
         w1.raw("../spec.yaml")
     out = _tools(w1)["read_document"].body(_ctx(), {"path": "../key.json"})
     assert isinstance(out.result, Err)
+    inside = {"path": "disclosures/../notes/C1-self-calibration.md"}
+    out = _tools(w1)["read_document"].body(_ctx(), inside)
+    assert isinstance(out.result, Err) and out.result.code == "not_allowed"
+
+
+def test_a_referenced_agreement_is_looked_for_not_assumed_absent(tmp_path: Path) -> None:
+    import shutil
+
+    world = SourceWorld(V1, TODAY)
+    (row,) = [r for r in world.contributor_rows("C1")["rows"] if r["person_id"] == "P-05"]
+    assert row["agreement_documents"] == [{"ref": "CA-2025-11", "found": False}]
+    shutil.copytree(V1, tmp_path / "sources")
+    (tmp_path / "sources" / "disclosures" / "CA-2025-11-consulting.md").write_text("x")
+    world.use(tmp_path / "sources")
+    (row,) = [r for r in world.contributor_rows("C1")["rows"] if r["person_id"] == "P-05"]
+    assert row["agreement_documents"] == [{"ref": "CA-2025-11", "found": True}]
 
 
 def test_missing_references_are_reported_not_found(w1: SourceWorld) -> None:
@@ -250,15 +266,53 @@ def test_the_recommendation_check_vetoes_an_action_the_rules_do_not_give() -> No
     assert not result.ok and "prioritize_counsel_review" in result.message
 
 
+def _form(*fields: tuple[str, bool, str]) -> dict[str, Any]:
+    return {"fields": [{"field": n, "required": r, "status": s} for n, r, s in fields]}
+
+
+READY = _form(("title", True, "complete"), ("figure_list", True, "needs_counsel_confirmation"))
+LATER = _form(("representative", False, "missing"))
+
+
 def test_the_packet_check_needs_the_counsel_section_first() -> None:
     ok = {"scope_note": "no opinion", "sections": [{"title": "Needs counsel confirmation"}]}
-    assert checks.packet_saved(_View(packet=ok)).ok
+    assert checks.packet_saved(_View(packet=ok, disclosure=READY, worksheet=LATER)).ok
     late = {
         "scope_note": "x",
         "sections": [{"title": "Scope"}, {"title": "Needs counsel confirmation"}],
     }
-    assert not checks.packet_saved(_View(packet=late)).ok
-    assert not checks.packet_saved(_View(packet={**ok, "scope_note": ""})).ok
+    assert not checks.packet_saved(_View(packet=late, disclosure=READY, worksheet=LATER)).ok
+    bare = {**ok, "scope_note": ""}
+    assert not checks.packet_saved(_View(packet=bare, disclosure=READY, worksheet=LATER)).ok
+
+
+def test_a_missing_required_field_keeps_the_packet_from_ready() -> None:
+    ok = {"scope_note": "no opinion", "sections": [{"title": "Needs counsel confirmation"}]}
+    gap = _form(("title", True, "complete"), ("figure_list", True, "missing"))
+    result = checks.packet_saved(_View(packet=ok, disclosure=gap, worksheet=LATER))
+    assert not result.ok and "figure_list" in result.message and result.count == 1
+    assert not checks.packet_saved(_View(packet=ok, disclosure=READY)).ok  # no worksheet yet
+
+
+def test_fill_form_records_required_from_the_template_not_the_model(w1: SourceWorld) -> None:
+    fields = _ws_fields()
+    for f in fields:
+        f["required"] = False  # the model claims nothing is required
+    out = _tools(w1)["fill_form"].body(
+        _ctx(), {"template": "filing-information-worksheet", "candidate": "C1", "fields": fields}
+    )
+    (save,) = out.saves
+    required = {f["field"]: f["required"] for f in save.content["fields"]}
+    assert required["applicant"] is True and required["representative"] is False
+    assert rules.required_missing(save.content) == [
+        "working_title",
+        "applicant",
+        "proposed_inventors",
+        "ownership_and_assignments",
+        "outside_party_agreements",
+        "earlier_public_disclosures",
+        "attachments",
+    ]
 
 
 # --- the model's parsing ---------------------------------------------------------------

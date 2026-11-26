@@ -164,6 +164,12 @@ class SourceWorld:
         assert self.root is not None
         return any(p.name == name for p in self.root.rglob("*") if p.is_file())
 
+    def file_naming(self, ref: str) -> bool:
+        """Whether any file under ``root`` has ``ref`` in its name (a referenced document)."""
+        assert self.root is not None
+        low = ref.casefold()
+        return any(low in p.name.casefold() for p in self.root.rglob("*") if p.is_file())
+
     def files(self, collection: str) -> list[str]:
         """The files of ``collection``, sorted, relative to ``root``."""
         assert self.root is not None
@@ -241,7 +247,13 @@ class SourceWorld:
             "agreement_ref",
             "source",
         )
-        rows = [{k: r[k] for k in keep} for r in _csv(text) if r["candidate"] == candidate]
+        rows = []
+        for r in _csv(text):
+            if r["candidate"] != candidate:
+                continue
+            refs = sorted(set(re.findall(r"\b[A-Z]{2,}-\d{4}-\d+\b", r["agreement_ref"])))
+            documents = [{"ref": ref, "found": self.file_naming(ref)} for ref in refs]
+            rows.append({**{k: r[k] for k in keep}, "agreement_documents": documents})
         return {"file": rel, "rows": rows}
 
     def people(self, person_ids: Sequence[str]) -> dict[str, Any]:

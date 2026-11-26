@@ -56,6 +56,7 @@ DEFINITION = "sha256:" + "7" * 64
 TODAY = date(2026, 11, 26)
 START = datetime(2026, 11, 26, 9, 0, 0, tzinfo=UTC)
 REQUEST = "Assess the four invention candidates and prepare the chosen one for counsel."
+GAP_ANSWER = "0.5 m from the vent edge, so its air flow stays outside the footprint."
 FULL: Mapping[str, ArtifactKind] = {f"{AGENT}.{k.name}": k for k in KINDS}
 
 
@@ -168,7 +169,7 @@ class PatentRig:
         )
 
     def accept(self, interrupt: str, card: str) -> CommandReceipt:
-        return accept_review(self.store, OWNER, interrupt, card, self.ids)
+        return accept_review(self.store, OWNER, interrupt, card, self.ids, tools=self.send_tool)
 
     def handoff(self, approval: str) -> CommandReceipt:
         """The execution path for an approval granted outside a run (ADR-P17 D8), drained."""
@@ -222,10 +223,23 @@ class PatentRig:
     def reviews(self) -> Mapping[str, Any]:
         return open_reviews(self.view())
 
+    def open_interrupts(self, kind: str) -> list[Any]:
+        return [i for i in interrupts(self.view()).values() if i.state == "open" and i.kind == kind]
+
+    def answer_gap(self, text: str = GAP_ANSWER) -> CommandReceipt:
+        """The founder relays the engineer-inventor's answer to the one open gap question."""
+        (open_,) = self.open_interrupts("input")
+        return answer(self.store, OWNER, open_.id, by="founder", text=text, tree=self.setup.tree)
+
     def run_to_selection(self) -> DriveResult:
         self.start()
         result = self.drive()
         assert result.state == "held", result
+        if self.open_interrupts("input"):
+            assert self.answer_gap().accepted
+            result = self.drive()
+            assert result.state == "held", result
+        assert self.open_interrupts("choice"), result
         return result
 
     def run_to_approval(self, candidate: str = "C1") -> Any:
