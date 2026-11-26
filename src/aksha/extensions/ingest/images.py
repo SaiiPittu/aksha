@@ -88,6 +88,8 @@ def _has_metadata(im: Any) -> bool:
         return True
     try:
         return len(im.getexif()) > 0
+    except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+        raise
     except Exception:
         return True
 
@@ -104,6 +106,8 @@ def _to_srgb(frame: Any, icc: bytes | None) -> tuple[Any, bool]:
             mode = "RGBA" if "A" in frame.getbands() else "RGB"
             frame = ImageCms.profileToProfile(frame.convert(mode), src, dst, outputMode=mode)
             converted = True
+        except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+            raise
         except Exception:
             converted = False
     if frame.mode in ("RGB", "RGBA", "L"):

@@ -7,10 +7,14 @@
 2. ``stored``: the original bytes go to ``put`` (the blob store), by hash.
 3. ``typed``: :func:`~aksha.extensions.ingest.sniff.sniff`; the allow-list runs on the
    detected type, so a ZIP renamed ``.pdf`` is judged as a ZIP.
-4. ``parse_fast``: the converter declared for the detected type. Each converter that needs
-   an optional library degrades to a gap ``unsupported`` naming the extra; a converter
-   that raises is a failed rung, so the document is a gap ``unreadable`` that names the
-   error, and the upload goes on.
+4. ``parse_fast``: the converter declared for the detected type. Each converter that
+   needs an optional library degrades to a gap ``unsupported`` naming the extra; a
+   converter that raises is a failed rung, so the document is a gap ``unreadable`` that
+   names the error, and the upload goes on. Steps 3 and 4 are ``parse``
+   (:mod:`aksha.extensions.ingest.parse`): the runtime passes a worker pool
+   (:class:`~aksha.extensions.ingest.worker.ParserPool`), so they run in a separate process
+   under a time, memory and CPU cap, and a parser that hits one leaves a gap ``unreadable``
+   named ``parser_timeout``, ``parser_memory`` or ``parser_crashed``. None runs them here.
 5. Children: each email attachment is ingested as its own document (``attachment``,
    ``parent`` set) under ``Caps.max_depth`` and ``Caps.max_children``; past either it is
    refused by name.
@@ -31,8 +35,9 @@ import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from aksha.extensions.ingest import images, mail, office, pdf, sniff, text
+from aksha.extensions.ingest import images, sniff
 from aksha.extensions.ingest.header import clean_name, render_header
+from aksha.extensions.ingest.parse import Parse, in_process
 from aksha.extensions.ingest.profiles import SentCopyCache, prepare_image
 from aksha.extensions.ingest.routing import resolve_route
 from aksha.extensions.ingest.types import (
@@ -103,37 +108,6 @@ class Ingested:
         return tuple(out)
 
 
-def _convert(
-    found: sniff.Sniffed, data: bytes, caps: Caps
-) -> tuple[Converted, tuple[images.Frame, ...]]:
-    kind = found.detected_type
-    if kind in sniff.IMAGE_TYPES:
-        decoded = images.decode(data, kind, caps)
-        return decoded.converted, decoded.frames
-    if kind == sniff.PDF:
-        return pdf.convert(data, caps), ()
-    if kind == sniff.DOCX:
-        return office.docx(data), ()
-    if kind == sniff.PPTX:
-        return office.pptx(data), ()
-    if kind == sniff.XLSX:
-        return office.xlsx(data, caps), ()
-    if kind == sniff.EMAIL:
-        return mail.convert(data), ()
-    body = found.text or ""
-    if kind == sniff.MARKDOWN:
-        return Converted(text.markdown(body)), ()
-    if kind == sniff.JSON:
-        return Converted(text.json_doc(body)), ()
-    if kind in (sniff.CSV, sniff.TSV):
-        return Converted(text.csv_doc(body, caps)), ()
-    if kind == sniff.HTML:
-        return Converted(text.html_doc(body)), ()
-    if kind in (sniff.TEXT, sniff.SVG):
-        return Converted(text.plain(body)), ()
-    return Converted(gap=Gap("unsupported", f"no_converter: {kind}")), ()
-
-
 def ingest(
     name: str,
     data: bytes,
@@ -150,17 +124,15 @@ def ingest(
     profile: ImageProfile | None = None,
     cache: SentCopyCache | None = None,
     depth: int = 0,
+    parse: Parse | None = None,
 ) -> Ingested | Refusal:
     """Run intake for one input (module doc)."""
     caps = caps or Caps()
     if len(data) > caps.max_bytes:
         return Refusal("max_bytes", len(data), caps.max_bytes, name, origin)
     blob = put(data) if put is not None else "sha256:" + hashlib.sha256(data).hexdigest()
-    try:
-        found = sniff.sniff(data, name, declared_type, caps=caps)
-    except Exception as e:  # a hostile container the sniffer cannot judge: never a crash
-        found = sniff.Sniffed(sniff.OCTET, gap=Gap("unreadable", "the type check failed: "
-                                                   f"{type(e).__name__}"))  # fmt: skip
+    parsed = (parse or in_process)(name, data, declared_type, caps, allow)
+    found = parsed.found
     doc = Document(doc_key, version, blob, name, origin, parent, declared_type,
                    found.detected_type, found.charset, found.type_conflict,
                    len(data))  # fmt: skip
@@ -170,12 +142,10 @@ def ingest(
         gap = Gap("refused", f"type not allowed: {label}")
     if gap is not None:
         return Ingested(doc, None, gap, render_header(doc, None, gap))
-    try:
-        converted, frames = _convert(found, data, caps)
-    except Exception as e:  # a parser bug or a hostile file: a failed rung, never a crash
-        converted = Converted(gap=Gap("unreadable", f"the converter failed: {type(e).__name__}",
-                                      ("parse_fast",)))  # fmt: skip
-        frames = ()
+    converted = parsed.converted or Converted(
+        gap=Gap("unreadable", "the converter returned nothing")
+    )
+    frames = parsed.frames
     if converted.gap is not None or converted.representation is None:
         gap = converted.gap or Gap("unreadable", "the converter returned nothing")
         return Ingested(doc, None, gap, render_header(doc, None, gap))
@@ -197,7 +167,7 @@ def ingest(
         got = ingest(child.name, child.data, "attachment", doc_key=key, version=ver,
                      parent=doc_key, declared_type=child.declared_type, caps=caps, allow=allow,
                      key_for=key_for, put=put, profile=profile, cache=cache,
-                     depth=depth + 1)  # fmt: skip
+                     depth=depth + 1, parse=parse)  # fmt: skip
         if isinstance(got, Refusal):
             refusals.append(got)
         else:

@@ -99,6 +99,8 @@ def docx(data: bytes) -> Converted:
                 tables += 1
                 for row in Table(child, document).rows:
                     out.line(_pipe(_cell(c.text) for c in row.cells))
+    except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+        raise
     except Exception as e:  # python-docx raises many types on a damaged file
         return _unreadable("Word document", e)
     text, anchors = out.done()
@@ -140,6 +142,8 @@ def pptx(data: bytes) -> Converted:
                 notes_text = " ".join(slide.notes_slide.notes_text_frame.text.split())
                 if notes_text:
                     out.line(f"notes: {notes_text}")
+    except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+        raise
     except Exception as e:  # python-pptx raises many types on a damaged file
         return _unreadable("PowerPoint deck", e)
     text, anchors = out.done()
@@ -200,6 +204,8 @@ def xlsx(data: bytes, caps: Caps | None = None) -> Converted:
                 left -= cells
         finally:
             book.close()
+    except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+        raise
     except Exception as e:  # openpyxl raises many types on a damaged file
         return _unreadable("Excel workbook", e)
     text, anchors = out.done()
