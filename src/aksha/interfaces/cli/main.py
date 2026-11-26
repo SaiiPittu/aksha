@@ -893,7 +893,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reason", required=True, help="kept in the record; must not name the person")
     s.set_defaults(handler=cmd_erase)
 
-    s = sub.add_parser("trace", help="export a run's trace as OTLP JSON (needs aksha-harness[otel])")
+    s = sub.add_parser(
+        "trace", help="export a run's trace as OTLP JSON (needs aksha-harness[otel])"
+    )
     s.add_argument("run")
     s.add_argument("--out")
     s.set_defaults(handler=cmd_trace)
