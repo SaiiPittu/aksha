@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.8"
+API_VERSION = "2.9"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -55,6 +55,16 @@ reader) and ``ToolContext.artifacts`` (a read tool's ``ArtifactReader`` over its
 ``reads_kinds``, answering ``ArtifactSnapshot``), ``TaskView.called``, the projection
 ``ended_runs`` and its ``RunEnded``, and the instruction-pattern check
 ``instruction_text`` with its flag ``INSTRUCTION_FLAG``.
+2.9 (27 Nov 2026) added fast-class calls from a tool body (``ToolSpec.model_aliases``,
+the trailing field ``ToolContext.models``, ``ToolModels``, ``Judgement``, ``passage_id``,
+``span_draft``; ADR-P07 G1), structural reading (``sniff_format``, ``segment``,
+``Segment``, ``read_rows``, ``Rows``, ``Row``, ``visible``, ``parse_date``,
+``find_dates``, ``FORMATS``; ADR-P13 G3), and reading a record of unknown kind
+(``DocumentKind``, ``DocumentReading``, ``OTHER_KIND``, ``decide_kind``,
+``document_preview``, ``kind_question``, ``read_document``; the field types ``time``,
+``datetime``, ``estimate`` and ``forecast``; ``FieldSpec.adapted``; ``allow_adapted`` on
+an extraction alias; ADR-P07 G3), and ``record_sections`` and ``section_heading``, so a
+record holding several kinds is decided section by section (ADR-P07 G4).
 """
 
 Version = tuple[int, int]

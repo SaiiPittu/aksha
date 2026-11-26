@@ -27,6 +27,17 @@ def test_pages_merge_only_on_a_relationship_sentence() -> None:
     assert [(a.record, b.record) for a, b, _ in merged.merges] == [("p/b", "p/a")]
 
 
+def test_two_sections_of_one_record_are_two_pages_and_merge_only_on_a_sentence() -> None:
+    """A memo with a section per seller: one record, two pages, two companies."""
+    a = PageIdentity("memo.md", "v1", "", "FW-200", "Firewise", section=1)
+    b = PageIdentity("memo.md", "v1", "", "KM Pro", "Kilnmate", section=2)
+    assert [c.canonical for c in analysis.resolve([a, b])] == ["Firewise", "Kilnmate"]
+    said = ({"text": "Kilnmate was acquired by Firewise.", "span": "EX-1"},)
+    b2 = PageIdentity("memo.md", "v1", "", "KM Pro", "Kilnmate", relations=said, section=2)
+    (merged,) = analysis.resolve([a, b2])
+    assert [p.section for p in merged.pages] == [1, 2]
+
+
 def test_companies_come_in_page_discovery_order_whatever_their_names() -> None:
     """A rename must not reorder the companies: their order is their first page's position."""
     pages = [

@@ -11,16 +11,20 @@ import pytest
 
 from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.research import tools
+from aksha.agents.research.fakes import ADAPTERS
 from aksha.runtime.grounding.reading import AttemptReader
 from aksha.runtime.tools.types import Err, Ok, ToolContext
-from tests.support.research import WORLDS
+from tests.support.fast import models_for
+from tests.support.research import AGENT_DIR, WORLDS
 
 SOURCES = WORLDS / "stillroom" / "sources"
 PAGE = "input/competitors/comp01-kelvra.html"
 
 
-def _ctx(reader: Any) -> ToolContext:
-    return ToolContext("o", "research", "evidence", "k", "R-0001/evidence[k]/t01/c01", 1, reader)
+def _ctx(reader: Any, tool: str = "fetch_page") -> ToolContext:
+    """The context the loop gives ``tool``'s body in fake mode, its fast models bound."""
+    return ToolContext("o", "research", "evidence", "k", "R-0001/evidence[k]/t01/c01", 1, reader,
+                       models=models_for(AGENT_DIR, ADAPTERS, tool))  # fmt: skip
 
 
 @pytest.fixture
@@ -46,16 +50,18 @@ def test_fetch_page_drafts_one_span_per_passage_over_the_returned_text(
 def test_list_inputs_finds_pages_and_review_tables_by_content_not_by_folder(
     reader: AttemptReader,
 ) -> None:
-    out = tools.list_inputs(_ctx(reader), {})
+    out = tools.list_inputs(_ctx(reader, "list_inputs"), {})
     assert isinstance(out.result, Ok) and out.result.spans == ()
-    shapes = {r["record"]: r["shape"] for r in out.result.data["inputs"]}
-    assert len(shapes) == sum(1 for p in SOURCES.rglob("*") if p.is_file())
-    sellers = sorted(r for r, s in shapes.items() if s == "seller_page")
+    kinds = {r["record"]: r["kind"] for r in out.result.data["inputs"]}
+    assert len(kinds) == sum(1 for p in SOURCES.rglob("*") if p.is_file())
+    sellers = sorted(r for r, s in kinds.items() if s == "competitor_page")
     assert sellers == sorted(
         f"input/competitors/{p.name}" for p in (SOURCES / "competitors").iterdir()
     )
-    assert [r for r, s in shapes.items() if s == "review_table"] == ["input/reviews/reviews.json"]
-    assert shapes["input/contributors/records.csv"] == "table"  # text, but no rating: not reviews
+    assert [r for r, s in kinds.items() if s == "customer_reviews"] == [
+        "input/reviews/reviews.json"
+    ]
+    assert kinds["input/contributors/records.csv"] == "other"  # text, but no rating: not reviews
     (read,) = out.result.reads
     assert (read.kind, read.id) == ("query", "research.list_inputs?{}")
 
@@ -68,10 +74,10 @@ def test_a_listing_is_a_recorded_query_whose_version_is_its_hit_set(tmp_path: Pa
     )
     (tmp_path / "a.html").write_text(page, encoding="utf-8")
     folder = FolderSource(tools.SOURCE, tmp_path, tools.COLLECTION)
-    args = {"shapes": ["seller_page"]}
+    args = {"kinds": ["competitor_page"]}
 
     def version() -> str:
-        out = tools.list_inputs(_ctx(folder), args)
+        out = tools.list_inputs(_ctx(folder, "list_inputs"), args)
         assert isinstance(out.result, Ok)
         return out.result.reads[0].version
 
@@ -99,12 +105,15 @@ def test_search_with_no_hit_still_records_its_query(reader: AttemptReader) -> No
     assert out.result.data["hits"] == [] and [r.kind for r in out.result.reads] == ["query"]
 
 
-def test_a_record_of_the_wrong_format_is_refused_unread(reader: AttemptReader) -> None:
+def test_any_record_reads_through_any_tool_whatever_its_format(reader: AttemptReader) -> None:
+    # no tool refuses a format: a table read as a page is its rows, each citable, and the
+    # decide step says what kind it is (here ``other``, left to the general model)
     out = tools.fetch_page(_ctx(reader), {"record": "input/contributors/records.csv"})
-    assert isinstance(out.result, Err) and out.result.code == "wrong_format"
-    assert reader.returned == ()
-    out = tools.read_table(_ctx(reader), {"record": PAGE})
-    assert isinstance(out.result, Err) and out.result.code == "wrong_format"
+    assert isinstance(out.result, Ok)
+    assert (out.result.data["kind"], out.result.data["unresolved"]) == ("other", ["kind"])
+    assert "unresolved" in out.result.data["note"] and out.result.spans
+    out = tools.read_table(_ctx(reader, "read_table"), {"record": PAGE})
+    assert isinstance(out.result, Ok)
 
 
 @pytest.mark.parametrize(
@@ -145,7 +154,7 @@ def test_without_a_reader_a_fetch_fails_and_mints_nothing() -> None:
 
 
 def test_read_table_and_read_note_draft_over_raw_offsets(reader: AttemptReader) -> None:
-    reviews = tools.read_table(_ctx(reader), {"record": "input/reviews/reviews.json"})
+    reviews = tools.read_table(_ctx(reader, "read_table"), {"record": "input/reviews/reviews.json"})
     note = tools.read_note(_ctx(reader), {"record": "input/priorities/business-priorities.md"})
     assert isinstance(reviews.result, Ok) and isinstance(note.result, Ok)
     texts = {r.record_id: r.text for r in reader.returned}
@@ -167,7 +176,7 @@ def test_a_csv_export_with_its_own_column_names_reads_like_any_other(
         encoding="utf-8",
     )
     folder = AttemptReader(FolderSource(tools.SOURCE, tmp_path, tools.COLLECTION))
-    out = tools.read_table(_ctx(folder), {"record": "input/x.csv"})
+    out = tools.read_table(_ctx(folder, "read_table"), {"record": "input/x.csv"})
     assert isinstance(out.result, Ok)
     rows = out.result.data["rows"]
     assert [(r["id"], r["site"], r["date"], r["geography"], r["text"]) for r in rows] == [

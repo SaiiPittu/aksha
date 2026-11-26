@@ -1,0 +1,10 @@
+id = "h-research-dup"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["research"]
+worlds = ["cindral"]
+opening = "Who sells booking software to independent physiotherapy clinics in the UK?"
+expect = ["facts.CF-07", "traps.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP"]

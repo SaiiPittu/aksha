@@ -40,11 +40,18 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``RecordReader`` and ``ReturnedText`` (the reader a body reads records through, and
    what it returns),
    ``CitePolicy`` (an artifact kind's per-field cite rules), ``Unknown`` and
-    ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one),
-    ``where_part`` and ``part_version`` (a read of some rows of a table, versioned by
-    exactly those rows, so a change to other rows moves nothing built on it);
-    ``instruction_text`` and ``INSTRUCTION_FLAG`` (P08), the fixed instruction-pattern
-    check a result is flagged by.
+   ``maybe_unknown`` (an explicit unknown and the schema of a field that may hold one),
+   ``where_part`` and ``part_version`` (a read of some rows of a table, versioned by
+   exactly those rows, so a change to other rows moves nothing built on it); a record's
+   structure, never its meaning: ``sniff_format``, ``segment`` and ``Segment``,
+   ``read_rows`` with ``Rows`` and ``Row``, ``visible``, ``parse_date``, ``find_dates`` and
+   ``FORMATS``. Fast-class calls from a body (P07 G1): ``ToolModels`` (``ToolContext.models``),
+   ``Judgement``, ``passage_id`` and ``span_draft``. Reading a record of unknown kind
+   (P07 G3): ``DocumentKind``, ``DocumentReading``, ``OTHER_KIND``, ``decide_kind``,
+   ``document_preview``, ``kind_question``, ``read_document``, ``record_sections`` and
+   ``section_heading``;
+   ``instruction_text`` and ``INSTRUCTION_FLAG`` (P08), the fixed instruction-pattern
+   check a result is flagged by.
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
    ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26);
    what a contributed system of record implements, answers and raises: ``SystemOfRecord``,
@@ -80,6 +87,18 @@ from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.grounding.parts import part_version, where_part
 from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.grounding.segment import (
+    FORMATS,
+    Row,
+    Rows,
+    Segment,
+    find_dates,
+    parse_date,
+    read_rows,
+    segment,
+    sniff_format,
+    visible,
+)
 from aksha.runtime.grounding.types import (
     CitePolicy,
     ReturnedText,
@@ -89,6 +108,18 @@ from aksha.runtime.grounding.types import (
 )
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.types import VersionedSourceSpec
+from aksha.runtime.models.calls import passage_id, span_draft
+from aksha.runtime.models.documents import (
+    OTHER_KIND,
+    DocumentKind,
+    DocumentReading,
+    decide_kind,
+    document_preview,
+    kind_question,
+    read_document,
+    record_sections,
+    section_heading,
+)
 from aksha.runtime.models.fixed import decimal_string, distribution_ppm, ppm
 from aksha.runtime.models.rules import (
     RuleClassificationModel,
@@ -106,6 +137,7 @@ from aksha.runtime.models.types import (
     FieldSpec,
     GenerationRequest,
     GenerationResult,
+    Judgement,
     Message,
     ModelAdapterSpec,
     ModelAlias,
@@ -148,6 +180,7 @@ from aksha.runtime.tasks.types import (
 )
 from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.timers.clock import observe_time
+from aksha.runtime.tools.ports import ToolModels
 from aksha.runtime.tools.types import (
     EffectClass,
     Err,
@@ -163,7 +196,9 @@ from aksha.runtime.tools.types import (
 
 __all__ = [
     "API_VERSION",
+    "FORMATS",
     "INSTRUCTION_FLAG",
+    "OTHER_KIND",
     "SELF",
     "Agent",
     "ApprovalRule",
@@ -183,6 +218,8 @@ __all__ = [
     "ConfidenceThresholds",
     "ContextPolicy",
     "DeclaredInterrupt",
+    "DocumentKind",
+    "DocumentReading",
     "EffectClass",
     "EffectSpec",
     "EgressPolicy",
@@ -209,6 +246,7 @@ __all__ = [
     "InputRef",
     "InstanceRef",
     "InstanceStatus",
+    "Judgement",
     "KeySource",
     "Limits",
     "LogView",
@@ -230,6 +268,8 @@ __all__ = [
     "ResumePolicy",
     "RetryPolicy",
     "ReturnedText",
+    "Row",
+    "Rows",
     "RuleClassificationModel",
     "RuleExtractionModel",
     "RuleGenerationModel",
@@ -238,6 +278,7 @@ __all__ = [
     "SandboxNeeds",
     "SandboxPolicy",
     "SaveRequest",
+    "Segment",
     "SpanDraft",
     "SpanRef",
     "StopPolicyOptIn",
@@ -252,6 +293,7 @@ __all__ = [
     "ToolCall",
     "ToolContext",
     "ToolDecl",
+    "ToolModels",
     "ToolOutcome",
     "ToolSpec",
     "ToolUse",
@@ -261,16 +303,30 @@ __all__ = [
     "Usage",
     "VersionedSourceSpec",
     "artifact_keys",
+    "decide_kind",
     "decimal_string",
     "distribution_ppm",
+    "document_preview",
     "ended_runs",
     "external_records",
+    "find_dates",
     "from_field",
     "instruction_text",
+    "kind_question",
     "maybe_unknown",
     "observe_time",
+    "parse_date",
     "part_version",
+    "passage_id",
     "ppm",
+    "read_document",
+    "read_rows",
+    "record_sections",
+    "section_heading",
+    "segment",
+    "sniff_format",
     "source_keys",
+    "span_draft",
+    "visible",
     "where_part",
 ]

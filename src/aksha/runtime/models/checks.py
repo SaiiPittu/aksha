@@ -7,7 +7,8 @@ binds; these checks need no adapter, so the loader runs them on every agent:
    alias, so it is of the generation class.
 2. ``on_exhausted_unknown``: ``on_exhausted`` is ``unknown``, ``review`` or ``fail``.
 3. ``fields_not_extraction``, ``questions_not_classification``,
-   ``allow_adapted_not_classification``: each part belongs to one class.
+   ``allow_adapted_not_fast``: each part belongs to one class, and only a fast-class
+   alias (extraction or classification) lets an adapted adapter answer (G3).
 4. ``adapted_gates_effect``: an adapted answer never gates an external effect (D5).
 5. ``field_type_unknown``, ``question_type_unknown``, ``spec_name_duplicate``.
 6. ``options_exactly_one``: a choice or score question has exactly one of ``options``
@@ -90,9 +91,9 @@ def alias_problems(alias: ModelAlias) -> list[Problem]:
     if alias.questions and cls != "classification":
         message = f"{name!r}: only a classification alias has questions"
         out.append(("questions_not_classification", message))
-    if alias.allow_adapted and cls != "classification":
-        message = f"{name!r}: only a classification alias allows an adapted classifier"
-        out.append(("allow_adapted_not_classification", message))
+    if alias.allow_adapted and cls not in ("classification", "extraction"):
+        message = f"{name!r}: only an extraction or classification alias allows an adapted one"
+        out.append(("allow_adapted_not_fast", message))
     if alias.allow_adapted and alias.gates_effect:
         message = f"{name!r}: an adapted answer never gates an external effect"
         out.append(("adapted_gates_effect", message))

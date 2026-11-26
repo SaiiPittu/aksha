@@ -21,6 +21,8 @@ Fact                            Counts as
 ``step.failed``,                active time: ``duration_ms``, plus ``backoff_ms`` of a
 ``step.completed``              retried failure
 ``step.completed{kind: model}``  tokens and money: ``usage``
+``step.completed{kind: tool}``   tokens and money: each ``value.model_calls[].usage``
+                                (fast-class calls from the tool body, ADR-P07 G1)
 ``step.completed{kind: tool,``   progress, for the restart limit
 ``outcome: ok}``,
 ``artifact.saved``
@@ -120,9 +122,21 @@ def active_ms(e: Event) -> int:
 
 
 def usage(e: Event) -> tuple[int, int]:
-    """``(tokens, cost_micro_usd)`` a model step reported, or zeros (ADR-P14 D9)."""
-    if e.type != "step.completed" or e.payload.get("kind") != "model":
+    """``(tokens, cost_micro_usd)`` a model step, or a tool body's model calls, spent (ADR-P14 D9).
+
+    A tool step counts the ``usage`` of each alias entry its body's fast-class calls left in
+    ``value.model_calls`` (ADR-P07 G1); any other fact counts zeros.
+    """
+    if e.type != "step.completed":
         return 0, 0
-    u = e.payload.get("usage") or {}
-    tokens = int(u.get("input_tokens", 0)) + int(u.get("output_tokens", 0))
-    return tokens, int(u.get("cost_micro_usd", 0))
+    kind = e.payload.get("kind")
+    if kind == "model":
+        spent = [e.payload.get("usage") or {}]
+    elif kind == "tool":
+        value = e.payload.get("value")
+        calls = value.get("model_calls") if isinstance(value, dict) else None
+        spent = [c.get("usage") or {} for c in calls or () if isinstance(c, dict)]
+    else:
+        return 0, 0
+    tokens = sum(int(u.get("input_tokens", 0)) + int(u.get("output_tokens", 0)) for u in spent)
+    return tokens, sum(int(u.get("cost_micro_usd", 0)) for u in spent)

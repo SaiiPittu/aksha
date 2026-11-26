@@ -23,6 +23,7 @@ from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage.sqlite import open_store
+from aksha.agents.research.fakes import ADAPTERS as FAKE_ADAPTERS
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactVersion
 from aksha.runtime.artifacts.versions import current
@@ -113,7 +114,9 @@ class ResearchBench:
             agent=agent,
             tree=compile_tree(agent.name, agent.tasks),
             registry=self.loaded.registry,
-            table=bind_aliases(agent.model_aliases, self.mode, {"generate": self.model}),
+            table=bind_aliases(
+                agent.model_aliases, self.mode, {**FAKE_ADAPTERS, "generate": self.model}
+            ),
             instructions=(folder / agent.instructions).read_text(encoding="utf-8"),
             request=self.request,
             briefs=briefs,

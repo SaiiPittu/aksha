@@ -1,0 +1,89 @@
+{
+  "world": "cindral",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. The agents read sources/ as uploaded inputs; folder names and file extensions mean nothing to them.",
+  "records": [
+    {
+      "path": "brochures/nimbo-clinic-brochure.pdf.txt",
+      "folder": "brochures",
+      "synthetic": true
+    },
+    {
+      "path": "brochures/physiograph-datasheet.pdf.txt",
+      "folder": "brochures",
+      "synthetic": true
+    },
+    {
+      "path": "decks/waitlist-ranking.pptx.txt",
+      "folder": "decks",
+      "synthetic": true
+    },
+    {
+      "path": "exports/feedback-export.json",
+      "folder": "exports",
+      "synthetic": true
+    },
+    {
+      "path": "forms/counsel-intake.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "log/where-we-showed-it.md",
+      "folder": "log",
+      "synthetic": true
+    },
+    {
+      "path": "meetings/2026-02-11-product-review.txt",
+      "folder": "meetings",
+      "synthetic": true
+    },
+    {
+      "path": "pages/corlew-diary.html",
+      "folder": "pages",
+      "synthetic": true
+    },
+    {
+      "path": "pages/tidewell-booking.html",
+      "folder": "pages",
+      "synthetic": true
+    },
+    {
+      "path": "people/inventors.json",
+      "folder": "people",
+      "synthetic": true
+    },
+    {
+      "path": "plans/priorities-2026.csv",
+      "folder": "plans",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0201.txt",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0202.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0203.txt",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "reports/uk-clinic-software-survey.pdf.txt",
+      "folder": "reports",
+      "synthetic": true
+    },
+    {
+      "path": "spreadsheets/price-comparison.tsv",
+      "folder": "spreadsheets",
+      "synthetic": true
+    }
+  ]
+}

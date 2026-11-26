@@ -108,7 +108,8 @@ def test_five_companies_on_six_pages_one_merged_with_its_excerpt(run: ResearchBe
     assert {merge["src"]["id"], merge["dst"]["id"]} == set(map(_input, k5))
     evidence = _fact(key, "KF-23")["quote"]["exact"]
     (excerpt,) = merge["evidence"]
-    assert evidence in excerpt["quote"] and excerpt["span"].startswith("EX-")
+    # the excerpt is the relationship sentence itself, inside the key's anchored passage
+    assert excerpt["quote"] in evidence and excerpt["span"].startswith("EX-")
 
 
 def test_manual_alternatives_not_found_is_an_explicit_unknown(run: ResearchBench) -> None:

@@ -1,0 +1,19 @@
+SYNTHETIC FIXTURE - a patent publication as labelled text. Invented for testing; not a real publication.
+
+Publication number: SYN-PUB-0203 A1
+Office: SYN-Office-1
+Title: Offering given-up appointment slots to patients on a waitlist
+Filing date: 9 November 2022
+Priority: SYN-PRI-2022-1109, 9 November 2022
+Publication date: 18 May 2024
+Status: Application published
+Legal status (register extract, 1 Nov 2026): Application withdrawn
+
+Abstract
+When a patient gives up an appointment, its slot is offered to the patients on a waitlist in the
+order in which they joined it, so the patient who has waited longest is offered it first.
+The slot is held for the patient who takes it.
+
+Claims
+1. A method comprising, when a patient gives up an appointment, offering its slot first to the patient who has waited longest on a waitlist.
+2. The method of claim 1, wherein the slot is held for the patient while they decide.

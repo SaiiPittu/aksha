@@ -66,6 +66,33 @@ aksha answer I-0002 TD-1
 
 The approval and the mock mailbox that receives the packet work as in the stillroom walk-through below. The offline models understand a small grammar in the request: `Compare <dimension> (<terms>), ...` names the matrix's dimensions besides price (a term ending in `*` is a prefix, `not <phrase>` excludes text), `say about: <theme> (<terms>); ...` names the review themes, `for <segment>` and a country or region fix the segment and the geography, and a missing one is asked for. A live model reads the request as free text; see the limitations.
 
+## How the agents read what you upload
+
+Nobody describes your files in advance, so no single extraction schema fits them. Each read tool runs three steps through the agent's fast models (ADR-P07 G3), every one recorded on the tool's step:
+
+1. **Decide.** A classification model names the record's kind from a preview code renders from structure alone (name, format, headings, header fields, a table's columns and sample values, the start of the text). The research agent's kinds are a competitor page, a pricing table, customer reviews, a market report and an internal note; the patent agent's are an invention disclosure, meeting notes, a contributor record, a disclosure record, an email, business priorities, a blank form and a prior-art publication. Anything else, or an answer the thresholds do not accept, is `other`.
+2. **Pick the schema.** Each kind names the extraction alias whose typed fields are its schema (`text`, `number`, `date`, `time`, `datetime`, `duration`, `list`, `estimate`, `forecast`).
+3. **Extract.** The model fills the schema; every value comes back with the exact words it was read from, which the runtime mints as a citation span and verifies verbatim when an artifact cites it.
+
+What the fast models cannot read, a record of kind `other` or a field they abstained on, goes to the Task's general model: the tool returns the record's passages, each citable, and says what is `unresolved`. The kinds are declared data in each agent (`reading.KINDS`, `world.KINDS`), so adding one is a kind and its alias.
+
+## Running the agents live, with your own key
+
+Offline, every model is a rule-based fake (`AKSHA_MODE=fake`, the default). `AKSHA_MODE=live` binds every model alias to a live adapter. With one general model (any server that speaks the chat-completions shape, hosted or on your machine), it fills the generation contract and, in adapted mode, the decide and extract contracts too: the same pipeline and the same citation checks, its quotes located in code, recorded `native=False`.
+
+```sh
+export AKSHA_MODE=live
+export AKSHA_LIVE_BASE_URL=https://your-provider.example/v1   # or http://127.0.0.1:8000/v1
+export AKSHA_LIVE_API_KEY=...        # read from the environment only; never recorded
+export AKSHA_LIVE_MODEL=your-model   # one model for every alias, or set per class or alias:
+# export AKSHA_LIVE_MODEL_GENERATION=a-large-model
+# export AKSHA_LIVE_MODEL_CLASSIFICATION=a-small-model
+# export AKSHA_LIVE_MODEL_PAGE_FACTS=a-model-for-one-alias
+aksha run --agent research --input my-inputs "Who sells ... and at what price?"
+```
+
+A native System 1 service (an extraction or classification API with its own spans and probabilities) is named per alias with `AKSHA_ALIAS_<ALIAS>=module:Class`, a class built as `cls(alias, env)` that implements the class's contract. The start is refused before any call, naming the setting to set, when the server or a model is missing (`live_config_missing`) or a server not on this machine has no key (`live_key_missing`). `AKSHA_LIVE_SAMPLES=N` asks each classification N times and uses the votes as its distribution. `tests/integration/test_live_mode.py` runs the research agent this way against a stub server on localhost.
+
 ## The command line, step by step
 
 The research agent runs end to end through `aksha run` on the synthetic `stillroom` world, here configured as a folder every run reads (`AKSHA_SOURCES`) instead of uploaded. Run this from a fresh clone, after `make venv`:

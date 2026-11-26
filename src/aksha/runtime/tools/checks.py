@@ -53,6 +53,7 @@ class ToolRights:
     granted: tuple[str, ...]
     aliases: frozenset[str]
     egress: frozenset[str]
+    fast_aliases: frozenset[str] = frozenset()
 
 
 def rights_of(agent: Agent, extensions: Sequence[LoadedExtension]) -> ToolRights:
@@ -68,6 +69,9 @@ def rights_of(agent: Agent, extensions: Sequence[LoadedExtension]) -> ToolRights
         writable_kinds=frozenset(own | contributed),
         granted=agent.reads,
         aliases=frozenset(a.name for a in agent.model_aliases),
+        fast_aliases=frozenset(
+            a.name for a in agent.model_aliases if a.model_class in ("extraction", "classification")
+        ),
         egress=frozenset(qualify(e.ext.name, p.name) for e in named for p in e.ext.egress),
     )
 
@@ -183,6 +187,9 @@ def rights_refusals(
             out.add("tools", "write_kind_not_owned", message)
     if spec.model_alias is not None and spec.model_alias not in rights.aliases:
         message = f"tool {name!r}: model alias {spec.model_alias!r} is not declared"
+        out.add("tools", "model_alias_unknown", message)
+    for alias in sorted(spec.model_aliases - rights.fast_aliases):
+        message = f"tool {name!r}: {alias!r} is not an extraction or classification alias"
         out.add("tools", "model_alias_unknown", message)
     if spec.egress is not None and resolve_kind(spec.egress, declarer) not in rights.egress:
         message = f"tool {name!r}: no egress policy {spec.egress!r} in the named extensions"

@@ -23,6 +23,7 @@ from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.sources.folder import FolderSource
 from aksha.adapters.storage.sqlite import open_store
 from aksha.agents.patent.agent import KINDS, build_agent
+from aksha.agents.patent.fakes import ADAPTERS as FAKE_ADAPTERS
 from aksha.agents.patent.fakes import PatentFake
 from aksha.agents.patent.world import SourceWorld
 from aksha.runtime.artifacts.store import ArtifactStore
@@ -40,6 +41,7 @@ from aksha.runtime.invalidation.commands import accept_review, apply_source_chan
 from aksha.runtime.invalidation.reviews import open_reviews
 from aksha.runtime.loop.drive import LoopDriver, drive, drive_rebuilds
 from aksha.runtime.loop.types import DriveResult, LoopSetup
+from aksha.runtime.models.calls import ToolModelCalls
 from aksha.runtime.models.routing import bind_aliases
 from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.projections.view import LogView, load_view
@@ -131,7 +133,9 @@ class PatentRig:
             agent=self.agent,
             tree=compile_tree(AGENT, self.agent.tasks),
             registry=ToolRegistry(self.agent, listed, ()),
-            table=bind_aliases((), "fake", {"generate": self.model}),
+            table=bind_aliases(
+                self.agent.model_aliases, "fake", {**FAKE_ADAPTERS, "generate": self.model}
+            ),
             instructions=(AGENT_DIR / "prompts" / "instructions.md").read_text(encoding="utf-8"),
             request=REQUEST,
             artifacts=ArtifactStore(FULL),
@@ -197,7 +201,10 @@ class PatentRig:
         head, _, raw = query.partition("?")
         decl = self.listed[head.partition(".")[2]]
         assert decl.body is not None
-        ctx = ToolContext(owner, AGENT, "requery", None, "requery", 1, reader=self.inputs)
+        spec = decl.spec
+        models = ToolModelCalls(self.setup.table, spec.model_aliases, spec.name, owner)
+        ctx = ToolContext(owner, AGENT, "requery", None, "requery", 1, reader=self.inputs,
+                          models=models)  # fmt: skip
         result = decl.body(ctx, json.loads(raw) if raw else {}).result
         assert isinstance(result, Ok)
         return next(r.version for r in result.reads if r.kind == "query" and r.id == query)

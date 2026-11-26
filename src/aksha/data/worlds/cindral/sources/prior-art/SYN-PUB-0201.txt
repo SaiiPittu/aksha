@@ -1,0 +1,18 @@
+SYNTHETIC FIXTURE - a patent publication as labelled text. Invented for testing; not a real publication.
+
+Publication number: SYN-PUB-0201 A1
+Office: SYN-Office-2
+Title: Booking reminders that ask the patient to reply
+Filing date: 2 March 2022
+Priority: SYN-PRI-2021-0303, 3 March 2021
+Publication date: 15 September 2022
+Status: Application published
+
+Abstract
+A scheduling system sends a booking reminder some hours ahead of an appointment, asking the
+patient to reply. If no reply arrives within a set number of hours after the reminder, the
+appointment is marked as at risk so that staff can follow it up.
+
+Claims
+1. A method comprising sending a booking reminder hours ahead of an appointment and asking the patient to reply; and, when no reply arrives within a reply period after the reminder, marking the appointment as at risk.
+2. The method of claim 1, wherein the reply period is between 4 and 12 hours.

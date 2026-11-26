@@ -42,15 +42,33 @@ def dimension_ids(scope: Mapping[str, Any] | None) -> list[str]:
     return [str(d.get("id")) for d in scope.get("dimensions", ()) if isinstance(d, Mapping)]
 
 
+PLAN_KINDS = ("comparison", "synthesis")
+"""A market comparison (sellers, prices, a matrix) or a synthesis of what the inputs say."""
+
+
+def plan_kind(content: Mapping[str, Any] | None) -> str:
+    """The plan a scope (or the competitors, which carry it on) names; ``comparison`` if none."""
+    plan = (content or {}).get("plan")
+    return str(plan.get("kind")) if isinstance(plan, Mapping) else "comparison"
+
+
 def scope_done(view: Any) -> CheckResult:
-    """The scope names a segment, a geography, a boundary and what to compare, with sources."""
+    """The scope names its plan, a boundary and what to compare or read for, with sources.
+
+    A comparison also names its segment and geography; a synthesis needs neither.
+    """
     scope = _content(view, "scope")
     if scope is None:
         return CheckResult(False, "save the scope")
-    missing = [f for f in ("segment", "geography") if not scope.get(f, {}).get("value")]
+    plan = scope.get("plan")
+    if not isinstance(plan, Mapping) or plan.get("kind") not in PLAN_KINDS:
+        return CheckResult(False, f"the scope needs a plan whose kind is one of {PLAN_KINDS}")
+    comparison = plan.get("kind") == "comparison"
+    needed = ("segment", "geography") if comparison else ()
+    missing = [f for f in needed if not scope.get(f, {}).get("value")]
     if missing:
         return CheckResult(False, f"scope has no value for {missing}", keys=tuple(missing))
-    unsourced = [f for f in ("segment", "geography") if not scope[f].get("basis")]
+    unsourced = [f for f in needed if not scope[f].get("basis")]
     if unsourced:
         return CheckResult(False, f"say where {unsourced} came from", keys=tuple(unsourced))
     boundary = scope.get("boundary")
@@ -59,15 +77,19 @@ def scope_done(view: Any) -> CheckResult:
     dims = scope.get("dimensions")
     if not isinstance(dims, list | tuple):
         return CheckResult(False, "list the dimensions to compare (an empty list compares price)")
-    bad = [d for d in dims if not isinstance(d, Mapping) or not d.get("id") or not d.get("terms")]
+    bad = [d for d in dims if not isinstance(d, Mapping) or not d.get("id")]
     ids = dimension_ids(scope)
     if bad or len(ids) != len(set(ids)):
-        return CheckResult(False, "each dimension has a unique id and the terms that find it")
+        return CheckResult(False, "each dimension has a unique id")
     themes = scope.get("themes")
     if not isinstance(themes, list | tuple) or any(
-        not isinstance(t, Mapping) or not t.get("id") or not t.get("terms") for t in themes
+        not isinstance(t, Mapping) or not t.get("id") for t in themes
     ):
-        return CheckResult(False, "list the review themes, each with an id and its terms")
+        return CheckResult(
+            False, "list the themes to read the customer voices for, each with an id"
+        )
+    if not comparison and not themes:
+        return CheckResult(False, "a synthesis names the themes it reads the inputs for")
     return CheckResult(True)
 
 
@@ -103,7 +125,8 @@ def discover_done(view: Any) -> CheckResult:
     if found is None:
         return CheckResult(False, "save the competitors")
     companies = found.get("companies", [])
-    pages = [p["record"] for c in companies for p in c.get("pages", [])]
+    # A page is a record, or one section of a record that holds several sellers' sections.
+    pages = [(p["record"], p.get("section")) for c in companies for p in c.get("pages", [])]
     if len(pages) != len(set(pages)):
         return CheckResult(False, "a page is listed under two companies")
     if found.get("resolved") != len(companies) or found.get("pages_found") != len(pages):
@@ -165,13 +188,20 @@ def needs_done(view: Any) -> CheckResult:
         return CheckResult(False, "rows must equal unique reviews plus duplicates")
     scope = _content(view, "scope") or {}
     want = {str(t.get("id")) for t in scope.get("themes", ()) if isinstance(t, Mapping)}
+    if (
+        want
+        and unique == 0
+        and (sample.get("status") != "no_feedback_found" or not sample.get("checked"))
+    ):
+        return CheckResult(False, "no customer voice was read: read them, or say "
+                           "status no_feedback_found with the listings checked")  # fmt: skip
     have = {str(n.get("theme")) for n in found.get("needs", [])}
     if want - have:
         return CheckResult(False, f"themes {sorted(want - have)} have no need saved")
     bad = []
     for need in found.get("needs", []):
         m = PHRASE.match(str(need.get("phrase", "")))
-        n = len(need.get("evidence", []))
+        n = len(need.get("reviews") or need.get("evidence", []))
         if m is None or int(m.group(1)) != n or int(m.group(2)) != unique:
             bad.append(str(need.get("theme")))
     if bad:
@@ -199,6 +229,8 @@ def report_done(view: Any) -> CheckResult:
     if findings is None:
         return CheckResult(False, "save the findings")
     tests = _content(view, "tests")
+    if plan_kind(_content(view, "scope")) == "synthesis" and tests is None:
+        return CheckResult(True)
     if tests is None or "tests" not in tests:
         return CheckResult(False, "save what to test next")
     unmarked = [
@@ -210,6 +242,7 @@ def report_done(view: Any) -> CheckResult:
 
 
 def outputs_exist(view: Any) -> CheckResult:
-    """The run's four outputs exist at current versions."""
-    missing = [k for k in OUTPUTS if view.latest(k) is None]
+    """The run's outputs exist at current versions: a synthesis needs no tests."""
+    want = OUTPUTS if plan_kind(_content(view, "scope")) == "comparison" else OUTPUTS[:3]
+    missing = [k for k in want if view.latest(k) is None]
     return CheckResult(not missing, f"missing outputs: {missing}", keys=tuple(missing))

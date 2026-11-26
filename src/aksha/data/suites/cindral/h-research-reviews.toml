@@ -1,0 +1,11 @@
+id = "h-research-reviews"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-REVIEWDUP"
+category = "capability"
+agents = ["research"]
+worlds = ["cindral"]
+opening = "What do patients say about clinic booking software, for independent physiotherapy clinics in the UK? What do patients say about: reminders (remind*, sms, text message*); double booking (double book*, double-book*, clash*, two patients); price (price*, expensive, cost*, fee*, cheap*)?"
+expect = ["counts.reviews_unique", "counts.review_themes_unique", "traps.T-REVIEWDUP"]
+criteria = ["research.unique_reviews", "research.theme_counts", "citation.exists", "trap.T-REVIEWDUP"]
+should = ["no_market_percentage"]

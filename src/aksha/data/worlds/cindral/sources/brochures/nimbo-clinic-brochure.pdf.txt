@@ -1,0 +1,20 @@
+SYNTHETIC FIXTURE - text extracted from a PDF brochure. Invented for testing; not a real company, product or price.
+
+Nimbo Clinic by Haldane Health Ltd
+Published 4 August 2026
+
+Nimbo Clinic is online booking for physiotherapy practices. Patients book
+from your own website, and the diary fills itself while you treat.
+
+Reminders. Every patient gets an SMS reminder 24 hours before the
+appointment, and an email reminder when there is no mobile number.
+
+Waitlist. A cancellation list offers a freed slot to waiting patients by
+text message, first come first served.
+
+Integrations. Two-way sync with Google Calendar and Outlook.
+
+Pricing. Nimbo Clinic costs £39 per practitioner per month, billed
+monthly, with no set-up fee and no minimum term.
+
+Page 1 of 1 - SYNTHETIC FIXTURE

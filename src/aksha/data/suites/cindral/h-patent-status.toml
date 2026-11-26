@@ -1,0 +1,10 @@
+id = "h-patent-status"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-STATUS"
+category = "capability"
+agents = ["patent"]
+worlds = ["cindral"]
+opening = "Prepare Cindral's invention candidates for counsel review."
+expect = ["facts.CF-31", "traps.T-STATUS"]
+criteria = ["trap.T-STATUS", "citation.exists"]

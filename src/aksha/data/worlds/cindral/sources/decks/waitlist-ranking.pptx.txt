@@ -1,0 +1,24 @@
+SYNTHETIC FIXTURE - text exported from a slide deck. Invented for testing the agents; not a real company, person or product.
+
+Slide 1: Fair waitlists for patients who travel far
+INV-9 - Grace Obi and Tomasz Wilk, Cindral - 3 April 2026
+
+Slide 2: The problem
+Waitlists offer a freed slot to whoever is first in the queue, so a patient who lives an hour
+away is offered 30-minute notice slots they can never take, and drops off the list.
+
+Slide 3: How it works
+• Estimate each waitlisted patient's travel time to the clinic from their postcode.
+• Offer a freed slot only to patients who can arrive before it starts, given the notice and their travel time.
+• Among those, offer it first to the patient who has waited longest.
+
+Slide 4: Settings
+• Travel time source: public transport timetable, cached nightly
+• Maximum travel time: not decided
+
+Slide 5: Status
+A prototype ranks the waitlist in two partner clinics; offers are still sent by hand.
+The travel-time study is in travel-times-2026.xlsx.
+
+Slide 6: Alternatives we ruled out
+• Offering every slot to everyone at once: ruled out, it creates a race patients far away always lose.

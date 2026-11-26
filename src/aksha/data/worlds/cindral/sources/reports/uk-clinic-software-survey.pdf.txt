@@ -1,0 +1,13 @@
+SYNTHETIC FIXTURE - text extracted from a PDF report. Invented for testing; not a real survey.
+
+UK independent physiotherapy software survey, 2026 (summary)
+Published 1 October 2026
+
+Respondents: 212 independent physiotherapy clinics in the UK. Online booking is now
+used by most clinics; Haldane Health Ltd and Corlew Systems lead the market, and
+Kestrel Software Ltd is growing among solo practitioners.
+
+About 31% of clinics still take bookings by phone only. The market for clinic
+booking software is expected to grow 9% a year to 2028.
+
+SYNTHETIC FIXTURE - end of summary

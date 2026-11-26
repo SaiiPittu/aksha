@@ -15,6 +15,7 @@ from typing import Any
 
 from aksha.runtime.canonical import freeze
 from aksha.runtime.egress.errors import EGRESS_REFUSED, EgressRefused
+from aksha.runtime.execution.errors import TransientStepError
 from aksha.runtime.tools.types import Err, Ok, ToolContext, ToolDecl, ToolOutcome
 
 
@@ -25,6 +26,8 @@ def call_body(decl: ToolDecl, ctx: ToolContext, args: Mapping[str, Any]) -> Tool
         return ToolOutcome(Err("class_violation", f"tool {name!r} has no body to call"))
     try:
         outcome: object = decl.body(ctx, freeze(args))  # agent code is not type-checked
+    except TransientStepError:  # a fast-model call worth retrying: the step's policy decides
+        raise
     except EgressRefused as refused:  # the destination, not the body, was refused
         message = f"tool {name!r}: egress refused for {refused.host!r}: {refused.reason}"
         return ToolOutcome(Err(EGRESS_REFUSED, message, item=refused.host or None))

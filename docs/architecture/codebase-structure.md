@@ -105,6 +105,7 @@ src/aksha/
 │   ├── tools/                               P10 tool registry and schemas
 │   │   ├── __init__.py                      every tool is declared data
 │   │   ├── types.py                         ToolSpec, ToolDecl, ToolUse, ToolContext, ToolOutcome, Ok, Err
+│   │   ├── ports.py                         ToolModels (Protocol): the fast-class handle a body asks (P07 G1)
 │   │   ├── registry.py                      ToolRegistry: build, offered, check_arguments, canonical_hash
 │   │   ├── checks.py                        the loader refusals of an unsafe registry
 │   │   ├── arguments.py                     schema_refusal (every failing path), JSON pointers
@@ -177,6 +178,7 @@ src/aksha/
 │   │   ├── ports.py                         RecordReader (Protocol): the reader a tool body reads records through
 │   │   ├── reading.py                       AttemptReader: one attempt's reads, the texts drafts are minted over
 │   │   ├── parts.py                         where_part, part_version: a read of some rows, versioned by those rows
+│   │   ├── segment.py                       sniff_format, segment, read_rows, parse_date: any record cut by structure (P13 G3)
 │   │   └── facts.py                         citation.bound, the evidence a save is verified against
 │   ├── models/                              P07 model interface and routing by model class
 │   │   ├── __init__.py                      what is built, what is planned
@@ -189,6 +191,8 @@ src/aksha/
 │   │   ├── routing.py                       bind_aliases, AliasTable, cascade_for, binding hash, live_adapters
 │   │   ├── codec.py                         results and judgements as recorded JSON, and back
 │   │   ├── steps.py                         generation_step and run_cascade on the durable step executor
+│   │   ├── calls.py                         ToolModelCalls: a body's extraction and classification calls, recorded on its step (G1)
+│   │   ├── documents.py                     DocumentKind, read_document: decide a record's kind, pick its schema, extract (G3)
 │   │   ├── options.py                       resolve_questions: options read from a saved artifact (S1)
 │   │   ├── adapted.py                       AdaptedClassificationModel: generation under a forced choice
 │   │   ├── rules.py                         RuleGenerationModel, RuleExtractionModel, RuleClassificationModel
@@ -385,10 +389,12 @@ src/aksha/
 │   │   ├── __init__.py                      what it does, where each part lives
 │   │   ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
 │   │   ├── tools.py                         list_inputs, search, fetch_page, read_table, read_note
-│   │   ├── parsing.py                       any input by format (pages, tables, texts) as exact passages; pure
+│   │   ├── parsing.py                       the passage, page and table values; a quoted price's currency, amount and basis; pure
+│   │   ├── reading.py                       the document kinds; decide, pick the schema, extract; passages as exact ranges
 │   │   ├── analysis.py                      entity resolution, price conflicts, term matching, review samples; pure
 │   │   ├── checks.py                        completion checks over a TaskView; pure
 │   │   ├── fakes.py                         ResearchModel: the offline rule-based policy, a test double; reads the request's grammar
+│   │   ├── fakes_readers.py                 the fast-class fakes: the decide rules and each kind's schema, general rules
 │   │   └── prompts/                         the instructions and one prompt per Task
 │   └── patent/                              the patent-disclosure agent (example)
 │       ├── __init__.py                      what it does and never does
@@ -398,6 +404,7 @@ src/aksha/
 │       ├── rules.py                         the rule table, families, form refusals
 │       ├── checks.py                        pure completion checks
 │       ├── fakes.py                         PatentFake: the rule-based generation model, a test double; general rules
+│       ├── fakes_readers.py                 the fast-class fakes: the decide rules and each kind's schema, general rules
 │       └── fakes_stillroom.py               the stillroom notes' hand-written lexicon; applies to those notes only
 ├── evals/                                   P22 EVALS: worlds as environments, graded by code
 │   ├── __init__.py                          the parts and the import rule

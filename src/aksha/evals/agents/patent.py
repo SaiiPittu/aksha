@@ -55,6 +55,7 @@ GAP_ANSWERS: Mapping[str, str] = {
     "stillroom": "0.5 m from the vent edge, so its air flow stays outside the footprint.",
     "stillroom-v2": "0.5 m from the vent edge, so its air flow stays outside the footprint.",
     "tilldew": "The state utility's published time-of-day tariff table.",
+    "cindral": "45 minutes by public transport.",
 }
 """The inventor's answer to a note's open detail, per world (the scripted user's knowledge)."""
 GAP_DEFAULT = "Not decided yet; the note's author will confirm it."

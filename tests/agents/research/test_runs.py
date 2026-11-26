@@ -27,17 +27,23 @@ class Reader:
     """The folder reader, with records that fail (``None``) and one read that kills the process."""
 
     def __init__(
-        self, *, failing: tuple[str, ...] = (), after: int = 0, crash_on: str | None = None
+        self,
+        *,
+        failing: tuple[str, ...] = (),
+        after: int = 0,
+        crash_on: str | None = None,
+        crash_at: int = 1,
     ) -> None:
         self.inner = FolderSource("inputs", SOURCES, "input")
         self.failing = failing
         self.after = after  # reads of a failing record that still succeed first
         self.crash_on = crash_on
+        self.crash_at = crash_at  # the read of ``crash_on`` that kills the process
         self.reads: list[str] = []
 
     def read(self, source: str, record_id: str) -> ReturnedText | None:
         self.reads.append(record_id)
-        if record_id == self.crash_on:
+        if record_id == self.crash_on and self.reads.count(record_id) >= self.crash_at:
             self.crash_on = None
             raise Crash(f"killed while reading {record_id}")
         if record_id in self.failing and self.reads.count(record_id) > self.after:
@@ -82,9 +88,10 @@ def test_a_blocked_source_ends_the_run_partial_with_the_gap_named(tmp_path: Path
     key = world_key("stillroom")
     (file,) = key["competitors"]["K4"]["pages"]
     page = f"input/{file}"
-    # Discovery reads the page three times (its listing, the manual search, the fetch); every
+    # Before the company's own evidence fetch, the page is read four times: the scope's
+    # search, discovery's listing (the decide step) and manual search, and its fetch. Every
     # later read fails.
-    b = ResearchBench(tmp_path, ResearchModel(), reader=Reader(failing=(page,), after=3))
+    b = ResearchBench(tmp_path, ResearchModel(), reader=Reader(failing=(page,), after=4))
     b.start()
     result = b.run_to_end(**ANSWER)
     assert (result.state, result.outcome) == ("ended", "partial")
@@ -128,7 +135,7 @@ def test_a_crash_mid_evidence_resumes_and_repeats_no_recorded_step(tmp_path: Pat
     whole.close()
 
     page = "input/" + world_key("stillroom")["competitors"]["K3"]["pages"][0]
-    reader = Reader(crash_on=page)
+    reader = Reader(crash_on=page, crash_at=5)  # four reads come before its evidence fetch
     b = ResearchBench(tmp_path / "crash", ResearchModel(), reader=reader)
     b.start()
     held = b.drive()

@@ -1,0 +1,10 @@
+id = "h-patent-grace"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GRACE"
+category = "capability"
+agents = ["patent"]
+worlds = ["cindral"]
+opening = "Prepare Cindral's invention candidates for counsel review."
+expect = ["facts.CF-25", "traps.T-GRACE"]
+criteria = ["trap.T-GRACE", "citation.exists"]

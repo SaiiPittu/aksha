@@ -2,8 +2,10 @@
 
 The agent reads one versioned source, :data:`SOURCE` (``inputs``), whose one collection
 :data:`COLLECTION` (``input``) holds whatever the person uploaded or configured: saved web
-pages, Markdown notes, CSV or JSON exports, emails, text extracted from a PDF. No tool
-expects a folder layout or a file name; each reads by format (``parsing.input_format``).
+pages, Markdown notes, CSV or JSON exports, emails, text extracted from a PDF, a slide deck
+or a spreadsheet. No tool expects a folder layout, a file name or a column name: each
+cuts a record by structure and asks the agent's aliases what it holds (``reading.py``),
+and every tool reads every format, sniffed from the content.
 
 Every body reads through ``ctx.reader`` (the runtime's record reader), never the file
 system, and returns the versions it read as ``Ok.reads`` so lineage reaches each record.
@@ -13,11 +15,12 @@ reopens only the work whose listing or search it changes. ``fetch_page``,
 ``read_table`` and ``read_note`` mint one citation span per passage, in passage order: the
 model is shown the span IDs after the result and cites ``{"span": ID, "quote": ...}``.
 ``list_inputs`` and ``search`` mint nothing, so a listing or a snippet can never be
-cited: a claim needs the record read.
+cited: a claim needs the record read. ``read_table`` pages through rows (``offset``,
+``limit``, ``total``) and, given the scope's themes, says which themes each row speaks to,
+so counting runs over the whole export, never over what fits in one result.
 
 A record the reader cannot return is an ``Err`` the model reads (``fetch_failed``), and a
-claim it would have supported stays ``unverified``; a record of the wrong format for a
-tool is ``wrong_format``.
+claim it would have supported stays ``unverified``.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from aksha.runtime.api import (
+    FORMATS,
     Err,
     InputRef,
     Ok,
@@ -38,9 +42,10 @@ from aksha.runtime.api import (
     ToolDecl,
     ToolOutcome,
     ToolSpec,
+    visible,
 )
 
-from . import parsing
+from . import parsing, reading
 
 AGENT = "research"
 SOURCE = "inputs"
@@ -48,9 +53,14 @@ SOURCE = "inputs"
 COLLECTION = "input"
 COLLECTIONS = (COLLECTION,)
 
-PAGE_FORMATS = ("html", "markdown")
-TABLE_FORMATS = ("csv", "json")
 SNIPPET_CHARS = 160
+PAGE_ROWS = 200
+"""Rows ``read_table`` returns at most per call; ``total`` and ``next_offset`` say the rest."""
+ALIASES = frozenset(
+    {"doc_kind", "page_facts", "price_table", "report_facts", "feedback_items", "table_roles",
+     "theme_match"}
+)  # fmt: skip
+"""The fast-class aliases the read tools ask (``reading.py``)."""
 
 
 def _not_an_input(record: str) -> Err | None:
@@ -78,15 +88,6 @@ def _drafts(text: ReturnedText, passages: tuple[parsing.Passage, ...]) -> tuple[
     return tuple(SpanDraft(SOURCE, text.record_id, text.version, p.start, p.end) for p in passages)
 
 
-def _wrong(record: str, fmt: str, want: tuple[str, ...]) -> ToolOutcome:
-    bad = _not_an_input(record)
-    if bad is not None:
-        return ToolOutcome(bad)
-    return ToolOutcome(
-        Err("wrong_format", f"{record} is {fmt}; this tool reads {list(want)}", item=record)
-    )
-
-
 def _query(ctx: ToolContext, tool: str, args: Mapping[str, Any], hits: list[str]) -> InputRef:
     """The recorded query of ``tool`` with ``args``: its version hashes the hits as a set."""
     qid = f"{ctx.agent}.{tool}?" + json.dumps(dict(args), sort_keys=True, separators=(",", ":"))
@@ -95,26 +96,37 @@ def _query(ctx: ToolContext, tool: str, args: Mapping[str, Any], hits: list[str]
 
 
 def list_inputs(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """Input records with their format and shape, optionally only some shapes.
+    """Input records with their format and kind, optionally only some kinds.
 
-    A recorded query: its version is the set of records listed, so a page or an export
-    added later re-executes it and reopens only the work that listed that shape.
-    Nothing in a listing is citable.
+    The kind is the ``doc_kind`` alias's decision over a structural preview of the record
+    (``reading.decide``); an abstention lists it as ``other`` with ``decided`` false. A
+    recorded query: its version is the set of records listed with their kinds, so a page
+    or an export added later re-executes it and reopens only the work that listed that
+    kind. Nothing in a listing is citable.
     """
-    shapes = [str(s) for s in args.get("shapes", ())]
+    kinds = [str(s) for s in args.get("kinds", ())]
     records = ctx.reader.records(SOURCE, COLLECTION) if ctx.reader is not None else ()
     rows = []
     for r in records:
         found = ctx.reader.read(SOURCE, r) if ctx.reader is not None else None
         if found is None:
             continue
-        shape = parsing.shape_of(r, found.text)
-        if shapes and shape not in shapes:
+        fmt = reading.record_format(r, found.text)
+        kind, decided = reading.decide(ctx.models, found, fmt)
+        parts = reading.decide_sections(ctx.models, found, fmt)
+        if kinds and kind not in kinds and not any(p["kind"] in kinds for p in parts):
             continue
-        rows.append({"record": r, "format": parsing.input_format(r), "shape": shape})
-    read = _query(ctx, "list_inputs", args, [f"{x['record']}:{x['shape']}" for x in rows])
+        row: dict[str, Any] = {"record": r, "format": fmt, "kind": kind, "decided": decided}
+        if parts:
+            row["sections"] = parts
+        rows.append(row)
+    keys = [f"{x['record']}:{x['kind']}:" + ",".join(p["kind"] for p in x.get("sections", ()))
+            for x in rows]  # fmt: skip
+    read = _query(ctx, "list_inputs", args, keys)
     data = {"inputs": rows, "count": len(rows), "query": f"query:{read.id}@{read.version}",
-            "note": "read a record to cite it"}  # fmt: skip
+            "note": "read a record to cite it; an 'other' record is yours to read; a record "
+                    "listed with sections holds several kinds: read the section that is the "
+                    "kind you need (its 'section' number)"}  # fmt: skip
     return ToolOutcome(Ok(data, reads=(read,)))
 
 
@@ -129,23 +141,20 @@ def search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
     hits: list[dict[str, Any]] = []
     checked = 0
     for record in records:
-        fmt = parsing.input_format(record)
-        if formats and fmt not in formats:
-            continue
         found = ctx.reader.read(SOURCE, record) if ctx.reader is not None else None
         if found is None:
             continue
+        fmt = reading.record_format(record, found.text)
+        if formats and fmt not in formats:
+            continue
         checked += 1
-        text = parsing.visible(found.text) if fmt == "html" else " ".join(found.text.split())
+        text = visible(found.text) if fmt == "html" else " ".join(found.text.split())
         low = text.lower()
         at = min((low.find(t) for t in terms if t in low), default=-1)
         if at < 0:
             continue
         hit: dict[str, Any] = {"record": record, "format": fmt,
                                "snippet": text[max(0, at - 40) : at + 120]}  # fmt: skip
-        if fmt == "html":
-            page = parsing.read_page(found.text)
-            hit.update(title=page.title, published=page.published, url=page.url)
         hits.append(hit)
     read = _query(ctx, "search", args, [str(h["record"]) for h in hits])
     data = {
@@ -159,21 +168,23 @@ def search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
 
 
 def fetch_page(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """One page (HTML or Markdown) as numbered passages, one citation span each."""
+    """Any record as a page: its identity and numbered passages, one citation span each."""
     record = str(args["record"])
-    fmt = parsing.input_format(record)
-    if fmt not in PAGE_FORMATS:
-        return _wrong(record, fmt, PAGE_FORMATS)
     found = _read(ctx, record)
     if isinstance(found, Err):
         return ToolOutcome(found)
-    page = (
-        parsing.read_page(found.text) if fmt == "html" else parsing.read_markdown_page(found.text)
-    )
+    fmt = reading.record_format(record, found.text)
+    section = args.get("section")
+    segs = reading.section_of(found, fmt, None if section is None else int(section))
+    if segs is None:
+        return ToolOutcome(Err("no_section", f"{record} has no section {section}", item=record))
+    page, read = reading.read_page(ctx.models, found, fmt, SOURCE, segs)
     data = {
         "record": record,
         "version": found.version,
         "format": fmt,
+        **({} if section is None else {"section": int(section)}),
+        **read.as_json(),
         "published": page.published,
         "title": page.title,
         "product": page.product,
@@ -181,73 +192,120 @@ def fetch_page(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         "url": page.url,
         "passages": [p.as_json(n) for n, p in enumerate(page.passages)],
     }
+    if read.needs_reader:
+        data["note"] = (
+            "the fast readers left " + ", ".join(read.unresolved) + " unresolved: read the "
+            "passages yourself and cite them"
+        )
     spans = _drafts(found, page.passages)
     return ToolOutcome(Ok(data, spans=spans, reads=(_input(found),)))
 
 
 def read_table(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """A table (CSV, or JSON rows): every row with its fields, its text one citation span."""
+    """Rows of a table (any delimiter, JSON at any depth) or the voices of a text, by page."""
     record = str(args["record"])
-    fmt = parsing.input_format(record)
-    if fmt not in TABLE_FORMATS:
-        return _wrong(record, fmt, TABLE_FORMATS)
     found = _read(ctx, record)
     if isinstance(found, Err):
         return ToolOutcome(found)
+    fmt = reading.record_format(record, found.text)
+    offset = int(args.get("offset", 0))
+    limit = int(args.get("limit", PAGE_ROWS))
+    themes = [dict(t) for t in args.get("themes", ())]
+    section = None if args.get("section") is None else int(args["section"])
     try:
-        table = parsing.read_table(found.text, fmt)
+        table = reading.read_table(ctx.models, found, fmt, SOURCE, offset=offset, limit=limit,
+                                   themes=themes, section=section)  # fmt: skip
     except ValueError as e:
         return ToolOutcome(Err("unreadable", f"{record}: {e}", item=record))
     rows = [{"n": n, **p.fields, "text": p.text} for n, p in enumerate(table.passages)]
+    end = offset + limit
     data = {
         "record": record,
         "version": found.version,
         "format": fmt,
+        **({} if section is None else {"section": section}),
         **table.header,
         "columns": list(table.columns),
         "roles": dict(table.roles),
+        "offset": offset,
+        "total": table.total,
+        "next_offset": end if end < table.total else None,
         "rows": rows,
     }
     return ToolOutcome(Ok(data, spans=_drafts(found, table.passages), reads=(_input(found),)))
 
 
 def read_note(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """Any text record (a note, an email, extracted PDF text) as numbered, citable lines."""
+    """Any text record (a note, an email, extracted PDF text) as numbered, citable blocks."""
     record = str(args["record"])
     found = _read(ctx, record)
     if isinstance(found, Err):
         return ToolOutcome(found)
-    lines = parsing.read_lines(found.text)
+    fmt = reading.record_format(record, found.text)
+    lines = reading.read_lines(found, fmt)
     data = {
         "record": record,
         "version": found.version,
-        "format": parsing.input_format(record),
+        "format": fmt,
         "lines": [{"n": n, "text": p.text} for n, p in enumerate(lines)],
     }
     return ToolOutcome(Ok(data, spans=_drafts(found, lines), reads=(_input(found),)))
 
 
+_SECTION = {"type": "integer", "minimum": 0}
+"""A section number from ``list_inputs``: read only that section of the record."""
 _RECORD = {
     "type": "object",
     "properties": {"record": {"type": "string", "minLength": 3}},
     "required": ["record"],
     "additionalProperties": False,
 }
+_PAGE = {
+    "type": "object",
+    "properties": {"record": {"type": "string", "minLength": 3}, "section": _SECTION},
+    "required": ["record"],
+    "additionalProperties": False,
+}
 _LIST = {
     "type": "object",
-    "properties": {"shapes": {"type": "array", "items": {"enum": list(parsing.SHAPES)}}},
+    "properties": {"kinds": {"type": "array", "items": {"enum": list(reading.KIND_NAMES)}}},
     "additionalProperties": False,
 }
 _SEARCH = {
     "type": "object",
     "properties": {
         "terms": {"type": "array", "items": {"type": "string", "minLength": 2}, "minItems": 1},
-        "formats": {"type": "array", "items": {"enum": list(parsing.FORMATS)}},
+        "formats": {"type": "array", "items": {"enum": list(FORMATS)}},
     },
     "required": ["terms"],
     "additionalProperties": False,
 }
-_FETCH_RETRY = RetryPolicy(timeout_ms=10_000, max_retries=2)
+_TABLE = {
+    "type": "object",
+    "properties": {
+        "record": {"type": "string", "minLength": 3},
+        "section": _SECTION,
+        "offset": {"type": "integer", "minimum": 0},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 1000},
+        "themes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "minLength": 1},
+                    "name": {"type": "string"},
+                    "terms": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["id"],
+            },
+        },
+    },
+    "required": ["record"],
+    "additionalProperties": False,
+}
+_FETCH_RETRY = RetryPolicy(timeout_ms=120_000, max_retries=2)
+"""A read asks fast-class models: a live one may take seconds per record."""
+_LIST_RETRY = RetryPolicy(timeout_ms=600_000, max_retries=1)
 _INPUTS = frozenset(COLLECTIONS)
 
 TOOLS = (
@@ -257,12 +315,14 @@ TOOLS = (
             AGENT,
             "read",
             "List the input records with their format (html, markdown, csv, json, email, "
-            "text) and shape (seller_page, review_table, table, note), optionally only some "
-            "shapes. Nothing in the listing is citable.",
+            "text) and kind (" + ", ".join(reading.KIND_NAMES) + "), optionally only some "
+            "kinds. Nothing in the listing is citable.",
             _LIST,
             collections=_INPUTS,
             recorded_query=True,
             result_key="/record",
+            retry=_LIST_RETRY,
+            model_aliases=ALIASES,
         ),
         list_inputs,
     ),
@@ -285,12 +345,15 @@ TOOLS = (
             "fetch_page",
             AGENT,
             "read",
-            "Read one page (HTML or Markdown) as numbered, citable passages: names, dates, "
-            "prices, specifications, claims and hidden text.",
-            _RECORD,
+            "Read any input: its kind, then numbered, citable passages: who it is from, "
+            "when, each stated price (with its seller in a price table), specifications, "
+            "claims, relationships and hidden text. 'unresolved' names what you must read "
+            "from the passages yourself. 'section' reads one section the listing names.",
+            _PAGE,
             collections=_INPUTS,
             mints_citation_spans=True,
             retry=_FETCH_RETRY,
+            model_aliases=ALIASES,
         ),
         fetch_page,
     ),
@@ -299,11 +362,16 @@ TOOLS = (
             "read_table",
             AGENT,
             "read",
-            "Read a table (CSV, or the rows of a JSON file) such as a review export; each "
-            "row's text is citable, its other columns named by what they hold.",
-            _RECORD,
+            "Read customer voices: the rows of a table (any delimiter, JSON rows at any "
+            "depth) or each voice in a text, by page (offset, limit; total says how many). "
+            "Each row's text is citable, its other columns named by what they hold; given "
+            "themes, each row says which themes it speaks to. 'section' reads one section "
+            "of a text the listing names.",
+            _TABLE,
             collections=_INPUTS,
             mints_citation_spans=True,
+            retry=_LIST_RETRY,
+            model_aliases=ALIASES,
         ),
         read_table,
     ),
@@ -312,8 +380,7 @@ TOOLS = (
             "read_note",
             AGENT,
             "read",
-            "Read any text input (a note, an email, text extracted from a PDF) as numbered, "
-            "citable lines.",
+            "Read any input (a note, an email, a brochure, a deck) as numbered, citable blocks.",
             _RECORD,
             collections=_INPUTS,
             mints_citation_spans=True,

@@ -9,15 +9,28 @@ injection case lives in the research suite.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from aksha.agents.research.parsing import shape_of
+import aksha.agents
+from aksha.agents.research import reading
+from aksha.agents.research.fakes import ADAPTERS
 from aksha.evals.case import load_suite
+from aksha.runtime.grounding.types import ReturnedText
 from tests.support.evals import SUITES, key, world
+from tests.support.fast import models_for
 
-READS = {"research": ("seller_page",), "patent": ()}
-"""The shapes of input whose every passage each agent reads: the research agent reads each
-seller page whole; the patent agent reads notes, tables and publications, never a page."""
+READS = {"research": ("competitor_page",), "patent": ()}
+"""The kinds of input whose every passage each agent reads: the research agent reads each
+competitor page whole; the patent agent reads notes, tables and publications, never a page."""
+
+
+def kind_of(record: str, raw: str) -> str:
+    """The kind the research agent's decide step gives ``record`` in fake mode."""
+    models = models_for(Path(aksha.agents.__file__).parent / "research", ADAPTERS, "list_inputs")
+    found = ReturnedText("inputs", f"input/{record}", "v", raw)
+    return reading.decide(models, found, reading.record_format(found.record_id, raw))[0]
 
 
 def _trap_files(trap_id: str) -> list[str]:
@@ -35,7 +48,7 @@ def test_every_planted_trap_is_on_a_page_the_agent_reads(suite: str) -> None:
         reads = READS[c.agents[0]]
         files = _trap_files(c.trap_id)
         sources = world().sources
-        shapes = [shape_of(f, (sources / f).read_text("utf-8")) for f in files]
+        shapes = [kind_of(f, (sources / f).read_text("utf-8")) for f in files]
         assert files and all(s in reads for s in shapes), (c.id, files, shapes)
 
 

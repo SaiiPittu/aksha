@@ -1,0 +1,34 @@
+SYNTHETIC FIXTURE. Invented for testing the agents; not a real company, person, product or meeting.
+
+Cindral product review - meeting notes
+Date: February 11, 2026
+Attendees: Priya Natarajan (product lead), Tomasz Wilk (backend engineer), Grace Obi (founder)
+Idea ref: INV-7
+Title: Releasing a slot to the waitlist when a reminder goes unanswered
+
+Problem:
+Clinics lose a paid slot every time a patient forgets to come. A reminder alone does not
+fill the gap, because by the time the clinic notices, nobody on the waitlist can come at
+short notice.
+
+How it would work:
+• Send the booking reminder 48 hours before the appointment, asking the patient to reply YES or NO.
+• If no reply has arrived 6 hours after the reminder, mark the slot as at risk.
+• Offer an at-risk slot to the first patient on the waitlist, holding it for them for 2 hours.
+• If the original patient replies YES before the waitlisted patient accepts, cancel the hold and keep the original booking.
+
+Settings agreed:
+• Reply window: 6 hours
+• Hold length: 2 hours
+• Reminder lead time: 48 hours
+
+Options we discussed:
+• Double-booking the slot outright: dropped, because clinics hated two patients arriving at once.
+• Phoning every patient who has not replied: dropped, it takes too much reception time.
+
+Where it stands:
+Tomasz built it against the Cindral sandbox diary, and it was tested on 40 simulated weeks of
+bookings before any clinic saw it.
+
+Open questions:
+• Why 6 hours and not 4: to be written up.
