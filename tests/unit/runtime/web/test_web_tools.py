@@ -30,6 +30,7 @@ from aksha.runtime.web.types import (
     WebError,
     normal_url,
     text_version,
+    url_problem,
     web_record_id,
 )
 
@@ -108,11 +109,21 @@ def test_a_span_over_a_snippet_is_refused() -> None:
 def test_a_failed_fetch_is_the_error_the_model_reads_and_keeps_nothing() -> None:
     for handle_status, url, code in ((200, "https://a.example/missing", "not_found"),
                                      (503, "https://a.example/probe", "fetch_failed"),
-                                     (200, "ftp://a.example/x", "url_invalid")):  # fmt: skip
+                                     (200, "ftp://a.example/x", "url_invalid"),
+                                     (200, "https://a.example:port/x", "url_invalid"),
+                                     (200, "https:///x", "url_invalid")):  # fmt: skip
         reader = AttemptReader(None)
         out = fetch_url(_ctx(_handle(reader, handle_status), reader), {"url": url})
         assert isinstance(out.result, Err) and out.result.code == code
         assert reader.returned == ()
+
+
+def test_a_malformed_url_is_url_invalid_wherever_it_is_normalised() -> None:
+    assert url_problem("https://a.example/x") is None
+    assert url_problem("https://a.example:99999999999/x") is not None
+    with pytest.raises(WebError) as e:
+        normal_url("https://a.example:port/x")
+    assert e.value.code == "url_invalid"
 
 
 def test_without_a_web_port_both_tools_answer_web_off() -> None:

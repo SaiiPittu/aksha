@@ -119,8 +119,27 @@ class FetchedPage:
                    str(data["text"]), bool(data.get("truncated", False)))  # fmt: skip
 
 
+def url_problem(url: str) -> str | None:
+    """Why ``url`` cannot be fetched as written (no host, a port that is not a number), or
+    None. A model writes the URL it fetches, so a malformed one is an error it reads."""
+    try:
+        parts = urlsplit(url.strip())
+        parts.port  # noqa: B018 - raises ValueError on a port that is not a number
+    except ValueError as e:
+        return f"not a valid URL ({e})"
+    if not parts.hostname:
+        return "no host"
+    return None
+
+
 def normal_url(url: str) -> str:
-    """``url`` with its scheme and host lower-cased and its fragment dropped."""
+    """``url`` with its scheme and host lower-cased and its fragment dropped.
+
+    Raises ``WebError`` ``url_invalid`` on a URL :func:`url_problem` refuses.
+    """
+    problem = url_problem(url)
+    if problem is not None:
+        raise WebError("url_invalid", f"{url!r}: {problem}")
     parts = urlsplit(url.strip())
     query = f"?{parts.query}" if parts.query else ""
     netloc = (parts.hostname or "").lower()

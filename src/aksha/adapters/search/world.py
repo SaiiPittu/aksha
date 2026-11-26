@@ -41,6 +41,7 @@ from aksha.runtime.egress.ports import HttpClient
 from aksha.runtime.grounding.segment import sniff_format, visible
 from aksha.runtime.web.types import (
     NOT_ON_THE_WEB,
+    WEB_COLLECTION,
     FetchedPage,
     SearchHit,
     SearchResults,
@@ -140,6 +141,8 @@ def load_pages(raw: Mapping[str, Any]) -> tuple[WebPage, ...]:
         if not url.startswith("https://"):
             raise ValueError(f"{url!r}: a world page is served over https")
         record = web_record_id(url)
+        if any(seg in (".", "..") for seg in record.partition("?")[0].split("/")):
+            raise ValueError(f"{url!r}: a world page's path has no . or .. segment")
         if record in seen:
             raise ValueError(f"{url!r} is declared twice")
         seen.add(record)
@@ -204,10 +207,11 @@ class WorldWeb:
     @classmethod
     def of_world(cls, root: Path) -> WorldWeb:
         """The web of the world at ``root``, read from its files."""
+        web = (root / WEB_COLLECTION).resolve()
 
-        def read(rel: str) -> str | None:
+        def read(rel: str) -> str | None:  # a page's file is under the world's web/, only
             path = (root / rel).resolve()
-            if not path.is_relative_to(root.resolve()) or not path.is_file():
+            if not path.is_relative_to(web) or not path.is_file():
                 return None
             return path.read_text(encoding="utf-8")
 

@@ -98,6 +98,20 @@ def test_a_malformed_declaration_is_refused() -> None:
         load_pages({"pages": [{"url": "https://a.example/x"}, {"url": "https://a.example/x/"}]})
     with pytest.raises(ValueError, match="noise"):
         load_pages({"pages": [{"url": "https://a.example/x", "noise": "bad"}]})
+    for url in ("https://a.example/../../key.json", "https://../key.json",
+                "https://a.example/./x"):  # fmt: skip
+        with pytest.raises(ValueError, match="segment"):
+            load_pages({"pages": [{"url": url}]})
+
+
+def test_a_world_s_web_reads_only_files_under_its_web_folder(tmp_path: Path) -> None:
+    (tmp_path / "web" / "a.example").mkdir(parents=True)
+    (tmp_path / "web" / "a.example" / "p").write_text("<p>a probe</p>")
+    (tmp_path / "key.json").write_text('{"answer": "secret"}')
+    (tmp_path / "web.json").write_text(json.dumps({"pages": [{"url": "https://a.example/p"}]}))
+    web = WorldWeb.of_world(tmp_path)
+    assert web._read("web/a.example/p") == "<p>a probe</p>"
+    assert web._read("key.json") is None and web._read("web/../key.json") is None
 
 
 def test_a_search_is_told_to_an_observer_and_reads_through_the_index(tmp_path: Path) -> None:

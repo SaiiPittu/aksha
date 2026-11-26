@@ -32,7 +32,7 @@ from aksha.runtime.tools.types import (
     ToolSpec,
 )
 from aksha.runtime.web.attempt import FetchedText
-from aksha.runtime.web.types import BUILTIN_EGRESS, WEB_EGRESS, WEB_OFF, WebError
+from aksha.runtime.web.types import BUILTIN_EGRESS, WEB_EGRESS, WEB_OFF, WebError, url_problem
 
 SNIPPET_NOTE = "a snippet is not evidence: fetch_url a result to read and cite it"
 _RETRY = RetryPolicy(timeout_ms=60_000, max_retries=2)
@@ -100,6 +100,9 @@ def fetch_text(ctx: ToolContext, url: str) -> FetchedText | Err:
         return Err(WEB_OFF, "no web fetch is configured")
     if not url.lower().startswith(("https://", "http://")):
         return Err("url_invalid", f"{url!r} is not an http(s) URL", paths=("/url",))
+    problem = url_problem(url)
+    if problem is not None:
+        return Err("url_invalid", f"{url!r}: {problem}", paths=("/url",))
     try:
         return ctx.web.fetch(url)
     except WebError as e:
