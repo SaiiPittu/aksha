@@ -28,9 +28,13 @@ PLACEHOLDER_KEY: Final = "$erasable"
 _PLACEHOLDER_KEYS: Final = frozenset({PLACEHOLDER_KEY, "commit", "redacted"})
 
 
-def commitment(salt: str, value: Any) -> str:
-    """``sha256:`` over the canonical bytes of ``{"salt": salt, "value": value}``."""
-    return sha256_ref(canonical_bytes({"salt": salt, "value": value}))
+def commitment(salt: str, subject: str, value: Any) -> str:
+    """``sha256:`` over the canonical bytes of ``{"salt", "subject", "value"}``.
+
+    The subject is bound in, so a row moved to another subject no longer verifies and
+    ``erase`` cannot be made to miss it.
+    """
+    return sha256_ref(canonical_bytes({"salt": salt, "subject": subject, "value": value}))
 
 
 def is_placeholder(value: Any) -> bool:
@@ -81,7 +85,7 @@ def _sealed(marker: Personal, entropy: Entropy | None) -> SealedValue:
         subject=subject,
         salt=salt,
         value=marker.value,
-        commit=commitment(salt, marker.value),
+        commit=commitment(salt, marker.subject, marker.value),
     )
 
 

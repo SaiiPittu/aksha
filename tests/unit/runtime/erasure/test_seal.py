@@ -44,8 +44,8 @@ def test_the_commitment_is_salted_so_two_seals_of_one_value_differ() -> None:
     first, a = seal({"who": Personal("person:p1", "Same Name")}, entropy=secrets.token_hex)
     second, b = seal({"who": Personal("person:p1", "Same Name")}, entropy=secrets.token_hex)
     assert a[0].ref != b[0].ref and a[0].commit != b[0].commit
-    assert a[0].commit == sha256_ref(canonical_bytes({"salt": a[0].salt, "value": "Same Name"}))
-    assert commitment(a[0].salt, "Same Name") == a[0].commit
+    assert a[0].commit == sha256_ref(canonical_bytes({"salt": a[0].salt, "subject": "person:p1", "value": "Same Name"}))
+    assert commitment(a[0].salt, a[0].subject, "Same Name") == a[0].commit
     assert first != second
 
 

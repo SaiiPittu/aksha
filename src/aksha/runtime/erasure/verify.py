@@ -5,15 +5,16 @@ placeholder (the ref, its event and its commitment) and every ref an
 ``erasure.performed`` event names. Then :meth:`ErasureLedger.check` holds the side
 table to that record:
 
-1. every row names a placeholder of the same owner and event, and its salted value
-   hashes to that placeholder's commitment (``erasable_mismatch`` otherwise);
+1. every row names a placeholder of the same owner and event, and its salt, subject
+   and value hash to that placeholder's commitment (``erasable_mismatch`` otherwise);
 2. no row survives for a ref an erasure names (``erasable_mismatch``);
 3. every placeholder has its row, unless an erasure of the same owner, later in the
    chain, names its ref (``erasable_missing``);
 4. an erasure names only refs sealed before it for its owner, each once
    (``erasable_mismatch`` at the erasure).
 
-So a value deleted without a recorded erasure, edited, moved to another event or kept
+So a value deleted without a recorded erasure, edited, moved to another event or
+subject, or kept
 after its erasure is found, and an erasure that really happened still verifies.
 """
 
@@ -104,7 +105,7 @@ class ErasureLedger:
         if isinstance(row, UnreadableValue):
             return ErasureBreak(sealed.seq, "erasable_mismatch", sealed.commit, row.why)
         try:
-            found = commitment(row.salt, row.value)
+            found = commitment(row.salt, row.subject, row.value)
         except (TypeError, ValueError) as e:
             found = f"value not canonical: {e}"
         if found != sealed.commit:

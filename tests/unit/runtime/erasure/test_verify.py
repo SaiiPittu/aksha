@@ -82,3 +82,13 @@ def test_a_row_with_no_placeholder_is_a_break() -> None:
     _, row = _sealed(1)
     found = ErasureLedger().check([row])
     assert found is not None and (found.seq, found.reason) == (1, "erasable_mismatch")
+
+
+def test_a_row_moved_to_another_subject_is_a_mismatch() -> None:
+    sealed, row = _sealed(1)
+    ledger = ErasureLedger()
+    ledger.see(sealed)
+    moved = StoredValue(row.owner, row.event_seq, row.ref, "person:p2", row.salt, row.value)
+    fault = ledger.check([moved])
+    assert fault is not None and fault.reason == "erasable_mismatch" and fault.seq == 1
+    assert ErasureLedger().check([]) is None

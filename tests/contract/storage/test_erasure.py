@@ -162,6 +162,15 @@ def test_a_value_moved_to_another_event_breaks_the_chain(
     assert broken is not None and broken.reason == "erasable_mismatch"
 
 
+def test_a_value_moved_to_another_subject_breaks_the_chain(
+    store: EventStore, backend: Backend
+) -> None:
+    store.append("o1", "U2", [_personal_probe(1)])
+    backend.tamper("UPDATE erasables SET subject = 'person:p9'")
+    broken = store.verify()
+    assert broken is not None and (broken.seq, broken.reason) == (1, "erasable_mismatch")
+
+
 def test_the_side_table_refuses_update(store: EventStore, backend: Backend) -> None:
     store.append("o1", "U2", [_personal_probe(1)])
     assert "append-only" in backend.refusal("UPDATE erasables SET subject = 'x'")
