@@ -26,9 +26,9 @@ refused ``already_decided``, and an approval's decision carries the dedup key
    :func:`finalize` is its third answer (ADR-P24 D4): ``run.finalizing`` voids the work
    not yet settled and lets only finalizer Tasks run, on the reserved budget. Refused
    ``already_finalizing`` once the run is finalizing.
-6. :func:`handoff` is Friday's execution path (D8): it re-verifies the approval from current
-   facts and only then writes the outbox entry, whose ``approval_id`` marks the approval
-   used. A refusal writes no entry.
+6. :func:`handoff` is the first milestone's execution path (D8): it re-verifies the
+   approval from current facts and only then writes the outbox entry, whose
+   ``approval_id`` marks the approval used. A refusal writes no entry.
 """
 
 from __future__ import annotations
