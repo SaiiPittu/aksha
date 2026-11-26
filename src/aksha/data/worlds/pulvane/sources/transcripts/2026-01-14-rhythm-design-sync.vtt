@@ -1,0 +1,70 @@
+WEBVTT
+
+NOTE
+SYNTHETIC FIXTURE. Invented for testing the agents; not a real company, person, product, meeting or recording.
+
+NOTE
+Pulvane rhythm design sync, recorded Wednesday 14 January 2026, 10:02 UTC
+Project: ENG-104, motion-gated irregular-rhythm screening on the Pulvane Ring
+Speakers: Lena Halvorsen (founder, Pulvane), Rafael Domingo (firmware lead, Pulvane), Yuki Tanabe (signal-processing engineer, Pulvane), Dr. Ines Marwood (guest; cardiologist, Wrenfield District Hospital)
+Transcribed automatically and lightly corrected by Yuki Tanabe.
+
+1
+00:00:04.000 --> 00:00:11.500
+<v Lena Halvorsen>Okay, it's recording. This is the sync on ENG-104, the irregular rhythm check for the ring.
+
+2
+00:00:11.500 --> 00:00:24.000
+<v Lena Halvorsen>The problem is simple. The ring raises rhythm notices when people are just moving their hands, and the testers stop trusting it after the second false one.
+
+3
+00:00:24.000 --> 00:00:41.200
+<v Rafael Domingo>So the first step is a gate. Firmware only uses a window if it is still: we only accept a 30-second pulse window when the accelerometer motion stays below 0.05 g RMS for the whole window. Anything above that, we throw the window away.
+
+4
+00:00:41.200 --> 00:00:58.000
+<v Yuki Tanabe>Then in an accepted window we mark it irregular when the normalised RMSSD of the beat-to-beat intervals is above 0.10. That is the root mean square of successive differences divided by the mean interval.
+
+5
+00:00:58.000 --> 00:01:09.400
+<v Yuki Tanabe>And we only raise a rhythm notice when three of the last five accepted windows are irregular. One bad window on its own never reaches the wearer.
+
+6
+00:01:09.400 --> 00:01:16.000
+<v Lena Halvorsen>We tried it the other way first, didn't we?
+
+7
+00:01:16.000 --> 00:01:34.800
+<v Rafael Domingo>Yes. The first build checked every beat continuously, with no motion gate. We dropped it because walking set off false notices for 9 of the 12 people in the December pilot.
+
+8
+00:01:34.800 --> 00:01:58.300
+<v Ines Marwood>Can I suggest something? Before you show anyone a notice, ask them to sit still for one minute with the hand resting at chest height, and only show the notice if that minute is irregular as well. That is roughly what we do on the ward before we trust a reading.
+
+9
+00:01:58.300 --> 00:02:16.000
+<v Rafael Domingo>That's good. So step four: before the notice, a guided 60-second still recording with the hand at chest height, and the notice only shows if that recording is irregular too.
+
+10
+00:02:16.000 --> 00:02:27.500
+<v Lena Halvorsen>Ines, I should say for the record that you are here as a guest. We have not signed anything with you for this.
+
+11
+00:02:27.500 --> 00:02:39.000
+<v Ines Marwood>My hospital has a policy on anything I help invent, so you would need to talk to their technology office.
+
+12
+00:02:39.000 --> 00:02:55.600
+<v Yuki Tanabe>Where it stands: steps one to three are in firmware 2.3 and were bench tested on 30 volunteers in the lab. Step four goes into firmware 2.4 next sprint.
+
+13
+00:02:55.600 --> 00:03:12.000
+<v Yuki Tanabe>Recap for the notes: window length 30 seconds, motion limit 0.05 g RMS, irregularity cut-off 0.10 normalised RMSSD, three of five windows, still recording 60 seconds.
+
+14
+00:03:12.000 --> 00:03:26.400
+<v Lena Halvorsen>One thing before we stop: nobody has written down why it's three of five and not two of four. Can that stay open until someone writes it up?
+
+15
+00:03:26.400 --> 00:03:30.000
+<v Yuki Tanabe>Yes, leave it open.

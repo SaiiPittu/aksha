@@ -1,0 +1,12 @@
+# The patent agent on the pulvane world: a medical-device venture (a ring that flags an
+# irregular heart rhythm) written as a held-out world. Its author read only the world and
+# suite formats, never the agent code or its offline models, so a pass here is evidence
+# that nothing specific to the earlier worlds leaked into the agent's definition or the
+# harness runtime. Its inputs take shapes no other world uses: a WebVTT meeting transcript,
+# an automatic call transcript, a plain-text slide export whose speaker notes carry facts,
+# a YAML contributor export, a key-value sharing register, the venture's own regulatory
+# summary, OKRs, a numbered questionnaire, and every publication inside one search export.
+[suite]
+name = "pulvane"
+description = "The patent agent on a held-out medical-device world, authored without reading the agent"
+k = 1

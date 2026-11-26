@@ -1,0 +1,109 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: pulvane
+synthetic: true
+notice: >-
+  Author-side truth for a fourth synthetic world, written for the patent agent only and held
+  out from its code: a medical-device venture whose inputs take shapes none of the other
+  worlds use. It tests that nothing specific to the earlier worlds leaked into the agent's
+  definition or the harness runtime. No tool reads this file, and no agent module names
+  anything in it.
+frozen_today: '2026-11-26'
+date_convention: >-
+  Prose dates as people write or say them (Wednesday 14 January 2026, 18 June 2026), a
+  US-style date in an automatic call transcript (04/22/2026), ISO 8601 in the search export
+  and the contributor export, and one register block with an empty Date line.
+identifier_schemes:
+  publication: SYN-PUB-03\d{2}
+  priority: SYN-PRI-YYYY-MMDD
+  person: SYN-P-4\d
+  event: SYN-EV-3\d
+  office: SYN-Office-[45]
+  regulator_record: SYN-REG-\d{4}
+  invention: ENG-\d{3}
+shape_note: >-
+  Patent-side inputs only (no competitor pages, no reviews), each in a shape no earlier world
+  uses. Invention candidates are a WebVTT meeting transcript (numbered cues, timestamps,
+  voice tags naming the speaker, a NOTE header with the date and the attendee list, the
+  settings read out as one spoken recap), an automatic call transcript in plain text
+  ([hh:mm:ss] Speaker N lines with a legend, a US-style date), and a plain-text slide export
+  with "--- page N ---" separators, lettered steps, a pipe-aligned settings block and
+  "[speaker notes]" sections that carry facts the slides do not. Contributors are a YAML
+  export with a nested credited list per person. Disclosures are a plain-text register of
+  key-value blocks, one with an empty Date line. The venture's own regulatory device summary,
+  published by a regulator, sits in its own folder. Priorities are OKRs in Markdown
+  (objective headings, an "Idea:" line). The only form is a numbered questionnaire with
+  [required] and [attorney completes] markers. All five publications are records inside one
+  search-export JSON (hits[].record with ids, timeline events carrying the priority number,
+  text.abstract, text.claims as strings, legal[].says), one of them a continuation named in
+  a relation field.
+venture:
+  name: Pulvane
+  domain: pulvane.example
+  product: Pulvane Ring
+  summary: >-
+    A finger-worn ring with an optical pulse (PPG, photoplethysmography) sensor and an
+    accelerometer that notifies the wearer of pulse patterns suggestive of an irregular heart
+    rhythm (arrhythmia), for follow-up with a clinician.
+  stage: clearance application filed with a regulator; beta wearers
+people:
+- {id: SYN-P-41, name: Lena Halvorsen, employer: Pulvane, role: founder and CEO}
+- {id: SYN-P-42, name: Rafael Domingo, employer: Pulvane, role: firmware lead}
+- {id: SYN-P-43, name: Yuki Tanabe, employer: Pulvane, role: signal-processing engineer}
+- {id: SYN-P-44, name: Nikhil Barua, employer: Pulvane, role: optics engineer}
+- {id: SYN-P-45, name: Dr. Ines Marwood, employer: Wrenfield District Hospital, role: honorary clinical advisor, outside: true}
+candidates:
+  ENG-104:
+    name: motion-gated irregular-rhythm screening with a guided still re-check
+    note: transcripts/2026-01-14-rhythm-design-sync.vtt
+    conceived: '2026-01-14'
+    status: steps S1 to S3 built in firmware 2.3 and bench tested on 30 volunteers; S4 next sprint
+    elements:
+      S1: accept a 30 s pulse window only when accelerometer motion stays below 0.05 g RMS
+      S2: mark an accepted window irregular when normalised RMSSD exceeds 0.10
+      S3: raise a notice only when 3 of the last 5 accepted windows are irregular
+      S4: before the notice, a guided 60 s still recording with the hand at chest height; notice only if it is irregular too
+    parameters: {window: 30 s, motion_limit: 0.05 g RMS, cutoff: 0.10, rule: 3 of 5, still_recording: 60 s}
+    rejected: continuous beat-by-beat checking with no motion gate (9 of 12 pilot wearers had false notices while walking)
+    deliberate_gap: why three of five and not two of four is in no source
+    outside_contributor: SYN-P-45 proposed S4 in the meeting as a guest; the contributor export says "no design input"; no agreement signed; her hospital's IP policy may apply
+  ENG-117:
+    name: perfusion-adaptive LED drive with an infrared fallback
+    note: decks/optics-review-2026-q2.txt
+    conceived: '2026-06-09'
+    status: prototype firmware on two bench rings
+    elements:
+      S1: perfusion index on the green channel every 10 s
+      S2: below 0.4% for 3 readings, step the green LED current up 1 mA at a time to a cap
+      S3: signal quality index still below 0.6 at the cap, switch beat detection to infrared
+    parameter_conflict: the settings slide says an 8 mA cap; its speaker notes say 6 mA was agreed on 2 June and the slide was not updated
+    deliberate_gap: skin-tone-bench-v3.csv is named in the speaker notes but is not in the world
+  ENG-123:
+    name: personal night-time rhythm baseline
+    note: transcripts/2026-04-22-night-baseline-call.txt
+    conceived: '2026-04-22'
+    status: whiteboard only
+    elements:
+      S1: during sleep (no motion 20 min, heart rate within 10% of the nightly minimum), a 60 s window every 15 min
+      S2: a personal irregularity baseline over 14 nights
+      S3: flag a night more than 3 standard deviations above the baseline
+families:
+  A: {priority: SYN-PRI-2019-0927, members: [SYN-PUB-0301, SYN-PUB-0302], applicant: Orrinth Medical (synthetic), note: the B1 grant is narrower (wrist-worn, a fixed 0.1 g limit); statuses In force vs Lapsed}
+  B: {priority: SYN-PRI-2021-0614, members: [SYN-PUB-0303], applicant: Vestry Biosignals (synthetic), note: an ECG confirmation after two episodes in 48 hours; partial for ENG-104 S3 and S4}
+  C: {priority: SYN-PRI-2020-1102, members: [SYN-PUB-0304, SYN-PUB-0305], applicant: Quillon Health (synthetic), note: SYN-PUB-0305 is a continuation that alone discloses the standard-deviation flag}
+disclosures:
+  SYN-EV-31: {idea: ENG-104, date: '2026-06-18', public: true, what: the venture's own device summary published by SYN-Regulator, showing S1 and S3}
+  SYN-EV-32: {idea: ENG-117, date: null, public: false, what: the optics deck to a contract manufacturer under NDA}
+  SYN-EV-33: {idea: ENG-123, date: '2026-05-02', public: false, what: an internal hack-day whiteboard}
+priorities: {ENG-104: 1, ENG-123: 2, ENG-117: 3}
+recommendations:
+  ENG-104: prioritize_counsel_review
+  ENG-117: collect_more_evidence
+  ENG-123: deprioritize_for_now
+traps:
+- T-CONSULT, an outside clinician proposes S4 out loud in the design meeting itself, as a guest with no agreement and a hospital IP policy, while the contributor export credits her with "no design input" (inventorship and ownership go to counsel)
+- T-GRACE, the venture's own disclosure arrives through a regulator's public database, authored by the venture but published by a third party; it is the venture's own disclosure for counsel, not third-party prior art
+- T-MISSING, a bench data file named only in a slide's speaker notes is not in the world
+- T-STATUS, a granted family member's front page says In force while the register says Lapsed; both kept verbatim, and the lapse does not change what the publication discloses
+- T-GAP, the 3-of-5 rationale is raised as an open point in the transcript; asked, not filled
+- T-UNDATED, the register block for the optics deck has an empty Date line; date kept null for counsel
+- T-PARAMCONFLICT, the slide's 8 mA cap against its speaker notes' 6 mA; both kept, neither picked (no deterministic check; judge material)

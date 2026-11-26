@@ -1,0 +1,25 @@
+SYNTHETIC FIXTURE. Invented for testing the agents; not real events.
+PULVANE EXTERNAL SHARING REGISTER
+Maintained by Lena Halvorsen. One block per time an idea, or its details, left the company.
+
+Event: SYN-EV-31
+Idea: ENG-104
+Date: 18 June 2026
+Channel: SYN-Regulator public device database
+What left: Our own device summary for the Pulvane Ring, filed with our clearance application, describing the 0.05 g motion gate and the three-of-five notice rule. The regulator published it on its public database on this date.
+Public: yes
+Document: regulatory/SYN-REG-0042-device-summary.txt
+
+Event: SYN-EV-32
+Idea: ENG-117
+Date:
+Channel: contract manufacturer, under NDA-2026-07 (synthetic)
+What left: The optics review deck, including the LED current settings
+Public: no
+
+Event: SYN-EV-33
+Idea: ENG-123
+Date: 2 May 2026
+Channel: internal hack day, staff only
+What left: Whiteboard photo of the night-time baseline
+Public: no

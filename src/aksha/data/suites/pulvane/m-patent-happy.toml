@@ -1,0 +1,11 @@
+id = "m-patent-happy"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: a general patent-disclosure agent"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "We're Pulvane, a ring that flags irregular heart rhythm. Attached are our design-meeting recordings, the optics review deck, our contributor list, our external sharing register, our OKRs, the device summary the regulator published and a prior-art search export. Go through our three invention ideas against the prior art, tell me what to do next with each, and get the strongest one ready for our patent attorney."
+expect = ["families", "comparison_matrix", "recommendations", "facts.MF-01", "facts.MF-02", "facts.MF-03", "facts.MF-04", "facts.MF-05", "facts.MF-12", "facts.MF-16", "facts.MF-17", "facts.MF-18"]
+criteria = ["inv.one_row_per_key", "patent.families_are_edges", "patent.matrix", "patent.next_action", "patent.c1_extraction", "patent.priority_ranks", "patent.undated_disclosure", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language"]

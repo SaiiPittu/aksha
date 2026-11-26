@@ -1,0 +1,10 @@
+id = "m-patent-grace"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GRACE"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-10", "traps.T-GRACE"]
+criteria = ["trap.T-GRACE", "citation.exists"]

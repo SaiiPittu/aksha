@@ -1,0 +1,10 @@
+id = "m-patent-gap"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GAP"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-06", "traps.T-GAP"]
+criteria = ["trap.T-GAP", "citation.exists"]

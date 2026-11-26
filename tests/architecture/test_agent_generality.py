@@ -8,6 +8,7 @@ file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``ci
 other module imports them. Each guard fails on a planted value.
 file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``cindral`` or ``kelasora``. Only the
 file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``cindral`` or ``vantlow``. Only the
+file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew``, ``cindral`` or ``pulvane``. Only the
 offline models (``fakes.py``, ``fakes_*.py``) may know a fixture, and no other module
 imports them. Each guard fails on a planted value.
 """
@@ -39,6 +40,8 @@ FIXTURE_TERMS = (
     "Ratna Wulandari",
     "Vantlow", "Siltgrove", "Ferrowind", "Brackpond", "Quarnel", "Emberwick", "Builder Shed",
     "Open Ingest Bench", "SYN-FP",
+    "Pulvane", "Orrinth", "Vestry", "Quillon", "Wrenfield", "Ines Marwood", "Lena Halvorsen",
+    "Rafael Domingo", "Yuki Tanabe", "Nikhil Barua",
     # candidate, element and family identifiers
     "C1", "C2", "C3", "C4", "TD-1", "TD-2", "TD-3", "F1", "F3", "P-05", "SYN-P-03",
     "SYN-PUB", "SYN-PRI", "SYN-Office", "CA-2025-11",
@@ -49,6 +52,8 @@ FIXTURE_TERMS = (
     "price-comparison", "travel-times-2026", "feedback-export", "counsel-intake",
     "vendor-landscape-memo", "vendor-shortlist", "review-hub-export", "SYN-RV", "SYN-CAL",
     "ulasan-platform", "tutorgrid-plans", "pintaria-sales-chat", "edtech-weekly",
+    "ENG-104", "ENG-117", "ENG-123", "skin-tone-bench", "sharing-register",
+    "attorney-questionnaire", "SYN-REG",
     # the stillroom market's own words
     "thermopile", "occupancy", "stillness", "door contact", "works council",
 )  # fmt: skip

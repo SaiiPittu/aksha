@@ -1,0 +1,20 @@
+SYNTHETIC FIXTURE - text of a public device summary. Invented for testing the agents; not a real regulator, company, device or record.
+
+SYN-Regulator public device database
+Record: SYN-REG-0042
+Device: Pulvane Ring, optical pulse wearable with irregular-rhythm notification
+Submitted by: Pulvane (synthetic), pulvane.example
+Published on the public database: 18 June 2026
+
+Device description
+The Pulvane Ring is a finger-worn optical pulse sensor. It uses a pulse window for rhythm
+analysis only when accelerometer motion stays below 0.05 g RMS for the whole window. An
+accepted window is classed as irregular from the variability of its beat-to-beat intervals.
+The ring shows an irregular-rhythm notification only when three of the last five accepted
+windows are irregular.
+
+Intended use
+To notify adult wearers of pulse patterns suggestive of an irregular rhythm, for follow-up
+with a clinician. Not intended to diagnose.
+
+This record is synthetic and exists only to test software.

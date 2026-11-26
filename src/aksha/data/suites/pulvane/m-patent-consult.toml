@@ -1,0 +1,10 @@
+id = "m-patent-consult"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CONSULT"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-07", "traps.T-CONSULT"]
+criteria = ["trap.T-CONSULT", "citation.exists"]

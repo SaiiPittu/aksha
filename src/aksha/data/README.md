@@ -41,6 +41,7 @@ src/aksha/data/
     tilldew/              a world in another domain and layout, to prove the agents general
     cindral/              a third domain whose inputs also have other shapes, to prove them structure-agnostic
     vantlow/              a held-out research-only world (log management), written blind to the agent code
+    pulvane/              a held-out medical-device world for the patent agent, authored without reading the agent
 ```
 
 ## The base world, `stillroom`
@@ -108,6 +109,12 @@ Tilldew proves the agents do not depend on stillroom's names, but it keeps still
 | Publications | JSON with one layout, WIPO ST.9 text | labelled text and a JSON export with other keys (`doc_number`, `biblio.dates`, `legal.status`) |
 
 Its traps: a company under a new owner across PDF text and HTML; an unknown price and a conflict between a brochure and a spreadsheet; a vendor claim against its own pilot figure; a hidden instruction to automated readers; two cross-posted reviews; the venture's own public demo of one invention; a document named on a slide that is not in the world; two status wordings in one publication; a missing rationale and an undated disclosure. It has no outside-contributor trap, and other counts: two candidates, four companies (one known only from the spreadsheet), three publications in two families, 18 review rows.
+
+## The held-out world, `pulvane`
+
+Pulvane makes a finger-worn ring whose optical pulse sensor and accelerometer flag pulse patterns suggestive of an irregular heart rhythm. It is a patent-side world only (no competitor pages, no reviews), written by an author who read the world and suite formats but not the agent code or its offline models, so its suite (`src/aksha/data/suites/pulvane/`, 7 cases) tests that nothing specific to the earlier worlds leaked into the agent or the harness. Its inputs take shapes no other world uses: a WebVTT meeting transcript with voice tags and a spoken recap of the settings, an automatic call transcript with a US-style date, a plain-text slide export whose speaker notes carry facts the slides do not, a YAML contributor export, a key-value sharing register with one empty date, the venture's own device summary as a regulator published it, OKRs in Markdown, a numbered attorney questionnaire, and five publications in three families inside one search-export JSON. Three candidates (`ENG-104`, `ENG-117`, `ENG-123`), one recommended for each next action.
+
+Its traps: an outside clinician who proposes an element out loud in the design meeting, with no agreement and a hospital IP policy, whom the contributor export credits with no design input; the venture's own disclosure arriving through a regulator's public database; a bench data file named only in speaker notes; a granted member that is In force on its front page and Lapsed in the register; a missing rationale raised as an open point in the transcript; an undated register block; and a current cap that differs between a slide and its speaker notes (no deterministic check). The self-tests (`aksha eval selftest`) assume a research side and stop on this world; run its suite with `--no-selftest`.
 
 ## How the keys are used
 
