@@ -6,7 +6,8 @@ file) and send it the command; with no server answering they run embedded: the c
 opens the store as the writer for its one invocation (exit code 8 when another process
 holds the lock), dispatches the command, drives the owner's runs until they yield, and exits. Read
 commands (``status``, ``inspect``, ``verify``, ``trace``) open a read-only handle and work
-beside a server.
+beside a server. ``aksha erase <subject> --reason <text>`` (ADR-P30) opens the store as the
+writer for its one call, so it exits 8 while a server holds the lock.
 
 ``aksha run --input PATH`` (repeatable: a folder, or files) first uploads those files to
 the owner's inputs (``UploadInputs``), then sends the message; ``aksha upload PATH`` uploads
@@ -43,6 +44,7 @@ from aksha import data
 from aksha.app import (
     RuntimeConfig,
     data_home,
+    erase_subject,
     export_trace,
     mock_system_notes,
     open_blob_store,
@@ -55,6 +57,7 @@ from aksha.interfaces.cli import evals
 from aksha.interfaces.cli.client import Client, ServerError, find_server
 from aksha.interfaces.cli.pending import PENDING_FILE, PendingIds, invocation_key
 from aksha.runtime.definitions.errors import LoadError
+from aksha.runtime.erasure.types import ErasureError
 from aksha.runtime.errors import AkshaError
 from aksha.runtime.inputs.reducers import queued_inputs
 from aksha.runtime.interrupts.reducers import approvals, interrupts
@@ -644,6 +647,21 @@ def cmd_verify(ctx: Context, args: argparse.Namespace) -> int:
     return wire.EXIT_CHAIN_BROKEN
 
 
+def cmd_erase(ctx: Context, args: argparse.Namespace) -> int:
+    """Erase one subject's personal values for the owner, as the writer (ADR-P30 E4, E9)."""
+    receipt = erase_subject(ctx.config, ctx.owner, args.subject, reason=args.reason)
+    if receipt.seq is None:
+        ctx.say(f"nothing to erase for {receipt.subject} ({receipt.owner})")
+        return wire.EXIT_OK
+    count = len(receipt.refs)
+    noun = "value" if count == 1 else "values"
+    ctx.say(
+        f"erased {count} {noun} of {receipt.subject} for {receipt.owner} at seq {receipt.seq};"
+        " aksha verify checks the chain"
+    )
+    return wire.EXIT_OK
+
+
 def cmd_trace(ctx: Context, args: argparse.Namespace) -> int:
     """Export a run's trace as OTLP JSON Lines, one file per segment (ADR-P21 D8)."""
     store = open_reader(ctx.config)
@@ -869,6 +887,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(handler=cmd_verify)
 
     s = sub.add_parser(
+        "erase", help="erase a subject's personal values (needs the writer lock; not undoable)"
+    )
+    s.add_argument("subject", help="the opaque subject id the values were sealed under")
+    s.add_argument("--reason", required=True, help="kept in the record; must not name the person")
+    s.set_defaults(handler=cmd_erase)
+
+    s = sub.add_parser(
         "trace", help="export a run's trace as OTLP JSON (needs aksha-harness[otel])"
     )
     s.add_argument("run")
@@ -911,6 +936,9 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
     except LockHeld as e:
         ctx.say(f"locked: {e.message}; a server or another command is the writer")
         return wire.EXIT_ENVIRONMENT
+    except ErasureError as e:
+        ctx.say(f"refused: {e.code}: {e.message}")
+        return wire.EXIT_REFUSED
     except (StoreError, LoadError, BindRefused) as e:
         ctx.say(f"environment: {e.code}: {e.message}")
         return wire.EXIT_ENVIRONMENT

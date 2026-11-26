@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from typing import Protocol
 
+from aksha.runtime.erasure.types import ErasureReceipt
 from aksha.runtime.events.catalogue import Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.storage.chain import Anchor, ChainBreak, StoreIdentity
@@ -166,9 +167,22 @@ class EventStore(Protocol):
 
         Recomputes every hash, checks each ``prev_hash`` and that seq has no gaps, checks
         each artifact row against its ``artifact.saved`` event's ``content_hash`` (H6),
-        then checks each anchor (:func:`aksha.runtime.storage.chain.verify_chain`). A row
-        the adapter cannot decode is reported (``not_canonical``), never raised. Works on a
-        reader. Operator use only, like ``owners_with_open_runs``; never per owner.
+        then holds the ``erasables`` side table to the chain's placeholders and erasures
+        (ADR-P30 E6), then checks each anchor
+        (:func:`aksha.runtime.storage.chain.verify_chain`). A row the adapter cannot decode
+        is reported (``not_canonical``), never raised. Works on a reader. Operator use only,
+        like ``owners_with_open_runs``; never per owner.
+        """
+        ...
+
+    def erase(self, owner: str, subject: str, *, reason: str) -> ErasureReceipt:
+        """Delete the owner's personal values about ``subject`` and record it (ADR-P30 E4).
+
+        The erasure hook (:class:`aksha.runtime.erasure.ports.Eraser`): one transaction
+        deletes the subject's ``erasables`` rows and appends ``erasure.performed`` naming
+        their refs, so :meth:`verify` still passes after it and readers see each value's
+        redacted stand-in. Writer only (``NotWriter``). Nothing left to erase records
+        nothing and returns ``refs == ()``.
         """
         ...
 

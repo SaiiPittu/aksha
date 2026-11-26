@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 from aksha.runtime.canonical import NotCanonical, canonical_bytes, sha256_ref
+from aksha.runtime.erasure.types import StoredValue, UnreadableValue
+from aksha.runtime.erasure.verify import ErasureLedger
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.storage.errors import StoreError
 from aksha.runtime.storage.rows import StoredArtifact
@@ -36,6 +38,8 @@ ChainReason = Literal[
     "truncated",
     "not_canonical",
     "artifact_mismatch",
+    "erasable_mismatch",
+    "erasable_missing",
 ]
 
 
@@ -203,6 +207,7 @@ def verify_chain(
     links: Iterable[ChainLink | UnreadableLink],
     anchors: Sequence[Anchor] = (),
     artifacts: Iterable[StoredArtifact | UnreadableArtifact] = (),
+    erasables: Iterable[StoredValue | UnreadableValue] = (),
 ) -> ChainBreak | None:
     """Walk ``links`` in seq order from the genesis; return the first break, or None.
 
@@ -213,7 +218,10 @@ def verify_chain(
     encoded). Then every artifact row saved by that event must match the event's
     ``ref``, ``kind``, ``key``, ``version`` and ``content_hash``, and its content must
     hash to that ``content_hash``, and an ``artifact.saved`` event with no row is a break
-    too (``artifact_mismatch``, H6). Then each anchor, oldest
+    too (``artifact_mismatch``, H6). Then the ``erasables`` side table is held to the
+    placeholders and erasures on the chain (``erasable_mismatch``, ``erasable_missing``;
+    :mod:`aksha.runtime.erasure.verify`), so an erased value verifies and a value
+    deleted, edited or kept without its erasure does not. Then each anchor, oldest
     first: an anchored seq past the head is ``truncated``, and a stored hash that differs
     is ``anchor_mismatch``. Without anchors a truncated tail, or a tail re-hashed by
     someone with write access, still verifies. An anchor of another store, or with a
@@ -235,12 +243,14 @@ def verify_chain(
         saved_by.setdefault(artifact.event_seq, []).append(artifact)
     anchored = {a.seq for a in anchors}
     hashes: dict[int, str] = {0: identity.genesis_hash}
+    ledger = ErasureLedger()
     seq, prev = 0, identity.genesis_hash
     for link in links:
         found = _link_break(link, seq + 1, prev)
         if found is not None:
             return _earliest(found, saved_by)
         assert isinstance(link, ChainLink)  # an unreadable link is always a break
+        ledger.see(link.event)
         rows = saved_by.pop(link.event.seq, ())
         for artifact in rows:
             found = _artifact_break(link.event, artifact)
@@ -260,6 +270,12 @@ def verify_chain(
     if saved_by:  # rows pointing past the head, or at a seq the walk never reached
         orphan = min(saved_by)
         return ChainBreak(orphan, "artifact_mismatch", None, "no event at this seq")
+    erasure = ledger.check(erasables)
+    if erasure is not None:
+        reason: ChainReason = (
+            "erasable_missing" if erasure.reason == "erasable_missing" else "erasable_mismatch"
+        )
+        return ChainBreak(erasure.seq, reason, erasure.expected, erasure.found)
     for anchor in sorted(anchors, key=lambda a: a.seq):
         if anchor.seq > seq:
             return ChainBreak(anchor.seq, "truncated", anchor.hash, None)

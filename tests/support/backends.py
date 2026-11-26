@@ -17,7 +17,7 @@ from aksha.runtime.events.catalogue import Catalogue
 from aksha.runtime.execution.ports import Clock
 from aksha.runtime.storage.ports import EventStore
 
-TAMPERED_TABLES = ("events", "artifacts", "store_meta")
+TAMPERED_TABLES = ("events", "artifacts", "store_meta", "erasables")
 """The tables :meth:`Backend.tamper` opens to edits."""
 
 
@@ -42,7 +42,8 @@ class Backend(ABC):
     def tamper(self, *sql: str) -> None:
         """Past the adapter, turn off the append-only triggers and run ``sql``.
 
-        The triggers on ``events``, ``artifacts`` and ``store_meta`` are turned off.
+        The triggers on ``events``, ``artifacts``, ``store_meta`` and ``erasables`` are
+        turned off.
 
         This is what someone with direct database access can do; the chain tests use it to
         show that ``verify()`` finds the change.
@@ -151,6 +152,7 @@ class PostgresBackend(Backend):
         "TRUNCATE events CASCADE",
         "TRUNCATE artifacts",
         "TRUNCATE boots",
+        "TRUNCATE erasables",
     )
 
     def __init__(self, dsn: str) -> None:

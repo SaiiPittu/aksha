@@ -12,11 +12,14 @@ from __future__ import annotations
 
 from aksha.runtime.storage.errors import StoreError
 
-SCHEMA_VERSION = 2
-"""The shape of the ``events``, ``artifacts``, ``boots``, ``meta`` and ``store_meta`` tables.
+SCHEMA_VERSION = 3
+"""The shape of the store tables: ``events``, ``artifacts``, ``erasables``, ``boots``, ``meta``,
+``store_meta``.
 
 Version 2 (25 Nov 2026) is the hash chain (ADR-P01 Amendment H): ``prev_hash`` and
 ``hash`` on every event, ``seq`` assigned by the writer, and the one-row ``store_meta``.
+Version 3 (26 Nov 2026) adds the ``erasables`` side table (ADR-P30 E1), the one table
+rows may leave, and only by ``EventStore.erase``.
 """
 
 

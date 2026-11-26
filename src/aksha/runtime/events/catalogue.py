@@ -1573,6 +1573,30 @@ INTERRUPT_AMENDED = EventTypeSpec(
     writer="interrupts",
     boundaries=frozenset({"U4"}),
 )
+# --- P30: erasure in an append-only store -----------------------------------------------
+
+ERASURE_PERFORMED = EventTypeSpec(
+    name="erasure.performed",
+    schema={
+        "type": "object",
+        "properties": {
+            # E3: an opaque subject id, never a name; it stays in the record.
+            "subject": {"type": "string", "minLength": 1, "maxLength": 200},
+            "refs": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^er_[0-9a-f]{32}$"},
+                "minItems": 1,
+                "uniqueItems": True,
+            },
+            "reason": {"type": "string", "minLength": 1, "maxLength": 200},
+        },
+        "required": ["subject", "refs", "reason"],
+        "additionalProperties": False,
+    },
+    writer="erasure",
+    boundaries=frozenset({"U12"}),
+)
+
 
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
@@ -1628,6 +1652,7 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     INPUT_QUEUED,
     INPUT_CONSUMED,
     INTERRUPT_AMENDED,
+    ERASURE_PERFORMED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

@@ -180,5 +180,6 @@ EVENT_MAP: Mapping[str, tuple[Role, str]] = {
     "input.queued": ("span_event", "aksha.input.queued"),
     "input.consumed": ("span_event", "aksha.input.consumed"),
     "interrupt.amended": ("span_event", "aksha.interrupt.amended"),
+    "erasure.performed": ("span_event", "aksha.erasure.performed"),  # no run: in no trace
 }
 """Every core event type and what it becomes in the trace (D9)."""
