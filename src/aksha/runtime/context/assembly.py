@@ -10,13 +10,17 @@ The order keeps the stable prefix first, so a provider's prefix cache stays warm
 
 1. ``system``: the agent's instructions; each stop-policy brief, outer to inner; the
    fixed data rule.
-2. ``user``: the read block (declared reads, rendered or by ref); the rebuild brief of a
-   rebuild run; the request with the Task brief and the person's answers (never reduced);
-   the recorded summary that stands for older turns.
-3. The instance's own turns: each reply, then each tool result, masked by the plan.
-4. ``user``: the change notice (decision 32), the recitation (only once something is
+2. ``user``: the read block (declared reads, rendered or by ref); the rebuild summary
+   of a fresh re-entry; the request with the Task brief and the person's answers (never
+   reduced).
+3. A resumed re-entry's session (decision 36): each segment's recorded summary and
+   turns, masked by the plan, then the re-entry notice (``reentry.reentry_notice``).
+4. The recorded summary that stands for the entry's older turns, then the instance's own
+   turns since its entry: each reply, then each tool result, masked by the plan. A fresh
+   re-entry shows none of the turns before it.
+5. ``user``: the change notice (decision 32), the recitation (only once something is
    masked) and the reason the runtime refused the last finish.
-5. The tools the stop policies left (``Prep.tools``), and the ``tool_choice`` hint.
+6. The tools the stop policies left (``Prep.tools``), and the ``tool_choice`` hint.
 
 Over ``context_limit_chars`` nothing is sent: :class:`ContextOverLimit` is returned, and
 the loop ends the turn ``context_overflow`` for stop-policy evaluation to judge. Each
@@ -32,16 +36,25 @@ from dataclasses import dataclass
 from aksha.runtime.artifacts.lineage import reads_to_record
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef
-from aksha.runtime.context.masking import arguments_stub, plan_masking, render_stub, stale_reads
+from aksha.runtime.context.masking import plan_masking, stale_reads, turn_messages
 from aksha.runtime.context.notices import (
     answers,
     change_notice,
     continue_reason,
+    rebuild_at_entry,
     rebuild_brief_for,
     rebuild_notice,
     recite,
 )
 from aksha.runtime.context.reads import RenderedReads, render_reads
+from aksha.runtime.context.reentry import (
+    ReentryChoice,
+    SessionBlock,
+    entry_event,
+    recorded_choice,
+    reentry_notice,
+    session_blocks,
+)
 from aksha.runtime.context.summary import latest_compaction, summary_message
 from aksha.runtime.context.turns import as_of, instance_turns
 from aksha.runtime.context.types import (
@@ -52,6 +65,7 @@ from aksha.runtime.context.types import (
     ContextOverLimit,
     ContextPolicy,
     Masked,
+    Segment,
     StaleRead,
     Turn,
 )
@@ -59,7 +73,7 @@ from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.spans import span_index, spans_shown
 from aksha.runtime.invalidation.view import ReadChecker
-from aksha.runtime.models.types import GenerationRequest, Message, ToolCall
+from aksha.runtime.models.types import GenerationRequest, Message
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.types import Prep
 from aksha.runtime.tasks.tree import CompiledTree
@@ -80,6 +94,8 @@ class _Parts:
     """Everything of one context that masking does not change."""
 
     head: tuple[Message, ...]
+    session: tuple[SessionBlock, ...]
+    notice: Message | None
     turns: tuple[Turn, ...]
     compaction: Compaction | None
     reads: RenderedReads
@@ -106,7 +122,9 @@ def _head(
         out.append(Message("user", reads.text))
     brief = rebuild_brief_for(view, instance, blobs=blobs)
     if brief is not None:
-        out.append(Message("user", rebuild_notice(brief, policy)))
+        choice = recorded_choice(view, instance)
+        added = () if choice is None else choice.new_reads
+        out.append(Message("user", rebuild_notice(brief, policy, added)))
     request = "\n\n".join(
         p for p in (inputs.request, inputs.brief and f"Task: {inputs.brief}") if p
     )
@@ -118,24 +136,9 @@ def _head(
     return tuple(out)
 
 
-def _turn_messages(turns: tuple[Turn, ...], masks: Mapping[str, Masked]) -> list[Message]:
-    out: list[Message] = []
-    for t in turns:
-        calls = []
-        for call, pair in zip(t.calls, t.pairs, strict=True):
-            m = masks.get(pair.step)
-            args = arguments_stub(m) if m is not None and m.arguments else call.arguments
-            calls.append(ToolCall(call.call_id, call.name, args))
-        out.append(Message("assistant", t.text, tuple(calls)))
-        for pair in t.pairs:
-            m = masks.get(pair.step)
-            out.append(Message("tool", render_stub(m) if m else pair.text, call_id=pair.call_id))
-    return out
-
-
 def _stale(
     view: LogView, instance: InstanceRef, masks: tuple[Masked, ...], turns: tuple[Turn, ...],
-    blobs: BlobStore | None,
+    blobs: BlobStore | None, session: tuple[Segment, ...],
 ) -> tuple[StaleRead, ...]:  # fmt: skip
     hidden = {m.step for m in masks if m.reason == "stale"}
     out: list[StaleRead] = []
@@ -143,7 +146,9 @@ def _stale(
     for t in turns:
         for p in t.pairs:
             if p.step in hidden:
-                out += stale_reads(view, instance.run, instance.instance, p, checker=checker)
+                out += stale_reads(
+                    view, instance.run, instance.instance, p, checker=checker, session=session
+                )
     return tuple(dict.fromkeys(out))
 
 
@@ -158,11 +163,20 @@ def _request(
     policy: ContextPolicy,
     blobs: BlobStore | None,
 ) -> tuple[GenerationRequest, tuple[StaleRead, ...], tuple[InputRef, ...]]:
+    by_step = {m.step: m for m in masks}
     messages = list(parts.head)
+    for block in parts.session:
+        if block.compaction is not None:
+            messages.append(summary_message(block.compaction))
+        messages += turn_messages(block.turns, by_step)
+    if parts.notice is not None:
+        messages.append(parts.notice)
     if parts.compaction is not None:
         messages.append(summary_message(parts.compaction))
-    messages += _turn_messages(parts.turns, {m.step: m for m in masks})
-    stale = _stale(view, instance, masks, parts.turns, blobs)
+    messages += turn_messages(parts.turns, by_step)
+    segments = tuple(b.segment for b in parts.session)
+    every = (*(t for b in parts.session for t in b.turns), *parts.turns)
+    stale = _stale(view, instance, masks, every, blobs, segments)
     notice_reads: tuple[InputRef, ...] = ()
     if stale:
         text, shown = change_notice(view, stale, policy, blobs=blobs)
@@ -193,18 +207,23 @@ def assemble_context(
     """Turn ``turn``'s request for ``instance`` (module doc). Pure: it reads only ``view``."""
     step = StepId(instance.run, instance.instance, turn=turn)
     v = as_of(view, step)
-    compaction = latest_compaction(v, instance.run, instance.instance)
-    covered = compaction.through_turn if compaction else 0
+    choice = recorded_choice(v, instance)
+    first = 1 if choice is None else choice.from_turn
+    compaction = latest_compaction(v, instance.run, instance.instance, since_turn=first)
+    covered = compaction.through_turn if compaction else first - 1
     turns = tuple(
         t
         for t in instance_turns(v, instance.run, instance.instance, blobs=blobs)
-        if covered < t.number < turn
+        if max(covered, first - 1) < t.number < turn
     )
+    session = _session(v, instance, choice)
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)
     reason = continue_reason(v, instance, turn)
     parts = _Parts(
         head=_head(v, instance, inputs, prep, policy, reads, blobs),
+        session=session,
+        notice=_notice(v, instance, choice, blobs) if session else None,
         turns=turns,
         compaction=compaction,
         reads=reads,
@@ -217,9 +236,10 @@ def assemble_context(
         built, _, _ = _request(step, alias, parts, masks, v, instance, inputs, policy, blobs)
         return measure(built)
 
+    shown = (*(t for b in session for t in b.turns), *turns)
     plan = plan_masking(
-        v, instance.run, instance.instance, turns, policy, sized, turn=turn, recovery=recovery,
-        blobs=blobs,
+        v, instance.run, instance.instance, shown, policy, sized, turn=turn, recovery=recovery,
+        blobs=blobs, session=tuple(b.segment for b in session),
     )  # fmt: skip
     request, stale, notice_reads = _request(
         step, alias, parts, plan.masked, v, instance, inputs, policy, blobs
@@ -234,6 +254,26 @@ def assemble_context(
         stale=stale,
         facts=_facts(v, instance, step, reads, notice_reads),
     )
+
+
+def _session(
+    view: LogView, instance: InstanceRef, choice: ReentryChoice | None
+) -> tuple[SessionBlock, ...]:
+    """A resumed entry's session as recorded on its ``task.entered`` (decision 36)."""
+    if choice is None or choice.mode != "resume":
+        return ()
+    return session_blocks(view, choice.session)
+
+
+def _notice(
+    view: LogView, instance: InstanceRef, choice: ReentryChoice | None, blobs: BlobStore | None
+) -> Message | None:
+    """The re-entry notice of a resumed entry, from the log as it stood at its entry."""
+    entry = entry_event(view, instance)
+    if choice is None or entry is None:
+        return None
+    state = rebuild_at_entry(view, entry, instance, blobs=blobs)
+    return Message("user", reentry_notice(state, choice, instance))
 
 
 def _facts(

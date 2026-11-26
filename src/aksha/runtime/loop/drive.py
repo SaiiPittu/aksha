@@ -190,7 +190,7 @@ def drive_rebuilds(
     for _ in range(max_runs):
         opened = open_rebuild_runs(
             setup.store, setup.owner, ids, definition_hashes=hashes, agents=(agent,),
-            sandbox=setup.sandbox,
+            sandbox=setup.sandbox, reentry=setup.reentry,
         )  # fmt: skip
         if not opened:
             return tuple(out)

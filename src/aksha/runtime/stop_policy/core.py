@@ -16,7 +16,8 @@ Task           one per Task instance on the stack. A leaf: entry (DONE when its 
                on a finish its completion check (DONE, a veto with the check's message, or
                FAIL at once for ``check_raised`` and ``child_blocked``). A parent takes no
                turns: it is DONE once its children settle and its check passes. A
-               supervisor follows the supervisor rule (ADR-P15 D7). Its limit fails the
+               supervisor follows the supervisor rule (ADR-P15 D7). A re-entry of a leaf
+               records its re-entry mode, resume or fresh (decision 36). Its limit fails the
                instance at the turn limit and at the stop-veto limit (the retry cap: the
                ``max_finish_vetoes``-th refused finish since entry is FAIL).
 interrupt      one per open interrupt, innermost: HOLD until a person closes it.
@@ -30,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aksha.runtime.budgets.limits import limit_reached, turns_used, vetoes_since_entry
+from aksha.runtime.context.reentry import choose_reentry
+from aksha.runtime.context.types import effective_policy
 from aksha.runtime.finalization.state import finalizing
 from aksha.runtime.interrupts.reducers import pending_interrupts
 from aksha.runtime.stop_policy import hold as holds
@@ -187,7 +190,12 @@ class TaskPolicy:
         status = state.status(ref)
         entering = c.kind == "enter" and status in ("new", "done", "blocked")
         if entering and ref in rebuild_targets(view.log, view.tree, ref.run):  # P05 D7, D8
-            facts = reentry(view.log, view.tree, ref.run, writer_of(view.tree, ref))
+            choice = None
+            if node.is_leaf:  # decision 36: the mode is chosen once, here, and recorded
+                policy = effective_policy(view.context_policy)
+                choice = choose_reentry(view.log, view.tree, ref, policy).as_json()
+            writer = writer_of(view.tree, ref)
+            facts = reentry(view.log, view.tree, ref.run, writer, choice=choice)
             if node.is_leaf:
                 return Verdict("continue", node.task.brief or "", facts=facts)
             return Verdict("pass", facts=facts)

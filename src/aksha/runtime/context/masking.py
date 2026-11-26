@@ -5,9 +5,10 @@ and the spans it minted; the call and its arguments stay, so a tool pair is neve
 The plan for a turn is a pure function of the log and the policy:
 
 1. **Stale** results are hidden first and always (decision 32): a result that read an
-   artifact version the invalidation view now reads as ``moved`` or ``gone`` for the
-   instance's run (ADR-P05 D4: the sibling rule and early cutoff apply, so another run's
-   version and an equal rebuild hide nothing), unless this instance saved the newer
+   artifact version, a source record or a query result the invalidation view now reads
+   as ``moved`` or ``gone`` for the instance's run (ADR-P05 D4: the sibling rule and
+   early cutoff apply, so another run's version and an equal rebuild hide nothing),
+   unless this instance (or the session it resumed, decision 36) saved the newer
    version itself. Its stub says the slot changed and that the current version is in the
    change notice at the end; the new content is never written into the old position.
 2. **Recorded** masks stay: every tool step an earlier turn's model step recorded under
@@ -21,7 +22,10 @@ The plan for a turn is a pure function of the log and the policy:
    one) and never an exempt tool's result.
 4. A superseded store call's arguments are stubbed as well (S2), naming the version it saved.
 
-With nothing hidden the context is byte for byte the one built with masking off.
+With nothing hidden the context is byte for byte the one built with masking off. A
+resumed context (decision 36) plans over its session's turns and its own together: the
+session's recorded masks stay hidden too, and a newer version the session saved counts
+as the instance's own.
 """
 
 from __future__ import annotations
@@ -39,6 +43,7 @@ from aksha.runtime.context.types import (
     Masked,
     MaskingPlan,
     MaskReason,
+    Segment,
     StaleRead,
     ToolPair,
     Turn,
@@ -46,7 +51,11 @@ from aksha.runtime.context.types import (
 from aksha.runtime.execution.errors import StepIdInvalid
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.invalidation.view import ReadChecker
+from aksha.runtime.models.types import Message, ToolCall
 from aksha.runtime.projections.view import LogView
+
+_SOURCE_KINDS = frozenset({"record", "query"})
+"""The non-artifact reads whose versions the invalidation view tracks (decision 36)."""
 
 Measure = Callable[[tuple[Masked, ...]], int]
 """The size of the context with these results hidden: assembly's own measure."""
@@ -75,12 +84,30 @@ def arguments_stub(m: Masked) -> dict[str, Any]:
     }
 
 
-def _prefix(run: str, instance: str) -> str:
-    return f"{run}/{instance}/"
+def turn_messages(turns: Iterable[Turn], masks: Mapping[str, Masked]) -> list[Message]:
+    """Each turn's reply, then each of its tool results, with hidden results stubbed."""
+    out: list[Message] = []
+    for t in turns:
+        calls = []
+        for call, pair in zip(t.calls, t.pairs, strict=True):
+            m = masks.get(pair.step)
+            args = arguments_stub(m) if m is not None and m.arguments else call.arguments
+            calls.append(ToolCall(call.call_id, call.name, args))
+        out.append(Message("assistant", t.text, tuple(calls)))
+        for pair in t.pairs:
+            m = masks.get(pair.step)
+            out.append(Message("tool", render_stub(m) if m else pair.text, call_id=pair.call_id))
+    return out
 
 
-def _by_me(step: str | None, run: str, instance: str) -> bool:
-    return step is not None and step.startswith(_prefix(run, instance))
+def _prefixes(run: str, instance: str, session: Iterable[Segment] = ()) -> tuple[str, ...]:
+    own = f"{run}/{instance}/"
+    return (own, *dict.fromkeys(f"{s.run}/{s.instance}/" for s in session if s.run != run
+                                or s.instance != instance))  # fmt: skip
+
+
+def _by_me(step: str | None, prefixes: tuple[str, ...]) -> bool:
+    return step is not None and step.startswith(prefixes)
 
 
 def stale_reads(
@@ -91,18 +118,28 @@ def stale_reads(
     *,
     blobs: BlobStore | None = None,
     checker: ReadChecker | None = None,
+    session: tuple[Segment, ...] = (),
 ) -> tuple[StaleRead, ...]:
-    """The artifact reads of ``pair`` that went out of date since (decision 32).
+    """The reads of ``pair`` that went out of date since (decision 32).
 
     Out of date is the invalidation view's answer for the instance's run (ADR-P05 D4,
-    S1): ``moved`` (a newer version of the run's line with other content) or ``gone``
-    (the version's writer was withdrawn). A newer version this instance saved itself is
-    not stale: it supersedes (rule 3). ``checker`` reuses one evaluation of the view
-    across a turn's pairs.
+    S1): ``moved`` (a newer version of the run's line with other content, or a source
+    record or query result at another version) or ``gone`` (the version's writer was
+    withdrawn, or the record left its source). A newer artifact version this instance,
+    or the ``session`` it resumed, saved itself is not stale: it supersedes (rule 3).
+    ``checker`` reuses one evaluation of the view across a turn's pairs.
     """
     check = checker or ReadChecker(view, blobs=blobs)
+    mine = _prefixes(run, instance, session)
     out: list[StaleRead] = []
     for read in pair.reads:
+        if read.kind in _SOURCE_KINDS:
+            status = check.status(run, read)
+            if status.state == "gone":
+                out.append(StaleRead(read, None))
+            elif status.state == "moved" and status.now is not None:
+                out.append(StaleRead(read, None, status.now))
+            continue
         if read.kind != "artifact":
             continue
         status = check.status(run, read)
@@ -112,14 +149,14 @@ def stale_reads(
         if status.state != "moved" or status.now is None:
             continue
         newer = check.version(status.now)
-        if newer is not None and _by_me(newer.step, run, instance):
+        if newer is not None and _by_me(newer.step, mine):
             continue
         out.append(StaleRead(read, ArtifactRef.parse(status.now)))
     return tuple(out)
 
 
 def _superseded(
-    view: LogView, run: str, instance: str, pairs: tuple[ToolPair, ...]
+    view: LogView, prefixes: tuple[str, ...], pairs: tuple[ToolPair, ...]
 ) -> dict[str, tuple[tuple[str, ...], bool]]:
     """For each superseded pair: what supersedes it, and whether it was a store call (S2)."""
     out: dict[str, tuple[tuple[str, ...], bool]] = {}
@@ -143,7 +180,7 @@ def _superseded(
             mine = [
                 v
                 for v in versions(view, old.kind, old.key)
-                if v.ref.version > old.version and _by_me(v.step, run, instance)
+                if v.ref.version > old.version and _by_me(v.step, prefixes)
             ]
             if mine:
                 newer.append(str(mine[-1].ref))
@@ -152,8 +189,14 @@ def _superseded(
     return out
 
 
-def recorded_masks(view: LogView, run: str, instance: str) -> Mapping[str, int]:
-    """Each tool step an earlier model step of the instance hid, with the turn it began."""
+def recorded_masks(
+    view: LogView, run: str, instance: str, session: tuple[Segment, ...] = ()
+) -> Mapping[str, int]:
+    """Each tool step an earlier model step of the instance hid, with the turn it began.
+
+    With a ``session`` (decision 36), the masks each segment's own model steps recorded
+    count too, so a resumed context hides at least what the session last hid.
+    """
     out: dict[str, int] = {}
     for e in view.events:
         if e.type != "step.started" or e.payload.get("kind") != "model" or e.step is None:
@@ -162,7 +205,10 @@ def recorded_masks(view: LogView, run: str, instance: str) -> Mapping[str, int]:
             sid = StepId.parse(e.step)
         except StepIdInvalid:
             continue
-        if sid.run != run or sid.instance != instance or sid.turn is None or sid.sub:
+        if sid.turn is None or sid.sub or sid.instance is None:
+            continue
+        own = sid.run == run and sid.instance == instance
+        if not own and not any(s.holds(sid.run, sid.instance, sid.turn) for s in session):
             continue
         for step in e.payload.get("masked", ()):
             out.setdefault(str(step), sid.turn)
@@ -191,8 +237,13 @@ def plan_masking(
     turn: int,
     recovery: bool = False,
     blobs: BlobStore | None = None,
+    session: tuple[Segment, ...] = (),
 ) -> MaskingPlan:
-    """The masking plan of ``instance``'s context for ``turn`` (module doc). Pure."""
+    """The masking plan of ``instance``'s context for ``turn`` (module doc). Pure.
+
+    ``turns`` are every turn the context shows: a resumed ``session``'s, then the
+    instance's own.
+    """
     raw = measure(())
     pairs = tuple(p for t in turns for p in t.pairs)
     if not policy.masking or not pairs:
@@ -200,10 +251,12 @@ def plan_masking(
             instance, turn, CONTEXT_POLICY_VERSION, raw, raw, (), recovery,
             raw > policy.context_limit_chars,
         )  # fmt: skip
-    superseded = _superseded(view, run, instance, pairs)
-    prior = recorded_masks(view, run, instance)
+    superseded = _superseded(view, _prefixes(run, instance, session), pairs)
+    prior = recorded_masks(view, run, instance, session)
     checker = ReadChecker(view, blobs=blobs)
-    stale_of = {p.step: stale_reads(view, run, instance, p, checker=checker) for p in pairs}
+    stale_of = {
+        p.step: stale_reads(view, run, instance, p, checker=checker, session=session) for p in pairs
+    }
 
     def masked(pair: ToolPair, reason: MaskReason, since: int) -> Masked:
         newer, stored = superseded.get(pair.step, ((), False))

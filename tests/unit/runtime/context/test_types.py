@@ -21,7 +21,15 @@ def test_context_policy_defaults_follow_the_adr() -> None:
     assert SummaryPolicy().alias == "generate"  # the implicit alias: the default always runs
     assert SummaryPolicy().max_per_instance == 2
     assert SummaryPolicy().trigger(p) == p.high_water_chars
-    assert CONTEXT_POLICY_VERSION == 1
+    assert CONTEXT_POLICY_VERSION == 2
+    r = p.resume
+    assert (r.min_prior_turns, r.headroom_chars, r.max_stale_permille, r.loop_repeats) == (
+        2,
+        15_000,
+        500,
+        3,
+    )
+    assert r.premise_exempt == frozenset()
 
 
 def test_masking_is_on_by_default_because_compaction_is_core() -> None:

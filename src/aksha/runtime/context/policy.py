@@ -4,7 +4,8 @@
 includes it, so a run cannot resume under different numbers or different stub, notice or
 recitation text. ``policy_refusals`` is what the loader refuses: the watermarks out of
 order, a read block that alone fills the limit, an exempt tool the agent does not have, a
-recent tail of zero pairs, or a summary policy that cannot run.
+recent tail of zero pairs, a summary policy that cannot run, or resume numbers out of
+range (decision 36).
 """
 
 from __future__ import annotations
@@ -35,6 +36,13 @@ def policy_material(policy: ContextPolicy) -> dict[str, Any]:
         "low_water_chars": policy.low_water_chars,
         "keep_recent_pairs": policy.keep_recent_pairs,
         "exempt_tools": sorted(policy.exempt_tools),
+        "resume": {
+            "min_prior_turns": policy.resume.min_prior_turns,
+            "headroom_chars": policy.resume.headroom_chars,
+            "max_stale_permille": policy.resume.max_stale_permille,
+            "loop_repeats": policy.resume.loop_repeats,
+            "premise_exempt": sorted(policy.resume.premise_exempt),
+        },
         "summary": None
         if summary is None
         else {
@@ -65,6 +73,11 @@ def policy_refusals(policy: ContextPolicy, tools: Iterable[str]) -> list[str]:
     unknown = sorted(set(policy.exempt_tools) - set(tools))
     if unknown:
         out.append(f"exempt_tools names tools the agent does not have: {unknown}")
+    r = policy.resume
+    if r.min_prior_turns < 1 or r.headroom_chars < 0 or r.loop_repeats < 2:
+        out.append("resume.min_prior_turns >= 1, resume.headroom_chars >= 0, loop_repeats >= 2")
+    if not 0 <= r.max_stale_permille <= 1000:
+        out.append("resume.max_stale_permille must lie between 0 and 1000")
     s = policy.summary
     if s is not None:
         if not s.alias:

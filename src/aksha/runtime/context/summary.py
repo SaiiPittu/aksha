@@ -76,10 +76,27 @@ def summary_attempts(view: LogView, run: str, instance: str) -> frozenset[str]:
     )
 
 
-def latest_compaction(view: LogView, run: str, instance: str) -> Compaction | None:
-    """The instance's newest recorded summary, or None."""
-    found = _compacted(view, run, instance)
+def latest_compaction(
+    view: LogView, run: str, instance: str, *, since_turn: int = 1, through_turn: int | None = None
+) -> Compaction | None:
+    """The instance's newest recorded summary, or None.
+
+    ``since_turn`` and ``through_turn`` keep only summaries made before a turn in that
+    range (decision 36): a fresh re-entry never shows a summary of the turns before it,
+    and a resumed session segment shows only the summaries made inside it.
+    """
+    found = [
+        c
+        for c in _compacted(view, run, instance)
+        if since_turn <= _made_at(c) and (through_turn is None or _made_at(c) <= through_turn)
+    ]
     return found[-1] if found else None
+
+
+def _made_at(c: Compaction) -> int:
+    """The turn whose summary step recorded ``c`` (``.../tNN/compact``)."""
+    turn = StepId.parse(c.step).turn
+    return 0 if turn is None else turn
 
 
 def summary_through(

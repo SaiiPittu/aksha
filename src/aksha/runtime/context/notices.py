@@ -5,10 +5,12 @@
    date, and how to see a hidden result again.
 2. :func:`change_notice`: the current versions of the artifacts a stale result read,
    once, at the end of the context (decision 32).
-3. :func:`rebuild_notice`: a rebuild run's fresh context starts from the rebuild brief
-   (ADR-P05 D10, decision 34): the old version, what changed, what to read instead and
-   what the person already answered. :func:`rebuild_brief_for` finds the brief from the
-   log as it stood when the instance was entered, so it never changes mid-instance.
+3. :func:`rebuild_notice`: a fresh re-entry's context starts from the rebuild summary
+   (``RebuildBrief``; ADR-P05 D10, decisions 34 and 36): the old version, what changed,
+   what to read instead, what the person already answered and the inputs that are new
+   since. :func:`rebuild_brief_for` reads it from the log as it stood when the instance
+   was re-entered, so it never changes mid-entry. A resumed re-entry gets none; its
+   notice is ``reentry.reentry_notice``.
 4. :func:`answers` (interrupt answers for this instance, never reduced) and
    :func:`continue_reason` (why the runtime refused the last finish).
 """
@@ -22,6 +24,7 @@ from aksha.runtime.artifacts.types import ArtifactVersion, WriterId
 from aksha.runtime.artifacts.versions import version
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import ContextPolicy, Masked, StaleRead
+from aksha.runtime.events.envelope import Event
 from aksha.runtime.grounding.types import STATEMENT_SOURCE
 from aksha.runtime.invalidation.plan import rebuild_plan
 from aksha.runtime.invalidation.rebuild import rebuild_brief
@@ -80,10 +83,7 @@ def recite(
     stale_list = list(stale)
     if stale_list:
         lines += ["Out of date since you read them:"]
-        lines += [
-            f"- {s.read.id}@{s.read.version} is now {s.now if s.now is not None else 'gone'}"
-            for s in stale_list
-        ]
+        lines += [f"- {s.read.id}@{s.read.version} is now {s.now_text()}" for s in stale_list]
     lines.append(
         f"{len(hidden)} earlier tool results are hidden above to save space; "
         "repeat a call to see its result again."
@@ -98,16 +98,28 @@ def change_notice(
     *,
     blobs: BlobStore | None = None,
 ) -> tuple[str, tuple[ArtifactVersion, ...]]:
-    """The change notice and the versions it shows (module doc, point 2)."""
+    """The change notice and the versions it shows (module doc, point 2).
+
+    An artifact read shows its current version's content; a source record or query
+    result (decision 36) is named with the version it moved to, since the runtime holds
+    no copy of it: the instance reads it again through its tools.
+    """
     lines = ["Change notice: these inputs changed after you read them. Their current versions:"]
     shown: list[ArtifactVersion] = []
     seen: set[str] = set()
     for s in stale:
-        if str(s.now) in seen:
+        label = s.now_text() if not s.gone else f"gone:{s.read.kind}:{s.read.id}"
+        if label in seen:
             continue
-        seen.add(str(s.now))
-        if s.now is None:
+        seen.add(label)
+        if s.gone:
             lines.append(f"- {s.read.id}@{s.read.version} is gone: its writer was withdrawn")
+            continue
+        if s.now is None:
+            lines.append(
+                f"- {s.read.kind} {s.read.id}@{s.read.version} is now version {s.moved_to}; "
+                "read it again with your tools"
+            )
             continue
         now = version(view, s.now, blobs=blobs)
         if now is None:
@@ -118,35 +130,77 @@ def change_notice(
     return "\n".join(lines), tuple(shown)
 
 
-def rebuild_brief_for(
-    view: LogView, instance: InstanceRef, *, blobs: BlobStore | None = None
-) -> RebuildBrief | None:
-    """The rebuild brief of ``instance`` in a rebuild run, read as of its entry; else None."""
-    agent: str | None = None
+def rebuild_entry(view: LogView, instance: InstanceRef) -> Event | None:
+    """The instance's latest ``task.entered{cause: rebuild}`` in its run, or None."""
+    found: Event | None = None
     for e in view.events:
-        if e.type == "run.started" and e.run == instance.run:
-            if e.payload.get("cause") != "rebuild":
-                return None
-            agent = str(e.payload["agent"])
-        elif (
+        if (
             e.type == "task.entered"
             and e.run == instance.run
-            and agent is not None
+            and e.payload.get("cause") == "rebuild"
             and e.payload.get("task") == instance.task_path
             and e.payload.get("key") == instance.key
         ):
-            at_entry = view.upto(e.seq)
-            iv = invalidation_view(at_entry, blobs=blobs)
-            writer = WriterId(agent, instance.task_path, instance.key)
-            for entry in rebuild_plan(iv):
-                if entry.writer == writer:
-                    return rebuild_brief(at_entry, iv, entry)
-            return None
+            found = e
+    return found
+
+
+def rebuild_at_entry(
+    view: LogView, entry: Event, instance: InstanceRef, *, blobs: BlobStore | None = None
+) -> RebuildBrief | None:
+    """The rebuild summary of ``instance`` as the log stood at ``entry`` (its re-entry)."""
+    agent: str | None = None
+    for e in view.events:
+        if e.type == "run.started" and e.run == instance.run:
+            agent = str(e.payload["agent"])
+            break
+    if agent is None:
+        return None
+    at_entry = view.upto(entry.seq)
+    iv = invalidation_view(at_entry, blobs=blobs)
+    writer = WriterId(agent, instance.task_path, instance.key)
+    for plan_entry in rebuild_plan(iv):
+        if plan_entry.writer == writer:
+            return rebuild_brief(at_entry, iv, plan_entry)
     return None
 
 
-def rebuild_notice(brief: RebuildBrief, policy: ContextPolicy) -> str:
-    """The rebuild brief as the first message of a fresh context (module doc, point 3)."""
+def rebuild_brief_for(
+    view: LogView, instance: InstanceRef, *, blobs: BlobStore | None = None
+) -> RebuildBrief | None:
+    """The rebuild summary of a fresh re-entry of ``instance``, as of its entry; else None.
+
+    A re-entry recorded with a mode (decision 36) gets it when the mode is
+    ``fresh``, in a rebuild run or in place; one recorded before modes existed gets it
+    only in a rebuild run, as it always did.
+    """
+    entry = rebuild_entry(view, instance)
+    if entry is None:
+        return None
+    recorded = entry.payload.get("reentry")
+    if recorded is not None:
+        if recorded.get("mode") != "fresh":
+            return None
+    elif not _rebuild_run(view, instance.run):
+        return None
+    return rebuild_at_entry(view, entry, instance, blobs=blobs)
+
+
+def _rebuild_run(view: LogView, run: str) -> bool:
+    for e in view.events:
+        if e.type == "run.started" and e.run == run:
+            return e.payload.get("cause") == "rebuild"
+    return False
+
+
+def rebuild_notice(
+    brief: RebuildBrief, policy: ContextPolicy, new_reads: Iterable[str] = ()
+) -> str:
+    """The rebuild brief as the first message of a fresh context (module doc, point 3).
+
+    ``new_reads`` (decision 36) are the inputs that entered a read of every key since the
+    old version was written; they are listed so the instance knows they are new.
+    """
     body, _ = cap_text(canonical_json(brief.content), policy.read_cap_chars)
     lines = [
         f"Rebuild: your earlier version {brief.old} is out of date. It was:",
@@ -163,6 +217,9 @@ def rebuild_notice(brief: RebuildBrief, policy: ContextPolicy) -> str:
             "The person already answered these; do not ask again:",
             *(f"- {r}" for r in brief.statements),
         ]
+    added = list(new_reads)
+    if added:
+        lines += ["New inputs since then:", *(f"- {r}" for r in added)]
     return "\n".join(lines)
 
 

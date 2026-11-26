@@ -31,9 +31,9 @@ nothing; a model proposes work only by saving data a key source reads.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 
 from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.artifacts.versions import unaccepted_revisions
@@ -219,8 +219,18 @@ def writer_of(tree: CompiledTree, ref: InstanceRef) -> WriterId:
     return WriterId(tree.agent, ref.task_path, ref.key)
 
 
-def entered_fact(tree: CompiledTree, ref: InstanceRef, *, cause: EntryCause) -> NewEvent:
-    """The ``task.entered`` fact for ``ref`` (U3), naming its key source and writer key."""
+def entered_fact(
+    tree: CompiledTree,
+    ref: InstanceRef,
+    *,
+    cause: EntryCause,
+    reentry: Mapping[str, Any] | None = None,
+) -> NewEvent:
+    """The ``task.entered`` fact for ``ref`` (U3), naming its key source and writer key.
+
+    ``reentry`` is a re-entry's recorded mode choice (decision 36,
+    ``context.reentry.ReentryChoice.as_json``).
+    """
     tree.node(ref.task_path)
     payload: dict[str, object] = {
         "cause": cause,
@@ -234,6 +244,8 @@ def entered_fact(tree: CompiledTree, ref: InstanceRef, *, cause: EntryCause) -> 
         if source.path is not None:
             named["path"] = source.path
         payload["key_source"] = named
+    if reentry is not None:
+        payload["reentry"] = dict(reentry)
     return NewEvent(TASK_ENTERED, payload, run=ref.run, instance=ref.instance)
 
 
@@ -323,11 +335,13 @@ def reentry(
     writer: WriterId,
     *,
     cause: EntryCause = "rebuild",
+    choice: Mapping[str, Any] | None = None,
 ) -> tuple[NewEvent, ...]:
     """Re-enter the instance a writer key names (a rebuild run, slice 6), whatever its run.
 
     A blocked instance is reset first (``completion_check.reset{cause: rebuild}``), so its
-    veto count starts again. ``task_unknown`` for a writer of another agent or Task.
+    veto count starts again. ``choice`` is the re-entry's mode choice, recorded on the
+    ``task.entered`` (decision 36). ``task_unknown`` for a writer of another agent or Task.
     """
     if writer.agent != tree.agent:
         raise TaskUnknown(message=f"writer {writer.agent!r} is not agent {tree.agent!r}")
@@ -336,7 +350,7 @@ def reentry(
     facts: list[NewEvent] = []
     if run_state(view, tree, run).status(ref) == "blocked":
         facts.append(reset_fact(ref, "rebuild"))
-    facts.append(entered_fact(tree, ref, cause=cause))
+    facts.append(entered_fact(tree, ref, cause=cause, reentry=choice))
     return tuple(facts)
 
 

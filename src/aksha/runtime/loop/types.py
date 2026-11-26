@@ -21,6 +21,7 @@ from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactKind
 from aksha.runtime.budgets.types import Limits
+from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import AssemblyInputs, ContextPolicy, effective_policy
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.grounding.ports import RecordReader
@@ -133,6 +134,8 @@ class LoopSetup:
     agent's whole tool list. ``artifacts`` is the save path of store tools; without it a
     body's save is refused ``store_unavailable``. ``reader`` is the record reader a tool body
     reads versioned sources through (ADR-P13 D1); without it a body's span drafts are refused.
+    ``reentry`` is the re-entry setting the rebuild runs it opens record (decision 36); None
+    inherits it from the runs rebuilt for, which is ``fresh`` unless they chose ``resume``.
     """
 
     store: EventStore
@@ -154,6 +157,7 @@ class LoopSetup:
     limits: Limits = field(default_factory=Limits)
     blobs: BlobStore | None = None
     reader: RecordReader | None = None
+    reentry: ReentrySetting | None = None
 
     def view(self) -> LogView:
         """The owner's log as it stands now."""

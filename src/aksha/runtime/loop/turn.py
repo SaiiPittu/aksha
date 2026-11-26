@@ -49,7 +49,7 @@ def stop_view(setup: LoopSetup, run: str, log: LogView | None = None) -> StopVie
     """The stop policies' view of ``log`` (the owner's log as it stands now by default)."""
     return StopView(
         setup.view() if log is None else log, setup.tree, run, setup.limits,
-        agent_policies=setup.agent.stop_policies,
+        agent_policies=setup.agent.stop_policies, context_policy=setup.policy(),
     )  # fmt: skip
 
 
