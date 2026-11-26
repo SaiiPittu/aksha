@@ -21,6 +21,14 @@ disagree with them after a crash. Each read of a version gets one state:
 4. A pending revision (an open diff review) and a rejected or voided one never count:
    readers see the old version until a person accepts (D1).
 
+5. Time (ADR-P25). A ``time:clock`` read is checked like a record read against the
+   clock record ``time/clock``, so a later recorded date moves it (D4). A record read of a
+   version saved before the record's last ``source.expired`` is ``moved`` to ``expired``
+   (D3): the fetch it was built on is past its freshness lifetime; a version saved after
+   the expiry read it again and is not. A version whose own lifetime ran out (its kind's
+   ``max_age_s``) carries one more read, ``time:expiry/<ref>``, ``moved`` to ``expired``,
+   so the plan, its brief and the revocations treat it as any invalidated version.
+
 A version is ``invalidated`` if any read moved or is gone, else ``dirty`` if any is
 unsettled, else ``current_by_cutoff`` if any is equivalent, else ``current``.
 
@@ -42,8 +50,9 @@ from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactRef, ArtifactVersion, InputRef, WriterId
 from aksha.runtime.artifacts.versions import all_versions, unaccepted_revisions
 from aksha.runtime.invalidation.reviews import approved_refs, open_reviews, reviews
-from aksha.runtime.invalidation.sources import source_facts
+from aksha.runtime.invalidation.sources import record_key, source_facts
 from aksha.runtime.invalidation.types import (
+    EXPIRED,
     STALE_STATES,
     ChangeSummary,
     Freshness,
@@ -264,6 +273,8 @@ class _Walk:
             statuses.append(status)
             if waits_on is not None:
                 waits.append(self.evaluate(self.by_ref[waits_on])[2])
+        if ref in self.facts.expired_artifacts:
+            statuses.append(ReadStatus(expiry_read(v.ref), "moved", EXPIRED))
         self.busy.discard(ref)
         states = {s.state for s in statuses}
         via: tuple[str, ...] = ()
@@ -287,12 +298,24 @@ class _Walk:
 
     def read_state(self, reader: ArtifactVersion, read: InputRef) -> tuple[ReadStatus, str | None]:
         """One read's status, and the ref it waits on when unsettled."""
-        return self.read_state_for(self.line(reader), read)
+        return self.read_state_for(self.line(reader), read, reader.event_seq)
 
-    def read_state_for(self, mine: frozenset[str], read: InputRef) -> tuple[ReadStatus, str | None]:
-        """One read's status for a reader written for the runs ``mine`` (rules 1 to 4)."""
-        if read.kind == "record":
+    def read_state_for(
+        self, mine: frozenset[str], read: InputRef, saved_seq: int | None = None
+    ) -> tuple[ReadStatus, str | None]:
+        """One read's status for a reader written for the runs ``mine`` (rules 1 to 5).
+
+        ``saved_seq`` is the reader's save; without it a record's expiry is not judged.
+        """
+        if read.kind == "time":
             return self._versioned(read, self.facts.records), None
+        if read.kind == "record":
+            status = self._versioned(read, self.facts.records)
+            expired_at = self.facts.expired_records.get(read.id)
+            expired = saved_seq is not None and expired_at is not None and expired_at > saved_seq
+            if status.state == "same" and expired:
+                return ReadStatus(read, "moved", EXPIRED), None
+            return status, None
         if read.kind == "query":
             return self._versioned(read, self.facts.queries), None
         if read.kind != "artifact":
@@ -327,9 +350,10 @@ class _Walk:
 
     @staticmethod
     def _versioned(read: InputRef, known: Mapping[str, str | None]) -> ReadStatus:
-        if read.id not in known:
+        key = record_key(read)
+        if key not in known:
             return ReadStatus(read, "same")
-        now = known[read.id]
+        now = known[key]
         if now is None:
             return ReadStatus(read, "gone")
         return ReadStatus(read, "same" if now == read.version else "moved", now)
@@ -359,6 +383,11 @@ class ReadChecker:
     def version(self, ref: str) -> ArtifactVersion | None:
         """The stored version ``ref`` names, accepted or not."""
         return self._walk.by_ref.get(ref)
+
+
+def expiry_read(ref: ArtifactRef) -> InputRef:
+    """The read an expired version carries (rule 5): its lifetime, as a time input."""
+    return InputRef("time", f"expiry/{ref}", "current")
 
 
 def _equal(read: InputRef, old: ArtifactVersion, new: ArtifactVersion) -> bool:

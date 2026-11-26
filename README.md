@@ -4,7 +4,7 @@ Aksha is a general, headless agent harness in Python. One runtime runs many diff
 
 It thinks fast and slow. Model work is split by the kind of answer it needs: System 1 models (fast, narrow) do extraction and classification, and System 2 models (slow, general) do generation. The three are first-class model classes with their own contracts, routed the same way, so a fast model can route a request or pull typed fields out of a page while a generation model writes the report.
 
-*Status as of 26 Nov 2026: 22 of the 30 primitives are built and tested, among them the session API with the `aksha` command line and server, a trace exporter and the eval runner. Two general agents, competitor research and patent disclosure, run on any folder of a person's own files (`aksha run --input`), and are tested on two synthetic worlds in different domains; `make demo` shows change and recovery offline.*
+*Status as of 26 Nov 2026: 23 of the 30 primitives are built and tested, among them the session API with the `aksha` command line and server, a trace exporter and the eval runner. Two general agents, competitor research and patent disclosure, run on any folder of a person's own files (`aksha run --input`), and are tested on two synthetic worlds in different domains; `make demo` shows change and recovery offline.*
 
 ## Quick start
 
@@ -271,7 +271,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P22 | Evals, fake and replay models | built | The eval runner with ordered graders, pass@k and pass^k, invariance and directional runs, grader self-tests; fakes and replay for every model class |
 | P23 | Request router | built | Classification over the loaded agents' purposes, a route question when it abstains |
 | P24 | Partial results and finalization | built | Explicit unknowns, the `blocked` outcome, finalize on a budget interrupt |
-| P25 | Durable timers and recorded time | designed | |
+| P25 | Durable timers and recorded time | built | Timers as facts that survive a crash, approval expiry, freshness rechecks, the date as a recorded read that a new day invalidates |
 | P26 | Egress policy | built | Deny by default; the runtime's HTTP client checks every resolved address and every redirect, and records each decision |
 | P27 | Steering and follow-up input | designed | The `Steer` command type exists and is refused `unsupported` |
 | P28 | Execution environment image | built | Images keyed by a content hash of the spec and lock files, first build approved, packages fetched under egress and hash-checked, installed offline, recorded, mounted read-only at `/env` |

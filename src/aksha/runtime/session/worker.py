@@ -9,8 +9,9 @@ read through the writer) and get a future of its result. The thread, in order:
    thread), resumes every owner with an open run (recovery, then each in-flight run to
    its yield), then loops.
 2. Drains the command queue: each command runs alone, in its own transaction.
-3. Runs one pass of one movable run per owner with open runs. A pass is one stop-policy
-   evaluation and at most one turn, so step 2 comes round again within one turn.
+3. Runs one pass of one movable run per owner with open runs or pending timers (ADR-P25:
+   each pass ticks the owner first, so a due timer fires with no run open). A pass is one
+   stop-policy evaluation and at most one turn, so step 2 comes round again within one turn.
 4. With nothing queued and nothing movable, waits on the queue.
 
 A pass that raises is recorded in :attr:`RuntimeThread.faults` and its owner is left
@@ -144,7 +145,9 @@ class RuntimeThread:
 
     def _pass(self, session: Session) -> bool:
         moved = False
-        owners = sorted(set(session.store.owners_with_open_runs()) | self._commanded)
+        store = session.store
+        waiting = store.owners_with_pending_timers()
+        owners = sorted(set(store.owners_with_open_runs()) | set(waiting) | self._commanded)
         self._commanded.clear()
         for owner in owners:
             if owner in self._faulted:

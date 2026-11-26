@@ -257,6 +257,27 @@ def test_owners_with_open_runs(store: EventStore) -> None:
     assert store.owners_with_open_runs() == ("o1",)
 
 
+def test_owners_with_pending_timers(store: EventStore) -> None:
+    """ADR-P25 D1: an owner is listed while a timer it scheduled is neither fired nor cancelled."""
+
+    def timer(ident: str) -> NewEvent:
+        return NewEvent("timer.scheduled", {
+            "timer_id": ident, "cause": "approval_expiry", "after_ms": 1,
+            "scope": {"kind": "approval", "approval": "A-0001"},
+        })  # fmt: skip
+
+    store.append("o1", "U4", [timer("x:1"), timer("x:2")])
+    store.append("o2", "U4", [timer("x:1")])
+    store.append("o3", "U4", [timer("x:1")])
+    store.append(
+        "o1", "U4", [NewEvent("timer.fired", {"timer_id": "x:1", "cause": "approval_expiry"})]
+    )
+    store.append("o2", "U4", [NewEvent("timer.cancelled", {"timer_id": "x:1", "reason": "moot"})])
+    assert store.owners_with_pending_timers() == ("o1", "o3")
+    store.append("o1", "U4", [NewEvent("timer.cancelled", {"timer_id": "x:2", "reason": "moot"})])
+    assert store.owners_with_pending_timers() == ("o3",)
+
+
 def test_run_started_needs_a_run(store: EventStore) -> None:
     with pytest.raises(DedupKeyError):
         store.append("o1", "U1", [NewEvent("run.started", {"agent": "a", "cause": "request"})])

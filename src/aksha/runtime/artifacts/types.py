@@ -21,11 +21,18 @@ from aksha.runtime.grounding.types import CitePolicy
 from aksha.runtime.storage.rows import ArtifactRow
 from aksha.runtime.tasks.types import Check
 
-InputKind = Literal["record", "query", "statement", "artifact", "blob"]
+InputKind = Literal["record", "query", "statement", "artifact", "blob", "time"]
 """What a lineage input is: a source record, a recorded query, a person's statement, an
-artifact version or a blob."""
+artifact version, a blob, or a recorded time read (ADR-P25 D4: ``time:clock@<ISO date>``)."""
 
-INPUT_KINDS: tuple[InputKind, ...] = ("record", "query", "statement", "artifact", "blob")
+INPUT_KINDS: tuple[InputKind, ...] = (
+    "record",
+    "query",
+    "statement",
+    "artifact",
+    "blob",
+    "time",
+)
 
 Origin = Literal["task", "derived", "choice", "copy_choice"]
 """Who made a version: a Task instance's save, a derived kind, or a person's choice."""
@@ -46,7 +53,9 @@ class ArtifactKind:
     maps an array's pointer to the field its items are sorted by, and ``canonicalize`` is
     a pure function applied before both (ADR-P04 D5). ``cites`` lists the cite policies of
     its grounded fields (ADR-P13 D4): each matched field cites its evidence or, where the
-    policy allows, holds an explicit unknown.
+    policy allows, holds an explicit unknown. ``max_age_s`` is its freshness lifetime
+    (ADR-P25 D3): each save schedules a recheck of the version saved, and once it fires the
+    version is out of date and is rebuilt like any invalidated one.
     """
 
     name: str
@@ -63,6 +72,7 @@ class ArtifactKind:
     save: Literal["any", "tool_only"] = "any"
     summary: str | None = None
     cites: tuple[CitePolicy, ...] = ()
+    max_age_s: int | None = None
 
 
 @dataclass(frozen=True)

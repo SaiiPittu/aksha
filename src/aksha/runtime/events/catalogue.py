@@ -81,7 +81,10 @@ RUN_STARTED = EventTypeSpec(
         "type": "object",
         "properties": {
             "agent": {"type": "string", "minLength": 1},
-            "cause": {"enum": ["request", "rebuild", "handoff"]},
+            "cause": {"enum": ["request", "rebuild", "handoff", "timer"]},
+            # ADR-P25 D2: a reminder's run names its timer and carries the request it states.
+            "timer": {"type": "string", "minLength": 1},
+            "request": {"type": "string", "minLength": 1},
             # ADR-P20 D7: the agent definition the run started under.
             "definition_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
             "extension_versions": {
@@ -151,7 +154,8 @@ RUN_STARTED = EventTypeSpec(
         "required": ["agent", "cause"],
     },
     writer="session",
-    # U4: the answer to a route question opens its run (ADR-P23 D4).
+    # U4: the answer to a route question opens its run (ADR-P23 D4); U1 also holds a
+    # reminder's run (ADR-P25 D2), opened by the timer that fired.
     boundaries=frozenset({"U1", "U4", "U9"}),
     dedup_key="rstart:{run}",
 )
@@ -191,7 +195,7 @@ _HASH = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
 INPUT_REF_SCHEMA: Mapping[str, Any] = {
     "type": "object",
     "properties": {
-        "kind": {"enum": ["record", "query", "statement", "artifact", "blob"]},
+        "kind": {"enum": ["record", "query", "statement", "artifact", "blob", "time"]},
         "id": {"type": "string", "minLength": 1},
         "version": {"type": "string", "minLength": 1},
         "path": {"type": "string"},
@@ -1130,7 +1134,8 @@ APPROVAL_VOIDED = EventTypeSpec(
         "type": "object",
         "properties": {
             "approval": {"type": "string", "minLength": 1},
-            "reason": {"enum": ["replaced_by_edit", "key_withdrawn", "superseded"]},
+            # ADR-P25 D5: ``expired``, its approval_expiry timer fired.
+            "reason": {"enum": ["replaced_by_edit", "key_withdrawn", "superseded", "expired"]},
         },
         "required": ["approval", "reason"],
         "additionalProperties": False,
@@ -1351,6 +1356,147 @@ ROUTE_DECIDED = EventTypeSpec(
     dedup_key="route:{message}",
 )
 
+# --- P25 durable timers and recorded time (``timers/``) ----------------------------------
+# A timer is a fact (D1): ``timer.scheduled`` in the transaction that wants it, closed once
+# by ``timer.fired`` or ``timer.cancelled`` (one dedup key for both). Each firing commits
+# in its cause's boundary: an expiry with the approval it voids (U4), a recheck with the
+# ``source.expired`` it writes (U8), a reminder with the run it opens (U1).
+
+_TIMER_ID = {"type": "string", "pattern": "^[A-Za-z0-9][^\\s]*$"}
+_TIMER_CAUSE = {"enum": ["approval_expiry", "reminder", "recheck"]}
+_TIMER_SCOPE = {
+    "oneOf": [
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "instance"},
+                "run": {"type": "string", "minLength": 1},
+                "instance": {"type": "string", "minLength": 1},
+            },
+            "required": ["kind", "run", "instance"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {"kind": {"const": "run"}, "run": {"type": "string", "minLength": 1}},
+            "required": ["kind", "run"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "agent"},
+                "agent": {"type": "string", "minLength": 1},
+            },
+            "required": ["kind", "agent"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "session"},
+                "session": {"type": "string", "minLength": 1},
+            },
+            "required": ["kind", "session"],
+            "additionalProperties": False,
+        },
+        {
+            "type": "object",
+            "properties": {
+                "kind": {"const": "approval"},
+                "approval": {"type": "string", "minLength": 1},
+            },
+            "required": ["kind", "approval"],
+            "additionalProperties": False,
+        },
+    ]
+}
+
+TIMER_SCHEDULED = EventTypeSpec(
+    name="timer.scheduled",
+    schema={
+        "type": "object",
+        "properties": {
+            "timer_id": _TIMER_ID,
+            "cause": _TIMER_CAUSE,
+            "scope": _TIMER_SCOPE,
+            # Exactly one: an ISO time on the injected clock, or (B2) milliseconds counted
+            # from this fact's own recorded ``at``.
+            "due_at": {"type": "string", "format": "date-time", "minLength": 20},
+            "after_ms": {"type": "integer", "minimum": 0},
+            # recheck (D3): the record read or the artifact version whose lifetime runs out.
+            "target": INPUT_REF_SCHEMA,
+            # reminder: the agent and the request its run states.
+            "request": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "text": {"type": "string", "minLength": 1},
+                },
+                "required": ["agent", "text"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["timer_id", "cause", "scope"],
+        "oneOf": [{"required": ["due_at"]}, {"required": ["after_ms"]}],
+        "additionalProperties": False,
+    },
+    writer="timers",
+    # U2: a step that read, saved or asked for approval; U4: a fresh approval request;
+    # U1 and U8: a reminder or a recheck scheduled with the facts that want it.
+    boundaries=frozenset({"U1", "U2", "U4", "U8"}),
+    dedup_key="timer:{timer_id}",
+)
+TIMER_FIRED = EventTypeSpec(
+    name="timer.fired",
+    schema={
+        "type": "object",
+        "properties": {
+            "timer_id": _TIMER_ID,
+            "cause": _TIMER_CAUSE,
+            # reminder: the run it opened.
+            "run": {"type": "string", "pattern": "^R-[0-9]{4,}$"},
+        },
+        "required": ["timer_id", "cause"],
+        "additionalProperties": False,
+    },
+    writer="timers",
+    boundaries=frozenset({"U1", "U4", "U8"}),
+    dedup_key="tclose:{timer_id}",
+)
+TIMER_CANCELLED = EventTypeSpec(
+    name="timer.cancelled",
+    schema={
+        "type": "object",
+        "properties": {
+            "timer_id": _TIMER_ID,
+            # ``moot``: what it would act on is already settled (a decided approval).
+            "reason": _SNAKE,
+        },
+        "required": ["timer_id", "reason"],
+        "additionalProperties": False,
+    },
+    writer="timers",
+    boundaries=frozenset({"U1", "U4", "U8"}),
+    dedup_key="tclose:{timer_id}",
+)
+SOURCE_EXPIRED = EventTypeSpec(
+    name="source.expired",
+    schema={
+        "type": "object",
+        "properties": {
+            "source_version": {"type": "integer", "minimum": 1},
+            "cause": {"enum": ["command", "recovery", "clock"]},
+            "records": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "artifacts": {"type": "array", "items": _REF_TEXT},
+        },
+        "required": ["source_version", "cause", "records", "artifacts"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -1398,6 +1544,10 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     KEYS_LISTED,
     USER_MESSAGE,
     ROUTE_DECIDED,
+    TIMER_SCHEDULED,
+    TIMER_FIRED,
+    TIMER_CANCELLED,
+    SOURCE_EXPIRED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

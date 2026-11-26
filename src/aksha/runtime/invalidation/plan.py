@@ -27,7 +27,7 @@ from aksha.runtime.invalidation.types import RebuildEntry, RebuildMode, VersionS
 from aksha.runtime.invalidation.view import HUMAN_ORIGINS, InvalidationView, invalidation_view
 from aksha.runtime.projections.view import LogView
 
-_CHANGES = frozenset({"source.changed", "query.reexecuted", "task.withdrawn"})
+_CHANGES = frozenset({"source.changed", "source.expired", "query.reexecuted", "task.withdrawn"})
 """The facts that can make a read ``moved`` or ``gone`` besides a newer artifact version."""
 
 

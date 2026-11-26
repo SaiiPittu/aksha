@@ -10,6 +10,7 @@ turn limit          10       turns authorised for the Task instance             
 stop-veto limit     3        vetoes since the instance was last entered          used >= limit
 restart limit       3        resume records since the run's last progress        used >= limit
 automatic starts    3 / 5 m  automatic starts recorded inside the window          used >= count
+timer starts        3 / 5 m  an agent's runs opened by a timer inside the window  used >= count
 ==================  =======  ==================================================  ==============
 
 "Bites" means the next turn, veto or resume would exceed the limit: the turn limit lets
@@ -129,3 +130,21 @@ def auto_start_allowed(view: LogView, run: str, limits: Limits, now: datetime) -
     """Whether one more automatic start of ``run`` fits ``limits.auto_starts`` (designed)."""
     count, window_ms = limits.auto_starts
     return automatic_starts(view, run, now, window_ms) < count
+
+
+def timer_starts(view: LogView, agent: str, now: datetime, window_ms: int) -> int:
+    """Runs of ``agent`` a timer opened (``run.started{cause: timer}``) in the window.
+
+    ADR-P25 D2: a reminder's run has no run of its own to count against before it opens,
+    so its automatic-start limit counts the agent's timer-opened runs; a reminder that
+    schedules itself again is capped at ``Limits.auto_starts`` per window.
+    """
+    since = now - timedelta(milliseconds=window_ms)
+    return sum(
+        1
+        for e in view.events
+        if e.type == "run.started"
+        and e.payload.get("cause") == records.TIMER_CAUSE
+        and e.payload.get("agent") == agent
+        and since < datetime.fromisoformat(e.at) <= now
+    )

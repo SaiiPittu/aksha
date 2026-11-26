@@ -69,11 +69,20 @@ class ApprovalRule:
 
     ``facts`` builds what the person approves; ``targets`` lists the artifact refs the
     action acts on. ``targets`` is None when the action acts on none (the ADR's default
-    lambda, written as None so the declared value has a stable form).
+    lambda, written as None so the declared value has a stable form). ``expires_after_s``
+    is how long a request (or its grant, until used) stays valid: the request schedules an
+    ``approval_expiry`` timer that voids it ``expired`` (ADR-P17 S7, ADR-P25 D5). None,
+    the default: it never expires.
     """
 
     facts: ApprovalFacts
     targets: Callable[[Mapping[str, object]], tuple[str, ...]] | None = None
+    expires_after_s: int | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a lifetime below one second."""
+        if self.expires_after_s is not None and self.expires_after_s < 1:
+            raise ValueError("an approval's expires_after_s is a positive number of seconds")
 
 
 @dataclass(frozen=True)

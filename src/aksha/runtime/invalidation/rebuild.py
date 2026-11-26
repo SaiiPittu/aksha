@@ -51,7 +51,7 @@ from aksha.runtime.context.reentry import ReentrySetting, inherited_setting
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
-from aksha.runtime.invalidation.types import ReadStatus, RebuildBrief, RebuildEntry
+from aksha.runtime.invalidation.types import EXPIRED, ReadStatus, RebuildBrief, RebuildEntry
 from aksha.runtime.invalidation.view import InvalidationView, invalidation_view
 from aksha.runtime.policy.headless import headless_start_refusal, started_headless
 from aksha.runtime.projections.project import rebuild
@@ -179,9 +179,12 @@ def rebuild_brief(view: LogView, iv: InvalidationView, entry: RebuildEntry) -> R
 
 
 def _now(status: ReadStatus) -> InputRef:
-    """The input a rebuilt instance reads in place of ``status.input``."""
+    """The input a rebuilt instance reads in place of ``status.input``.
+
+    An expired read (ADR-P25 D3) names no newer version: the instance reads it again.
+    """
     read = status.input
-    if status.now is None or status.state in ("same", "unsettled"):
+    if status.now is None or status.now == EXPIRED or status.state in ("same", "unsettled"):
         return read
     if read.kind == "artifact":
         return ArtifactRef.parse(status.now).as_input()

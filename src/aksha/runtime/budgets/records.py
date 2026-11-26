@@ -25,6 +25,7 @@ Fact                            Counts as
 ``outcome: ok}``,
 ``artifact.saved``
 ``run.started{cause: rebuild}``  an automatic start
+``run.started{cause: timer}``    an automatic start (a reminder's run, ADR-P25 D2)
 ==============================  =====================================================
 
 Every function is pure: it reads one event and returns what it counts for.
@@ -44,6 +45,10 @@ RESUME = "resume"
 
 AUTOMATIC_CAUSES = frozenset({"resume", "continuation", "timer"})
 """Stop-decision causes the runtime writes with no person's command (ADR-P14 D7, S3)."""
+TIMER_CAUSE = "timer"
+"""The ``run.started`` cause of a run a reminder timer opened (ADR-P25 D2)."""
+AUTOMATIC_RUN_CAUSES = frozenset({"rebuild", TIMER_CAUSE})
+"""``run.started`` causes the runtime writes with no person's command."""
 
 
 def _verdict(e: Event) -> str:
@@ -95,9 +100,9 @@ def is_progress(e: Event) -> bool:
 
 
 def is_automatic_start(e: Event) -> bool:
-    """A start the runtime made without a person's command: resume, rebuild, continuation."""
+    """A start the runtime made without a person's command (resume, rebuild, a timer's run)."""
     if e.type == "run.started":
-        return e.payload.get("cause") == "rebuild"
+        return e.payload.get("cause") in AUTOMATIC_RUN_CAUSES
     return e.type == STOP_DECIDED and e.payload.get("cause") in AUTOMATIC_CAUSES
 
 

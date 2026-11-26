@@ -99,6 +99,7 @@ from aksha.runtime.session.service import Session, SessionAgent
 from aksha.runtime.storage.errors import StoreError
 from aksha.runtime.storage.ports import EventStore
 from aksha.runtime.tasks.tree import compile_tree
+from aksha.runtime.timers.freshness import lifetimes
 from aksha.runtime.tools.registry import ToolRegistry
 from aksha.runtime.tools.types import ToolDecl
 
@@ -401,6 +402,9 @@ def session_agent(
         context_policy=agent.context_policy,
         run_extra=extra,
         reentry=reentry,
+        lifetimes=lifetimes(
+            (*agent.sources, *(spec for ext in loaded.extensions for spec in ext.ext.sources))
+        ),
     )
 
 

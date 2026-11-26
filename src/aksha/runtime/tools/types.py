@@ -31,6 +31,7 @@ from aksha.runtime.interrupts.types import ApprovalRule
 from aksha.runtime.outbox.types import EffectSpec
 from aksha.runtime.sandbox.ports import ExecAPI
 from aksha.runtime.sandbox.types import SandboxNeeds
+from aksha.runtime.timers.reads import TimeReads
 
 EffectClass = Literal["read", "store", "external", "exec", "model", "reserved"]
 """The one category of effect a tool has; it picks the gate's route and the recovery."""
@@ -88,9 +89,14 @@ class ToolContext:
     citation spans drafts them over the texts it returned. None when no source is
     configured, and then every read returns None.
 
-    ``run_date`` is the ISO date (``YYYY-MM-DD``) of the run's recorded ``run.started``,
-    so a body that counts days counts them to a recorded date, the same on every replay.
-    It is not yet a recorded read: ADR-P25 D4's ``observe_time`` is not built.
+    ``run_date`` is the ISO date (``YYYY-MM-DD``) the run counts to: the later of its
+    recorded ``run.started`` date and the last date the runtime recorded for the owner,
+    read from the log as of the step (ADR-P25 B1, amended by B2), so a body that counts
+    days counts them to a recorded date, the same on every replay. Reading it is a recorded
+    read (ADR-P25 D4, B2): with ``time_reads`` set (the agent loop sets it for every
+    attempt), each read adds ``time:clock@<date>`` to the attempt's reads, and a later
+    recorded date invalidates what the body's step fed. ``observe_time(ctx)`` is the same
+    read, returned as the lineage input.
 
     ``http`` is the only way a body reaches the network (ADR-P26 D2): bound to the tool's
     egress policy, or refusing everything when the tool names none. ``exec`` runs a program
@@ -107,6 +113,16 @@ class ToolContext:
     run_date: str | None = None
     http: HttpClient = field(default_factory=RefusingHttpClient)
     exec: ExecAPI | None = None
+    time_reads: TimeReads | None = None
+
+    def __getattribute__(self, name: str) -> Any:
+        """Every read of ``run_date`` is recorded in ``time_reads`` (class doc)."""
+        value = object.__getattribute__(self, name)
+        if name == "run_date" and value is not None:
+            reads = object.__getattribute__(self, "time_reads")
+            if reads is not None:
+                reads.observe(value)
+        return value
 
 
 @dataclass(frozen=True)

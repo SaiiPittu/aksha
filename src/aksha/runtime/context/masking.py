@@ -54,7 +54,7 @@ from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import Message, ToolCall
 from aksha.runtime.projections.view import LogView
 
-_SOURCE_KINDS = frozenset({"record", "query"})
+_SOURCE_KINDS = frozenset({"record", "query", "time"})
 """The non-artifact reads whose versions the invalidation view tracks (decision 36)."""
 
 Measure = Callable[[tuple[Masked, ...]], int]
