@@ -313,6 +313,10 @@ class OneRecord:
         """The one record ID."""
         return (self.text.record_id,)
 
+    def serves(self, source: str) -> bool:
+        """Whether ``source`` is the one text's source."""
+        return source == self.text.source
+
 
 @dataclass
 class SourceWorld:

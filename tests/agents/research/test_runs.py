@@ -48,9 +48,6 @@ class FlakyWeb(WorldWeb):
             raise WebError("fetch_failed", f"{url} did not answer")
         return super().fetch(url, http)
 
-    def serves(self, source: str) -> bool:
-        return self.inner.serves(source)
-
 
 def _outputs(b: ResearchBench) -> dict[str, Any]:
     return {
