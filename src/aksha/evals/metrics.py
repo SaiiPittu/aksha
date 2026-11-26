@@ -2,7 +2,7 @@
 
 pass@k is the chance that at least one of k rollouts passes; pass^k the chance that all k
 pass. Both use the unbiased estimators over n rollouts with c passes (Chen and others,
-2021; tau-bench): ``pass@k = 1 - C(n - c, k) / C(n, k)`` and ``pass^k = C(c, k) / C(n, k)``,
+2021): ``pass@k = 1 - C(n - c, k) / C(n, k)`` and ``pass^k = C(c, k) / C(n, k)``,
 undefined (NaN) when n < k.
 
 pass^k is reported only where ``k_effective > 1``, the number of distinct normalised traces
