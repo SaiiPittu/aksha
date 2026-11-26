@@ -63,3 +63,14 @@ def test_open_event_store_opens_postgres(postgres_dsn: str, clock: FakeClock) ->
         assert isinstance(store, PostgresEventStore)
     finally:
         store.close()
+
+
+def test_open_blob_store_is_a_folder_of_blobs(tmp_path: Path) -> None:
+    from aksha.adapters.blobs.filesystem import FilesystemBlobStore
+    from aksha.app import open_blob_store
+
+    config = StorageConfig.from_env({"AKSHA_BLOB_PATH": str(tmp_path / "b")})
+    assert config.blob_path == tmp_path / "b"
+    assert StorageConfig.from_env({}).blob_path == Path("var/blobs")
+    blobs = open_blob_store(config)
+    assert isinstance(blobs, FilesystemBlobStore) and blobs.get(blobs.put(b"x")) == b"x"

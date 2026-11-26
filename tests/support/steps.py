@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue, EventTypeSpec
+from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.types import Deadline, StepOutput
 from aksha.runtime.policy.events import args_hash
@@ -72,38 +72,17 @@ def types(store: EventStore, owner: str = "o") -> list[str]:
 
 # --- probe types for the run classes whose event types later primitives declare ---------
 
-INTERRUPT_RAISED = EventTypeSpec(
-    name="interrupt.raised",
-    schema={"type": "object", "properties": {"interrupt": {"type": "string"}}},
-    writer="tests",
-    boundaries=frozenset({"U2"}),
-)
-"""Stands in for ADR-P17's type: an open interrupt holds its run."""
-
-INTERRUPT_RESOLVED = EventTypeSpec(
-    name="interrupt.resolved",
-    schema={"type": "object", "properties": {"interrupt": {"type": "string"}}},
-    writer="tests",
-    boundaries=frozenset({"U4"}),
-)
-APPROVAL_REQUESTED = EventTypeSpec(
-    name="approval.requested",
-    schema={"type": "object", "properties": {"approval": {"type": "string"}}},
-    writer="tests",
-    boundaries=frozenset({"U2"}),
-)
-"""Stands in for ADR-P17's approval request: it keeps its own lifecycle when a run stops."""
+# ``interrupt.raised``, ``interrupt.resolved`` and ``approval.requested`` are core types
+# since invalidation (ADR-P05) became their first core writer, so they need no stand-in.
 
 
 def recovery_catalogue() -> Catalogue:
-    """The probe catalogue plus the interrupt and approval stand-ins.
+    """The probe catalogue: the interrupt and approval types recovery reads are core now.
 
-    ``run.stop_requested`` and ``interrupt.voided`` are core types since cancellation
-    (ADR-P18) was built, so they need no stand-in.
+    ``run.stop_requested`` and ``interrupt.voided`` became core with cancellation (ADR-P18),
+    and the interrupt and approval request types with invalidation (ADR-P05).
     """
-    return Catalogue(
-        (*CORE_EVENT_TYPES, *TEST_TYPES, INTERRUPT_RAISED, INTERRUPT_RESOLVED, APPROVAL_REQUESTED)
-    )
+    return Catalogue((*CORE_EVENT_TYPES, *TEST_TYPES))
 
 
 def started_run(run: str, agent: str = "a", definition_hash: str | None = None) -> NewEvent:

@@ -7,14 +7,19 @@ section 2.7, without the walk and special segments (those belong to the stop pol
 
 .. code-block:: text
 
-    step_id  := run [ "/" instance ( "/" child )* [ "/" turn [ "/" call [ "/" sub ] ]
+    step_id  := run [ "/" instance ( "/" child )* [ "/" turn [ "/" call [ "/" sub ]
+                                                                | "/" turnsub ]
                                                   | "/" check ] ]
     run      := "R-" 4 or more digits                R-0002
     instance := task [ "[" key "]" ]                 compare[C1], scope
     turn     := "t" 2 or more digits, from 1         t03
     call     := "c" 2 or more digits, from 1         c02, the position in the model's reply
     sub      := "d" 2 digits | "derived"             d01, a fast model-class step
+    turnsub  := "compact"                            t12/compact, a summary compaction step
     check    := "k" 2 or more digits, from 1         k01, a completion check
+
+``turnsub`` follows a turn and nothing follows it: the recorded summary step that runs
+before that turn's model call (ADR-P08 D7).
 
 A Task may not be named like a reserved segment (:func:`is_reserved_segment`); the
 loader refuses it (``task_id_reserved``).
@@ -67,7 +72,8 @@ _INSTANCE = re.compile(r"^(?P<task>[a-z][a-z0-9_]*)(\[(?P<key>[^/\[\]]+)\])?$")
 _NUMBERED = re.compile(r"^(?P<letter>[tck])(?P<n>[0-9]{2,})$")
 _SUB = re.compile(r"^(d[0-9]{2}|derived)$")
 _RESERVED = re.compile(r"^[tckwxd][0-9]+$")
-_RESERVED_NAMES = frozenset({"end", "handoff", "derived"})
+_TURN_SUB = "compact"
+_RESERVED_NAMES = frozenset({"end", "handoff", "derived", _TURN_SUB})
 
 
 def is_reserved_segment(name: str) -> bool:
@@ -123,7 +129,10 @@ class StepId:
             return "a check belongs to the instance, not to a turn"
         if self.call is not None and self.turn is None:
             return "a call needs a turn"
-        if self.sub is not None and (self.call is None or not _SUB.match(self.sub)):
+        if self.sub == _TURN_SUB:
+            if self.turn is None or self.call is not None:
+                return f"sub-step {_TURN_SUB!r} follows a turn and no call"
+        elif self.sub is not None and (self.call is None or not _SUB.match(self.sub)):
             return f"sub-step {self.sub!r} needs a call and is d<2 digits> or derived"
         return None
 
@@ -159,7 +168,7 @@ class StepId:
             letter = m.group("letter") if m else None
             if m and letter and letter not in numbers and _in_order(letter, numbers, sub):
                 numbers[letter] = int(m.group("n"))
-            elif sub is None and "c" in numbers and _SUB.match(segment):
+            elif sub is None and _sub_fits(segment, numbers):
                 sub = segment
             else:
                 raise StepIdInvalid(message=f"{text!r}: {segment!r} is not expected here")
@@ -179,6 +188,17 @@ class StepId:
     def with_call(self, call: int) -> StepId:
         """This turn's step for ``call``."""
         return StepId(self.run, self.instance, turn=self.turn, call=call)
+
+    def compaction(self) -> StepId:
+        """This turn's summary compaction step, ``.../t12/compact`` (ADR-P08 D7)."""
+        return StepId(self.run, self.instance, turn=self.turn, sub=_TURN_SUB)
+
+
+def _sub_fits(segment: str, seen: Mapping[str, int]) -> bool:
+    """A call's sub-step after ``c``, or ``compact`` straight after ``t``."""
+    if "c" in seen:
+        return bool(_SUB.match(segment))
+    return set(seen) == {"t"} and segment == _TURN_SUB
 
 
 def _in_order(letter: str, seen: Mapping[str, int], sub: str | None) -> bool:

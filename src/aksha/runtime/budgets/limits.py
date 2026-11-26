@@ -58,12 +58,16 @@ def turns_used(view: LogView, run: str, instance: str) -> int:
 
 
 def vetoes_since_entry(view: LogView, run: str, instance: str) -> int:
-    """Completion-check vetoes of ``instance`` since its last ``task.entered``."""
+    """Completion-check vetoes of ``instance`` since its last entry or reset (ADR-P15 D2).
+
+    A ``completion_check.reset`` (a person answered a blocked instance, or a rebuild run
+    re-entered it) starts the count again, like a ``task.entered``.
+    """
     count = 0
     for e in view.events:
         if e.run != run or e.instance != instance:
             continue
-        if e.type == records.TASK_ENTERED:
+        if e.type in records.VETO_COUNT_RESETS:
             count = 0
         elif records.is_veto(e):
             count += 1

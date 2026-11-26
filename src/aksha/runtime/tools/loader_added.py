@@ -23,7 +23,15 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-from aksha.runtime.artifacts.types import SaveRequest
+from aksha.runtime.artifacts.types import (
+    SELF,
+    End,
+    Excerpt,
+    InputRef,
+    RelationRequest,
+    SaveRequest,
+)
+from aksha.runtime.events.catalogue import INPUT_REF_SCHEMA
 from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl, ToolOutcome, ToolSpec
 
 LOADER_ADDED_TOOLS: frozenset[str] = frozenset({"finish", "ask", "save_artifact"})
@@ -36,10 +44,34 @@ RUNTIME_OWNER = "runtime"
 """The owner of the loader-added tools, and the only declarer of a ``reserved`` tool."""
 
 
+def _end(value: Any) -> End:
+    return SELF if value == SELF else InputRef.from_json(value)
+
+
+def _relation(value: Mapping[str, Any]) -> RelationRequest:
+    return RelationRequest(
+        kind=str(value["kind"]),
+        src=_end(value["src"]),
+        dst=_end(value["dst"]),
+        evidence=tuple(Excerpt.from_json(x) for x in value.get("evidence", ())),
+        label=value.get("label"),
+    )
+
+
 def save_artifact(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """Ask the store to save ``content`` as one ``kind`` version under ``key``."""
+    """Ask the store to save ``content`` as one ``kind`` version under ``key``.
+
+    ``primary_inputs`` and ``relations`` are read from their JSON forms
+    (``InputRef.as_json``, ``Excerpt.as_json``, an end being an input or ``"self"``).
+    """
     kind, key = str(args["kind"]), args.get("key")
-    request = SaveRequest(kind, None if key is None else str(key), args["content"])
+    request = SaveRequest(
+        kind,
+        None if key is None else str(key),
+        args["content"],
+        primary_inputs=tuple(InputRef.from_json(r) for r in args.get("primary_inputs", ())),
+        relations=tuple(_relation(r) for r in args.get("relations", ())),
+    )
     return ToolOutcome(Ok({"kind": kind, "key": request.key}), saves=(request,))
 
 
@@ -64,9 +96,23 @@ _ASK = ToolSpec(
         "type": "object",
         "properties": {
             "question": {"type": "string", "minLength": 1},
+            # ADR-P17 S2: several questions, each answered (and cited) on its own.
+            "questions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "text": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["id", "text"],
+                    "additionalProperties": False,
+                },
+            },
             "options": {"type": "array", "items": {"type": "string"}},
         },
-        "required": ["question"],
+        "anyOf": [{"required": ["question"]}, {"required": ["questions"]}],
         "additionalProperties": False,
     },
 )
@@ -82,6 +128,35 @@ _SAVE_ARTIFACT = ToolSpec(
             "kind": {"type": "string", "minLength": 1},
             "key": {"type": ["string", "null"]},
             "content": {"type": "object"},
+            "primary_inputs": {"type": "array", "items": INPUT_REF_SCHEMA},
+            "relations": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "kind": {"type": "string", "minLength": 1},
+                        "src": {"anyOf": [{"const": SELF}, INPUT_REF_SCHEMA]},
+                        "dst": {"anyOf": [{"const": SELF}, INPUT_REF_SCHEMA]},
+                        "label": {"type": ["string", "null"]},
+                        "evidence": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "source": INPUT_REF_SCHEMA,
+                                    "quote": {"type": "string", "minLength": 1},
+                                    "pointer": {"type": "string"},
+                                    "span": {"type": "string", "minLength": 1},
+                                },
+                                "required": ["source", "quote"],
+                                "additionalProperties": False,
+                            },
+                        },
+                    },
+                    "required": ["kind", "src", "dst", "evidence"],
+                    "additionalProperties": False,
+                },
+            },
         },
         "required": ["kind", "content"],
         "additionalProperties": False,

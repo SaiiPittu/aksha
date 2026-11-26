@@ -28,6 +28,7 @@ from aksha.runtime.execution.types import StepId, StepOutput, StepPolicy, StepRe
 from aksha.runtime.projections.runs import RunSummary
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.storage.ports import EventStore
+from tests.support.approvals import requested
 from tests.support.backends import Backend, PostgresBackend, SQLiteBackend
 from tests.support.events import START
 from tests.support.steps import HASH, Crash, Script, recovery_catalogue, started_run
@@ -151,10 +152,7 @@ def test_stop_while_approval_pending_then_crash(world: World) -> None:
     w = world
     w.start("R-0002")
     steps = StepExecutor(w.store, "o", w.clock)
-    raised = (
-        NewEvent("approval.requested", {"approval": "A-0001"}, run="R-0002"),
-        NewEvent("interrupt.raised", {"interrupt": "P-0009", "kind": "approval"}, run="R-0002"),
-    )
+    raised = requested("A-0001", "R-0002")
     sid = StepId("R-0002", "a", turn=2, call=1)
     steps.step(sid, "tool", "handoff_request", HASH,
                lambda d: StepOutput({"asked": True}, events=raised), StepPolicy())  # fmt: skip
@@ -166,7 +164,7 @@ def test_stop_while_approval_pending_then_crash(world: World) -> None:
     before = w.store.last_seq("o")
     recover_on_startup(w.store, LOADED)
     assert w.facts(before) == [
-        ("interrupt.voided", "R-0002", {"interrupt": "P-0009", "reason": "run_stopped"}),
+        ("interrupt.voided", "R-0002", {"interrupt": "A-0001", "reason": "run_stopped"}),
         ("run.ended", "R-0002", {"outcome": "stopped", "reason": "stop_requested"}),
         ("stop.decided", "R-0002", {"walk": 2, "verdict": "stop", "cause": "resume",
                                     "candidate": "resume", "reason": "stop_requested"}),

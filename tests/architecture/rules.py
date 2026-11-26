@@ -317,6 +317,46 @@ def impure_gate(root: Path) -> list[Violation]:
     return out
 
 
+# --- ADR-P16 D1: stop policies are pure ------------------------------------------------
+
+STOP_POLICY_WRITER = "commit.py"
+"""The one stop-policy module that holds a store; every other one decides and is pure."""
+
+PURE_STOP_CALLS = frozenset(
+    {"open", "print", "input", "now", "utcnow", "today", "sleep", "mono_ms", "getenv"}
+)  # fmt: skip
+"""Calls a deciding stop-policy module may not make: the clock and I/O."""
+
+
+def impure_stop_policies(root: Path) -> list[Violation]:
+    """Every clock, randomness, I/O or store use in the deciding stop-policy modules.
+
+    A stop policy reads only the ``StopView`` and the candidate (ADR-P16 D1), so two runs
+    over the same log decide the same; only ``commit.py`` reaches the event store.
+    """
+    out: list[Violation] = []
+    files = sorted((root / "aksha").rglob("*.py"))
+    modules = frozenset(module_name(root, f) for f in files)
+    for f in sorted((root / "aksha" / "runtime" / "stop_policy").rglob("*.py")):
+        if f.name == STOP_POLICY_WRITER:
+            continue
+        me = module_name(root, f)
+        for target in imports_of(root, f, modules):
+            if target.split(".")[0] in IMPURE_MODULES:
+                out.append(Violation(me, target, "a stop policy imports no clock or I/O"))
+            elif _within(target, "aksha.runtime.storage") and not target.endswith(".rows"):
+                out.append(Violation(me, target, "only commit.py reaches the event store"))
+            elif _within(target, "aksha.adapters"):
+                out.append(Violation(me, target, "a stop policy imports no adapter"))
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"), filename=str(f))):
+            if isinstance(node, ast.Call):
+                fn = node.func
+                called = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", None)
+                if called in PURE_STOP_CALLS:
+                    out.append(Violation(me, str(called), "a stop policy calls no clock or I/O"))
+    return out
+
+
 def bypass_paths(root: Path) -> list[Violation]:
     """Every runtime function that runs a tool body without an ``Allow`` from ``check`` first.
 
@@ -416,7 +456,8 @@ def _guarded(fn: ast.AST, call: ast.Call, answers: set[str]) -> bool:
             (
                 b
                 for field in ("body", "orelse", "finalbody")
-                if node in (b := getattr(parent, field, [])) and isinstance(b, list)
+                # a lambda's body is one expression, not a block: test the type first
+                if isinstance(b := getattr(parent, field, []), list) and node in b
             ),
             None,
         )
@@ -564,4 +605,73 @@ def counter_fields(root: Path) -> list[Violation]:
                         held = name
             if held is not None:
                 out.append(Violation(me, held, "a cap is counted from the event store (P14 D1)"))
+    return out
+
+
+def headless_reads(root: Path) -> list[Violation]:
+    """Every read of a ``headless`` attribute in the runtime outside ``check``'s call of
+    ``resolve_ask`` (ADR-P11 D12, ``test_no_bypass_path_headless``).
+
+    The flag may be declared (a dataclass field) and passed on; it may be *read* only in
+    ``aksha.runtime.policy.gate.check``, as an argument of ``resolve_ask``.
+    """
+    import ast
+
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime").rglob("*.py")):
+        module = module_name(root, f)
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        allowed: set[int] = set()
+        if module == "aksha.runtime.policy.gate":
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "resolve_ask"
+                ):
+                    allowed.update(id(a) for a in node.args)
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "headless"
+                and id(node) not in allowed
+            ):
+                out.append(
+                    Violation(module, f"line {node.lineno}", "headless read outside resolve_ask")
+                )
+    return out
+
+
+LOOP_COMMITS = frozenset({"commit_stop_decision"})
+"""The one write the agent loop's driver makes itself: the stop decision (ADR-P16 D3)."""
+
+STORE_WRITES = frozenset({"append", "commit"})
+"""Method names that write an event store."""
+
+
+def loop_writers(root: Path) -> list[Violation]:
+    """Every write the agent loop makes other than through the step executor (ADR-P06 D3).
+
+    In ``aksha/runtime/loop/``: a call ``x.append(owner, boundary, events)`` (three or more
+    arguments, the ``EventStore.append`` shape, never a list's), a ``.commit(...)`` call,
+    and a call of any ``commit_*`` function but :data:`LOOP_COMMITS`, which only
+    ``drive.py`` may call.
+    """
+    out: list[Violation] = []
+    for f in sorted((root / "aksha" / "runtime" / "loop").rglob("*.py")):
+        me = module_name(root, f)
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"), filename=str(f))):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _called(node)
+            if name is None:
+                continue
+            args = len(node.args) + len(node.keywords)
+            if isinstance(node.func, ast.Attribute) and name in STORE_WRITES:
+                if name == "commit" or args >= 3:
+                    out.append(Violation(me, name, "the loop writes through the step executor"))
+            elif name.startswith("commit_") and not (
+                name in LOOP_COMMITS and me == "aksha.runtime.loop.drive"
+            ):
+                out.append(Violation(me, name, "only the driver commits, and only a decision"))
     return out

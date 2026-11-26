@@ -173,8 +173,9 @@ class SourceVersion:
 class GateInput:
     """Everything ``check`` reads. Only ``call`` comes from the model (D4).
 
-    ``ceiling`` is fixed on ``run.started``; ``narrowing``, ``meter`` and ``sources`` are
-    projections rebuilt from the event store; ``sandbox`` is the chosen backend's probe.
+    ``ceiling`` and ``headless`` are fixed on ``run.started``; ``narrowing``, ``meter`` and
+    ``sources`` are projections rebuilt from the event store; ``sandbox`` is the chosen
+    backend's probe.
     """
 
     call: ToolCall
@@ -185,6 +186,8 @@ class GateInput:
     meter: MeterReading
     sources: Mapping[str, SourceVersion]
     sandbox: Availability | None
+    headless: bool = False
+    """Fixed on ``run.started`` (D12, decision 26); read only by ``gate.resolve_ask``."""
 
 
 class _NoTruth:

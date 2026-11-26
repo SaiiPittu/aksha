@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 from jsonschema import Draft202012Validator, SchemaError
 
+from aksha.runtime.artifacts.types import PROVENANCE_RELATIONS
+from aksha.runtime.context.policy import POLICY_INVALID, policy_refusals
 from aksha.runtime.definitions.errors import LoadRefusal, Refusals
 from aksha.runtime.definitions.names import is_local_name, qualify, resolve_kind
 from aksha.runtime.definitions.tree_checks import (
@@ -28,7 +30,9 @@ from aksha.runtime.definitions.tree_checks import (
 )
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION, satisfies
+from aksha.runtime.models.checks import alias_problems
 from aksha.runtime.models.types import MODEL_CLASSES
+from aksha.runtime.tasks.tree import MAX_CONCURRENCY
 from aksha.runtime.tools.checks import tool_refusals
 from aksha.runtime.tools.loader_added import LOADER_ADDED_TOOLS
 from aksha.runtime.tools.types import ToolDecl, ToolUse
@@ -86,6 +90,12 @@ def validate_agent(
     for opt in agent.stop_policies:
         if not is_builtin_opt_in(opt):
             out.add("stop_policies", "unknown_stop_policy", stop_policy_message(opt))
+    if agent.concurrency != MAX_CONCURRENCY:
+        message = f"concurrency {agent.concurrency!r} is not built; v1 runs one instance at a time"
+        out.add("concurrency", "concurrency_unsupported", message)
+    if agent.context_policy is not None:
+        for message in policy_refusals(agent.context_policy, [*tool_names, *LOADER_ADDED_TOOLS]):
+            out.add("context_policy", POLICY_INVALID, message)
     if any(not is_function(c) for c in agent.completion):
         out.add("completion", "check_not_callable", "every completion check is a function")
     written = {resolve_kind(w, agent.name) for _, t in walk_tasks(agent.tasks) for w in t.writes}
@@ -127,6 +137,9 @@ def _relations(agent: Agent, out: Refusals, known: set[str]) -> None:
     out.items += name_refusals(out.module, "relations", [r.name for r in agent.relations])
     local = {agent.name, *agent.extensions}
     for rel in agent.relations:
+        if rel.name in PROVENANCE_RELATIONS:
+            message = f"relation {rel.name!r} is lineage, which only the runtime records"
+            out.add("relations", "provenance_relation_forbidden", message)
         for end in (*rel.src, *rel.dst):
             full = resolve_kind(end, agent.name)
             if full.startswith("record:"):
@@ -191,6 +204,9 @@ def _aliases(agent: Agent, out: Refusals) -> None:
         if alias.model_class not in MODEL_CLASSES:
             message = f"{alias.name!r}: no model class {alias.model_class!r}"
             out.add("model_aliases", "alias_class_unknown", message)
+            continue
+        for code, message in alias_problems(alias):
+            out.add("model_aliases", code, message)
         for fb in alias.fallback:
             other = aliases.get(fb)
             if other is None or other.model_class != alias.model_class:

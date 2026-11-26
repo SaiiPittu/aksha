@@ -43,3 +43,17 @@ def test_task_defaults_follow_the_adr() -> None:
 def test_check_result_carries_failing_keys() -> None:
     r = CheckResult(ok=False, message="missing", count=2, keys=("a", "b"))
     assert (r.ok, r.count, r.keys, r.clears) == (False, 2, ("a", "b"), None)
+
+
+def test_instance_ref_prints_and_parses_the_step_id_instance() -> None:
+    from aksha.runtime.tasks.types import InstanceRef
+
+    child = InstanceRef("R-0001", "collect/write", "n1")
+    assert child.instance == "collect[n1]/write"
+    assert str(child) == "R-0001/collect[n1]/write"
+    assert child.task_id == "write"
+    assert InstanceRef.parse("R-0001", "collect[n1]/write") == child
+    assert InstanceRef.parse("R-0001", "scope") == InstanceRef("R-0001", "scope", None)
+    assert InstanceRef("R-0001", "collect", "n1").child("read") == InstanceRef(
+        "R-0001", "collect/read", "n1"
+    )

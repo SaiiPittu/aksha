@@ -26,7 +26,10 @@ class Boundary:
 
 _ALL = (
     Boundary(
-        "U1", "start", "session", "command.accepted or command.refused, user.message, run.started"
+        "U1",
+        "start",
+        "session",
+        "command.accepted or command.refused, user.message, route.decided, run.started",
     ),
     Boundary(
         "U2a",
@@ -40,9 +43,11 @@ _ALL = (
         "U2",
         "step_result",
         "execution",
-        "step.completed with the result's facts: artifact rows and artifact.saved, "
-        "relations, an interrupt.raised or an approval request; for an effectful tool "
-        "call, the outbox.completed or outbox.abandoned it ends with",
+        "step.completed with the result's facts: read.recorded, excerpts.minted, "
+        "excerpts.shown, artifact rows and artifact.saved, relation.saved, citation.bound, "
+        "context.compacted, "
+        "an interrupt.raised or an approval request; for an "
+        "effectful tool call, the outbox.completed or outbox.abandoned it ends with",
     ),
     Boundary(
         "U3",
@@ -55,7 +60,9 @@ _ALL = (
         "U4",
         "resolution",
         "session",
-        "command.accepted or command.refused, interrupt.resolved, approvals, budget.granted, "
+        "command.accepted or command.refused, interrupt.resolved, the answer's "
+        "excerpts.minted, approvals, budget.granted, a route answer's route.decided "
+        "and run.started, "
         "review outcomes, run.stop_requested, "
         "an outbox.enqueued the decision wants",
     ),

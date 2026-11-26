@@ -27,3 +27,29 @@ def test_save_artifact_is_a_store_tool_returning_one_save_request() -> None:
     assert isinstance(outcome.result, Ok)
     (save,) = outcome.saves
     assert (save.kind, save.key, dict(save.content)) == ("line", "n1", {"line": "x"})
+
+
+def test_save_artifact_reads_primary_inputs_and_relations_from_json() -> None:
+    from aksha.runtime.artifacts.types import SELF, Excerpt, InputRef, RelationRequest
+
+    page = {"kind": "record", "id": "pages/P-0001", "version": "1"}
+    args = {
+        "kind": "merge",
+        "key": "m1",
+        "content": {},
+        "primary_inputs": [page],
+        "relations": [
+            {"kind": "same_as", "src": "self", "dst": page, "label": None,
+             "evidence": [{"source": page, "quote": "Acme", "span": "EX-0001"}]},
+        ],
+    }  # fmt: skip
+    decl = LOADER_ADDED_DECLS["save_artifact"]
+    from jsonschema import Draft202012Validator
+
+    Draft202012Validator(dict(decl.spec.schema)).validate(args)
+    assert decl.body is not None
+    (req,) = decl.body(CTX, args).saves
+    record = InputRef("record", "pages/P-0001", "1")
+    assert req.primary_inputs == (record,)
+    evidence = (Excerpt(record, "Acme", span="EX-0001"),)
+    assert req.relations == (RelationRequest("same_as", SELF, record, evidence),)

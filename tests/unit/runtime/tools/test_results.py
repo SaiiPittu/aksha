@@ -3,7 +3,13 @@ import json
 
 import pytest
 
-from aksha.runtime.tools.results import DEFAULT_RESULT_CAP_CHARS, cap_text, render_result
+from aksha.runtime.tools.results import (
+    DEFAULT_RESULT_CAP_CHARS,
+    cap_text,
+    render_result,
+    view_from_json,
+    view_json,
+)
 from aksha.runtime.tools.types import Err, Ok, ToolOutcome
 
 
@@ -56,3 +62,11 @@ def test_cap_text_keeps_head_and_tail_within_the_cap() -> None:
 def test_cap_text_refuses_a_cap_too_small_for_the_marker() -> None:
     with pytest.raises(ValueError, match="cap_chars"):
         cap_text("x" * 100, 10)
+
+
+def test_view_round_trips_through_its_recorded_json() -> None:
+    view = render_result(ToolOutcome(Ok({"text": "x" * 9_000})))
+    recorded = view_json(view)
+    assert set(recorded) == {"status", "text", "truncated", "full_chars", "full_hash"}
+    assert view_from_json(recorded) == view
+    assert view_from_json(json.loads(json.dumps(recorded))) == view

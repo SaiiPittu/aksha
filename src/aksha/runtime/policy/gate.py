@@ -16,6 +16,11 @@ Layers in the fixed order of D3, the first refusing layer winning:
 ``check`` is pure and never raises: any exception is ``Refuse("gate_error")`` at the layer
 it happened in. There is no mode, flag or setting that skips a layer, and every layer
 only removes: none can allow what an earlier one refused.
+
+Headless (D12, decision 26, option B): after every layer has run, :func:`resolve_ask`
+turns an allow whose route is ``approval`` into the route the tool takes without approval
+(``outbox`` for an external effect, ``dispatch`` otherwise). It is the one place the flag
+is read; it never touches a refusal, so every deny holds headless exactly as attended.
 """
 
 from __future__ import annotations
@@ -38,6 +43,7 @@ from aksha.runtime.sandbox.types import strong_enough
 from aksha.runtime.tasks.types import Task
 from aksha.runtime.tools.loader_added import IMPLICIT_TOOLS
 from aksha.runtime.tools.registry import ToolRegistry
+from aksha.runtime.tools.types import ToolSpec
 
 
 def check(g: GateInput, registry: ToolRegistry) -> Allow | Refuse:
@@ -49,10 +55,21 @@ def check(g: GateInput, registry: ToolRegistry) -> Allow | Refuse:
             refused = step(g, registry)
             if refused is not None:
                 return refused
-        return Allow(route_of(registry.get(g.call.name).spec))
+        spec = registry.get(g.call.name).spec
+        return resolve_ask(Allow(route_of(spec)), g.headless, spec)
     except Exception as exc:  # fail closed: a bug in a helper is a refusal, never an allow
         msg = f"the policy gate failed at layer {layer}: {type(exc).__name__}"
         return Refuse("gate_error", layer, msg, counted=True, detail=(type(exc).__name__,))
+
+
+def resolve_ask(a: Allow, headless: bool, tool: ToolSpec) -> Allow:
+    """Headless never asks: route ``approval`` becomes ``outbox`` or ``dispatch`` (D12).
+
+    Every other allow, and every attended allow, is returned unchanged.
+    """
+    if not headless or a.route != "approval":
+        return a
+    return Allow("outbox" if tool.effect == "external" else "dispatch", a.counted)
 
 
 def _budget(g: GateInput, registry: ToolRegistry) -> Refuse | None:

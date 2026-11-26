@@ -17,6 +17,7 @@ from aksha.runtime.api import (
     Agent,
     ArtifactKind,
     CheckResult,
+    ContextPolicy,
     ModelAlias,
     Ok,
     Read,
@@ -29,6 +30,7 @@ from aksha.runtime.api import (
     ToolUse,
     artifact_keys,
     from_field,
+    source_keys,
 )
 from aksha.runtime.definitions.loader import LoadedExtension, load_extensions
 from aksha.runtime.definitions.validate import validate_agent
@@ -112,6 +114,14 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         "relations",
         lambda a: replace(a, relations=(RelationKind("r", src=("line",), dst=("record:other",)),)),
     ),
+    (
+        "provenance_relation_forbidden",
+        None,
+        "relations",
+        lambda a: replace(
+            a, relations=(RelationKind("derived_from", src=("line",), dst=("line",)),)
+        ),
+    ),
     ("unknown_tool", None, "tools", lambda a: replace(a, tools=(*a.tools, ToolUse("nope")))),
     (
         "duplicate_tool",
@@ -150,6 +160,18 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         lambda a: replace(
             a, model_aliases=(*a.model_aliases, ModelAlias("classify.tone", "generation"))
         ),
+    ),
+    (
+        "context_policy_invalid",
+        None,
+        "context_policy",
+        lambda a: replace(a, context_policy=ContextPolicy(low_water_chars=70_000)),
+    ),
+    (
+        "context_policy_invalid",
+        None,
+        "context_policy",
+        lambda a: replace(a, context_policy=ContextPolicy(exempt_tools=frozenset({"nope"}))),
     ),
     ("check_not_callable", None, "completion", lambda a: replace(a, completion=("x",))),  # type: ignore[arg-type]
     ("duplicate_task", None, "tasks", lambda a: replace(a, tasks=(*a.tasks, a.tasks[1]))),
@@ -248,6 +270,13 @@ CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
         "model_aliases",
         lambda a: _child(a, "collect", "write", model_aliases=("nope",)),
     ),
+    ("concurrency_unsupported", None, "concurrency", lambda a: replace(a, concurrency=2)),
+    (
+        "keyed_child_unsupported",
+        "collect/read",
+        "per",
+        lambda a: _child(a, "collect", "read", per=source_keys("notes")),
+    ),
     (
         "minting_tool_not_extracting",
         "summarise",
@@ -300,7 +329,7 @@ def test_the_api_refusal_comes_first(echo: tuple[LoadedExtension, ...], tmp_path
 def test_api_refusals_accept_the_current_version() -> None:
     from aksha.runtime.definitions.validate import api_refusals
 
-    assert api_refusals("m", ">=1.0,<2") == []
+    assert api_refusals("m", ">=2.0,<3") == []
     assert [r.code for r in api_refusals("m", "<1")] == ["api_mismatch"]
 
 

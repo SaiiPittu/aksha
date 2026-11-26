@@ -15,6 +15,9 @@ dependencies = ["jsonschema>=4.19"]
 # Storage adapters are optional extras; the runtime core never imports them.
 # `make venv` installs dev only; `make venv-postgres` adds the PostgreSQL driver.
 postgres = ["psycopg[binary]>=3.2"]
+# The live model adapter (aksha.adapters.models.live) uses only the standard library; the
+# extra names the opt-in, so `pip install 'aksha[live]'` is how a live run is asked for.
+live = []
 dev = [
     "pytest>=8",
     "ruff>=0.6",

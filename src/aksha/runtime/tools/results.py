@@ -3,15 +3,22 @@
 The view is the canonical JSON of the result. Over the cap it is cut in the middle, head
 and tail kept, with a marker saying how much was cut; the full size and its SHA-256 go on
 ``step.completed``, so a rebuilt context recomputes nothing (D7).
+
+A tool step records its view under ``value["view"]`` as :func:`view_json` writes it;
+context assembly reads it back with :func:`view_from_json` (ADR-P08 D4).
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.tools.types import Ok, ToolOutcome, ToolResultView
+
+VIEW_FIELD = "view"
+"""The field of a tool step's recorded value that holds its model view."""
 
 DEFAULT_RESULT_CAP_CHARS = 8_000
 """The model view's cap in characters (code points) when the context policy sets none."""
@@ -60,4 +67,27 @@ def render_result(
         truncated=truncated,
         full_chars=len(full),
         full_hash="sha256:" + hashlib.sha256(full.encode("utf-8")).hexdigest(),
+    )
+
+
+def view_json(view: ToolResultView) -> dict[str, Any]:
+    """The view as a tool step records it under ``value["view"]``."""
+    return {
+        "status": view.status,
+        "text": view.text,
+        "truncated": view.truncated,
+        "full_chars": view.full_chars,
+        "full_hash": view.full_hash,
+    }
+
+
+def view_from_json(value: Mapping[str, Any]) -> ToolResultView:
+    """The inverse of :func:`view_json`."""
+    status: Literal["ok", "error"] = "ok" if value["status"] == "ok" else "error"
+    return ToolResultView(
+        status=status,
+        text=str(value["text"]),
+        truncated=bool(value["truncated"]),
+        full_chars=int(value["full_chars"]),
+        full_hash=str(value["full_hash"]),
     )

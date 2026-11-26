@@ -1,14 +1,51 @@
-"""Interrupt values: what a Task declares, and the approval rule a tool declares (ADR-P17).
+"""Interrupt values: kinds, requests, views, the action body and approval views (ADR-P17).
 
-Built so far: ``DeclaredInterrupt``, ``ApprovalFacts`` and ``ApprovalRule``.
-``InterruptView``, ``ActionBody`` and ``ApprovalView`` arrive with the interrupt primitive.
+``DeclaredInterrupt`` and ``ApprovalRule`` are what an agent declares (on a Task and on a
+tool). The rest is the runtime's: the six interrupt kinds (D2, S5), what raising one
+asks for (``InterruptRequest``), how a person sees it (``InterruptView``), the generic
+``ActionBody`` an approval signs (D6) and the approval's own view (``ApprovalView``).
+
+An interrupt's scope is read from its event's envelope, never stored twice: an instance
+(``run`` and ``instance`` set), a run (``run`` set, no instance: the budget interrupt) or a
+session (``session`` set, no run: the request router's ``route`` question, S5).
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Any, Literal
+
+InterruptKind = Literal["input", "choice", "approval", "budget", "review", "route"]
+"""The closed set of interrupt kinds (D2, P17-3); an agent's word goes in a ``label``."""
+
+INTERRUPT_KINDS: tuple[InterruptKind, ...] = (
+    "input",
+    "choice",
+    "approval",
+    "budget",
+    "review",
+    "route",
+)
+
+FREE_TEXT_KINDS: frozenset[str] = frozenset({"input", "choice", "route"})
+"""The kinds a free-text answer may resolve (D4, IE-10); the rest need an explicit command."""
+
+VoidReason = Literal[
+    "key_withdrawn",
+    "run_ended",
+    "run_stopped",
+    "replaced_by_edit",
+    "superseded",
+    "definition_changed",
+    "revision_invalidated",
+]
+"""Why the runtime withdrew an interrupt; it never resolves one (D4)."""
+
+InterruptState = Literal["open", "resolved", "voided"]
+ScopeName = Literal["instance", "run", "session"]
 
 
 @dataclass(frozen=True)
@@ -37,3 +74,168 @@ class ApprovalRule:
 
     facts: ApprovalFacts
     targets: Callable[[Mapping[str, object]], tuple[str, ...]] | None = None
+
+
+@dataclass(frozen=True)
+class Question:
+    """One question of an ``input`` interrupt; S2 gives each its own answer and span."""
+
+    id: str
+    text: str
+
+    def as_json(self) -> dict[str, str]:
+        """The stored form."""
+        return {"id": self.id, "text": self.text}
+
+
+@dataclass(frozen=True)
+class InterruptRequest:
+    """What a tool step or the runtime asks to raise: the kind, its scope and what it shows.
+
+    The scope is the envelope's: ``run`` and ``instance`` for an instance, ``run`` alone for
+    a run, ``session`` alone for a ``route`` question. ``questions`` (``input``, S2),
+    ``options`` (``choice``; the agents a ``route`` lists) and ``label`` are the shown
+    parts; ``extra`` holds a kind's own fields (an approval's ID, a review's card).
+    """
+
+    kind: InterruptKind
+    run: str | None = None
+    instance: str | None = None
+    session: str | None = None
+    questions: tuple[Question, ...] = ()
+    options: tuple[str, ...] = ()
+    label: str | None = None
+    extra: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+
+    def __post_init__(self) -> None:
+        """Check the scope: ``route`` alone is session-scoped; ``choice`` lists options."""
+        if self.kind == "route":
+            if self.session is None or self.run is not None or self.instance is not None:
+                raise ValueError("a route interrupt is scoped to a session, with no run")
+        elif self.run is None:
+            raise ValueError(f"a {self.kind} interrupt is scoped to a run or an instance")
+        if self.instance is not None and self.run is None:
+            raise ValueError("an instance-scoped interrupt names its run")
+        if self.kind in ("choice", "route") and not self.options:
+            raise ValueError(f"a {self.kind} interrupt lists its options")
+        if self.kind == "input" and not self.questions:
+            raise ValueError("an input interrupt asks at least one question")
+        ids = [q.id for q in self.questions]
+        if len(set(ids)) != len(ids):
+            raise ValueError("question IDs are unique within one interrupt")
+
+
+@dataclass(frozen=True)
+class InterruptView:
+    """One interrupt as a person and the runtime see it, read from the log (D1)."""
+
+    id: str
+    kind: InterruptKind
+    run: str | None
+    instance: str | None
+    session: str | None
+    payload: Mapping[str, Any]
+    seq: int
+    state: InterruptState = "open"
+    resolution: Mapping[str, Any] | None = None
+    void_reason: str | None = None
+
+    @property
+    def scope(self) -> ScopeName:
+        """``instance``, ``run`` or ``session``, from the envelope."""
+        if self.run is None:
+            return "session"
+        return "run" if self.instance is None else "instance"
+
+    @property
+    def is_open(self) -> bool:
+        """True while no closing fact exists."""
+        return self.state == "open"
+
+
+@dataclass(frozen=True)
+class ActionBody:
+    """The canonical description of the one action an approval covers (D6). Generic.
+
+    Only harness words: the tool, the canonical JSON of its arguments, the target artifact
+    refs with their content hashes, the idempotency key of the outbox entry it will create,
+    the agent definition hash and the facts the tool's ``ApprovalRule.facts`` returned.
+    """
+
+    tool: str
+    owner: str
+    canonical_args: str
+    targets: tuple[tuple[str, str], ...]
+    idempotency_key: str
+    definition_hash: str
+    facts: Mapping[str, str]
+
+    def args(self) -> Mapping[str, Any]:
+        """The tool arguments the body names, parsed from their canonical JSON."""
+        parsed = json.loads(self.canonical_args)
+        if not isinstance(parsed, dict):
+            raise ValueError("an action body's arguments are a JSON object")
+        return parsed
+
+    def target_refs(self) -> tuple[str, ...]:
+        """The artifact refs the action acts on, in order."""
+        return tuple(ref for ref, _ in self.targets)
+
+    def as_json(self) -> dict[str, Any]:
+        """The stored and signed form: every field, facts sorted by the canonical encoder."""
+        return {
+            "tool": self.tool,
+            "owner": self.owner,
+            "canonical_args": self.canonical_args,
+            "targets": [[ref, content_hash] for ref, content_hash in self.targets],
+            "idempotency_key": self.idempotency_key,
+            "definition_hash": self.definition_hash,
+            "facts": dict(self.facts),
+        }
+
+    @classmethod
+    def from_json(cls, value: Mapping[str, Any]) -> ActionBody:
+        """Read the stored form back."""
+        return cls(
+            tool=str(value["tool"]),
+            owner=str(value["owner"]),
+            canonical_args=str(value["canonical_args"]),
+            targets=tuple((str(r), str(h)) for r, h in value["targets"]),
+            idempotency_key=str(value["idempotency_key"]),
+            definition_hash=str(value["definition_hash"]),
+            facts=MappingProxyType({str(k): str(v) for k, v in value["facts"].items()}),
+        )
+
+
+ACTION_BODY_FIELDS: frozenset[str] = frozenset(
+    {"tool", "owner", "canonical_args", "targets", "idempotency_key", "definition_hash", "facts"}
+)
+"""The generic field set; ``test_action_body_has_no_agent_fields`` holds the body to it."""
+
+ApprovalState = Literal["requested", "granted", "rejected", "voided", "revoked", "used"]
+
+
+@dataclass(frozen=True)
+class ApprovalView:
+    """One approval and where it is in its life (the ADR's state diagram)."""
+
+    approval_id: str
+    body: ActionBody
+    signature: str
+    state: ApprovalState
+    run: str | None
+    instance: str | None
+    seq: int
+    decided_by: str | None = None
+    replaces: str | None = None
+    revoked_because: tuple[Mapping[str, Any], ...] = ()
+    used_by: str | None = None
+    void_reason: str | None = None
+
+
+@dataclass(frozen=True)
+class Refusal:
+    """Why an approval may not be used or decided: a stable code and a message."""
+
+    code: str
+    message: str = ""

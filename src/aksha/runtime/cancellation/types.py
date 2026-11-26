@@ -72,7 +72,7 @@ class HeldStart:
     seq: int
     type: str
     run: str | None
-    reason: HoldReason
+    reason: HoldReason | Literal["interrupt_open"]
 
 
 @dataclass(frozen=True)

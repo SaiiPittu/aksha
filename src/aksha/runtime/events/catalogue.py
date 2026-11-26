@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from jsonschema.exceptions import SchemaError
+from jsonschema.exceptions import SchemaError, ValidationError
 
 from aksha.runtime.canonical import NotCanonical, canonical_bytes, canonical_json, nul_path
 from aksha.runtime.errors import AkshaError
@@ -40,6 +40,7 @@ from aksha.runtime.events.errors import (
     PayloadTooLarge,
     UnknownEventType,
 )
+from aksha.runtime.events.stubs import Path, stub_paths, under
 
 PAYLOAD_CAP_BYTES = 64 * 1024
 """The largest payload, in bytes of canonical JSON (ADR-P01 D7; a placeholder to measure)."""
@@ -94,6 +95,30 @@ RUN_STARTED = EventTypeSpec(
             "api_version": {"type": "string", "pattern": "^[0-9]+[.][0-9]+$"},
             "runtime_commit": {"type": "string"},
             "dirty": {"type": "boolean"},
+            # ADR-P11 D12 (decision 26): a headless run never asks; every deny still holds.
+            "headless": {"type": "boolean"},
+            # ADR-P05 S1, D8: a rebuild run names the runs whose invalidated work it
+            # regenerates, and its key (one rebuild run per agent and source version).
+            "for_runs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "rebuild_key": {"type": "string", "pattern": "^rebuild:"},
+            # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
+            # class, native), with its hash; never a configuration value or a key.
+            "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},
+            "models": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "alias": {"type": "string", "minLength": 1},
+                        "model_class": {"enum": ["extraction", "classification", "generation"]},
+                        "adapter": {"type": "string", "minLength": 1},
+                        "native": {"type": "boolean"},
+                    },
+                    "required": ["alias", "model_class", "adapter", "native"],
+                    "additionalProperties": False,
+                },
+            },
+            "model_binding": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
             # ADR-P14 D2: the run's budget; a dimension left out is not capped.
             "budget": {
                 "type": "object",
@@ -107,17 +132,33 @@ RUN_STARTED = EventTypeSpec(
         "required": ["agent", "cause"],
     },
     writer="session",
-    boundaries=frozenset({"U1", "U9"}),
+    # U4: the answer to a route question opens its run (ADR-P23 D4).
+    boundaries=frozenset({"U1", "U4", "U9"}),
     dedup_key="rstart:{run}",
 )
+_UNKNOWN_ENTRY: Mapping[str, Any] = {
+    "type": "object",
+    "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "reason": {"enum": ["unverified", "not_checked"]},
+        "blocker": {"type": "string", "minLength": 1},
+    },
+    "required": ["key", "reason"],
+    "additionalProperties": False,
+}
 RUN_ENDED = EventTypeSpec(
     name="run.ended",
     schema={
         "type": "object",
         "properties": {
-            # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``.
-            "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
+            # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``. ADR-P24 D6:
+            # ``partial`` ends with explicit unknowns, ``blocked`` with an untolerated block.
+            "outcome": {"enum": ["complete", "partial", "blocked", "failed", "stopped"]},
             "reason": {"type": "string"},
+            # ADR-P16 D3: the blocked instances a run ends with, for readers.
+            "blockers": {"type": "array", "items": {"type": "string"}},
+            # ADR-P24 D6: every explicit unknown, its reason and its blocker.
+            "unknowns": {"type": "array", "items": _UNKNOWN_ENTRY},
         },
         "required": ["outcome", "reason"],
     },
@@ -125,6 +166,22 @@ RUN_ENDED = EventTypeSpec(
     boundaries=frozenset({"U3"}),
     dedup_key="rend:{run}",
 )
+_HASH = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+
+# ADR-P04: one lineage input, as ``aksha.runtime.artifacts.types.InputRef.as_json`` writes it.
+INPUT_REF_SCHEMA: Mapping[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {"enum": ["record", "query", "statement", "artifact", "blob"]},
+        "id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "path": {"type": "string"},
+        "entry_hash": _HASH,
+    },
+    "required": ["kind", "id", "version"],
+    "additionalProperties": False,
+}
+
 ARTIFACT_SAVED = EventTypeSpec(
     name="artifact.saved",
     schema={
@@ -134,13 +191,142 @@ ARTIFACT_SAVED = EventTypeSpec(
             "kind": {"type": "string"},
             "key": {"type": ["string", "null"]},
             "version": {"type": "integer", "minimum": 1},
-            "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            "content_hash": _HASH,
+            # ADR-P04 D5, D6: written by the artifact store's save path on every save.
+            "canonical_hash": _HASH,
+            "reads": {"type": "array", "items": INPUT_REF_SCHEMA},
+            "reads_hash": _HASH,
+            "primary_inputs": {"type": "array", "items": INPUT_REF_SCHEMA},
+            "writer": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "task_path": {"type": "string", "minLength": 1},
+                    "key": {"type": ["string", "null"]},
+                },
+                "required": ["agent", "task_path", "key"],
+                "additionalProperties": False,
+            },
+            "origin": {"enum": ["task", "derived", "choice", "copy_choice"]},
         },
         "required": ["ref", "kind", "key", "version", "content_hash"],
     },
     writer="artifacts",
     boundaries=frozenset({"U2", "U10"}),
     dedup_key="save:{ref}",
+)
+# --- P04 lineage inputs and typed relations (``artifacts/lineage.py``, ``relations.py``) --
+
+READ_RECORDED = EventTypeSpec(
+    name="read.recorded",
+    schema={
+        "type": "object",
+        "properties": {"input": INPUT_REF_SCHEMA, "via": {"enum": ["context", "tool"]}},
+        "required": ["input", "via"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2"}),
+)
+_EXCERPT = {
+    "type": "object",
+    "properties": {
+        "source": INPUT_REF_SCHEMA,
+        "quote": {"type": "string", "minLength": 1},
+        "pointer": {"type": "string"},
+        # ADR-P13: the span a record's quote is verified against.
+        "span": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
+    },
+    "required": ["source", "quote", "pointer"],
+    "additionalProperties": False,
+}
+RELATION_SAVED = EventTypeSpec(
+    name="relation.saved",
+    schema={
+        "type": "object",
+        "properties": {
+            "kind": {"type": "string", "minLength": 1},
+            "label": {"type": ["string", "null"]},
+            "src": INPUT_REF_SCHEMA,
+            "dst": INPUT_REF_SCHEMA,
+            "evidence": {"type": "array", "items": _EXCERPT, "minItems": 1},
+            "carrier": {"type": "string", "minLength": 1},
+            "n": {"type": "integer", "minimum": 0},
+        },
+        "required": ["kind", "label", "src", "dst", "evidence", "carrier", "n"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2", "U10"}),
+    dedup_key="rel:{carrier}#{n}",
+)
+# --- P13 grounding (``grounding/spans.py``, ``grounding/facts.py``) -----------------------
+
+_SPAN = {
+    "type": "object",
+    "properties": {
+        "span_id": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
+        "source": {"type": "string", "minLength": 1},
+        "record_id": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "minLength": 1},
+        "start": {"type": "integer", "minimum": 0},
+        "end": {"type": "integer", "minimum": 1},
+        "text": {"type": "string", "minLength": 1},
+        "tool": {"type": "string", "minLength": 1},
+        "supersedes": {"type": "string", "pattern": "^EX-[0-9]{4,}$"},
+    },
+    "required": ["span_id", "source", "record_id", "version", "start", "end", "text", "tool"],
+    "additionalProperties": False,
+}
+_SPAN_IDS = {"type": "array", "items": {"type": "string", "pattern": "^EX-[0-9]{4,}$"}}
+EXCERPTS_MINTED = EventTypeSpec(
+    name="excerpts.minted",
+    schema={
+        "type": "object",
+        "properties": {
+            "tool": {"type": "string", "minLength": 1},
+            # D8: each span carries its full text, so an old quote can be re-verified.
+            "spans": {"type": "array", "items": _SPAN},
+            # S1: the spans whose text was inside the view shown to the envelope's instance.
+            "shown": _SPAN_IDS,
+        },
+        "required": ["tool", "spans", "shown"],
+        "additionalProperties": False,
+    },
+    writer="grounding",
+    boundaries=frozenset({"U2", "U4"}),
+)
+EXCERPTS_SHOWN = EventTypeSpec(
+    name="excerpts.shown",
+    schema={
+        "type": "object",
+        "properties": {"spans": {**_SPAN_IDS, "minItems": 1}, "via": {"enum": ["context"]}},
+        "required": ["spans", "via"],
+        "additionalProperties": False,
+    },
+    writer="grounding",
+    boundaries=frozenset({"U2"}),
+)
+CITATION_BOUND = EventTypeSpec(
+    name="citation.bound",
+    schema={
+        "type": "object",
+        "properties": {
+            "carrier": {"type": "string", "minLength": 1},
+            "n": {"type": "integer", "minimum": 0},
+            "pointer": {"type": "string"},
+            "form": {"enum": ["span", "statement", "artifact"]},
+            "target": {"type": "string", "minLength": 1},
+            "quote": {"type": "string", "minLength": 1},
+            "occurrence": {"type": "integer", "minimum": 0},
+            "path": {"type": "string"},
+        },
+        "required": ["carrier", "n", "pointer", "form", "target"],
+        "additionalProperties": False,
+    },
+    writer="artifacts",
+    boundaries=frozenset({"U2", "U10"}),
+    dedup_key="cite:{carrier}#{n}",
 )
 RECOVERY_COMPLETED = EventTypeSpec(
     name="recovery.completed",
@@ -151,6 +337,29 @@ RECOVERY_COMPLETED = EventTypeSpec(
     },
     writer="execution",
     boundaries=frozenset({"U7"}),
+)
+
+# --- P08 summary compaction (``context/summary.py`` builds it) -------------------------
+# D7: one recorded generation step replaces an instance's older turns with a summary. The
+# summary rides on this event, never on an artifact, so it can never be cited as evidence;
+# it commits with the summary step's ``step.completed`` (U2), so a resume replays it.
+
+CONTEXT_COMPACTED = EventTypeSpec(
+    name="context.compacted",
+    schema={
+        "type": "object",
+        "properties": {
+            "through_turn": {"type": "integer", "minimum": 1},
+            "summary": {"type": "string", "minLength": 1},
+            "summary_hash": _HASH,
+            "policy_version": {"type": "integer", "minimum": 1},
+        },
+        "required": ["through_turn", "summary", "summary_hash", "policy_version"],
+        "additionalProperties": False,
+    },
+    writer="context",
+    boundaries=frozenset({"U2"}),
+    dedup_key="compact:{step}",
 )
 
 # --- P02 step facts: the durable step executor (``execution/facts.py`` builds them) ------
@@ -195,6 +404,32 @@ STEP_STARTED = EventTypeSpec(
             "counted": {"type": "boolean"},
             # ADR-P03 D1: the idempotency key of the entry an effectful call enqueued.
             "outbox_key": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+            # ADR-P07: what answered a model step, and the cascade candidate it replaces.
+            "model_class": {"enum": ["extraction", "classification", "generation"]},
+            "alias": {"type": "string", "minLength": 1},
+            "adapter": {"type": "string", "minLength": 1},
+            "native": {"type": "boolean"},
+            "replaces": {"type": "string", "minLength": 1},
+            # ADR-P08 D3, S1: what the context of a generation step held. ``context_chars``
+            # is its measured size; ``rendered`` each artifact shown and how; ``masked`` the
+            # tool steps whose results it hid, so a later turn keeps them hidden (monotone).
+            "context_chars": {"type": "integer", "minimum": 0},
+            "rendered": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "ref": {"type": "string", "minLength": 1},
+                        "mode": {"enum": ["full", "summary", "ref_only"]},
+                        "chars": {"type": "integer", "minimum": 0},
+                        "spans": {"type": "array", "items": {"type": "string"}},
+                    },
+                    "required": ["ref", "mode", "chars", "spans"],
+                    "additionalProperties": False,
+                },
+            },
+            "masked": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "summary_through": {"type": "integer", "minimum": 1},
         },
         "required": ["kind", "counted"],
     },
@@ -291,14 +526,26 @@ ATTEMPT_DISCARDED = EventTypeSpec(
     dedup_key="sdisc:{step}/a{attempt}",
 )
 
-# --- P14 budgets, and the part of P16's stop decision record P02 and P14 read ----------
-# ``stop.decided`` is declared with the fields the budget and limit reducers read
-# (``budgets/records.py``): a CONTINUE charges a turn, a ``cause: resume`` record is a
-# resume record (recovery writes it, ADR-P02 D7), a ``candidate: finish`` CONTINUE is a
-# veto. ADR-P16 widens the schema when it is built. ``budget.reached`` commits with the
-# budget interrupt in the stop decision; ``budget.granted`` is a person's command.
+# --- P14 budgets and P16 stop policy: the stop decision record --------------------------
+# ``stop.decided`` is the one record of a stop-policy evaluation (ADR-P16 D3). The budget
+# and limit reducers read ``verdict``, ``cause``, ``candidate``, ``candidate_instance``,
+# ``turn`` and ``resumes_turn`` (``budgets/records.py``): a CONTINUE charges a turn, a
+# ``cause: resume`` record is a resume record (recovery writes it, ADR-P02 D7), a
+# ``candidate: finish`` CONTINUE of the finishing instance is a veto. ``pops`` (and the
+# older single ``pop``) are the instances the evaluation popped DONE or FAIL, which the
+# Task status projection reads (ADR-P15 D6). The rest is the trail ``inspect`` and replay
+# read: the stack as derived, each policy's verdict in order, who decided, which limit
+# replaced a CONTINUE and the counts behind it. ``budget.reached`` commits with the budget
+# interrupt in the stop decision; ``budget.granted`` is a person's command.
 
 _DIMENSION = {"enum": ["model_turns", "tool_calls", "active_ms", "tokens", "cost_micro_usd"]}
+_VERDICT_KIND = {"enum": ["pass", "continue", "push", "hold", "done", "fail", "stop"]}
+_POLICY_VERDICT = {
+    "type": "array",
+    "prefixItems": [{"type": "string", "minLength": 1}, _VERDICT_KIND],
+    "minItems": 2,
+    "maxItems": 2,
+}
 
 STOP_DECIDED = EventTypeSpec(
     name="stop.decided",
@@ -309,11 +556,31 @@ STOP_DECIDED = EventTypeSpec(
             "verdict": {"enum": ["continue", "hold", "stop"]},
             "cause": {"type": "string", "pattern": "^[a-z][a-z0-9_:]*$"},
             "candidate": {"type": "string", "minLength": 1},
+            "candidate_instance": {"type": "string", "minLength": 1},
+            "after_turn": {"type": "integer", "minimum": 0},
+            "seq_read": {"type": "integer", "minimum": 0},
             "turn": {"type": "integer", "minimum": 1},
             "resumes_turn": {"type": "boolean"},
             "reason": {"type": "string"},
             "limit": {"type": "string"},
             "counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+            # ADR-P15 D6: the decision popped its instance DONE or FAIL (``blocked``).
+            "pop": {"enum": ["done", "fail"]},
+            "pops": {
+                "type": "array",
+                "items": {
+                    "type": "array",
+                    "prefixItems": [{"type": "string", "minLength": 1}, {"enum": ["done", "fail"]}],
+                    "minItems": 2,
+                    "maxItems": 2,
+                },
+            },
+            "stack": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "trail": {"type": "array", "items": _POLICY_VERDICT},
+            "decided_by": {"type": "string", "minLength": 1},
+            "replaced": _POLICY_VERDICT,
+            "outcome": {"enum": ["complete", "partial", "blocked", "failed", "stopped"]},
+            "interrupt": {"type": "string", "minLength": 1},
         },
         "required": ["walk", "verdict"],
         "additionalProperties": False,
@@ -361,6 +628,30 @@ BUDGET_GRANTED = EventTypeSpec(
     boundaries=frozenset({"U4"}),
     dedup_key="bgrant:{run}/{interrupt_id}",
 )
+RUN_FINALIZING = EventTypeSpec(
+    name="run.finalizing",
+    schema={
+        "type": "object",
+        "properties": {
+            # ADR-P24 D4: the budget interrupt "finalize" answered, and who answered it.
+            "interrupt": {"type": "string", "minLength": 1},
+            "by": {"type": "string", "minLength": 1},
+            # D5: the reserve per capped dimension, which only finalizer Tasks spend.
+            "reserve": {
+                "type": "object",
+                "propertyNames": _DIMENSION,
+                "additionalProperties": {"type": "integer", "minimum": 0},
+            },
+            "finalizers": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "voided": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        },
+        "required": ["interrupt", "by", "reserve", "finalizers", "voided"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="rfinal:{run}",
+)
 
 # --- P03 the transactional outbox and command receipts (``outbox/facts.py``, ----------
 # ``session/commands.py``). An outbox entry is ``outbox.enqueued``, committed in the
@@ -373,7 +664,7 @@ BUDGET_GRANTED = EventTypeSpec(
 
 _KEY = {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
 _SNAKE = {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
-_COMMAND_BOUNDARIES = frozenset({"U1", "U4", "U5"})
+_COMMAND_BOUNDARIES = frozenset({"U1", "U4", "U5", "U8"})
 
 OUTBOX_ENQUEUED = EventTypeSpec(
     name="outbox.enqueued",
@@ -541,20 +832,480 @@ INTERRUPT_VOIDED = EventTypeSpec(
         "additionalProperties": False,
     },
     writer="stop_policy",
-    boundaries=frozenset({"U3"}),
+    # U3: the stop ending; U2, U4, U8: invalidation voids a diff review whose revision went
+    # stale in the transaction that confirmed it (ADR-P05 D9).
+    boundaries=frozenset({"U2", "U3", "U4", "U8"}),
     dedup_key="ivoid:{run}/{interrupt}",
+)
+
+# --- P05 invalidation (``invalidation/``) ------------------------------------------------
+# The stored facts of invalidation are the source change, the query re-executions, the
+# saves and the revocations; every invalidation set is a projection over them (D3).
+# ``interrupt.raised``, ``interrupt.resolved`` and ``approval.requested`` are ADR-P17's
+# types; invalidation is their first core writer (a diff review and the fresh approval
+# request an acceptance makes). P17 gave them their full schemas: an approval request
+# carries its action body and signature, and ``route`` is the one session-scoped kind.
+
+_REF_TEXT = {"type": "string", "minLength": 1}
+_SIGNATURE = {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"}
+_ACTION_BODY = {
+    "type": "object",
+    "properties": {
+        "tool": {"type": "string", "minLength": 1},
+        "owner": {"type": "string", "minLength": 1},
+        "canonical_args": {"type": "string"},
+        "targets": {
+            "type": "array",
+            "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2},
+        },
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "definition_hash": {"type": "string", "minLength": 1},
+        "facts": {"type": "object", "additionalProperties": {"type": "string"}},
+    },
+    "required": [
+        "tool",
+        "owner",
+        "canonical_args",
+        "targets",
+        "idempotency_key",
+        "definition_hash",
+        "facts",
+    ],
+    "additionalProperties": False,
+}
+_HUNK = {
+    "type": "object",
+    "properties": {"path": {"type": "string"}, "old": {}, "new": {}},
+    "required": ["path"],
+    "additionalProperties": False,
+}
+_READ_STATUS = {
+    "type": "object",
+    "properties": {
+        "input": INPUT_REF_SCHEMA,
+        "state": {"enum": ["same", "equivalent", "moved", "unsettled", "gone"]},
+        "now": {"type": ["string", "null"]},
+    },
+    "required": ["input", "state", "now"],
+    "additionalProperties": False,
+}
+
+SOURCE_CHANGED = EventTypeSpec(
+    name="source.changed",
+    schema={
+        "type": "object",
+        "properties": {
+            "source_version": {"type": "integer", "minimum": 1},
+            "cause": {"enum": ["command", "recovery", "clock"]},
+            "change_set": {"type": "string"},
+            "sources": {"type": "object", "additionalProperties": {"type": "string"}},
+            "records": {
+                "type": "object",
+                "additionalProperties": {"type": ["string", "null"]},
+            },
+        },
+        "required": ["source_version", "cause", "sources", "records"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+QUERY_REEXECUTED = EventTypeSpec(
+    name="query.reexecuted",
+    schema={
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "minLength": 1},
+            "source_version": {"type": "integer", "minimum": 1},
+            "previous": {"type": "string", "minLength": 1},
+            "hash": {"type": "string", "minLength": 1},
+            "changed": {"type": "boolean"},
+        },
+        "required": ["query", "source_version", "previous", "hash", "changed"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+APPROVAL_REVOKED = EventTypeSpec(
+    name="approval.revoked",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "target": _REF_TEXT,
+            "moved": {"type": "array", "items": INPUT_REF_SCHEMA},
+        },
+        "required": ["approval", "target", "moved"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U2", "U4", "U8"}),
+    dedup_key="revoke:{approval}",
+)
+INTERRUPT_RAISED = EventTypeSpec(
+    name="interrupt.raised",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            # ADR-P16 D3: ``budget`` is the budget interrupt a stop decision raises (U3).
+            "kind": {"enum": ["input", "choice", "approval", "review", "budget", "route"]},
+            # ADR-P17: what an interrupt shows. ``questions`` (S2, one answer each),
+            # ``options`` (a choice; the agents a route lists), the agent's ``label``, and an
+            # approval's ID, signature, tool, facts and targets (its body is on the request).
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "string", "minLength": 1},
+                        "text": {"type": "string"},
+                    },
+                    "required": ["id", "text"],
+                    "additionalProperties": False,
+                },
+            },
+            "options": {"type": "array", "items": {"type": "string"}},
+            "label": {"type": "string"},
+            "approval": {"type": "string", "minLength": 1},
+            "signature": {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"},
+            "tool": {"type": "string", "minLength": 1},
+            "facts": {"type": "object", "additionalProperties": {"type": "string"}},
+            "targets": {"type": "array", "items": {"type": "string"}},
+            # ADR-P05: a diff review's card, and the choice a rejected review raises (S4).
+            "old": _REF_TEXT,
+            "revision": _REF_TEXT,
+            "card_hash": _HASH,
+            "changed_reads": {"type": "array", "items": _READ_STATUS},
+            "via": {"type": "array", "items": {"type": "string"}},
+            "hunks": {"type": "array", "items": _HUNK},
+            "writer": {"type": "object"},
+            "reason": _SNAKE,
+            # ADR-P23 D3: a route question's message, each listed agent's purpose line, and
+            # the two or three highest-scoring agents (the rest follow in ``options``).
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "purposes": {"type": "object", "additionalProperties": {"type": "string"}},
+            "suggested": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        },
+        "required": ["interrupt"],
+        "allOf": [
+            {
+                "if": {"properties": {"kind": {"const": "review"}}, "required": ["kind"]},
+                "then": {"required": ["old", "revision", "card_hash", "hunks"]},
+            },
+            {
+                "if": {"properties": {"kind": {"const": "approval"}}, "required": ["kind"]},
+                "then": {"required": ["approval", "signature"]},
+            },
+        ],
+    },
+    writer="interrupts",
+    # U3: the budget interrupt, raised in the stop decision that a budget limit bit.
+    boundaries=frozenset({"U2", "U3", "U4"}),
+)
+INTERRUPT_RESOLVED = EventTypeSpec(
+    name="interrupt.resolved",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            # ADR-P17 D4: who answered, the answer per question ID (S2), or the decision.
+            "by": {"type": "string", "minLength": 1},
+            "answers": {"type": "object", "additionalProperties": {"type": "string"}},
+            # ADR-P24 D4: ``finalized`` answers a budget interrupt with ``finalize``.
+            "decision": {"enum": ["granted", "rejected", "finalized"]},
+        },
+        "required": ["interrupt"],
+    },
+    writer="session",
+    # No dedup key: a budget interrupt's ID is unique only within its run. The answer
+    # command refuses a closed interrupt ``already_decided``, and every kind-specific
+    # decision fact carries its own key (``decide:``, ``review:``, ``bgrant:``).
+    boundaries=frozenset({"U4"}),
+)
+REVIEW_ACCEPTED = EventTypeSpec(
+    name="review.accepted",
+    schema={
+        "type": "object",
+        "properties": {
+            "interrupt": {"type": "string", "minLength": 1},
+            "old": _REF_TEXT,
+            "revision": _REF_TEXT,
+            "card_hash": _HASH,
+        },
+        "required": ["interrupt", "old", "revision", "card_hash"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="review:{interrupt}",
+)
+REVIEW_REJECTED = EventTypeSpec(
+    name="review.rejected",
+    schema=REVIEW_ACCEPTED.schema,
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="review:{interrupt}",
+)
+APPROVAL_REQUESTED = EventTypeSpec(
+    name="approval.requested",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "targets": {"type": "array", "items": _REF_TEXT},
+            "replaces": {"type": "string", "minLength": 1},
+            # ADR-P17 D5, D6: the generic action body and its approval signature.
+            "body": _ACTION_BODY,
+            "signature": _SIGNATURE,
+        },
+        "required": ["approval", "body", "signature"],
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U2", "U4"}),
+)
+
+# --- P17 interrupts and approvals (``interrupts/``) --------------------------------------
+# A person's decision on an approval commits with its command (U4) under ``decide:``, so a
+# second decision is ``already_decided``. ``approval.voided`` is the runtime's: an edit
+# (U4) or a withdrawn key (U3, S3). ``approval.revoked`` is invalidation's (above).
+
+APPROVAL_GRANTED = EventTypeSpec(
+    name="approval.granted",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "signature": _SIGNATURE,
+            "by": {"type": "string", "minLength": 1},
+            "targets": {"type": "array", "items": _REF_TEXT},
+        },
+        "required": ["approval", "signature", "by", "targets"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="decide:{approval}",
+)
+APPROVAL_REJECTED = EventTypeSpec(
+    name="approval.rejected",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "signature": _SIGNATURE,
+            "by": {"type": "string", "minLength": 1},
+            "note": {"type": "string"},
+        },
+        "required": ["approval", "signature", "by"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="decide:{approval}",
+)
+APPROVAL_VOIDED = EventTypeSpec(
+    name="approval.voided",
+    schema={
+        "type": "object",
+        "properties": {
+            "approval": {"type": "string", "minLength": 1},
+            "reason": {"enum": ["replaced_by_edit", "key_withdrawn", "superseded"]},
+        },
+        "required": ["approval", "reason"],
+        "additionalProperties": False,
+    },
+    writer="interrupts",
+    boundaries=frozenset({"U3", "U4"}),
+    dedup_key="avoid:{approval}",
+)
+
+# --- P15 Task model and scheduler (``tasks/``) ------------------------------------------
+# Every fact here commits inside a stop decision (U3), so no Task fact has a second writer;
+# a person's answer resets a blocked instance in its resolution (U4), and a source change
+# may list a collection's keys again (U8). Status is a projection over them (D6).
+
+_TASK_KEY: Mapping[str, Any] = {"type": ["string", "null"]}
+_TASK_PATH: Mapping[str, Any] = {
+    "type": "string",
+    "pattern": "^[a-z][a-z0-9_]*(/[a-z][a-z0-9_]*)*$",
+}
+TASK_ENTERED = EventTypeSpec(
+    name="task.entered",
+    schema={
+        "type": "object",
+        "properties": {
+            "cause": {"enum": ["scheduler", "rebuild"]},
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "writer": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "task_path": _TASK_PATH,
+                    "key": _TASK_KEY,
+                },
+                "required": ["agent", "task_path", "key"],
+                "additionalProperties": False,
+            },
+            "key_source": {
+                "type": "object",
+                "properties": {
+                    "origin": {"enum": ["source", "artifact"]},
+                    "name": {"type": "string", "minLength": 1},
+                    "path": {"type": "string"},
+                },
+                "required": ["origin", "name"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["cause", "task", "key", "writer"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+TASK_WITHDRAWN = EventTypeSpec(
+    name="task.withdrawn",
+    schema={
+        "type": "object",
+        "properties": {"task": _TASK_PATH, "key": _TASK_KEY, "reason": {"const": "key_withdrawn"}},
+        "required": ["task", "key", "reason"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+COMPLETION_CHECK_EVALUATED = EventTypeSpec(
+    name="completion_check.evaluated",
+    schema={
+        "type": "object",
+        "properties": {
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "on": {"enum": ["entry", "finish", "parent"]},
+            "check": {"type": "string"},
+            "ok": {"type": "boolean"},
+            "message": {"type": "string"},
+            "count": {"type": "integer", "minimum": 0},
+            "keys": {"type": "array", "items": {"type": "string"}},
+            "code": {
+                "enum": [
+                    "",
+                    "check_failed",
+                    "check_raised",
+                    "children_pending",
+                    "child_blocked",
+                    "keys_pending",
+                    "rebuild_pending",
+                ]
+            },
+            "blockers": {"type": "array", "items": {"type": "string"}},
+            "clears": {"enum": ["supervisor", "worker", "person"]},
+        },
+        "required": ["task", "key", "on", "ok", "message", "count", "keys", "code"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+)
+COMPLETION_CHECK_RESET = EventTypeSpec(
+    name="completion_check.reset",
+    schema={
+        "type": "object",
+        "properties": {
+            "task": _TASK_PATH,
+            "key": _TASK_KEY,
+            "cause": {"enum": ["answer", "rebuild"]},
+        },
+        "required": ["task", "key", "cause"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3", "U4"}),
+)
+KEYS_LISTED = EventTypeSpec(
+    name="keys.listed",
+    schema={
+        "type": "object",
+        "properties": {
+            "collection": {"type": "string", "minLength": 1},
+            "keys": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^[^/\\[\\]]+$"},
+                "uniqueItems": True,
+            },
+        },
+        "required": ["collection", "keys"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3", "U8"}),
+)
+
+# --- P23: the request router -----------------------------------------------------------
+# A request reaches a session as ``user.message``; the router's decision of which agent
+# handles it is ``route.decided``, written in the transaction that opens the run (D6).
+
+USER_MESSAGE = EventTypeSpec(
+    name="user.message",
+    schema={
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "text": {"type": "string", "minLength": 1},
+            # D5: the agent the person named; a message that names one skips the router.
+            "agent": {"type": "string", "minLength": 1},
+        },
+        "required": ["message", "text"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U1"}),
+    dedup_key="msg:{message}",
+)
+ROUTE_DECIDED = EventTypeSpec(
+    name="route.decided",
+    schema={
+        "type": "object",
+        "properties": {
+            "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
+            "agent": {"type": "string", "minLength": 1},
+            "by": {"enum": ["classifier", "person"]},
+            "run": {"type": "string", "pattern": "^R-[0-9]{4,}$"},
+            # The classification step behind it; absent when a person named the agent.
+            "step": {"type": "string", "minLength": 1},
+            "probabilities_ppm": {
+                "type": "object",
+                "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
+            },
+        },
+        "required": ["message", "agent", "by", "run"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    # U1: a named agent and a classifier's accepted answer; U4: a person's route answer.
+    boundaries=frozenset({"U1", "U4"}),
+    dedup_key="route:{message}",
 )
 
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
     ARTIFACT_SAVED,
+    READ_RECORDED,
+    RELATION_SAVED,
+    EXCERPTS_MINTED,
+    EXCERPTS_SHOWN,
+    CITATION_BOUND,
     RECOVERY_COMPLETED,
     STEP_STARTED,
     STEP_DISPATCHED,
     STEP_FAILED,
     ATTEMPT_DISCARDED,
     STEP_COMPLETED,
+    CONTEXT_COMPACTED,
     OUTBOX_ENQUEUED,
     OUTBOX_CLAIMED,
     OUTBOX_FAILED,
@@ -565,8 +1316,27 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     STOP_DECIDED,
     BUDGET_REACHED,
     BUDGET_GRANTED,
+    RUN_FINALIZING,
     RUN_STOP_REQUESTED,
     INTERRUPT_VOIDED,
+    SOURCE_CHANGED,
+    QUERY_REEXECUTED,
+    APPROVAL_REVOKED,
+    INTERRUPT_RAISED,
+    INTERRUPT_RESOLVED,
+    REVIEW_ACCEPTED,
+    REVIEW_REJECTED,
+    APPROVAL_REQUESTED,
+    APPROVAL_GRANTED,
+    APPROVAL_REJECTED,
+    APPROVAL_VOIDED,
+    TASK_ENTERED,
+    TASK_WITHDRAWN,
+    COMPLETION_CHECK_EVALUATED,
+    COMPLETION_CHECK_RESET,
+    KEYS_LISTED,
+    USER_MESSAGE,
+    ROUTE_DECIDED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 
@@ -690,14 +1460,19 @@ class Catalogue:
         if boundary_id not in self.get(name).boundaries:
             raise BoundaryNotAllowed(message=f"{name} may not be appended in {boundary_id}")
 
-    def validate_payload(self, name: str, payload: Mapping[str, Any]) -> str:
+    def validate_payload(
+        self, name: str, payload: Mapping[str, Any], *, cap: int | None = PAYLOAD_CAP_BYTES
+    ) -> str:
         """Check ``payload`` against the cap and the schema of ``name``; return its canonical JSON.
 
-        Raises :class:`PayloadTooLarge` over :data:`PAYLOAD_CAP_BYTES`, and
+        Raises :class:`PayloadTooLarge` over ``cap`` (:data:`PAYLOAD_CAP_BYTES`; None checks
+        no size, which only the blob offload uses before it moves values out), and
         :class:`PayloadInvalid` naming the failing JSON path otherwise, including a string
         that holds NUL, which PostgreSQL cannot store (so both backends refuse it alike),
         and a value outside the hash chain's encoding (a float, an integer beyond plus or
         minus 2**53), which the chain could not hash the same way everywhere (ADR-P01 H3).
+        A blob stub (:mod:`aksha.runtime.events.stubs`) stands for a value checked before
+        it was moved to the blob store, so no schema error at or inside a stub counts.
         """
         self.get(name)
         try:
@@ -712,12 +1487,19 @@ class Catalogue:
         except NotCanonical as e:
             raise PayloadInvalid(name, e.path, e.reason) from None
         size = len(text.encode("utf-8"))
-        if size > PAYLOAD_CAP_BYTES:
-            raise PayloadTooLarge(name, size, PAYLOAD_CAP_BYTES)
-        error = next(iter(self._validators[name].iter_errors(payload)), None)
+        if cap is not None and size > cap:
+            raise PayloadTooLarge(name, size, cap)
+        stubs = stub_paths(payload)
+        errors = self._validators[name].iter_errors(payload)
+        error = next((e for e in errors if not _at_stub(e, stubs)), None)
         if error is not None:
             raise PayloadInvalid(name, _json_path(error.absolute_path), error.message)
         return text
+
+    def dedup_fields(self, name: str) -> frozenset[str]:
+        """The fields the dedup-key template of ``name`` reads (empty without a template)."""
+        template = self.get(name).dedup_key
+        return frozenset(_template_fields(template)) if template else frozenset()
 
     def render_dedup_key(
         self, name: str, envelope: Mapping[str, Any], payload: Mapping[str, Any]
@@ -737,3 +1519,16 @@ class Catalogue:
                     "dedup_key_field_missing", f"{name}: dedup key needs {field!r} ({template})"
                 )
         return template.format_map(values)
+
+
+def _at_stub(error: ValidationError, stubs: tuple[Path, ...]) -> bool:
+    """Whether ``error`` is only about values a blob stub stands for.
+
+    An error at or inside a stub is; so is a combinator's error (``anyOf``, ``oneOf``)
+    whose every branch failed only at stubs.
+    """
+    if not stubs:
+        return False
+    if under(tuple(error.absolute_path), stubs):
+        return True
+    return bool(error.context) and all(_at_stub(e, stubs) for e in error.context)

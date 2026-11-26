@@ -45,3 +45,30 @@ def test_raised_in_lists_every_interrupt_of_the_runs(store: EventStore) -> None:
     view = load_view(store, "o")
     assert raised_in(view, frozenset({"R-0001"})) == {"P-0001", "P-0002", "P-0003"}
     assert raised_in(view, frozenset()) == frozenset()
+
+
+def test_interrupts_carry_state_scope_and_resolution(store: EventStore) -> None:
+    from aksha.runtime.interrupts.reducers import (
+        interrupts,
+        open_interrupts,
+        open_session_interrupts,
+    )
+
+    store.append("o", "U2", (NewEvent("interrupt.raised", {"interrupt": "P-0005", "kind": "choice",
+                                                          "options": ["a"]},
+                                      run="R-0001", instance="pick"),))  # fmt: skip
+    route = {"interrupt": "P-0006", "kind": "route", "options": ["x"]}
+    store.append("o", "U2", (NewEvent("interrupt.raised", route, session="S-1"),))
+    store.append("o", "U4", (NewEvent("interrupt.resolved", {"interrupt": "P-0001", "by": "p",
+                                                            "answers": {"q1": "yes"}},
+                                      run="R-0001"),))  # fmt: skip
+    view = load_view(store, "o")
+    found = interrupts(view)
+    assert found["P-0001"].state == "resolved" and found["P-0001"].resolution is not None
+    assert found["P-0005"].scope == "instance" and found["P-0005"].kind == "choice"
+    assert found["P-0002"].scope == "run" and found["P-0002"].kind == "input"  # no kind stored
+    assert found["P-0006"].scope == "session"
+    assert [i.id for i in open_interrupts(view, "R-0001", "pick")] == ["P-0005"]
+    assert [i.id for i in open_interrupts(view, "R-0001")] == ["P-0002", "P-0003", "P-0005"]
+    assert [i.id for i in open_session_interrupts(view, "S-1")] == ["P-0006"]
+    assert open_session_interrupts(view, "S-2") == ()

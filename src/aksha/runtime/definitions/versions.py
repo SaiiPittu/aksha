@@ -1,4 +1,4 @@
-"""The extension API version, and ``requires_api`` specifiers such as ``">=1.0,<2"`` (D2).
+"""The extension API version, and ``requires_api`` specifiers such as ``">=2.0,<3"`` (D2).
 
 ``API_VERSION`` is ``major.minor``: adding a public name bumps the minor version; removing
 or changing one bumps the major. :mod:`aksha.runtime.api` re-exports it.
@@ -11,11 +11,26 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "1.1"
+API_VERSION = "2.0"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
-``LogView.complete`` (both trailing fields with defaults).
+``LogView.complete`` (both trailing fields with defaults). 1.2 added the artifact store's
+names a save uses (``ArtifactRef``, ``InputRef``, ``RelationRequest``, ``Excerpt``,
+``SELF``) and ``SaveRequest.primary_inputs`` and ``SaveRequest.relations`` (ADR-P04). 1.3
+added grounding's names (``SpanDraft``, ``CitePolicy``, ``Unknown``, ``maybe_unknown``) and
+the trailing fields ``Ok.spans``, ``Excerpt.span`` and ``ArtifactKind.cites`` (ADR-P13).
+1.4 added what a completion check reads (``TaskView``, ``InstanceRef``,
+``InstanceStatus``) and the trailing field ``Agent.concurrency`` (ADR-P15). 1.5 added
+the model interface's names (the specs, thresholds, requests, results, the rule-based
+fake bases and the fixed-point helpers) and the trailing fields ``ModelAlias.fields``,
+``ModelAlias.questions`` and ``ModelAlias.gates_effect`` (ADR-P07). 2.0 (26 Nov 2026,
+decision 34: compaction is a must-have) changed defaults, a major change:
+``ContextPolicy.masking`` is True and ``ContextPolicy.summary`` is ``SummaryPolicy()``,
+so an agent that declares a policy to change one number keeps masking and summaries;
+``SummaryPolicy.alias`` is the implicit ``generate`` and ``SummaryPolicy.trigger_chars``
+is None (the high watermark); ``Agent.requires_api`` defaults to ``">=2.0,<3"``. It also
+added the trailing field ``Ok.reads`` (a body's recorded reads, ADR-P04 D6).
 """
 
 Version = tuple[int, int]

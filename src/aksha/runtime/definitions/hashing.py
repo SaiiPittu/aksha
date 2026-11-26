@@ -46,12 +46,19 @@ def tree_hash(hashes: FileHashes) -> str:
 
 
 def definition_hash(
-    folder: Path, extensions: Sequence[LoadedExtension], api_version: str, *, tools_hash: str
+    folder: Path,
+    extensions: Sequence[LoadedExtension],
+    api_version: str,
+    *,
+    tools_hash: str,
+    context_hash: str | None = None,
 ) -> str:
     """The agent definition version hash of the agent in ``folder`` (``sha256:<64 hex>``).
 
     ``tools_hash`` is ``ToolRegistry.canonical_hash()``, so a changed tool set or schema
-    changes the hash even where file hashes alone would not show it.
+    changes the hash even where file hashes alone would not show it. ``context_hash`` is
+    ``context.policy.policy_hash`` of the agent's context policy (ADR-P08 D9): it carries
+    the runtime's ``CONTEXT_POLICY_VERSION``, which no file of the agent shows.
     """
     material = {
         "agent": [list(pair) for pair in file_hashes(folder)],
@@ -64,6 +71,7 @@ def definition_hash(
             for e in sorted(extensions, key=lambda e: e.ext.name)
         ],
         "tools": tools_hash,
+        "context": context_hash,
         "api_version": api_version,
     }
     return "sha256:" + sha256_hex(material)

@@ -12,3 +12,6 @@ digest
 git
 hg
 svn
+# The Patent agent's nouns (finding 11, 26 Nov 2026): the runtime names its own concepts.
+packet
+contributor
