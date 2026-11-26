@@ -236,6 +236,21 @@ def test_reminder_starts_are_capped_by_the_automatic_start_limit(bench: Bench) -
     assert _fire(bench, limits=Limits(auto_starts=(3, 300_000))).fired == ("T-4",)
 
 
+def test_a_reminder_is_judged_against_its_own_agents_start_window(bench: Bench) -> None:
+    """A configured window for the reminder's agent replaces the default one."""
+    for n in range(1, 3):
+        bench.store.append(OWNER, "U1", (scheduled(_remind(f"T-{n}", session=f"S-{n}")),))
+    bench.clock.advance(1)
+    strict = {"p": Limits(auto_starts=(1, 300_000))}
+    report = _fire(bench, limits=Limits(auto_starts=(3, 300_000)), agent_limits=strict)
+    assert report.fired == ("T-1",)
+    assert report.deferred == {"T-2": "auto_start_limit"}
+    loose = {"p": Limits(auto_starts=(5, 300_000))}
+    assert _fire(bench, limits=Limits(auto_starts=(1, 300_000)), agent_limits=loose).fired == (
+        "T-2",
+    )
+
+
 def test_each_firing_survives_a_crash_and_never_fires_twice(tmp_path: Path) -> None:
     b = Bench(tmp_path)
     b.start("R-0001")

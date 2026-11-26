@@ -241,3 +241,28 @@ def test_a_session_step_fires_a_due_reminder_into_a_new_run(session: SessionBenc
     (ended,) = session.payloads("run.ended")
     assert ended["outcome"] == "complete"
     assert session.session.store.owners_with_pending_timers() == ()
+
+
+def test_a_session_judges_a_reminder_against_its_agents_configured_window(
+    session: SessionBench,
+) -> None:
+    from aksha.runtime.budgets.types import Limits
+    from aksha.runtime.session.service import Session
+    from aksha.runtime.stop_policy.types import SessionScope
+    from aksha.runtime.timers.facts import scheduled
+    from aksha.runtime.timers.types import Reminder, TimerSet
+
+    base = session.session
+    scribe = base.agents["scribe"]
+    strict = replace(scribe, agent=replace(scribe.agent, limits=Limits(auto_starts=(1, 300_000))))
+    runtime = Session(base.store, base.clock, (strict,), ids=base.ids)
+    note = Reminder("scribe", "Write a note")
+    timers = [
+        TimerSet(f"T-{n}", SessionScope(f"S-{n}"), "reminder", after_ms=1_000, request=note)
+        for n in (1, 2)
+    ]
+    base.store.append(OWNER_S, "U1", tuple(scheduled(t) for t in timers))
+    session.clock.advance(1)
+    report = runtime.tick(OWNER_S)
+    assert report.fired == ("T-1",)
+    assert report.deferred == {"T-2": "auto_start_limit"}

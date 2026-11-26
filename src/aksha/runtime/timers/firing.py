@@ -109,14 +109,17 @@ def fire_due(
     ids: IdSource,
     agents: Mapping[str, Mapping[str, Any]] | None = None,
     limits: Limits | None = None,
+    agent_limits: Mapping[str, Limits] | None = None,
 ) -> FiringReport:
     """Fire every timer of ``owner`` due at ``now`` (module doc); return what happened.
 
     ``agents`` maps each agent this runtime can start to the fields its ``run.started``
     records (definition hash, model binding, budget); a reminder for another agent waits.
-    ``limits`` gives the automatic-start window.
+    A reminder is judged against its own agent's automatic-start window: the agent's
+    configured ``agent_limits`` entry, else ``limits``, else the default ``Limits()``.
     """
-    window = (limits or Limits()).auto_starts
+    default = limits or Limits()
+    windows = {name: lim.auto_starts for name, lim in (agent_limits or {}).items()}
     out_fired: list[str] = []
     out_cancelled: list[str] = []
     out_runs: list[str] = []
@@ -124,7 +127,7 @@ def fire_due(
     at = iso_utc(now)
     for timer in due_timers(load_view(store, owner), at):
         view = load_view(store, owner)
-        firing = _firing(view, timer, now, ids, agents or {}, window)
+        firing = _firing(view, timer, now, ids, agents or {}, windows, default.auto_starts)
         if isinstance(firing, str):
             deferred[timer.spec.timer_id] = firing
             continue
@@ -143,7 +146,8 @@ def _firing(
     now: datetime,
     ids: IdSource,
     agents: Mapping[str, Mapping[str, Any]],
-    window: tuple[int, int],
+    windows: Mapping[str, tuple[int, int]],
+    default: tuple[int, int],
 ) -> _Firing | str:
     spec = timer.spec
     if spec.cause == "approval_expiry":
@@ -154,6 +158,8 @@ def _firing(
         facts = record_source_changes(view, (), cause="clock", expired=(spec.target,))
         events = (*facts, *confirmations(view, facts), fired(spec.timer_id, "recheck"))
         return _Firing(SOURCE_CHANGE_BOUNDARY, events, "fired")
+    assert spec.request is not None
+    window = windows.get(spec.request.agent, default)
     return _reminder(view, timer, now, ids, agents, window)
 
 
@@ -213,6 +219,7 @@ def tick(
     ids: IdSource,
     agents: Mapping[str, Mapping[str, Any]] | None = None,
     limits: Limits | None = None,
+    agent_limits: Mapping[str, Limits] | None = None,
 ) -> FiringReport:
     """Record the date if it can matter, then fire what is due (module doc)."""
     now = clock.now()
@@ -223,7 +230,9 @@ def tick(
         with contextlib.suppress(AlreadyRecorded):
             store.append(owner, SOURCE_CHANGE_BOUNDARY, (*changed, *confirmations(view, changed)))
             recorded = True
-    report = fire_due(store, owner, now, ids=ids, agents=agents, limits=limits)
+    report = fire_due(
+        store, owner, now, ids=ids, agents=agents, limits=limits, agent_limits=agent_limits
+    )
     if not recorded:
         return report
     return FiringReport(report.fired, report.cancelled, report.deferred, report.runs, True)

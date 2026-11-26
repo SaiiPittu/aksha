@@ -45,6 +45,7 @@ from typing import Any
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
+from aksha.runtime.budgets.types import Limits
 from aksha.runtime.cancellation.command import stop
 from aksha.runtime.cancellation.ending import honour_stop
 from aksha.runtime.cancellation.requests import runs_to_resume_for_stop
@@ -274,6 +275,9 @@ class Session:
                      "reentry": a.reentry or "fresh"}
             for a in agents
         }  # fmt: skip
+        self._timer_limits: dict[str, Limits] = {
+            a.name: a.agent.limits for a in agents if a.agent.limits is not None
+        }
 
     # --- what this runtime accepts --------------------------------------------------------
 
@@ -538,7 +542,8 @@ class Session:
 
     def tick(self, owner: str) -> FiringReport:
         """Record the date if it matters and fire ``owner``'s due timers (module doc)."""
-        return tick(self.store, owner, self.clock, ids=self.ids, agents=self._timed)
+        return tick(self.store, owner, self.clock, ids=self.ids, agents=self._timed,
+                    agent_limits=self._timer_limits)  # fmt: skip
 
     def step(self, owner: str) -> bool:
         """One pass of the first open run of ``owner`` that can move; False if none can.
