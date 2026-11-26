@@ -90,6 +90,10 @@ def test_research_runs_on_an_uploaded_folder_and_a_changed_file_reopens_only_its
 
     code, out = aksha(tmp_path, "upload", str(data))  # nothing changed: nothing reopens
     assert code == wire.EXIT_OK and "no work reopened" in out, out
+    code, out = aksha(tmp_path, "show")
+    assert code == wire.EXIT_OK and "research.matrix@v1" in out.splitlines(), out
+    code, out = aksha(tmp_path, "show", "research.needs")
+    assert code == wire.EXIT_OK and '"phrase": "6 of 22 reviews in this sample"' in out, out
 
     reviews = data / "exports" / "farmer-reviews.csv"
     text = reviews.read_text(encoding="utf-8")

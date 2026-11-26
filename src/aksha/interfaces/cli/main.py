@@ -37,6 +37,7 @@ from aksha.app import (
     RuntimeConfig,
     export_trace,
     mock_system_notes,
+    open_blob_store,
     open_reader,
     open_session,
     session_capabilities,
@@ -349,7 +350,7 @@ def cmd_upload(ctx: Context, args: argparse.Namespace) -> int:
         session.store.close()
     opened = [r for r in run_statuses(view) if r.run not in before]
     if not opened:
-        ctx.say("nothing built on the changed inputs; no work reopened")
+        ctx.say("no work reopened: no input changed, or none that work was built on")
     code = wire.EXIT_OK
     for run in opened:
         code = _report(ctx, run)
@@ -519,6 +520,39 @@ def cmd_inspect(ctx: Context, args: argparse.Namespace) -> int:
     return wire.EXIT_OK
 
 
+def cmd_show(ctx: Context, args: argparse.Namespace) -> int:
+    """What the agents saved: every current output, or one output's content as JSON.
+
+    ``aksha show`` lists the owner's current artifact versions (``research.matrix@v2``);
+    ``aksha show research.matrix`` or ``aksha show research.profile/c01-...`` prints that
+    output's current content. A read over a read-only store, beside a server too.
+    """
+    from aksha.runtime.artifacts.versions import all_versions, current
+    from aksha.runtime.canonical import thaw
+
+    store = open_reader(ctx.config)
+    try:
+        view = load_view(store, ctx.owner)
+        blobs = open_blob_store(ctx.config.storage)
+        if args.output is None:
+            slots = sorted({(v.ref.kind, v.ref.key) for v in all_versions(view)},
+                           key=lambda s: (s[0], s[1] or ""))  # fmt: skip
+            for kind, key in slots:
+                found = current(view, kind, key)
+                if found is not None:
+                    ctx.say(str(found.ref))
+            return wire.EXIT_OK
+        kind, _, key = args.output.partition("/")
+        found = current(view, kind, key or None, blobs=blobs)
+    finally:
+        store.close()
+    if found is None:
+        ctx.say(f"no output {args.output}")
+        return wire.EXIT_REFUSED
+    ctx.emit({"ref": str(found.ref), "content": thaw(found.content)})
+    return wire.EXIT_OK
+
+
 def cmd_verify(ctx: Context, args: argparse.Namespace) -> int:
     """Check the hash chain from the genesis to the head (ADR-P01 Amendment H)."""
     store = open_reader(ctx.config)
@@ -651,6 +685,10 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("inspect", help="the run inspector (read-only)")
     s.add_argument("run")
     s.set_defaults(handler=cmd_inspect)
+
+    s = sub.add_parser("show", help="what the agents saved: list outputs, or print one (read-only)")
+    s.add_argument("output", nargs="?", help="an output, such as research.matrix or KIND/KEY")
+    s.set_defaults(handler=cmd_show)
 
     s = sub.add_parser("verify", help="check the hash chain (read-only)")
     s.set_defaults(handler=cmd_verify)
