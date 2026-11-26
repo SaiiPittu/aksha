@@ -21,7 +21,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from aksha.adapters.sources.folder import FolderSource
@@ -147,6 +147,58 @@ class InputWorkspace:
             os.replace(tmp, target)
             changed.append(f"{self.collection}/{p}")
         return tuple(changed)
+
+    def parts_of(self, owner: str, parent: str) -> tuple[str, ...]:
+        """The relative paths served under ``parent``'s attachment folder (``<parent>.parts/``)."""
+        folder = self.folder(owner)
+        parts = folder / (check_path(parent) + ".parts")
+        if not parts.is_dir():
+            return ()
+        return tuple(sorted(f.relative_to(folder).as_posix() for f in parts.rglob("*")
+                            if f.is_file()))  # fmt: skip
+
+    def remove(self, owner: str, paths: Iterable[str]) -> tuple[str, ...]:
+        """Delete ``paths`` from ``owner``'s inputs; the record IDs that went.
+
+        Folders left empty under the owner's folder are removed too. A path not on disk is
+        skipped. Like :meth:`put`, this only changes files: the caller records what moved.
+        """
+        folder = self.folder(owner)
+        gone: list[str] = []
+        for p in sorted({check_path(p) for p in paths}):
+            target = folder / p
+            if not target.is_file():
+                continue
+            target.unlink()
+            gone.append(f"{self.collection}/{p}")
+            up = target.parent
+            while up != folder and up.is_dir() and not any(up.iterdir()):
+                up.rmdir()
+                up = up.parent
+        return tuple(gone)
+
+    def highest_named(self, owner: str, prefix: str) -> int:
+        """The highest ``n`` of a ``<prefix>-<n>`` on the first line of any of ``owner``'s files.
+
+        A converted input is served under a header that names its doc key, and the files
+        are written before the upload's facts commit. A process that stops between the two
+        leaves a key on disk the log has never seen; the next upload counts from past it,
+        so one key never names two files. A key that only looks like one skips a number,
+        which is harmless.
+        """
+        pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(prefix)}-([0-9]+)(?![0-9])")
+        folder = self.folder(owner)
+        best = 0
+        if not folder.is_dir():
+            return best
+        for f in folder.rglob("*"):
+            if not f.is_file():
+                continue
+            with f.open("rb") as fh:
+                head = fh.readline(4096).decode("utf-8", "replace")
+            for m in pattern.finditer(head):
+                best = max(best, int(m.group(1)))
+        return best
 
     def version(self, owner: str) -> str:
         """The owner's whole input set's version: a hash over every record and its version."""

@@ -411,19 +411,30 @@ class Session:
             try:
                 view = load_view(self.store, command.owner)
                 put = None if self.blobs is None else self.blobs.put
-                done = self.ingester.ingest(files, known_documents(view),
-                                            highest(view.events, DOC_PREFIX) + 1, put)  # fmt: skip
+                first = (
+                    max(
+                        highest(view.events, DOC_PREFIX),
+                        self.inputs.highest_named(command.owner, DOC_PREFIX),
+                    )
+                    + 1
+                )
+                done = self.ingester.ingest(files, known_documents(view), first, put)
             except ValueError as e:
                 return self._refuse(command, "upload_inputs", command.owner,
                                     {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
             serve = {i.path: i.data for i in done}
             facts = tuple(NewEvent(t, dict(p)) for i in done for t, p in i.facts)
         before = self.inputs.version(command.owner)
+        # An uploaded file owns its attachment folder: a part the new upload no longer
+        # serves is removed, so a replaced email's old attachments stop being readable.
         try:
+            stale = [q for p in files for q in self.inputs.parts_of(command.owner, p)
+                     if q not in serve]  # fmt: skip
             changed = self.inputs.put(command.owner, serve)
         except ValueError as e:
             return self._refuse(command, "upload_inputs", command.owner,
                                 {"paths": sorted(files)}, UPLOAD_REFUSED, str(e))  # fmt: skip
+        changed = (*changed, *self.inputs.remove(command.owner, stale))
         named = hashlib.sha256()
         for p in sorted(files):
             named.update(p.encode("utf-8") + b"\0" + hashlib.sha256(files[p]).hexdigest().encode())

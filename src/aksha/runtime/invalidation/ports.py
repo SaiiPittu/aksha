@@ -8,7 +8,7 @@ result-set hashes, and records what they answered as ``source.changed`` and
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Protocol
 
 from aksha.runtime.grounding.ports import RecordReader
@@ -55,6 +55,7 @@ class InputWorkspace(Protocol):
     """Each owner's uploaded inputs: a versioned source that uploads write (ADR-P05 D6).
 
     ``put`` writes files for one owner and returns the record IDs whose bytes changed;
+    ``remove`` deletes them (an uploaded file's attachment parts it no longer has);
     ``reader`` is that owner's record reader over them. The session records what an upload
     moved with the same source-change fact as any other change, so only the work built on
     a changed record reopens.
@@ -80,6 +81,18 @@ class InputWorkspace(Protocol):
 
     def put(self, owner: str, files: Mapping[str, bytes]) -> tuple[str, ...]:
         """Write ``files`` (relative path to bytes) for ``owner``; the record IDs that changed."""
+        ...
+
+    def parts_of(self, owner: str, parent: str) -> tuple[str, ...]:
+        """The relative paths served under ``parent``'s attachment folder (``<parent>.parts/``)."""
+        ...
+
+    def remove(self, owner: str, paths: Iterable[str]) -> tuple[str, ...]:
+        """Delete ``paths`` for ``owner``; the record IDs that went."""
+        ...
+
+    def highest_named(self, owner: str, prefix: str) -> int:
+        """The highest ``n`` of a ``<prefix>-<n>`` on the first line of any of ``owner``'s files."""
         ...
 
     def reader(self, owner: str) -> RecordReader:

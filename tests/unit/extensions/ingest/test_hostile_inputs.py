@@ -144,3 +144,27 @@ def test_a_sniffer_that_raises_is_a_gap(monkeypatch: pytest.MonkeyPatch) -> None
     got = fx.run("x.docx", b"PK\x03\x04" + b"\0" * 64)
     assert got.gap is not None and got.gap.reason == "unreadable"
     assert "the type check failed: RuntimeError" in got.gap.detail
+
+
+def _sent(n: int, size: int) -> object:
+    from aksha.extensions.ingest.types import SentImage
+
+    return SentImage(f"sha256:{n}", "p", (1, 1), (1, 1), 1_000_000, "image/png", True,
+                     f"sha256:{n}", 1, "flat", b"x" * size)  # fmt: skip
+
+
+def test_the_sent_copy_cache_is_bounded_by_entries_and_bytes() -> None:
+    """A long-lived session's ingester keeps one cache; it must not hold every image."""
+    from aksha.extensions.ingest.profiles import SentCopyCache
+
+    cache = SentCopyCache(max_entries=3, max_bytes=1_000)
+    for n in range(5):
+        cache.put((f"sha256:{n}", "p", None), _sent(n, 10))  # type: ignore[arg-type]
+    assert [cache.get((f"sha256:{n}", "p", None)) is not None for n in range(5)] == [
+        False, False, True, True, True]  # fmt: skip
+    cache.get(("sha256:2", "p", None))  # used most recently, so kept
+    cache.put(("sha256:9", "p", None), _sent(9, 985))  # type: ignore[arg-type]
+    held = [n for n in (2, 3, 4, 9) if cache.get((f"sha256:{n}", "p", None)) is not None]
+    assert held == [2, 9] and cache.held_bytes <= 1_000
+    cache.put(("sha256:big", "p", None), _sent(10, 5_000))  # type: ignore[arg-type]
+    assert cache.get(("sha256:big", "p", None)) is None  # larger than the whole budget

@@ -16,7 +16,10 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from aksha import data
+from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS
 from aksha.interfaces import wire
 from aksha.interfaces.cli.main import main
@@ -198,3 +201,74 @@ def test_without_an_ingester_a_binary_upload_is_refused(tmp_path: Path) -> None:
 
 def _facts_in(session: Any, kind: str) -> list[Any]:
     return [e for e in session.store.read("o1") if e.type == kind]
+
+
+def _upload_bytes(session: Any, files: dict[str, bytes]) -> Any:
+    import base64
+
+    from aksha.runtime.session import named as n
+
+    binary = {p: base64.b64encode(b).decode() for p, b in files.items()}
+    return session.dispatch(n.UploadInputs(owner="o1", files={}, binary=binary))
+
+
+def test_an_email_uploaded_again_without_an_attachment_removes_the_old_part(
+    tmp_path: Path,
+) -> None:
+    """An attachment's served file belongs to its parent: replacing the email replaces
+    the set, so a part the new email no longer has stops being readable."""
+    fx.need("pypdf")
+    from aksha.app import open_session
+    from tests.support.session import config
+
+    session = open_session(config(tmp_path, agent_paths=(DEFAULT_AGENTS,)))
+    try:
+        pdf = fx.text_pdf(["Payment terms: net 30 days from delivery"])
+        assert _upload_bytes(session, {"m.eml": fx.eml_bytes(pdf)}).accepted
+        part = "m.eml.parts/1-terms.pdf"
+        ws = session.inputs
+        assert isinstance(ws, InputWorkspace)
+        reader = ws.reader("o1")
+        assert reader.read("inputs", f"input/{part}") is not None
+        got = _upload_bytes(session, {"m.eml": fx.eml_bytes(pdf, name="other.pdf")})
+        assert got.accepted
+        assert not (ws.folder("o1") / part).exists()
+        assert (ws.folder("o1") / "m.eml.parts/1-other.pdf").exists()
+        assert _upload_bytes(session, {"m.eml": fx.eml_bytes()}).accepted
+        assert not (ws.folder("o1") / "m.eml.parts").exists()
+        assert ws.reader("o1").read("inputs", f"input/{part}") is None
+    finally:
+        session.store.close()
+
+
+def test_an_upload_cut_off_before_its_facts_does_not_hand_its_doc_key_out_again(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The workspace is written before the facts commit. A stop between the two leaves a
+    served header naming a doc key the log has never seen; the next upload must not
+    reuse that key for another file."""
+    fx.need("pypdf")
+    from aksha.app import open_session
+    from tests.support.session import config
+
+    session = open_session(config(tmp_path, agent_paths=(DEFAULT_AGENTS,)))
+    try:
+
+        def stop(*a: Any, **k: Any) -> Any:
+            raise KeyboardInterrupt("process stopped")
+
+        monkeypatch.setattr("aksha.runtime.session.service.apply_source_change", stop)
+        with pytest.raises(KeyboardInterrupt):
+            _upload_bytes(session, {"x.pdf": fx.text_pdf(["first"])})
+        monkeypatch.undo()
+        session.check_inputs(session.store, "o1")
+        ws = session.inputs
+        assert isinstance(ws, InputWorkspace)
+        orphan = (ws.folder("o1") / "x.pdf").read_text("utf-8").splitlines()[0]
+        assert _upload_bytes(session, {"y.pdf": fx.text_pdf(["second"])}).accepted
+        (fact,) = _facts_in(session, "document.stored")
+        assert fact.payload["path"] == "y.pdf"
+        assert f"[document {fact.payload['doc_key']} " not in orphan, orphan
+    finally:
+        session.store.close()

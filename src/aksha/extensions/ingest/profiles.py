@@ -41,6 +41,7 @@ from __future__ import annotations
 import hashlib
 import io
 import math
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import replace
 from fractions import Fraction
@@ -139,20 +140,41 @@ def fit_size(profile: ImageProfile, w: int, h: int, max_edge: int | None = None)
 
 
 class SentCopyCache:
-    """Sent copies by (source hash, profile ID, many-image edge); in memory, re-derivable."""
+    """Sent copies by (source hash, profile ID, many-image edge); in memory, re-derivable.
 
-    def __init__(self) -> None:
-        """An empty cache."""
-        self._held: dict[tuple[str, str, int | None], SentImage] = {}
+    Bounded, because one ingester lives as long as its session: at most ``max_entries``
+    copies and ``max_bytes`` of their bytes, the least recently used dropped first. A copy
+    larger than the whole byte budget is not kept. A dropped copy is derived again on its
+    next use; its blob is already in the blob store.
+    """
+
+    def __init__(self, *, max_entries: int = 256, max_bytes: int = 64 * 1024 * 1024) -> None:
+        """An empty cache holding at most ``max_entries`` copies and ``max_bytes`` bytes."""
+        self._held: OrderedDict[tuple[str, str, int | None], SentImage] = OrderedDict()
+        self.max_entries = max_entries
+        self.max_bytes = max_bytes
+        self.held_bytes = 0
         self.encodes = 0
 
     def get(self, key: tuple[str, str, int | None]) -> SentImage | None:
-        """The cached copy, or None."""
-        return self._held.get(key)
+        """The cached copy, or None; a hit counts as the most recent use."""
+        found = self._held.get(key)
+        if found is not None:
+            self._held.move_to_end(key)
+        return found
 
     def put(self, key: tuple[str, str, int | None], sent: SentImage) -> None:
-        """Keep ``sent`` under ``key``."""
+        """Keep ``sent`` under ``key``, dropping the least recently used past the bounds."""
+        old = self._held.pop(key, None)
+        if old is not None:
+            self.held_bytes -= len(old.data)
+        if len(sent.data) > self.max_bytes:
+            return
         self._held[key] = sent
+        self.held_bytes += len(sent.data)
+        while len(self._held) > self.max_entries or self.held_bytes > self.max_bytes:
+            _, dropped = self._held.popitem(last=False)
+            self.held_bytes -= len(dropped.data)
 
 
 def _encode(pixels: object, fmt: Literal["JPEG", "PNG"], quality: int) -> bytes:
