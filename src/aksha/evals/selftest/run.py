@@ -14,7 +14,7 @@ was left as in the base must fail it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -131,8 +131,14 @@ def self_test(
     open_store: StoreOpener,
     out: Path,
     registry: Mapping[str, Criterion],
+    cases: Sequence[EvalCase] = (),
 ) -> SelfTestReport:
-    """Run every self-test bundle for ``world`` (module docstring)."""
+    """Run every self-test bundle for ``world`` (module docstring).
+
+    With ``cases`` (the suite's cases that list this world), the null bundle is also graded
+    as each case: a case with ``needs_action`` must fail it, and one without must not, so
+    a case whose criteria an empty episode passes is caught before it is trusted.
+    """
     env = Environment(world, open_store=open_store, out=out)
     case = selftest_case(world, key, registry)
     report = SelfTestReport(world=world.name, criteria=tuple(registry))
@@ -158,12 +164,22 @@ def self_test(
         diff = [f"{c}: {got.get(c)} (oracle {o})" for c, o in want.items() if got.get(c) != o]
         report.checks.append(BundleCheck(f"perturbed:{name}", not diff, tuple(diff)))
 
-    null = graded(_run(env, _with(case, "selftest-null"), NullAgent(), "null"))
-    inv = [r for r in null.results if r.layer == "invariant" or r.id == "no_unbound_send"]
+    null_rec = _run(env, _with(case, "selftest-null"), NullAgent(), "null")
+    null = graded(null_rec)
+    inv = [r for r in null.results if r.layer == "invariant"]
     problems = [f"{r.id}: {r.outcome}" for r in inv if r.outcome != "pass"]
     if null.outcome != "fail":
         problems.append(f"null verdict is {null.outcome}, want fail")
     report.checks.append(BundleCheck("null", not problems, tuple(problems)))
+    if cases:
+        problems = []
+        for c in cases:
+            outcome = grade(null_rec, c, key, world, registry).outcome
+            if c.needs_action and outcome != "fail":
+                problems.append(f"{c.id}: the null bundle is {outcome}, want fail (needs_action)")
+            elif not c.needs_action and outcome == "fail":
+                problems.append(f"{c.id}: the null bundle fails a case without needs_action")
+        report.checks.append(BundleCheck("null-per-case", not problems, tuple(problems)))
 
     for name, agent, must_fail in (
         ("lister", ListerAgent(key, world), LISTER_MUST_FAIL),

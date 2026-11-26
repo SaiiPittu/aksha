@@ -46,7 +46,7 @@ def test_a_passing_episode_passes_and_should_results_never_fail_it(research: Epi
     assert v.outcome == "pass"
     assert v.result("patent.matrix") is not None
     assert v.result("patent.matrix").outcome == "fail"  # type: ignore[union-attr]
-    assert v.must_passed == (2, 2)
+    assert v.must_passed == (4, 4)  # the two listed, plus the two invariants every case runs
 
 
 def test_a_failed_must_fails_the_episode(research: EpisodeRecord) -> None:

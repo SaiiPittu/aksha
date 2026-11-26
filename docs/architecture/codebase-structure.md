@@ -385,7 +385,8 @@ src/aksha/
 │   │   └── run.py                           self_test, relation_self_test, mutation coverage
 │   └── agents/                              adapters that put an agent through an episode
 │       ├── __init__.py                      where the real agents' adapters go
-│       └── scripted.py                      ScriptedAgent, ScriptedResearchAgent
+│       ├── scripted.py                      ScriptedAgent, ScriptedResearchAgent
+│       └── tools.py                         episode_tools: runtime tool bodies over an episode
 └── interfaces/                              INTERFACES: how people reach the runtime
     ├── __init__.py                          calls the session API through aksha.app
     ├── wire.py                              commands, receipts and statuses as JSON; the exit codes

@@ -35,5 +35,10 @@ class ToolFault(EvalError):
     default_code = "tool_fault"
 
 
-class Restart(Exception):
-    """Raised out of an agent's run when a change step asks for a restart."""
+class Restart(BaseException):
+    """Raised out of an agent's run when a change step asks for a restart.
+
+    A ``BaseException``, like ``KeyboardInterrupt``, so the runtime's tool-body wrapper and
+    an agent's own ``except Exception`` do not turn the restart into a tool error; only the
+    environment catches it.
+    """

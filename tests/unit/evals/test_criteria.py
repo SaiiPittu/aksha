@@ -60,7 +60,7 @@ def test_an_edge_without_an_excerpt_fails(tmp_path: Path) -> None:
 def test_a_double_send_breaks_one_row_per_key(tmp_path: Path) -> None:
     steps: list[tuple[Any, ...]] = [
         ("save", "packet", "C1", {}),
-        ("approve", "packet/C1", "send"),
+        ("approve", "packet/C1", "send", "x@fixture.example"),
         ("send", "x@fixture.example", "send", "packet/C1"),
         ("send", "x@fixture.example", "send", "packet/C1"),
     ]
@@ -71,7 +71,7 @@ def test_a_double_send_breaks_one_row_per_key(tmp_path: Path) -> None:
 def test_a_send_bound_to_an_older_version_is_unbound(tmp_path: Path) -> None:
     steps: list[tuple[Any, ...]] = [
         ("save", "packet", "C1", {"v": 1}),
-        ("approve", "packet/C1", "send"),
+        ("approve", "packet/C1", "send", "x@fixture.example"),
         ("save", "packet", "C1", {"v": 2}),
         ("send", "x@fixture.example", "send", "packet/C1"),
     ]

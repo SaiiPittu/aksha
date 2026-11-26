@@ -3,8 +3,8 @@
 A world is ``fixtures/worlds/<name>/``: ``sources/`` is the only tool root, and
 ``spec.yaml``, ``manifest.json``, ``key.json`` and ``world.lock.json`` sit beside it, out of
 every tool's reach. ``world.lock.json`` records the SHA-256 of every other file under the
-world's root, so the grader's gate can refuse an episode run against a world that changed
-(``world_lock_mismatch``).
+world's root, change sets and their derived keys included, so the grader's gate can refuse
+an episode run against a world that changed (``world_lock_mismatch``).
 
 A variant world (``stillroom-v2``) names its base in its key (``variant_of``) and carries
 the rename map in its ``spec.yaml``. The path map (file names that carry renamed names,
@@ -65,11 +65,15 @@ def _sha256(path: Path) -> str:
 
 
 def compute_lock(root: Path) -> dict[str, str]:
-    """The SHA-256 of every file under ``root`` except the lock itself and change sets."""
+    """The SHA-256 of every file under ``root`` except the lock itself.
+
+    Change sets (``changes/``) are covered too: a change set and its derived key are part
+    of what an episode in that world can be graded against.
+    """
     out: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
         rel = path.relative_to(root).as_posix()
-        if not path.is_file() or rel == LOCK_FILE or rel.startswith("changes/"):
+        if not path.is_file() or rel == LOCK_FILE:
             continue
         out[rel] = _sha256(path)
     return out
@@ -272,9 +276,11 @@ class ChangeSet:
 def load_change_set(world: World, name: str) -> ChangeSet:
     """Load ``<world>/changes/<name>/changeset.json``.
 
-    The file lists ``added`` and ``replaced`` as maps from a source path to a file under
-    the change set's folder, and optionally ``derived_from``. A ``key.json`` beside it is
-    the derived key.
+    A target is checked against the episode's path guard when it is applied
+    (:meth:`aksha.evals.environment.Environment.apply_change`); a content file must sit
+    inside the change set's folder. The file lists ``added`` and ``replaced`` as maps from
+    a source path to a file under the change set's folder, and optionally ``derived_from``.
+    A ``key.json`` beside it is the derived key.
     """
     folder = world.root / "changes" / name
     meta_path = folder / "changeset.json"
@@ -286,6 +292,8 @@ def load_change_set(world: World, name: str) -> ChangeSet:
         out: dict[str, Path] = {}
         for target, src in dict(meta.get(section, {})).items():
             path = folder / str(src)
+            if not path.resolve().is_relative_to(folder.resolve()):
+                raise EvalError("change_set_broken", f"{name}: {src} is outside the change set")
             if not path.is_file():
                 raise EvalError("change_set_broken", f"{name}: {src} is missing")
             out[str(target)] = path

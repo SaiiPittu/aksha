@@ -5,9 +5,11 @@ the episode's tools (:class:`aksha.evals.episode.Episode`): it reads the world c
 its outputs and relations, asks for approvals and sends effects. Everything it does is
 recorded in the episode's own event store, and the grader reads only the bundle exported
 from that store once the episode has ended. An agent that runs on the Aksha runtime keeps
-its own runtime store and, at the end of its run, writes its saved artifacts into the
-episode in the bundle schema (``docs/evals/README.md``); the adapter that does so is what
-:mod:`aksha.app` registers.
+its own runtime store, reads its sources through
+:func:`aksha.evals.agents.tools.episode_tools` (tool bodies that call the episode, so every
+read passes the path guard and is recorded), and at the end of its run writes its saved
+artifacts into the episode in the bundle schema (``docs/evals/README.md``); the adapter
+that does so is what :mod:`aksha.app` registers.
 
 ``StoreOpener`` opens a fresh event store for one episode or one results folder; the
 composition root supplies it, so the eval package never picks a backend.

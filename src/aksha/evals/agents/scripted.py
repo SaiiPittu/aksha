@@ -27,7 +27,7 @@ class ScriptedAgent:
 
     Steps: ``("read", path)``, ``("list", folder)``, ``("save", kind, key, content,
     citations)``, ``("relate", type, src, dst, excerpt)``, ``("flag", kind, text)``,
-    ``("approve", target_ref, action)``, ``("send", recipient, action, target_ref)`` (the
+    ``("approve", target_ref, action, recipient)``, ``("send", recipient, action, target_ref)`` (the
     last approval granted is attached), ``("send_unbound", recipient, action)`` and
     ``("fail", message)``. An unknown step raises; :meth:`assert_complete` fails when steps
     were left.
@@ -59,7 +59,9 @@ class ScriptedAgent:
         elif op == "flag":
             ep.flag(step[1], step[2])
         elif op == "approve":
-            self._approval = ep.request_approval(step[1], step[2])
+            self._approval = ep.request_approval(
+                step[1], step[2], step[3] if len(step) > 3 else None
+            )
         elif op == "send":
             ep.send(step[1], step[2], target_ref=step[3], approval_id=self._approval)
         elif op == "send_unbound":
@@ -143,7 +145,7 @@ class ScriptedResearchAgent:
             self._save_entity(episode, f"E{i}", group)
         self._reviews(episode)
         ref = episode.save("report", "summary", {"competitors": len(entities)})
-        approval = episode.request_approval(ref.rsplit("@", 1)[0], "send_report")
+        approval = episode.request_approval(ref.rsplit("@", 1)[0], "send_report", REQUESTER)
         episode.send(REQUESTER, "send_report", target_ref="report/summary", approval_id=approval)
 
     def _page(self, ep: Episode, path: str) -> _Page | None:

@@ -38,7 +38,7 @@ def test_the_scripted_suite_passes_with_self_tests_first(full_run: SuiteRun) -> 
     lines = text.splitlines()
     assert lines[0].startswith("self-tests: pass; mutation coverage")
     assert lines[1] == "fake model mode: rates are plumbing checks, not reliability"
-    assert "one world cluster: counts only" in text
+    assert "1 world cluster(s): counts only" in text
     assert "trap handling" not in text  # never a trap tally in fake mode
     assert full_run.exit_code == 0
 
@@ -58,6 +58,7 @@ def test_results_are_events_and_the_report_is_their_projection(full_run: SuiteRu
     rows = [json.loads(line) for line in (full_run.out / "results.jsonl").read_text().splitlines()]
     assert len(rows) == len(full_run.records)
     assert all(r["conditions"]["world_lock"].startswith("sha256:") for r in rows)
+    assert all(r["conditions"]["agent_definition_hash"].startswith("sha256:") for r in rows)
     assert all(r["trace_path"].endswith("trace.jsonl") for r in rows)
 
 

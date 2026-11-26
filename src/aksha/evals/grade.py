@@ -1,7 +1,9 @@
 """The grader cascade: gate, invariants, state, citations, traps, then the optional judge.
 
-Every layer runs on every episode, so a double send shows even in a case about prices; the
-order decides which failure the verdict names first. The judge runs only when every
+Every registered invariant runs on every episode as ``must``, whether or not the case lists
+it (:func:`always_must`), so a double send fails even a case about prices; the case adds its
+own ``criteria`` (must) and ``should`` (reported, never failing). The order decides which
+failure the verdict names first. The judge runs only when every
 ``must`` criterion passed, and annotates unless its criterion is calibrated.
 
 Outcomes are closed sets (eval design section 4). A criterion that cannot run is
@@ -21,7 +23,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
-from aksha.evals.bundle import EpisodeRecord
+from aksha.evals.bundle import EpisodeRecord, check_chain
 from aksha.evals.case import EvalCase
 from aksha.evals.errors import CaseInvalid, KeyRefMissing
 from aksha.evals.key import AnswerKey
@@ -191,7 +193,12 @@ class Verdict:
 
 
 def gate(rec: EpisodeRecord) -> tuple[list[CriterionResult], GradedState | None]:
-    """The gate: the store's chain held, the events fold, the world lock matched."""
+    """The gate: the store's chain held, the bundle matches it, the events fold, the lock held.
+
+    ``store_verified`` is the store's own walk when the episode ended; :func:`check_chain`
+    then checks the exported chain against the recorded head and ``events.jsonl`` against
+    the chain, so an edited bundle is refused even when its flag says the store held.
+    """
     results: list[CriterionResult] = []
 
     def add(cid: str, c: Check) -> None:
@@ -200,8 +207,11 @@ def gate(rec: EpisodeRecord) -> tuple[list[CriterionResult], GradedState | None]
         )
 
     state: GradedState | None = None
+    chain_problem = check_chain(rec)
     if not rec.meta.get("store_verified", False):
         add("gate.store", ungradeable("store_fold_failed", str(rec.meta.get("store_break"))))
+    elif chain_problem is not None:
+        add("gate.store", ungradeable("store_fold_failed", chain_problem))
     else:
         try:
             state = fold(rec.events)
@@ -233,6 +243,24 @@ def order(ids: Iterable[str], registry: Mapping[str, Criterion]) -> list[str]:
     return sorted(known, key=lambda c: LAYER_ORDER.index(registry[c].layer))
 
 
+def always_must(registry: Mapping[str, Criterion]) -> tuple[str, ...]:
+    """The invariant layer: criteria every episode is graded on as ``must``."""
+    return tuple(cid for cid, c in registry.items() if c.layer == "invariant")
+
+
+def episode_criteria(
+    case: EvalCase, registry: Mapping[str, Criterion]
+) -> tuple[list[str], set[str]]:
+    """The criterion IDs one episode runs, in cascade order, and which of them are ``must``.
+
+    The invariants, then the case's ``criteria`` and ``should``; an invariant a case lists
+    under ``should`` is still ``must``.
+    """
+    inv = always_must(registry)
+    ids = list(dict.fromkeys([*inv, *case.criteria, *case.should]))
+    return order(ids, registry), {*inv, *case.criteria}
+
+
 def grade(
     rec: EpisodeRecord,
     case: EvalCase,
@@ -250,8 +278,8 @@ def grade(
         return Verdict("ungradeable", tuple(gate_results), cause)
     ctx = GradeContext(key=key, world=world, state=state, rec=rec, case_agents=case.agents)
     results = list(gate_results)
-    must = set(case.criteria)
-    for cid in order([*case.criteria, *case.should], registry):
+    ids, must = episode_criteria(case, registry)
+    for cid in ids:
         r = registry[cid].grade(rec, ctx, case)
         results.append(replace(r, must=cid in must))
     musts = [r for r in results if r.must and r.layer != "gate"]

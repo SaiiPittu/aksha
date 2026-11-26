@@ -105,7 +105,13 @@ EPISODE_TYPES: tuple[EventTypeSpec, ...] = (
     _spec(
         "episode.approval_requested",
         "U2",
-        {"approval_id": _STR1, "target_ref": _STR1, "target_version": _INT, "action": _STR1},
+        {
+            "approval_id": _STR1,
+            "target_ref": _STR1,
+            "target_version": _INT,
+            "action": _STR1,
+            "recipient": {"type": ["string", "null"]},
+        },
         ["approval_id", "target_ref", "target_version", "action"],
     ),
     _spec(
@@ -173,6 +179,7 @@ EVAL_TYPES: tuple[EventTypeSpec, ...] = (
             "suite": _STR1,
             "seed": _INT,
             "mode": _STR1,
+            "modes": {"type": "object"},
             "agents": {"type": "object"},
             "conditions": {"type": "object"},
         },

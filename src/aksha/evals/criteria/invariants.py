@@ -1,5 +1,9 @@
 """Invariants: rules that hold on every episode whatever the case is about.
 
+The cascade runs every registered criterion of the ``invariant`` layer on every episode,
+as ``must``, whether or not a case lists it (:func:`aksha.evals.grade.grade`): a double
+send fails a case about prices. ``no_unbound_send`` (in :mod:`.forbidden`) is one too.
+
 ``inv.one_row_per_key`` reads the fixture receiver's ledger: at most one delivery per
 effect key. It needs nothing but the ledger, so it gates from the first milestone. The
 invariants that need the runtime's recorded stop decisions and invalidation semantics

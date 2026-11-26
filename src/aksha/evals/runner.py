@@ -8,13 +8,18 @@ each verdict as an event in the results store. Cases with ``relation = "invarian
 base. The report is rebuilt from the results store's projection.
 
 Run conditions go on every result row: model mode, seed, k, fault profile digest, world
-lock hash, grader versions, the agent's registration and the runtime commit with a dirty
+lock hash, grader versions, the agent's definition hash and the runtime commit with a dirty
 flag when the caller supplies them.
+
+The output folder holds one run. A folder an earlier run wrote (it carries
+:data:`RUN_MARKER`) is cleared first, so a results row never points at a bundle another run
+rewrote; a non-empty folder without the marker is refused (``out_not_empty``).
 """
 
 from __future__ import annotations
 
 import os
+import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,18 +29,33 @@ from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase, Suite, check_against_keys
 from aksha.evals.criteria import REGISTRY
 from aksha.evals.environment import Environment
-from aksha.evals.errors import CaseInvalid
-from aksha.evals.grade import Criterion, Verdict, grade, order
+from aksha.evals.errors import CaseInvalid, EvalError
+from aksha.evals.grade import Criterion, Verdict, episode_criteria, grade, order
 from aksha.evals.judge import JUDGE_CRITERIA, Judge
 from aksha.evals.key import AnswerKey, load_key
 from aksha.evals.ports import StoreOpener
-from aksha.evals.registry import AgentRegistry
+from aksha.evals.registry import AgentRegistry, Registration
 from aksha.evals.relations import directional, invariance, key_delta
 from aksha.evals.report import exit_code, write_reports
 from aksha.evals.results import ResultsWriter, SuiteResults, criteria_json, project_results
 from aksha.evals.selftest.run import relation_self_test, self_test
 from aksha.evals.state import fold
 from aksha.evals.world import World, load_world, lock_digest, renaming
+
+RUN_MARKER = ".aksha-eval-run"
+"""The file that marks a folder as an eval run's output, safe to clear for the next run."""
+
+
+def prepare_out(out: Path) -> None:
+    """Clear an earlier run's folder, or refuse a non-empty folder that is not one."""
+    if out.exists() and any(out.iterdir()):
+        if not (out / RUN_MARKER).is_file():
+            raise EvalError(
+                "out_not_empty", f"{out} holds files that no eval run wrote; pick another --out"
+            )
+        shutil.rmtree(out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / RUN_MARKER).write_text("written by aksha eval run; cleared by the next run\n")
 
 
 @dataclass
@@ -78,12 +98,15 @@ def _conditions(
     seed: int,
     k: int,
     mode: str,
+    agent: Registration,
     extra: Mapping[str, Any],
 ) -> dict[str, Any]:
     faults = suite.faults.get(case.faults) if case.faults else None
-    versions = {c: REGISTRY[c].version for c in (*case.criteria, *case.should)}
+    versions = {c: REGISTRY[c].version for c in episode_criteria(case, REGISTRY)[0]}
     return {
         "mode": mode,
+        "agent_definition_hash": agent.definition_hash,
+        "agent_definition_basis": agent.definition_basis,
         "seed": seed,
         "k": k,
         "fault_profile": faults.digest if faults else None,
@@ -113,10 +136,10 @@ def run_suite(
     keys = {w: load_key(world) for w, world in worlds.items()}
     validate_suite(suite, keys)
     chosen = [suite.case(c) for c in cases] if cases else list(suite.cases)
-    mode = "fake"
-    for case in chosen:
-        name = agent_override or case.agents[0]
-        mode = agents.get(name).mode
+    modes = {c.id: agents.get(agent_override or c.agents[0]).mode for c in chosen}
+    distinct = set(modes.values())
+    mode = distinct.pop() if len(distinct) == 1 else ("mixed" if distinct else "fake")
+    prepare_out(out)
     writer = ResultsWriter(open_store, out, suite.name)
     records: dict[tuple[str, str, int], EpisodeRecord] = {}
     verdicts: dict[tuple[str, str, int], Verdict] = {}
@@ -126,12 +149,13 @@ def run_suite(
                 "suite": suite.name,
                 "seed": seed,
                 "mode": mode,
+                "modes": modes,
                 "agents": {c.id: agent_override or c.agents[0] for c in chosen},
                 "conditions": dict(conditions or {}),
             }
         )
         if selftests:
-            _selftests(writer, worlds, keys, open_store, out / "_selftest")
+            _selftests(writer, worlds, keys, open_store, out / "_selftest", suite.cases)
         for case in chosen:
             name = agent_override or case.agents[0]
             reg = agents.get(name)
@@ -175,6 +199,7 @@ def run_suite(
                                 seed=seed,
                                 k=rollouts,
                                 mode=reg.mode,
+                                agent=reg,
                                 extra=conditions or {},
                             ),
                         }
@@ -207,10 +232,18 @@ def _selftests(
     keys: Mapping[str, AnswerKey],
     open_store: StoreOpener,
     out: Path,
+    cases: Sequence[EvalCase] = (),
 ) -> None:
     oracles: dict[str, EpisodeRecord] = {}
     for wname, world in worlds.items():
-        report = self_test(world, keys[wname], open_store=open_store, out=out, registry=REGISTRY)
+        report = self_test(
+            world,
+            keys[wname],
+            open_store=open_store,
+            out=out,
+            registry=REGISTRY,
+            cases=[c for c in cases if wname in c.worlds],
+        )
         if report.oracle is not None:
             oracles[wname] = report.oracle
         gradeable = sorted(c for c in report.criteria if c not in report.key_gaps)

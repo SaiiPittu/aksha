@@ -13,7 +13,7 @@ A citation is any mapping with a ``file`` and an ``exact`` (and code-point ``sta
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 
@@ -58,6 +58,7 @@ class Approval:
     target_version: int
     action: str
     granted: bool | None
+    recipient: str | None = None
 
 
 @dataclass
@@ -177,15 +178,19 @@ def _apply(state: GradedState, type_: str, p: Mapping[str, Any]) -> None:
         state.flags.append(p)
     elif type_ == "episode.approval_requested":
         aid = str(p["approval_id"])
+        recipient = p.get("recipient")
         state.approvals[aid] = Approval(
-            aid, str(p["target_ref"]), int(p["target_version"]), str(p["action"]), None
+            aid,
+            str(p["target_ref"]),
+            int(p["target_version"]),
+            str(p["action"]),
+            None,
+            None if recipient is None else str(recipient),
         )
     elif type_ == "episode.approval_decided":
         aid = str(p["approval_id"])
         a = state.approvals[aid]
-        state.approvals[aid] = Approval(
-            a.approval_id, a.target_ref, a.target_version, a.action, bool(p["granted"])
-        )
+        state.approvals[aid] = replace(a, granted=bool(p["granted"]))
     elif type_ == "episode.effect_sent":
         state.sends.append(p)
     elif type_ == "episode.tool_called":

@@ -84,7 +84,7 @@ def test_approvals_bind_the_current_version_and_sends_reach_the_ledger(tmp_path:
         ScriptedAgent(
             [
                 ("save", "packet", "C1", {"v": 1}),
-                ("approve", "packet/C1", "send"),
+                ("approve", "packet/C1", "send", "counsel@fixture.example"),
                 ("send", "counsel@fixture.example", "send", "packet/C1"),
             ]
         ),
