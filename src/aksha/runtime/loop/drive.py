@@ -98,6 +98,32 @@ def control_point(view: LogView, run: str, *, blobs: BlobStore | None = None) ->
     return ControlPoint("candidate", end.candidate())
 
 
+def _advance(
+    setup: LoopSetup, executor: DurableStepExecutor, run: str, point: ControlPoint,
+    ends: list[TurnEnd],
+) -> ControlPoint:  # fmt: skip
+    """One pass from a ``turn`` or ``candidate`` point: the turn if any, then one decision."""
+    if point.state == "turn":
+        assert point.instance is not None and point.turn is not None
+        end = run_turn(setup, executor, point.instance, point.turn)
+        ends.append(end)
+        candidate = end.candidate()
+    else:
+        assert point.candidate is not None
+        candidate = point.candidate
+    decision = evaluate_stop(stop_view(setup, run), candidate)
+    commit_stop_decision(setup.store, setup.owner, decision)
+    verdict, instance = decision.verdict, decision.instance
+    if verdict.kind == "continue" and instance is not None:
+        turn = decision.turn or max(1, turns_used(setup.view(), run, instance.instance))
+        return ControlPoint("turn", instance=instance, turn=turn)
+    if verdict.kind == "hold" and instance is not None:
+        return ControlPoint("candidate", StopCandidate(run, "next"))
+    if verdict.kind == "hold":
+        return ControlPoint("held")
+    return ControlPoint("ended")
+
+
 def drive(
     setup: LoopSetup,
     executor: DurableStepExecutor,
@@ -114,27 +140,28 @@ def drive(
             return DriveResult(run, "ended", outcome, tuple(ends))
         if point.state == "held":
             return DriveResult(run, "held", None, tuple(ends))
-        if point.state == "turn":
-            assert point.instance is not None and point.turn is not None
-            end = run_turn(setup, executor, point.instance, point.turn)
-            ends.append(end)
-            candidate = end.candidate()
-        else:
-            assert point.candidate is not None
-            candidate = point.candidate
-        decision = evaluate_stop(stop_view(setup, run), candidate)
-        commit_stop_decision(setup.store, setup.owner, decision)
-        verdict, instance = decision.verdict, decision.instance
-        if verdict.kind == "continue" and instance is not None:
-            turn = decision.turn or max(1, turns_used(setup.view(), run, instance.instance))
-            point = ControlPoint("turn", instance=instance, turn=turn)
-        elif verdict.kind == "hold" and instance is not None:
-            point = ControlPoint("candidate", StopCandidate(run, "next"))
-        elif verdict.kind == "hold":
-            point = ControlPoint("held")
-        else:
-            point = ControlPoint("ended")
+        point = _advance(setup, executor, run, point, ends)
     raise StopRefused("evaluation_loop", f"run {run} did not hold or end")
+
+
+PassState = Literal["ended", "held", "running"]
+"""What one pass found: the run had ended, it waits on a person, or it moved."""
+
+
+def drive_pass(setup: LoopSetup, executor: DurableStepExecutor, run: str) -> PassState:
+    """One pass of ``run`` from where the log says it stands (ADR-P19 D4).
+
+    ``ended`` and ``held`` write nothing. ``running`` means the pass committed one
+    stop-policy decision and, when an earlier CONTINUE or this one authorised it, ran the
+    turn first. Because :func:`control_point` reads the next point from the log alone, a
+    run of passes writes exactly what one :func:`drive` writes, and a caller may commit
+    other facts (a person's answer, a stop request) between any two passes.
+    """
+    point = control_point(setup.view(), run, blobs=setup.blobs)
+    if point.state in ("ended", "held"):
+        return "ended" if point.state == "ended" else "held"
+    _advance(setup, executor, run, point, [])
+    return "running"
 
 
 DEFAULT_MAX_REBUILD_RUNS = 100
