@@ -156,10 +156,10 @@ def _asked(ctx: Context, w: Waiting) -> None:
         ctx.say(f"    options: {', '.join(w.options)}")
 
 
-def _refused(ctx: Context, receipt: CommandReceipt) -> int:
+def _refused(ctx: Context, receipt: CommandReceipt, session: str | None = None) -> int:
     ctx.say(f"refused: {receipt.refused} (command {receipt.command_id}, seq {receipt.seq})")
     if receipt.refused == "lane_required":
-        run = _open_run(ctx) or "RUN"
+        run = _open_run(ctx, session) or "RUN"
         ctx.say("  the session has an open run; say which lane the message is for:")
         ctx.say(f"    aksha steer {run} TEXT                   steer the running work")
         ctx.say(f"    aksha steer {run} TEXT --lane follow_up  a note for when it finishes")
@@ -177,14 +177,15 @@ def _refused(ctx: Context, receipt: CommandReceipt) -> int:
     return wire.EXIT_REFUSED
 
 
-def _open_run(ctx: Context) -> str | None:
-    """The owner's latest open run, read from a read-only handle (for the lane hint)."""
+def _open_run(ctx: Context, session: str | None) -> str | None:
+    """The refused session's latest open run (any of the owner's without one), for the hint."""
     store = open_reader(ctx.config)
     try:
         runs = run_statuses(load_view(store, ctx.owner))
     finally:
         store.close()
-    open_ = [r.run for r in runs if r.state != "ended"]
+    open_ = [r.run for r in runs
+             if r.state != "ended" and (session is None or r.session == session)]  # fmt: skip
     return open_[-1] if open_ else None
 
 
@@ -227,7 +228,7 @@ def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target
         receipt = client.dispatch(command)
         ctx.received()
         if not receipt.accepted:
-            return _refused(ctx, receipt)
+            return _refused(ctx, receipt, session_id)
         if ctx.after_accept is not None:
             ctx.after_accept()
         if run is None and session_id is not None:
@@ -242,7 +243,7 @@ def _mutate(ctx: Context, build: Callable[[str], n.NamedCommand], target: Target
         receipt = session.dispatch(command)
         ctx.received()
         if not receipt.accepted:
-            return _refused(ctx, receipt)
+            return _refused(ctx, receipt, session_id)
         if ctx.after_accept is not None:
             ctx.after_accept()
         if run is None and session_id is not None:

@@ -163,6 +163,17 @@ def test_steer_queues_input_for_a_waiting_run(tmp_path: Path) -> None:
     assert code == wire.EXIT_REFUSED and "run_ended" in out
 
 
+def test_the_lane_hint_names_the_refused_sessions_run(tmp_path: Path) -> None:
+    """With open runs in two sessions, the hint names the run of the session refused."""
+    code, out = aksha(tmp_path, "run", "Write and publish", "--session", "S-1")
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+    code, out = aksha(tmp_path, "run", "Write and publish", "--session", "S-2")
+    assert code == wire.EXIT_WAITING_APPROVAL, out
+    code, out = aksha(tmp_path, "run", "note text: blue", "--session", "S-1")
+    assert code == wire.EXIT_REFUSED and "lane_required" in out
+    assert "aksha steer R-0001" in out and "R-0002" not in out
+
+
 def test_stop_exits_six(tmp_path: Path) -> None:
     code, out = aksha(tmp_path, "run", "Ask first", "--session", "S-1")
     assert code == wire.EXIT_WAITING_INPUT
