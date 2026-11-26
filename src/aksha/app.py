@@ -52,6 +52,7 @@ from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
 from aksha.adapters.egress.network import HttpTransport, SocketResolver
+from aksha.adapters.sandbox import e2b
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
@@ -96,10 +97,16 @@ from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
 from aksha.runtime.sandbox.errors import SandboxRefused
-from aksha.runtime.sandbox.ports import Sandbox
+from aksha.runtime.sandbox.ports import Sandbox, SessionWorkspaces
 from aksha.runtime.sandbox.select import AUTO, select_backend
 from aksha.runtime.sandbox.tier import ExecutionTier
-from aksha.runtime.sandbox.types import STRENGTHS, Availability, EnvironmentSpec, Strength
+from aksha.runtime.sandbox.types import (
+    STRENGTHS,
+    Availability,
+    EnvironmentSpec,
+    SessionRef,
+    Strength,
+)
 from aksha.runtime.session.capabilities import CapabilityRecord, capabilities
 from aksha.runtime.session.service import Session, SessionAgent
 from aksha.runtime.storage.errors import StoreError
@@ -194,8 +201,15 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_AGENTS``         folders holding agent folders (``os.pathsep``)  ``src/aksha/agents``
 # ``AKSHA_EXTENSIONS``     folders holding extension folders               ``src/aksha/extensions``
 # ``AKSHA_MODE``           run mode: ``fake`` (each agent's ``fakes.py``)  ``fake``
-# ``AKSHA_SANDBOX``        the sandbox backend: ``auto``, ``bwrap``,       none
-#                          ``refuse``, or ``<name>:<strength>``
+# ``AKSHA_SANDBOX``        the sandbox backend: ``bwrap``, ``e2b``,        none
+#                          ``auto``, ``refuse``, ``none``, or
+#                          ``<name>:<strength>``
+# ``AKSHA_SANDBOX_PATH``   where session workspaces live (decision 37)     ``<home>/sandbox``
+# ``AKSHA_WORKSPACE``      the folder or git repository a new session      none (empty)
+#                          workspace starts from
+# ``AKSHA_E2B_TEMPLATE``   the E2B template a session sandbox starts from  ``base``
+# ``AKSHA_E2B_TIMEOUT_S``  an E2B sandbox's idle timeout, in seconds       ``900``
+# ``AKSHA_E2B_ON_END``     at the idle timeout: ``pause`` or ``kill``       ``pause``
 # ``AKSHA_NETWORK``        ``on`` gives tools the real network under       ``off``
 #                          their egress policies (ADR-P26)
 # ``AKSHA_APPROVED_ENVIRONMENTS``  environment keys an operator granted   none
@@ -232,14 +246,25 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 #
 # ``AKSHA_SANDBOX`` chooses tier 3's backend once, at start, from side-effect-free probes
 # (ADR-P12 decision 2). ``bwrap`` (or ``bwrap:os-jail``) is the bubblewrap backend,
-# ``auto`` the strongest built-in backend that probes available, ``refuse`` the backend
-# that runs nothing. A built-in backend that does not probe available becomes ``refuse``
+# ``e2b`` (or ``e2b:vm``) the E2B cloud backend, which needs ``E2B_API_KEY`` in the
+# environment, ``auto`` the strongest local built-in backend that probes available (never
+# a cloud one), ``refuse`` the backend that runs nothing, and ``none`` the same as unset.
+# A built-in backend that does not probe available becomes ``refuse``
 # with the probe's reason, never a weaker box. ``<name>:<strength>`` with any other name
 # declares an outer box the operator attests the whole process runs in (a container,
 # a VM): it lets a headless run start (ADR-P11 D12), and it runs no program, so an exec
 # tool is still refused ``sandbox_unavailable``. Unset, no backend is chosen. Strength
 # ``none`` is never a sandbox. The choice, every probe and the network setting are
 # recorded on each ``run.started`` (decision 9).
+#
+# Decision 37: one stateful sandbox per session. The bubblewrap backend binds a folder per
+# session under ``AKSHA_SANDBOX_PATH`` (``bwrap/<owner>/<session>/work``) as ``/work``, so
+# every exec of the session's runs sees what the earlier ones wrote; the E2B backend keeps
+# one remote sandbox per session by its ID (``e2b/<owner>/<session>/e2b.json``). A new
+# bubblewrap workspace starts from ``AKSHA_WORKSPACE``: a git repository becomes a git
+# worktree on the branch ``aksha/<session>`` (never the checkout itself), any other folder
+# is copied in, and unset is an empty folder. Workspaces are kept after the run;
+# ``aksha sandbox clean <session>`` removes one (:func:`clean_sandbox_session`).
 #
 # ``AKSHA_NETWORK`` is ``off`` unless set to ``on``: off, every tool's HTTP client
 # refuses ``network_off``, so the default process is offline (ADR-P26 amendment A2).
@@ -254,6 +279,40 @@ SYSTEMS_DIR = "systems"
 """Beside the store: one state folder per contributed system of record."""
 MOCK_SYSTEM_KINDS = ("mailbox",)
 """The development systems of record ``AKSHA_SYSTEMS`` can bind (mocks, never real ones)."""
+
+
+@dataclass(frozen=True)
+class SandboxSettings:
+    """The session workspaces' settings (decision 37; the table above)."""
+
+    root: Path = field(default_factory=lambda: _default_home() / "sandbox")
+    workspace: Path | None = None
+    e2b_template: str = e2b.TEMPLATE
+    e2b_timeout_s: int = 900
+    e2b_on_end: str = "pause"
+    e2b_api_url: str = e2b.API_URL
+    e2b_envd_url: str = e2b.ENVD_URL
+
+    @classmethod
+    def from_env(cls, env: Mapping[str, str]) -> SandboxSettings:
+        """Read the settings; a bad value is refused ``sandbox_invalid``."""
+        raw_timeout = env.get("AKSHA_E2B_TIMEOUT_S") or "900"
+        if not raw_timeout.isdigit() or int(raw_timeout) <= 0:
+            why = f"AKSHA_E2B_TIMEOUT_S={raw_timeout!r}: a positive number of seconds"
+            raise StoreError("sandbox_invalid", why)
+        on_end = env.get("AKSHA_E2B_ON_END") or "pause"
+        if on_end not in ("pause", "kill"):
+            raise StoreError("sandbox_invalid", f"AKSHA_E2B_ON_END={on_end!r}: pause or kill")
+        workspace = env.get("AKSHA_WORKSPACE")
+        return cls(
+            root=Path(env.get("AKSHA_SANDBOX_PATH") or data_home(env) / "sandbox"),
+            workspace=Path(workspace).resolve() if workspace else None,
+            e2b_template=env.get("AKSHA_E2B_TEMPLATE") or e2b.TEMPLATE,
+            e2b_timeout_s=int(raw_timeout),
+            e2b_on_end=on_end,
+            e2b_api_url=env.get("AKSHA_E2B_API_URL") or e2b.API_URL,
+            e2b_envd_url=env.get("AKSHA_E2B_ENVD_URL") or e2b.ENVD_URL,
+        )
 
 
 @dataclass(frozen=True)
@@ -272,6 +331,8 @@ class RuntimeConfig:
     """``AKSHA_SYSTEMS``: each bound system's mock kind and folder, by system name."""
     network: str = "off"
     approved_environments: tuple[str, ...] = ()
+    sandboxes: SandboxSettings = field(default_factory=lambda: SandboxSettings())
+    """Where session workspaces live and what they start from (decision 37)."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -289,6 +350,7 @@ class RuntimeConfig:
             extension_paths=paths("AKSHA_EXTENSIONS", DEFAULT_EXTENSIONS),
             mode=env.get("AKSHA_MODE", "fake"),
             sandbox=env.get("AKSHA_SANDBOX") or None,
+            sandboxes=SandboxSettings.from_env(env),
             server_url=env.get("AKSHA_SERVER_URL") or None,
             sources=_source_settings(env.get("AKSHA_SOURCES", "")),
             reentry=env.get("AKSHA_REENTRY") or "fresh",
@@ -641,18 +703,63 @@ class ToolQueryRunner:
         return ""
 
 
-BUILT_IN_BACKENDS: Mapping[str, Callable[[], Sandbox]] = {"bwrap": BwrapSandbox}
-"""The sandbox backends ``AKSHA_SANDBOX`` can choose, strongest last (ADR-P12)."""
+BUILT_IN_BACKENDS: Mapping[str, type[BwrapSandbox] | type[e2b.E2BSandbox]] = {
+    "bwrap": BwrapSandbox,
+    "e2b": e2b.E2BSandbox,
+}
+"""The sandbox backends ``AKSHA_SANDBOX`` can choose (ADR-P12, decision 37)."""
+LOCAL_BACKENDS = ("bwrap",)
+"""The backends ``auto`` may choose: never a cloud one."""
 
-_TIERS: dict[tuple[str | None, str, tuple[str, ...]], ExecutionTier] = {}
+_TIERS: dict[tuple[object, ...], ExecutionTier] = {}
 """One probed tier per setting per process: probes are side-effect free and cached."""
 
 
+def _backends(settings: SandboxSettings) -> dict[str, Callable[[], Sandbox]]:
+    """A factory per built-in backend, each keeping its session workspaces under ``root``."""
+    root = settings.root
+    return {
+        "bwrap": lambda: BwrapSandbox(workspaces=root / "bwrap", origin=settings.workspace),
+        "e2b": lambda: e2b.E2BSandbox(
+            state_dir=root / "e2b", template=settings.e2b_template,
+            timeout_s=settings.e2b_timeout_s,
+            on_end="kill" if settings.e2b_on_end == "kill" else "pause",
+            api_url=settings.e2b_api_url, envd_url=settings.e2b_envd_url,
+        ),
+    }  # fmt: skip
+
+
+def session_workspaces(config: RuntimeConfig) -> dict[str, SessionWorkspaces]:
+    """Every built-in backend's session workspaces, by backend name, probing nothing."""
+    built = _backends(config.sandboxes)
+    return {name: cast(SessionWorkspaces, built[name]()) for name in BUILT_IN_BACKENDS}
+
+
+def clean_sandbox_session(config: RuntimeConfig, owner: str, session: str) -> dict[str, Any]:
+    """Remove ``session``'s workspaces from every backend that has one (decision 37).
+
+    A bubblewrap folder is deleted (a git worktree is removed, its branch and commits kept);
+    an E2B sandbox is killed, which needs ``E2B_API_KEY``. What each backend removed, or
+    why it could not, by backend name.
+    """
+    ref = SessionRef(owner, session)
+    out: dict[str, Any] = {}
+    for name, workspaces in session_workspaces(config).items():
+        try:
+            removed = workspaces.clean(ref)
+        except (SandboxRefused, OSError, e2b.E2BError) as exc:
+            out[name] = {"error": f"{type(exc).__name__}: {exc}"}
+            continue
+        if removed is not None:
+            out[name] = dict(removed)
+    return out
+
+
 def _choose_sandbox(
-    setting: str | None,
+    setting: str | None, settings: SandboxSettings
 ) -> tuple[Sandbox | None, tuple[Availability, ...], Availability | None]:
     """``AKSHA_SANDBOX`` to (backend, probes, declared outer box); see the table above."""
-    if setting is None:
+    if setting is None or setting == "none":
         return None, (), None
     name, colon, strength = setting.partition(":")
     builtin = name in (AUTO, "refuse", *BUILT_IN_BACKENDS)
@@ -668,13 +775,13 @@ def _choose_sandbox(
         usable = strength != "none"
         why = "" if usable else "strength none is not a sandbox"
         return None, (), Availability(name, cast(Strength, strength), usable, why)
+    if colon and name in BUILT_IN_BACKENDS and strength != BUILT_IN_BACKENDS[name].strength:
+        raise StoreError("sandbox_invalid", f"AKSHA_SANDBOX={setting!r}: {name} is "
+                         f"{BUILT_IN_BACKENDS[name].strength}")  # fmt: skip
     try:
-        box, probes = select_backend(name, BUILT_IN_BACKENDS)
+        box, probes = select_backend(name, _backends(settings), auto=LOCAL_BACKENDS)
     except SandboxRefused as refused:
         raise StoreError("sandbox_invalid", refused.message) from refused
-    if colon and name in BUILT_IN_BACKENDS and strength != BUILT_IN_BACKENDS[name]().strength:
-        raise StoreError("sandbox_invalid", f"AKSHA_SANDBOX={setting!r}: {name} is "
-                         f"{BUILT_IN_BACKENDS[name]().strength}")  # fmt: skip
     return box, probes, None
 
 
@@ -689,10 +796,10 @@ def execution_tier(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) ->
     for key in config.approved_environments:
         if not (key.startswith("sha256:") and len(key) == 71):
             raise StoreError("environment_key_invalid", f"{key!r} is not an environment key")
-    cache_key = (config.sandbox, config.network, config.approved_environments)
+    cache_key = (config.sandbox, config.network, config.approved_environments, config.sandboxes)
     base = _TIERS.get(cache_key)
     if base is None:
-        box, probes, declared = _choose_sandbox(config.sandbox)
+        box, probes, declared = _choose_sandbox(config.sandbox, config.sandboxes)
         network = Network(SocketResolver(), HttpTransport()) if config.network == "on" else None
         base = ExecutionTier(box=box, probes=probes, network=network, declared=declared,
                              approved_images=frozenset(config.approved_environments))  # fmt: skip

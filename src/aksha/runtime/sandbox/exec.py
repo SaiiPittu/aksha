@@ -1,8 +1,11 @@
 """``BoxedExec``: the ``ExecAPI`` an exec tool body gets, one per call attempt (ADR-P12).
 
-Each :meth:`BoxedExec.run` is one fresh box (decision 5): ``/work`` is built from the
-workspace tree and the inline files, the program runs under the effective policy, and the
-box keeps nothing. In order:
+Each :meth:`BoxedExec.run` is one box. Given the run's session (decision 37), the box runs
+in that session's one stateful workspace: the workspace tree and the inline files are
+written over it, the program runs under the effective policy, and what it wrote stays for
+the session's next exec; the outputs are the files this exec wrote or changed (all of them
+for a writable tree). Given no session, ``/work`` is built fresh from the tree and the
+files and the box keeps nothing (decision 5). In order:
 
 1. No backend, a backend that did not probe available, or one weaker than the tool's
    ``min_strength`` answers ``sandbox_unavailable`` and nothing spawns (decision 2).
@@ -14,7 +17,8 @@ box keeps nothing. In order:
    8): the declared outputs (all of ``out`` by default), and for a writable tree a new
    ``TreeManifest`` whose blobs are written to the blob store on the runtime thread.
 5. Every run, refused or not, appends an exec record (decision 9) the agent loop puts on
-   the step's ``step.completed`` under ``value["exec"]``.
+   the step's ``step.completed`` under ``value["exec"]``. A session box's record names
+   the session and the workspace the backend says it used (``workspace``).
 
 ``ExecUnit`` is the step's kill boundary (T6, ADR-P18 D6): the backend attaches the
 running box to it, and the step executor ends it on a stop or at the deadline. A unit
@@ -42,6 +46,7 @@ from aksha.runtime.sandbox.types import (
     EnvironmentMount,
     ExecPolicy,
     SandboxNeeds,
+    SessionRef,
     TreeManifest,
     strong_enough,
 )
@@ -161,10 +166,12 @@ class BoxedExec:
         environments: EnvironmentResolver | None = None,
         unit: ExecUnit | None = None,
         refusal: tuple[str, str] | None = None,
+        session: SessionRef | None = None,
     ) -> None:
         """Run under ``policy`` (already effective) on ``box``, recording every run.
 
         ``refusal`` refuses every run with that code and message (a policy that widened).
+        ``session`` is the run's session, whose stateful workspace every box runs in.
         """
         self._box = box
         self._availability = availability
@@ -175,6 +182,7 @@ class BoxedExec:
         self._environments = environments
         self.unit = unit or ExecUnit()
         self._refusal_given = refusal
+        self._session = session
         self._records: list[dict[str, Any]] = []
 
     @property
@@ -200,6 +208,8 @@ class BoxedExec:
         }
         if tree is not None:
             base["tree"] = tree.hash_ref()
+        if self._session is not None:
+            base["session"] = self._session.as_json()
         refused = self._refusal()
         if refused is not None:
             return self._refused(base, *refused)
@@ -221,7 +231,9 @@ class BoxedExec:
         try:
             request = BoxRequest(base["invocation"], tuple(argv), self._policy,
                                  files=dict(files or {}), tree=tree, environment=mount,
-                                 stdin=stdin)  # fmt: skip
+                                 stdin=stdin, session=self._session,
+                                 collect="all" if self._needs.tree_writable else "changed",
+                                 )  # fmt: skip
         except ValueError as exc:
             return self._refused(base, "exec_invalid", str(exc))
         try:
@@ -274,6 +286,8 @@ class BoxedExec:
         }
         if new_tree is not None:
             record["new_tree"] = new_tree.hash_ref()
+        if result.workspace is not None:
+            record["workspace"] = dict(result.workspace)
         if result.stdout_truncated or result.stderr_truncated:
             record["truncated"] = True
         self._records.append(record)

@@ -68,7 +68,7 @@ from aksha.runtime.interrupts.raising import ask_request, raised
 from aksha.runtime.interrupts.types import Refusal
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
-from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, with_records
+from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, run_session, with_records
 from aksha.runtime.loop.types import SIGNAL_FIELD, LoopSetup, PositionOutcome, Signal, skip_code
 from aksha.runtime.models.types import ToolCall as ReplyCall
 from aksha.runtime.policy.events import args_hash, decision_event
@@ -241,7 +241,10 @@ def run_position(
             reader = AttemptReader(setup.reader)
             dates = TimeReads()
             http = http_for(setup, spec)
-            exe = None if unit is None else exec_for(setup, spec, str(step), attempt, unit)
+            exe = None
+            if unit is not None:
+                session = run_session(view, setup.owner, ref.run)
+                exe = exec_for(setup, spec, str(step), attempt, unit, session)
             outcome = body(ctx(reader, http, exe, dates))
             out = _dispatched(setup, ref, step, spec, outcome, reader.returned, dates.reads)
             return with_records(out, http, exe)

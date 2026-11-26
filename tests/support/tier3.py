@@ -155,7 +155,7 @@ class TierBench:
     """One owner's SQLite store, the ``runner`` agent, and tier 3 as the test sets it."""
 
     def __init__(self, root: Path, model: Recorder, *, box: Sandbox | None = None,
-                 network: bool = True) -> None:  # fmt: skip
+                 network: bool = True, session: str | None = None) -> None:  # fmt: skip
         self.clock = FakeClock(START)
         self.model = model
         self.agent = agent()
@@ -180,17 +180,21 @@ class TierBench:
             sandbox=self.tier.availability, tier=self.tier,
         )  # fmt: skip
         self.executor = StepExecutor(self.store, OWNER, self.clock, blobs=self.blobs)
+        self.start(RUN, session)
+
+    def start(self, run: str, session: str | None = None) -> None:
+        """Record ``run.started`` for ``run``, in ``session`` when one is given."""
         self.store.append(OWNER, "U1", (NewEvent("run.started", {
             "agent": AGENT, "cause": "request", "definition_hash": DEFINITION,
             "budget": {"model_turns": 100, "tool_calls": 100, "active_ms": 10**9},
-        }, run=RUN),))  # fmt: skip
+        }, run=run, session=session),))  # fmt: skip
 
     def with_tier(self, **changes: Any) -> None:
         self.tier = replace(self.tier, **changes)
         self.setup = replace(self.setup, tier=self.tier, sandbox=self.tier.availability)
 
-    def drive(self) -> DriveResult:
-        return drive(self.setup, self.executor, RUN)
+    def drive(self, run: str = RUN) -> DriveResult:
+        return drive(self.setup, self.executor, run)
 
     def tool_steps(self, tool: str) -> list[Event]:
         return [e for e in load_view(self.store, OWNER).events

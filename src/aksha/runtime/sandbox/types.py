@@ -8,7 +8,8 @@ when the narrower one asks for more (decision 2). ``Limits`` are the hard limits
 ``SandboxNeeds`` is an exec tool's declaration. ``TreeManifest`` names a workspace tree
 by path and content hash (decision 5). ``BoxRequest`` and ``BoxResult`` are the whole of
 what crosses the ``Sandbox`` port (T3): argv, inputs, the effective policy and limits in;
-exit status, output, denials and collected files out.
+exit status, output, denials and collected files out. ``SessionRef`` names the session
+whose one stateful workspace a box runs in (decision 37).
 """
 
 from __future__ import annotations
@@ -277,11 +278,42 @@ class EnvironmentMount:
 
 
 @dataclass(frozen=True)
+class SessionRef:
+    """The session a box belongs to: one stateful workspace per owner and session (decision 37).
+
+    Every exec of the session's runs names it, so a backend that keeps a workspace per
+    session (a folder bound as ``/work``, a remote sandbox kept by its ID) finds the same
+    one each time.
+    """
+
+    owner: str
+    session: str
+
+    def __post_init__(self) -> None:
+        """Both parts are non-empty and hold no NUL."""
+        for part in (self.owner, self.session):
+            if not part or "\x00" in part:
+                raise ValueError("a session reference names a non-empty owner and session")
+
+    def as_json(self) -> dict[str, str]:
+        """The reference as recorded data."""
+        return {"owner": self.owner, "session": self.session}
+
+
+Collect = Literal["all", "changed"]
+"""What a session box collects back: every file under the writable paths, or only the
+files this exec wrote or changed (decision 37). A fresh box always collects everything."""
+
+
+@dataclass(frozen=True)
 class BoxRequest:
     """Everything the runtime sends a backend for one box (T3): data only, no handles.
 
     ``files`` are small inputs given inline; ``tree`` is a workspace tree whose blobs the
     backend reads through the reader it is given (the runtime streams them, T4's lean).
+    ``session`` names the stateful workspace the box runs in (decision 37): the inputs are
+    written over it and nothing else is removed. None is a fresh ``/work`` that the backend
+    deletes afterwards. ``collect`` applies to a session box only.
     """
 
     invocation_id: str
@@ -291,6 +323,8 @@ class BoxRequest:
     tree: TreeManifest | None = None
     environment: EnvironmentMount | None = None
     stdin: bytes = b""
+    session: SessionRef | None = None
+    collect: Collect = "changed"
 
     def __post_init__(self) -> None:
         """An argv is a non-empty tuple of strings; every file path is clean."""
@@ -319,3 +353,7 @@ class BoxResult:
     collected: Mapping[str, bytes] = field(default_factory=lambda: MappingProxyType({}))
     stdout_truncated: bool = False
     stderr_truncated: bool = False
+    workspace: Mapping[str, Any] | None = None
+    """For a session box, which workspace it ran in (decision 37), as recorded data: the
+    backend, the session folder or remote sandbox ID, where it came from, and any
+    checkpoint made. None for a fresh box."""
