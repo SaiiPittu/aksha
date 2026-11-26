@@ -66,5 +66,6 @@ def test_automatic_starts_are_resumes_rebuilds_continuations_and_timers() -> Non
     assert records.is_automatic_start(log.resumed())
     assert records.is_automatic_start(log.decided("continue", cause="timer"))
     assert records.is_automatic_start(log.add("run.started", {"agent": "a", "cause": "rebuild"}))
+    assert records.is_automatic_start(log.add("run.started", {"agent": "a", "cause": "timer"}))
     assert not records.is_automatic_start(log.started())
     assert not records.is_automatic_start(log.decided("continue", cause="command:send"))

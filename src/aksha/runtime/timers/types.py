@@ -1,7 +1,7 @@
 """Timer values (ADR-P25): what a timer is, its scope, and one attempt's recorded time reads.
 
 ``TimerSet`` is the payload of ``timer.scheduled`` (D1). Its time is exactly one of
-``due_at`` (an ISO time read from the injected clock) and ``after_ms`` (amendment B2:
+``due_at`` (an ISO time read from the injected clock) and ``after_ms`` (amendment B3:
 milliseconds counted from the scheduling fact's own recorded ``at``, which also comes from
 the injected clock, for a fact built inside a step where no clock reading is at hand).
 Each cause names what its firing needs: an expiry its approval (``ApprovalRef``, D5), a

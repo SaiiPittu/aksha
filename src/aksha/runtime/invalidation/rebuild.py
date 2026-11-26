@@ -52,7 +52,11 @@ from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.invalidation.plan import rebuild_plan, runnable
 from aksha.runtime.invalidation.types import EXPIRED, ReadStatus, RebuildBrief, RebuildEntry
-from aksha.runtime.invalidation.view import InvalidationView, invalidation_view
+from aksha.runtime.invalidation.view import (
+    InvalidationView,
+    invalidation_view,
+    is_expiry_read,
+)
 from aksha.runtime.policy.headless import headless_start_refusal, started_headless
 from aksha.runtime.projections.project import rebuild
 from aksha.runtime.projections.runs import RUNS, open_runs
@@ -166,7 +170,10 @@ def rebuild_brief(view: LogView, iv: InvalidationView, entry: RebuildEntry) -> R
     if old is None:
         raise KeyError(f"{entry.invalidated} is not in {view.owner}'s log")
     state = iv.state(entry.invalidated)
-    current = tuple(_now(r) for r in state.reads if r.state != "gone")
+    # An expired version's ``time:expiry`` marker says why it is stale; it is not a read.
+    current = tuple(
+        _now(r) for r in state.reads if r.state != "gone" and not is_expiry_read(r.input)
+    )
     statements = tuple(r for r in old.reads if r.kind == "statement")
     return RebuildBrief(
         old=old.ref,

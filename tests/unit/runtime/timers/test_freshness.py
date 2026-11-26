@@ -9,6 +9,7 @@ import pytest
 
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef, WriterId
 from aksha.runtime.invalidation.plan import may_invalidate, rebuild_plan
+from aksha.runtime.invalidation.rebuild import rebuild_brief
 from aksha.runtime.invalidation.sources import record_source_changes, source_facts
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.stop_policy.types import AgentScope
@@ -71,6 +72,20 @@ def test_an_expired_artifact_version_is_invalidated_and_its_readers_wait(bench: 
     assert (why.input.kind, why.state, why.now) == ("time", "moved", "expired")
     assert iv.state("p.compare/X@v1").freshness == "dirty"
     assert source_facts(bench.view()).expired_artifacts == frozenset({"p.extract/X@v1"})
+
+
+def test_an_expired_versions_brief_says_why_but_never_asks_to_read_the_expiry(
+    bench: Bench,
+) -> None:
+    """The ``time:expiry`` read is a marker, not an input: the rebuild reads its real inputs."""
+    bench.start("R-0001")
+    bench.save("R-0001", "p.extract/X", {"v": 1}, reads=[record("K")])
+    _expire(bench, ref("p.extract/X@v1").as_input())
+    iv = bench.iv()
+    (entry,) = rebuild_plan(iv)
+    brief = rebuild_brief(bench.view(), iv, entry)
+    assert [r.input.kind for r in brief.changed] == ["time"]
+    assert brief.current_reads == (record("K"),)
 
 
 def test_expiry_counts_as_a_source_change(bench: Bench) -> None:

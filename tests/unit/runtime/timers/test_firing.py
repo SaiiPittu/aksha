@@ -209,6 +209,22 @@ def test_a_reminder_never_wakes_a_scope_a_person_holds(bench: Bench) -> None:
     assert held_auto_starts(bench.view()) == ()
 
 
+def test_a_reminder_waits_while_its_session_has_an_open_route_question(bench: Bench) -> None:
+    """ADR-P25 D2 with ADR-P17 S5: an open ``route`` question holds its session's intake."""
+    from aksha.runtime.interrupts.raising import raised, route_request
+
+    question = raised(route_request("S-0001", "which agent?", ("p",)), "I-0001")
+    bench.store.append(OWNER, "U4", (question,))
+    bench.store.append(OWNER, "U1", (scheduled(_remind()), scheduled(_remind("T-2", "S-0002"))))
+    bench.clock.advance(1)
+    report = _fire(bench)
+    assert report.fired == ("T-2",) and report.deferred == {"T-1": "interrupt_open"}
+    answer = {"interrupt": "I-0001", "answer": "p"}
+    bench.store.append(OWNER, "U4", (NewEvent("interrupt.resolved", answer, session="S-0001"),))
+    assert _fire(bench).fired == ("T-1",)
+    assert held_auto_starts(bench.view()) == ()
+
+
 def test_reminder_starts_are_capped_by_the_automatic_start_limit(bench: Bench) -> None:
     for n in range(1, 5):
         bench.store.append(OWNER, "U1", (scheduled(_remind(f"T-{n}", session=f"S-{n}")),))

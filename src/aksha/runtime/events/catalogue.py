@@ -1420,7 +1420,7 @@ TIMER_SCHEDULED = EventTypeSpec(
             "timer_id": _TIMER_ID,
             "cause": _TIMER_CAUSE,
             "scope": _TIMER_SCOPE,
-            # Exactly one: an ISO time on the injected clock, or (B2) milliseconds counted
+            # Exactly one: an ISO time on the injected clock, or (B3) milliseconds counted
             # from this fact's own recorded ``at``.
             "due_at": {"type": "string", "format": "date-time", "minLength": 20},
             "after_ms": {"type": "integer", "minimum": 0},

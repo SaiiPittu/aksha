@@ -390,6 +390,11 @@ def expiry_read(ref: ArtifactRef) -> InputRef:
     return InputRef("time", f"expiry/{ref}", "current")
 
 
+def is_expiry_read(read: InputRef) -> bool:
+    """Whether ``read`` is the marker :func:`expiry_read` adds, not an input to read again."""
+    return read.kind == "time" and read.id.startswith("expiry/")
+
+
 def _equal(read: InputRef, old: ArtifactVersion, new: ArtifactVersion) -> bool:
     """Early cutoff: an equal canonical hash, or for a path-scoped read an equal entry."""
     if read.path is not None and read.entry_hash is not None:

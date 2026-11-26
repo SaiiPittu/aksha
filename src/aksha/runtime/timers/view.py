@@ -1,7 +1,7 @@
 """The timer projection (ADR-P25 D1): every timer, its due time and its state. Pure.
 
 A timer's due time is its ``due_at``, or its scheduling fact's recorded ``at`` plus
-``after_ms`` (amendment B2). Both come from the injected clock, and ``due`` compares them
+``after_ms`` (amendment B3). Both come from the injected clock, and ``due`` compares them
 with the caller's clock reading, never a clock of its own, so a fake run fires the same
 timers at the same point every time.
 """
