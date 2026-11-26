@@ -11,6 +11,9 @@ refuses:
    name. An agent may also import ``aksha.extensions.<name>`` for each extension it names;
    the loader allows those once it knows the names (:attr:`SourceFinding.target`).
 2. A class shaped like a stop policy (decision 10: the set is closed).
+3. An import of a network module (``socket``, ``ssl``, ``urllib.request``, ``http.client``,
+   ``requests``, ``httpx`` and the like): a tool body reaches the network only through
+   the client the runtime hands it, ``ToolContext.http`` (ADR-P26 D2).
 
 The scan is a guard against mistakes, not a sandbox: a module built to hide an import
 (``getattr`` chains, ``exec``) is beyond it, which is why only trusted folders load (D9).
@@ -31,6 +34,10 @@ _EXTENSIONS = "aksha.extensions"
 _DYNAMIC_IMPORTS = frozenset({"import_module", "__import__"})
 _STOP_POLICY_BASES = frozenset({"StopPolicy", "Director"})
 _STOP_POLICY_METHODS = frozenset({"prepare", "judge"})
+_NETWORK_TOPS = frozenset({"socket", "ssl", "requests", "httpx", "aiohttp", "urllib3",
+                           "ftplib", "smtplib", "poplib", "imaplib", "telnetlib", "xmlrpc",
+                           "websocket", "websockets", "pycurl"})  # fmt: skip
+_NETWORK_MODULES = frozenset({"urllib.request", "http.client", "http.server"})
 
 
 @dataclass(frozen=True)
@@ -107,10 +114,34 @@ def _findings(file: str, tree: ast.Module) -> list[SourceFinding]:
                 message = f"imports {target}; import aksha.runtime.api only"
                 line = getattr(node, "lineno", 0)
                 out.append(SourceFinding(file, line, "import_outside_api", message, target))
+        for target in _network_targets(node):
+            message = f"imports {target}; reach the network through ctx.http (ADR-P26 D2)"
+            out.append(SourceFinding(file, getattr(node, "lineno", 0), "network_import",
+                                     message, target))  # fmt: skip
+            break
         if isinstance(node, ast.ClassDef) and _is_stop_policy(node):
             message = f"class {node.name} is a stop policy; opt into a built-in one instead"
             out.append(SourceFinding(file, node.lineno, "stop_policy_class", message))
     return out
+
+
+def _is_network(target: str) -> bool:
+    top = target.split(".", 1)[0]
+    return top in _NETWORK_TOPS or any(
+        target == m or target.startswith(m + ".") for m in _NETWORK_MODULES
+    )
+
+
+def _network_targets(node: ast.AST) -> list[str]:
+    """The network modules a statement imports (``from urllib import request`` included)."""
+    names: list[str] = []
+    if isinstance(node, ast.Import):
+        names = [a.name for a in node.names]
+    elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        names = [node.module, *(f"{node.module}.{a.name}" for a in node.names)]
+    elif isinstance(node, ast.Call):
+        names = _dynamic_import(node)
+    return [n for n in names if _is_network(n)]
 
 
 def _is_aksha(target: str) -> bool:

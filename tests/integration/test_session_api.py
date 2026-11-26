@@ -147,7 +147,7 @@ def test_a_headless_start_needs_a_sandbox(tmp_path: Path) -> None:
         assert bare.payloads("run.started") == []
     finally:
         bare.close()
-    boxed = SessionBench(tmp_path / "boxed", sandbox="bwrap:os-jail")
+    boxed = SessionBench(tmp_path / "boxed", sandbox="outer:os-jail")
     try:
         assert boxed.session.dispatch(send(boxed, "Write a note", headless=True)).accepted
         assert boxed.payloads("run.started")[0]["headless"] is True
@@ -156,7 +156,7 @@ def test_a_headless_start_needs_a_sandbox(tmp_path: Path) -> None:
 
 
 def test_headless_turns_an_ask_into_an_allow_and_never_waits(tmp_path: Path) -> None:
-    b = SessionBench(tmp_path, sandbox="bwrap:os-jail")
+    b = SessionBench(tmp_path, sandbox="outer:os-jail")
     try:
         b.session.dispatch(send(b, "Write a note and publish it", headless=True))
         b.session.run_until_yield(OWNER)

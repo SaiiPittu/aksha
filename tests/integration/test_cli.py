@@ -150,7 +150,7 @@ def test_headless_needs_a_sandbox_setting(tmp_path: Path) -> None:
     code, out = aksha(tmp_path, "run", "Write and publish", "--headless", "--session", "S-1")
     assert code == wire.EXIT_REFUSED and "sandbox_required" in out and "AKSHA_SANDBOX" in out
     code, out = aksha(tmp_path, "run", "Write a note", "--headless", "--session", "S-2",
-                      AKSHA_SANDBOX="bwrap:os-jail")  # fmt: skip
+                      AKSHA_SANDBOX="outer:os-jail")  # fmt: skip
     assert code == wire.EXIT_OK and "(headless)" in out, out
 
 

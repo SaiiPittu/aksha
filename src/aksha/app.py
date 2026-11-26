@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import os
 import subprocess
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -44,6 +44,8 @@ from typing import TYPE_CHECKING, Literal, TypeGuard, cast
 from aksha.adapters.blobs.filesystem import FilesystemBlobStore
 from aksha.adapters.clock.fake import FakeClock
 from aksha.adapters.clock.system import SystemClock
+from aksha.adapters.egress.network import HttpTransport, SocketResolver
+from aksha.adapters.sandbox.bwrap import BwrapSandbox
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.storage import sqlite
 from aksha.adapters.systems.mailbox import MailboxSystem
@@ -66,8 +68,10 @@ from aksha.runtime.definitions.loader import (
     with_context_policy,
 )
 from aksha.runtime.definitions.modules import import_value
-from aksha.runtime.definitions.names import qualify
+from aksha.runtime.definitions.names import qualify, resolve_kind
 from aksha.runtime.definitions.types import Agent
+from aksha.runtime.egress.ports import Network
+from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource
@@ -83,7 +87,11 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.router.fake import PurposeClassifier
 from aksha.runtime.router.router import Router
-from aksha.runtime.sandbox.types import STRENGTHS, Availability, Strength
+from aksha.runtime.sandbox.errors import SandboxRefused
+from aksha.runtime.sandbox.ports import Sandbox
+from aksha.runtime.sandbox.select import AUTO, select_backend
+from aksha.runtime.sandbox.tier import ExecutionTier
+from aksha.runtime.sandbox.types import STRENGTHS, Availability, EnvironmentSpec, Strength
 from aksha.runtime.session.capabilities import CapabilityRecord, capabilities
 from aksha.runtime.session.service import Session, SessionAgent
 from aksha.runtime.storage.errors import StoreError
@@ -155,7 +163,12 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_AGENTS``         folders holding agent folders (``os.pathsep``)  ``src/aksha/agents``
 # ``AKSHA_EXTENSIONS``     folders holding extension folders               ``src/aksha/extensions``
 # ``AKSHA_MODE``           run mode: ``fake`` (each agent's ``fakes.py``)  ``fake``
-# ``AKSHA_SANDBOX``        ``<backend>:<strength>`` the operator provides  none
+# ``AKSHA_SANDBOX``        the sandbox backend: ``auto``, ``bwrap``,       none
+#                          ``refuse``, or ``<name>:<strength>``
+# ``AKSHA_NETWORK``        ``on`` gives tools the real network under       ``off``
+#                          their egress policies (ADR-P26)
+# ``AKSHA_APPROVED_ENVIRONMENTS``  environment keys an operator granted   none
+#                          a first build (ADR-P28 D4), ``,``-separated
 # ``AKSHA_SERVER_URL``     the server a CLI command talks to               the server file
 # ``AKSHA_SOURCES``        ``<source>=<folder>`` pairs (``os.pathsep``)    each spec's ``root``
 # ``AKSHA_REENTRY``        re-entry setting a request run records:         ``fresh``
@@ -183,10 +196,21 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # loaded agent or extension uses is refused ``system_unknown``, an unknown kind
 # ``system_invalid``. The CLI says on every command that the bound system is a mock.
 #
-# ``AKSHA_SANDBOX`` is a declaration, not a probe: no sandbox backend is built yet
-# (ADR-P12), so the operator names the one the process runs inside, for example
-# ``bwrap:os-jail``. A headless start needs it (ADR-P11 D12); strength ``none`` does not
-# count as a sandbox.
+# ``AKSHA_SANDBOX`` chooses tier 3's backend once, at start, from side-effect-free probes
+# (ADR-P12 decision 2). ``bwrap`` (or ``bwrap:os-jail``) is the bubblewrap backend,
+# ``auto`` the strongest built-in backend that probes available, ``refuse`` the backend
+# that runs nothing. A built-in backend that does not probe available becomes ``refuse``
+# with the probe's reason, never a weaker box. ``<name>:<strength>`` with any other name
+# declares an outer box the operator attests the whole process runs in (a container,
+# a VM): it lets a headless run start (ADR-P11 D12), and it runs no program, so an exec
+# tool is still refused ``sandbox_unavailable``. Unset, no backend is chosen. Strength
+# ``none`` is never a sandbox. The choice, every probe and the network setting are
+# recorded on each ``run.started`` (decision 9).
+#
+# ``AKSHA_NETWORK`` is ``off`` unless set to ``on``: off, every tool's HTTP client
+# refuses ``network_off``, so the default process is offline (ADR-P26 amendment A2).
+# ``AKSHA_APPROVED_ENVIRONMENTS`` is the interim path for ADR-P28 D4: each listed key may
+# be built once without the spec's pre-approval, and the grant is on ``run.started``.
 
 DEFAULT_AGENTS = Path(__file__).resolve().parent / "agents"
 DEFAULT_EXTENSIONS = Path(__file__).resolve().parent / "extensions"
@@ -212,6 +236,8 @@ class RuntimeConfig:
     reentry: str = "fresh"
     systems: Mapping[str, tuple[str, Path]] = field(default_factory=dict)
     """``AKSHA_SYSTEMS``: each bound system's mock kind and folder, by system name."""
+    network: str = "off"
+    approved_environments: tuple[str, ...] = ()
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -233,6 +259,12 @@ class RuntimeConfig:
             sources=_source_settings(env.get("AKSHA_SOURCES", "")),
             reentry=env.get("AKSHA_REENTRY") or "fresh",
             systems=_system_settings(env.get("AKSHA_SYSTEMS", "")),
+            network=env.get("AKSHA_NETWORK") or "off",
+            approved_environments=tuple(
+                k.strip()
+                for k in env.get("AKSHA_APPROVED_ENVIRONMENTS", "").split(",")
+                if k.strip()
+            ),
         )
 
     def reentry_setting(self) -> ReentrySetting:
@@ -245,20 +277,6 @@ class RuntimeConfig:
                 "reentry_invalid", f"AKSHA_REENTRY={self.reentry!r}: use fresh or resume"
             )
         return cast(ReentrySetting, self.reentry)
-
-    def sandbox_availability(self) -> Availability | None:
-        """The declared sandbox (``AKSHA_SANDBOX``), or None when none is declared."""
-        if self.sandbox is None:
-            return None
-        backend, _, strength = self.sandbox.partition(":")
-        strength = strength or "os-jail"
-        if not _is_strength(strength):
-            raise StoreError(
-                "sandbox_invalid", f"AKSHA_SANDBOX={self.sandbox!r}: strength is one of {STRENGTHS}"
-            )
-        usable = strength != "none"
-        return Availability(backend, strength, usable,
-                            "" if usable else "strength none is not a sandbox")  # fmt: skip
 
     def server_file(self) -> Path:
         """Where ``serve`` records its URL: beside the SQLite file."""
@@ -502,6 +520,75 @@ def source_reader(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> 
     return FolderSources(folders)
 
 
+BUILT_IN_BACKENDS: Mapping[str, Callable[[], Sandbox]] = {"bwrap": BwrapSandbox}
+"""The sandbox backends ``AKSHA_SANDBOX`` can choose, strongest last (ADR-P12)."""
+
+_TIERS: dict[tuple[str | None, str, tuple[str, ...]], ExecutionTier] = {}
+"""One probed tier per setting per process: probes are side-effect free and cached."""
+
+
+def _choose_sandbox(
+    setting: str | None,
+) -> tuple[Sandbox | None, tuple[Availability, ...], Availability | None]:
+    """``AKSHA_SANDBOX`` to (backend, probes, declared outer box); see the table above."""
+    if setting is None:
+        return None, (), None
+    name, colon, strength = setting.partition(":")
+    builtin = name in (AUTO, "refuse", *BUILT_IN_BACKENDS)
+    if colon and not _is_strength(strength):
+        raise StoreError(
+            "sandbox_invalid", f"AKSHA_SANDBOX={setting!r}: strength is one of {STRENGTHS}"
+        )
+    if not builtin:
+        if not colon:
+            names = ", ".join((AUTO, "refuse", *BUILT_IN_BACKENDS))
+            raise StoreError("sandbox_invalid", f"AKSHA_SANDBOX={setting!r}: use {names}, "
+                             "or <name>:<strength> for an outer box")  # fmt: skip
+        usable = strength != "none"
+        why = "" if usable else "strength none is not a sandbox"
+        return None, (), Availability(name, cast(Strength, strength), usable, why)
+    try:
+        box, probes = select_backend(name, BUILT_IN_BACKENDS)
+    except SandboxRefused as refused:
+        raise StoreError("sandbox_invalid", refused.message) from refused
+    if colon and name in BUILT_IN_BACKENDS and strength != BUILT_IN_BACKENDS[name]().strength:
+        raise StoreError("sandbox_invalid", f"AKSHA_SANDBOX={setting!r}: {name} is "
+                         f"{BUILT_IN_BACKENDS[name]().strength}")  # fmt: skip
+    return box, probes, None
+
+
+def execution_tier(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) -> ExecutionTier:
+    """Tier 3 for ``config``: the backend, the network, egress policies and environments.
+
+    The egress policies and environment specs are the loaded extensions', by full name
+    (``<extension>.<name>``); an environment's ``egress`` is qualified by its extension.
+    """
+    if config.network not in ("on", "off"):
+        raise StoreError("network_invalid", f"AKSHA_NETWORK={config.network!r}: on or off")
+    for key in config.approved_environments:
+        if not (key.startswith("sha256:") and len(key) == 71):
+            raise StoreError("environment_key_invalid", f"{key!r} is not an environment key")
+    cache_key = (config.sandbox, config.network, config.approved_environments)
+    base = _TIERS.get(cache_key)
+    if base is None:
+        box, probes, declared = _choose_sandbox(config.sandbox)
+        network = Network(SocketResolver(), HttpTransport()) if config.network == "on" else None
+        base = ExecutionTier(box=box, probes=probes, network=network, declared=declared,
+                             approved_images=frozenset(config.approved_environments))  # fmt: skip
+        _TIERS[cache_key] = base
+    egress: dict[str, EgressPolicy] = {}
+    environments: dict[str, EnvironmentSpec] = {}
+    for definition in loaded:
+        for ext in definition.extensions:
+            for policy in ext.ext.egress:
+                egress[qualify(ext.ext.name, policy.name)] = policy
+            for env in ext.ext.environments:
+                environments[qualify(ext.ext.name, env.name)] = replace(
+                    env, egress=resolve_kind(env.egress, ext.ext.name)
+                )
+    return replace(base, egress=egress, environments=environments)
+
+
 def open_session(
     config: RuntimeConfig,
     clock: Clock | None = None,
@@ -529,10 +616,13 @@ def open_session(
     if len(agents) >= 2:
         routable = tuple(a.routable() for a in agents)
         router = Router(routable, PurposeClassifier(), ids)
-    sandbox = config.sandbox_availability()
+    tier = execution_tier(config, loaded)
+    sandbox = tier.gate_availability
+    recorded = tier.record()
+    agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
                    blobs=open_blob_store(config.storage), systems=every_system,
-                   reader=reader, ids=ids)  # fmt: skip
+                   reader=reader, ids=ids, tier=tier)  # fmt: skip
 
 
 def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore:
@@ -543,7 +633,7 @@ def open_reader(config: RuntimeConfig, clock: Clock | None = None) -> EventStore
 def session_capabilities(session: Session, config: RuntimeConfig) -> CapabilityRecord:
     """The capability record of ``session`` (ADR-P19 D7) with this process's commit."""
     commit, dirty = runtime_commit()
-    sandbox = config.sandbox_availability()
+    sandbox = session.tier.gate_availability
     backends = () if sandbox is None or not sandbox.available else (sandbox.backend,)
     return capabilities(session, runtime_commit=commit, dirty=dirty, sandbox_backends=backends)
 

@@ -29,6 +29,7 @@ from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.policy.permissions import ceiling_of
 from aksha.runtime.policy.types import Permissions, SourceVersion
 from aksha.runtime.projections.view import LogView, load_view
+from aksha.runtime.sandbox.tier import ExecutionTier
 from aksha.runtime.sandbox.types import Availability
 from aksha.runtime.stop_policy.types import AUTOMATIC_CAUSE, CandidateKind, StopCandidate
 from aksha.runtime.storage.ports import EventStore
@@ -158,6 +159,9 @@ class LoopSetup:
     blobs: BlobStore | None = None
     reader: RecordReader | None = None
     reentry: ReentrySetting | None = None
+    tier: ExecutionTier = field(default_factory=ExecutionTier)
+    """Tier 3: the sandbox backend, the network under the HTTP client, egress policies and
+    environment specs (ADR-P12, P26, P28). The default runs nothing and reaches nothing."""
 
     def view(self) -> LogView:
         """The owner's log as it stands now."""

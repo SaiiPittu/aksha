@@ -235,7 +235,8 @@ def _find(name: str, search: Sequence[Path]) -> Path | None:
 
 def _scan(folder: Path, findings: Iterable[SourceFinding]) -> list[LoadRefusal]:
     """Source findings as refusals, each naming the file it is in."""
-    field_of = {"import_outside_api": "imports", "stop_policy_class": "classes"}
+    field_of = {"import_outside_api": "imports", "stop_policy_class": "classes",
+                "network_import": "imports"}  # fmt: skip
     refusals: list[LoadRefusal] = []
     for s in findings:
         out = Refusals(f"{folder.name}/{s.file}")
