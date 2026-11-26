@@ -43,8 +43,11 @@ What an agent or extension declares, grouped by the primitive that owns it:
    exactly those rows, so a change to other rows moves nothing built on it).
 10. Other contributions: ``VersionedSourceSpec`` (P05), ``SandboxBackendSpec`` and
    ``EnvironmentSpec`` (P12, P28), ``SystemOfRecordSpec`` (P03), ``EgressPolicy`` (P26);
-   what a contributed system of record implements and answers: ``SystemOfRecord`` and
-   ``SystemReceipt`` (P03).
+   what a contributed system of record implements, answers and raises: ``SystemOfRecord``,
+   ``SystemReceipt`` and ``TransientEffectError`` (a failure worth retrying, matched to
+   the tool's ``retry_on``; P03).
+11. External record state (P29): ``ExternalRecord`` and ``external_records``, the outside
+   records an owner's effects created or revised, with the freshness of each one's source.
 """
 
 from __future__ import annotations
@@ -106,7 +109,9 @@ from aksha.runtime.models.types import (
     ToolCall,
     Usage,
 )
+from aksha.runtime.outbox.errors import TransientEffectError
 from aksha.runtime.outbox.ports import SystemOfRecord
+from aksha.runtime.outbox.records import ExternalRecord, external_records
 from aksha.runtime.outbox.types import EffectSpec, SystemOfRecordSpec, SystemReceipt
 from aksha.runtime.projections.ports import Reducer
 from aksha.runtime.projections.view import ArtifactsView, LogView
@@ -179,6 +184,7 @@ __all__ = [
     "ExecLimits",
     "ExecOutcome",
     "Extension",
+    "ExternalRecord",
     "ExtractionRequest",
     "ExtractionResult",
     "FieldAnswer",
@@ -237,6 +243,7 @@ __all__ = [
     "ToolOutcome",
     "ToolSpec",
     "ToolUse",
+    "TransientEffectError",
     "TreeManifest",
     "Unknown",
     "Usage",
@@ -244,6 +251,7 @@ __all__ = [
     "artifact_keys",
     "decimal_string",
     "distribution_ppm",
+    "external_records",
     "from_field",
     "maybe_unknown",
     "observe_time",

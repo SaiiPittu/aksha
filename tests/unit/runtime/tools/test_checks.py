@@ -104,6 +104,11 @@ CASES: list[tuple[str, str, str | None, str, Callable[[Agent], Agent]]] = [
      _own(effect="external", external=replace(SEND, system=None))),
     ("key_field_not_pointer", "key_field_invalid", None, "tools",
      _own(effect="external", external=replace(SEND, key_fields=("id",)))),
+    # ADR-P29 B3: record identity is a JSON pointer inside the request identity.
+    ("record_field_not_pointer", "record_field_invalid", None, "tools",
+     _own(effect="external", external=replace(SEND, record_fields=("id",)))),
+    ("record_field_outside_key", "record_field_not_keyed", None, "tools",
+     _own(effect="external", external=replace(SEND, record_fields=("/kind",)))),
     ("semantics_unknown", "semantics_unknown", None, "tools",
      _own(effect="external", external=replace(SEND, semantics="twice"))),  # type: ignore[arg-type]
     ("approval_without_external", "approval_without_external", None, "tools",

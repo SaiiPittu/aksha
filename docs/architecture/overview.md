@@ -114,7 +114,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P26 | Egress policy | built | Deny by default; the runtime's HTTP client checks every resolved address and every redirect, and records each decision |
 | P27 | Steering and follow-up input | built | `Steer` in three lanes (steer, follow-up, amend) as durable facts, through the session API, HTTP and `aksha steer` |
 | P28 | Execution environment image | built | Images keyed by a content hash of the spec and lock files, first build approved, packages fetched under egress and hash-checked, installed offline, recorded, mounted read-only at `/env` |
-| P29 | External record state | designed | |
+| P29 | External record state | built | One record per outside record from outbox receipts, with its source version's freshness joined |
 | P30 | Erasure in an append-only store | planned | |
 
 The catalogue, with dependencies and the build order, is [docs/design/03-primitives.md](../design/03-primitives.md).

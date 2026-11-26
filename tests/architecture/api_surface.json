@@ -1,5 +1,5 @@
 {
-  "api_version": "2.6",
+  "api_version": "2.7",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1) -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
@@ -29,6 +29,7 @@
     "ExecLimits": "class ExecLimits(wall_ms: 'int' = 30000, cpu_s: 'int' = 30, memory_mb: 'int' = 512, max_processes: 'int' = 64, max_open_files: 'int' = 256, max_output_bytes: 'int' = 1048576, max_file_bytes: 'int' = 16777216, max_collect_bytes: 'int' = 67108864) -> None",
     "ExecOutcome": "class ExecOutcome(status: 'str', exit_code: 'int | None', stdout: 'str', stderr: 'str', denials: 'tuple[Denial, ...]' = (), outputs: 'Mapping[str, bytes]' = <factory>, tree: 'TreeManifest | None' = None, code: 'str | None' = None, record: 'Mapping[str, Any]' = <factory>) -> None",
     "Extension": "class Extension(name: 'str', version: 'str', requires_api: 'str', tools: 'tuple[ToolDecl, ...]' = (), artifacts: 'tuple[ArtifactKind, ...]' = (), relations: 'tuple[RelationKind, ...]' = (), projections: 'tuple[Projection, ...]' = (), tasks: 'tuple[Task, ...]' = (), sandbox_backends: 'tuple[SandboxBackendSpec, ...]' = (), model_adapters: 'tuple[ModelAdapterSpec, ...]' = (), sources: 'tuple[VersionedSourceSpec, ...]' = (), systems: 'tuple[SystemOfRecordSpec, ...]' = (), environments: 'tuple[EnvironmentSpec, ...]' = (), egress: 'tuple[EgressPolicy, ...]' = (), event_types: 'tuple[EventTypeSpec, ...]' = ()) -> None",
+    "ExternalRecord": "class ExternalRecord(system: 'str', record_key: 'str', tool: 'str', fields: 'Mapping[str, Any]', revisions: 'tuple[SystemReceipt, ...]', sources: 'tuple[ArtifactRef, ...]' = (), freshness: 'Freshness | None' = None, pending: 'tuple[str, ...]' = (), unknown: 'tuple[str, ...]' = ()) -> None",
     "ExtractionRequest": "class ExtractionRequest(step_id: 'str', alias: 'str', state: 'tuple[CitationSpan, ...]', fields: 'tuple[FieldSpec, ...]') -> None",
     "ExtractionResult": "class ExtractionResult(answers: 'tuple[tuple[str, FieldAnswer], ...]', usage: 'Usage' = Usage(input_tokens=0, output_tokens=0, cost_micro_usd=0)) -> None",
     "FieldAnswer": "class FieldAnswer(value: 'FieldValue', spans: 'tuple[SpanRef, ...]' = (), p_null_ppm: 'int | None' = None, confidence_ppm: 'int | None' = None) -> None",
@@ -88,6 +89,7 @@
     "ToolOutcome": "class ToolOutcome(result: 'Ok | Err', saves: 'tuple[SaveRequest, ...]' = ()) -> None",
     "ToolSpec": "class ToolSpec(name: 'str', owner: 'str', effect: 'EffectClass', description: 'str', schema: 'Mapping[str, Any]', collections: 'frozenset[str]' = frozenset(), reads_kinds: 'frozenset[str]' = frozenset(), writes_kinds: 'frozenset[str]' = frozenset(), mints_citation_spans: 'bool' = False, recorded_query: 'bool' = False, retry: 'RetryPolicy' = RetryPolicy(timeout_ms=10000, max_retries=2, retry_on=frozenset({'timeout', 'transient'}), backoff_ms=(500, 1000)), result_key: 'str | None' = None, external: 'EffectSpec | None' = None, approval: 'ApprovalRule | None' = None, egress: 'str | None' = None, sandbox: 'SandboxNeeds | None' = None, model_alias: 'str | None' = None) -> None",
     "ToolUse": "class ToolUse(tool: 'str', retries: 'int | None' = None, timeout_ms: 'int | None' = None) -> None",
+    "TransientEffectError": "class TransientEffectError: default_code",
     "TreeManifest": "class TreeManifest(entries: 'Mapping[str, str]' = <factory>) -> None",
     "Unknown": "class Unknown(question: 'str', reason: 'UnknownReason', checked: 'tuple[str, ...]' = (), failed_step: 'str | None' = None) -> None",
     "Usage": "class Usage(input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_micro_usd: 'int' = 0) -> None",
@@ -95,6 +97,7 @@
     "artifact_keys": "def artifact_keys(kind: 'str', path: 'str', unless: 'Check | None' = None) -> 'KeySource'",
     "decimal_string": "def decimal_string(value: 'object') -> 'str'",
     "distribution_ppm": "def distribution_ppm(weights: 'Mapping[str, float | int | Decimal]') -> 'tuple[tuple[str, int], ...]'",
+    "external_records": "def external_records(view: 'LogView', system: 'str | None' = None) -> 'tuple[ExternalRecord, ...]'",
     "from_field": "def from_field(kind: 'str', path: 'str') -> 'FromField'",
     "maybe_unknown": "def maybe_unknown(schema: 'Mapping[str, Any]') -> 'dict[str, Any]'",
     "observe_time": "def observe_time(ctx: 'ToolContext') -> 'InputRef'",

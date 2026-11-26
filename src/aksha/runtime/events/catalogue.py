@@ -708,7 +708,16 @@ OUTBOX_ENQUEUED = EventTypeSpec(
             "request_hash": _KEY,
             "approval_id": {"type": "string", "minLength": 1},
             "command_id": {"type": "string", "minLength": 1},
+            # ADR-P29 D1: the outside record the request revises, and its source versions.
+            "record": {
+                "type": "object",
+                "properties": {"key": _KEY, "fields": {"type": "object"}},
+                "required": ["key", "fields"],
+                "additionalProperties": False,
+            },
+            "sources": {"type": "array", "items": {"type": "string", "minLength": 1}},
         },
+        "dependentRequired": {"record": ["sources"], "sources": ["record"]},
         "required": [
             "key",
             "tool",

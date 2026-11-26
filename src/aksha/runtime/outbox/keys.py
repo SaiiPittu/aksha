@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from aksha.runtime.artifacts.types import ArtifactRef
 from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.outbox.errors import KeyFieldMissing
 from aksha.runtime.outbox.types import EffectSpec
@@ -55,3 +56,52 @@ def idempotency_key(
 def request_hash(request: Mapping[str, Any]) -> str:
     """``sha256:<hex>`` of the whole request, so a change outside the key fields is seen."""
     return "sha256:" + sha256_hex(request)
+
+
+def record_values(args: Mapping[str, Any], spec: EffectSpec) -> dict[str, Any]:
+    """The value at each record field (ADR-P29 D1), as given; ``record_field_missing``.
+
+    Record identity is never resolved to an exact version: a form kind and a candidate
+    name one outside record across every version of the form written to it.
+    """
+    out: dict[str, Any] = {}
+    for pointer in spec.record_fields:
+        found, value = argument_at(args, pointer)
+        if not found:
+            raise KeyFieldMissing(
+                "record_field_missing", f"record field {pointer} is not in the arguments"
+            )
+        out[pointer] = value
+    return out
+
+
+def record_key(tool: str, owner: str, args: Mapping[str, Any], spec: EffectSpec) -> str:
+    """``sha256:<hex>`` over the tool, the owner and the record-field values (ADR-P29)."""
+    fields = record_values(args, spec)
+    return "sha256:" + sha256_hex({"tool": tool, "owner": owner, "record": fields})
+
+
+def artifact_sources(values: Mapping[str, Any]) -> tuple[str, ...]:
+    """The artifact refs among ``values`` (each ``kind/key@vN`` string, at any depth), in order.
+
+    These are the versions a request was written from (ADR-P29, amendment B2): the key
+    fields name what the effect means, so an artifact version among them is its source.
+    """
+    found: list[str] = []
+    for value in values.values():
+        _refs(value, found)
+    return tuple(dict.fromkeys(found))
+
+
+def _refs(value: Any, found: list[str]) -> None:
+    if isinstance(value, str):
+        try:
+            found.append(str(ArtifactRef.parse(value)))
+        except ValueError:
+            return
+    elif isinstance(value, Mapping):
+        for v in value.values():
+            _refs(v, found)
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            _refs(v, found)

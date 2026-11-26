@@ -64,7 +64,9 @@ def enqueued(
     """The outbox entry itself: the request, its key and how to finish it after a crash.
 
     A step's entry carries the step in its envelope (``entry.step``), so the worker can
-    commit the step's result with the entry's end.
+    commit the step's result with the entry's end. An entry that names an outside record
+    carries ``record`` (its key and field values) and ``sources`` (ADR-P29 D1); any other
+    entry's payload is unchanged.
     """
     payload: dict[str, Any] = {
         "key": entry.key,
@@ -79,6 +81,9 @@ def enqueued(
         payload["approval_id"] = entry.approval_id
     if entry.command_id is not None:
         payload["command_id"] = entry.command_id
+    if entry.record_key is not None:
+        payload["record"] = {"key": entry.record_key, "fields": thaw(entry.record or {})}
+        payload["sources"] = list(entry.sources)
     run = entry.run if entry.run is not None else run
     return NewEvent(
         "outbox.enqueued", payload, session=session, run=run, instance=instance, step=entry.step

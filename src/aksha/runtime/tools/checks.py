@@ -125,6 +125,15 @@ def _external(name: str, spec: ToolSpec, out: Refusals) -> None:
             if not is_json_pointer(field) or field == "":
                 message = f"tool {name!r}: key field {field!r} is not a JSON pointer"
                 out.add("tools", "key_field_invalid", message)
+        for field in effect.record_fields:
+            if not is_json_pointer(field) or field == "":
+                message = f"tool {name!r}: record field {field!r} is not a JSON pointer"
+                out.add("tools", "record_field_invalid", message)
+            elif field not in effect.key_fields:
+                # ADR-P29 B3: two records under one idempotency key would make the second
+                # write the first one's replay, so record identity is part of request identity.
+                message = f"tool {name!r}: record field {field!r} is not one of the key fields"
+                out.add("tools", "record_field_not_keyed", message)
     if spec.approval is not None and effect is None:
         message = f"tool {name!r}: approval is for external tools with an effect spec"
         out.add("tools", "approval_without_external", message)
