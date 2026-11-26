@@ -28,33 +28,32 @@ Every answer and approval a person would give is scripted and recorded with `by=
 
 ### The command line, step by step
 
-As of 26 Nov 2026 the two example agents run end to end through the demo and the tests, but not yet through `aksha run`: the command line binds an agent's fake models from its `fakes.py`, and theirs do not export that table yet (the start is refused `fakes_missing`). The walkthrough below uses `scribe`, the small agent the test suite drives: it writes one note, and asks a question first when the request says "ask". Run it from a fresh clone, after `make venv`.
+The research agent runs end to end through `aksha run` on the synthetic world. Run this from a fresh clone, after `make venv`:
 
 ```sh
 . .venv/bin/activate
-mkdir -p var/agents && ln -s "$PWD/tests/fixtures/agents/scribe" var/agents/scribe
-export AKSHA_AGENTS=var/agents        # load only the scribe
+export AKSHA_SOURCES=corpus=fixtures/worlds/stillroom/sources   # the folder the research tools read
 
-aksha run "ask me first, then write a note"
+aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research
 # session S-...
-# R-0001 scribe waiting
-#   waiting for input (needs_detail) I-0001: aksha answer I-0001 TEXT      (exit code 3)
+# R-0001 research waiting
+#   waiting for input (question) I-0001: aksha answer I-0001 TEXT          (exit code 3)
 
-aksha answer I-0001 "the blue one"
-# R-0001 scribe ended complete                                            (exit code 0)
+aksha answer I-0001 EU       # the agent asked which geography to cover
+# R-0001 research ended complete                                          (exit code 0)
 
 aksha status                 # where every run stands, read from the event store
 aksha inspect R-0001         # the run inspector: budget, steps, stop decisions, as JSON
 aksha verify                 # chain ok: <n> events, head sha256:...
-aksha trace R-0001           # var/traces/R-0001/1.otlp.jsonl and one file per segment
+aksha trace R-0001           # var/traces/R-0001/1.otlp.jsonl, one file per execution segment
 
-aksha run "write a note" --headless
+aksha run "Who sells camera-free occupancy sensing for offices, and at what price?" --agent research --headless
 # refused: sandbox_required (...)                                         (exit code 7)
-AKSHA_SANDBOX=bwrap:os-jail aksha run "write a note" --headless
-# R-0002 scribe ended complete (headless)
+AKSHA_SANDBOX=bwrap:os-jail aksha run "Who sells camera-free occupancy sensing for offices in the EU, and at what price?" --agent research --headless
+# R-0002 research ended complete (headless)
 ```
 
-`AKSHA_SANDBOX` is a declaration by the operator, not a probe: no sandbox backend is built yet, so setting it confines nothing (see the limitations). State lives in `var/aksha.sqlite` and `var/blobs/`; delete `var/` to start again.
+`AKSHA_SANDBOX` is a declaration by the operator, not a probe: no sandbox backend is built yet, so setting it confines nothing (see the limitations). With `--agent` left out, the router picks the agent from the loaded agents' purposes. State lives in `var/`; delete it to start again.
 
 ## Architecture in one page
 
@@ -241,7 +240,7 @@ A hash chain is tamper-evident, not tamper-proof: anyone who can open the databa
 As of 26 Nov 2026:
 
 1. **No sandbox backend.** Nothing confines a tool call yet (P12). A headless run is refused `sandbox_required` unless `AKSHA_SANDBOX` declares one, and that variable is the operator's word, not a check: Aksha does not probe for or start the sandbox it names. Exec steps can be bounded and killed by process group, not confined.
-2. **The example agents do not run through `aksha run` yet.** Their `fakes.py` has no model table for the command line to bind (refused `fakes_missing`); the demo and the tests drive them directly. An approval the CLI grants for an external effect is refused `effect_needs_outbox`, because the CLI's session has no outbox worker for the scribe's `publish`.
+2. **The patent agent's send does not run from the command line.** `aksha run --agent patent` (with `AKSHA_SOURCES=patent_sources=...`) reaches its approval, but approving it is refused `effect_needs_outbox`: no extension contributes the mock mailbox to the CLI's session, so only the demo and the tests deliver the packet. A refused approval also leaves that run open, and later embedded commands for the same user are then refused the same way, so try it on a store of its own (`AKSHA_SQLITE_PATH`).
 3. **OTLP/HTTP export is not built.** Traces go to local OTLP JSON Lines files only; sending them to a collector over HTTP is designed (P21) and not built.
 4. **Steering is unsupported.** The `Steer` command type exists, but the session API refuses it `unsupported` and the capability record does not list it (P27 is designed).
 5. **A rebuilt Task starts from a fresh context.** When invalidation rebuilds work, the rebuilt instance starts from a fresh context that opens with what changed (`rebuild_brief`); that is the default. Resuming the instance in its own recorded history, with stale tool results masked and a change notice, is under evaluation (decisions 30 to 32) and stays off until a measured comparison shows it does better.
