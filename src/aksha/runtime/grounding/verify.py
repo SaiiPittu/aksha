@@ -32,6 +32,7 @@ from aksha.runtime.grounding.types import (
     MIN_QUOTE_CHARS,
     STATEMENT_SOURCE,
     ArtifactCite,
+    CitationSpan,
     CiteError,
     CiteForm,
     CitePolicy,
@@ -71,8 +72,8 @@ class Evidence:
     reads: frozenset[str]
     artifact: Callable[[ArtifactRef], Mapping[str, Any] | None]
     failed_steps: frozenset[str] = frozenset()
-    resumed: frozenset[tuple[str, str]] = frozenset()
-    """The ``(run, instance)`` segments of the session this instance resumed, if it did."""
+    resumed_spans: frozenset[str] = frozenset()
+    """The spans shown inside the turns of the session this instance resumed, if it did."""
 
 
 def _err(code: Any, pointer: str, message: str) -> CiteError:
@@ -93,11 +94,11 @@ def verify_citation(
     return _artifact(cite, evidence, policy, pointer)
 
 
-def _seen(span_shown_to: frozenset[tuple[str, str]], evidence: Evidence) -> bool:
-    """Shown to this instance in this run, or to the session it resumed (decision 36)."""
-    if (evidence.run, evidence.instance) in span_shown_to:
-        return True
-    return bool(evidence.resumed & span_shown_to)
+def _seen(span: CitationSpan, evidence: Evidence) -> bool:
+    """Shown to this instance in this run, or inside the session it resumed (decision 36)."""
+    return (evidence.run, evidence.instance) in span.shown_to or (
+        span.span_id in evidence.resumed_spans
+    )
 
 
 def _span(cite: SpanCite, ev: Evidence, policy: CitePolicy, at: str) -> Verified | CiteError:
@@ -111,7 +112,7 @@ def _span(cite: SpanCite, ev: Evidence, policy: CitePolicy, at: str) -> Verified
     if policy.span_sources and span.source not in policy.span_sources:
         allowed = sorted(policy.span_sources)
         return _err("form_not_allowed", at, f"{cite.span} is from {span.source!r}, not {allowed}")
-    if not _seen(span.shown_to, ev):
+    if not _seen(span, ev):
         return _err("span_not_seen", at, f"{cite.span} was never shown to {ev.instance}")
     if span.source != STATEMENT_SOURCE and span.record_id in ev.records:
         now = ev.records[span.record_id]
@@ -145,7 +146,7 @@ def _statement(cite: StatementCite, ev: Evidence, at: str) -> Verified | CiteErr
         return _err(
             "cite_invalid", at, f"{cite.statement} is a {span.source} span, not a statement"
         )
-    if not _seen(span.shown_to, ev):
+    if not _seen(span, ev):
         return _err("span_not_seen", at, f"{cite.statement} was never shown to {ev.instance}")
     if cite.statement in ev.spans.superseded():
         return _err("superseded_statement", at, f"{cite.statement} was corrected; cite the new one")

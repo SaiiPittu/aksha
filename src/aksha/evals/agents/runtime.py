@@ -274,6 +274,15 @@ class RuntimeUnderTest:
                 owner=OWNER, change_set=name, command_id=f"episode-change-{seq}"
             )
             self._dispatch(session, change)
+            if not any(
+                e.type == "source.changed" and e.payload.get("change_set") == name
+                for e in load_view(session.store, OWNER).events
+            ):
+                # Only a record the agent read and that moved is recorded; an added record
+                # reaches the runtime through a re-executed query, which this source has none
+                # of. Say so rather than grade outputs the change never reached.
+                raise EvalError("change_not_recorded", f"{self.name}: {name} moved no record "
+                                "the agent read")  # fmt: skip
         for _ in range(MAX_ROUNDS):
             session.drive_rebuilds(OWNER)
             session.run_until_yield(OWNER)

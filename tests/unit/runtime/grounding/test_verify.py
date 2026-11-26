@@ -133,17 +133,14 @@ def test_quote_not_verbatim_hands_the_model_the_span_text() -> None:
 
 
 def test_a_resumed_instance_may_cite_what_its_session_was_shown() -> None:
-    """Decision 36: a re-entry that resumed compare[C1]'s session in R-0002 is shown that
-    session again, so the spans shown to the session count as shown to it; a fresh entry
-    (no resumed session) and another instance's session do not."""
+    """Decision 36: a re-entry that resumed a session is shown that session's spans again,
+    so the spans shown inside the session's turns count as shown to it; others do not."""
     cite = SpanCite("EX-0002", "279 EUR per sensor")
     fresh = verify_citation(cite, evidence(run="R-0002", instance="compare[C1]"))
     assert isinstance(fresh, CiteError) and fresh.code == "span_not_seen"
-    resumed = evidence(run="R-0002", instance="compare[C1]",
-                       resumed=frozenset({(RUN, "compare[C1]")}))  # fmt: skip
+    resumed = evidence(run="R-0002", instance="compare[C1]", resumed_spans=frozenset({"EX-0002"}))
     assert isinstance(verify_citation(cite, resumed), Verified)
-    other = evidence(run="R-0002", instance="compare[C1]",
-                     resumed=frozenset({(RUN, "compare[C2]")}))  # fmt: skip
+    other = evidence(run="R-0002", instance="compare[C1]", resumed_spans=frozenset({"EX-0001"}))
     found = verify_citation(cite, other)
     assert isinstance(found, CiteError) and found.code == "span_not_seen"
 
