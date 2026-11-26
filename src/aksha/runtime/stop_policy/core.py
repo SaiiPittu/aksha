@@ -5,10 +5,12 @@ Policy         Judges
 =============  ==========================================================================
 Run            outermost, one per open run. Relays the scheduler's pick (PUSH), holds when
                nothing may run but a person can unblock it, and is the only policy that
-               returns STOP: ``complete``, ``partial`` (naming the blocked instances) or
-               ``failed`` on a run fault. Its limit replaces a CONTINUE with the budget
-               interrupt once a budget dimension is spent (ADR-P14), and ends a resumed run
-               at the restart limit.
+               returns STOP: ``complete``, ``partial`` (explicit unknowns, ADR-P24 D6),
+               ``blocked`` (naming the blocked instances) or ``failed`` on a run fault. Its
+               limit replaces a CONTINUE with the budget interrupt once a budget dimension
+               is spent (ADR-P14), or, once the run is finalizing, ends it ``partial``
+               when the reserve is spent too (ADR-P24 D5); it ends a resumed run at the
+               restart limit.
 Task           one per Task instance on the stack. A leaf: entry (DONE when its check
                passes on entry, so untouched work takes no turn), CONTINUE after tools, and
                on a finish its completion check (DONE, a veto with the check's message, or
@@ -28,6 +30,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aksha.runtime.budgets.limits import limit_reached, turns_used, vetoes_since_entry
+from aksha.runtime.finalization.state import finalizing
 from aksha.runtime.interrupts.reducers import pending_interrupts
 from aksha.runtime.stop_policy import hold as holds
 from aksha.runtime.stop_policy.types import (
@@ -99,9 +102,12 @@ class RunPolicy:
             return Verdict("hold", reason, code="interrupt_open", facts=facts)
         if outcome.outcome == "complete":
             return Verdict("stop", "completion_checks_passed", outcome="complete", facts=facts)
+        if outcome.outcome == "partial":
+            reason = f"partial: {len(outcome.unknowns)} unknown"
+            return Verdict("stop", reason, outcome="partial", facts=facts)
         blocked = ", ".join(outcome.blockers)
         reason = f"blocked: {blocked}" if blocked else "blocked"
-        return Verdict("stop", reason, outcome="partial", facts=facts)
+        return Verdict("stop", reason, outcome="blocked", facts=facts)
 
     def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
         """The budget first (a spent dimension raises the budget interrupt), then restarts."""
@@ -118,10 +124,13 @@ class RunPolicy:
             return None
         d = spent[0]
         used, allowed = m.used[d], m.allowed[d]
+        counts = ((d, used), ("allowed", allowed))
+        if finalizing(view.log, self.run) is not None:
+            reason = f"reserve spent: {d} {used} of {allowed}"
+            return Verdict("stop", reason, outcome="partial", code="reserve_spent", counts=counts)
         n = 1 + sum(1 for e in view.log.events if e.run == self.run and e.type == BUDGET_REACHED)
         raises = InterruptRequest(f"budget-{n}", d, used, allowed)
-        reason = f"budget {d} spent: {used} of {allowed}; grant more to continue"
-        counts = ((d, used), ("allowed", allowed))
+        reason = f"budget {d} spent: {used} of {allowed}; grant more or finalize"
         return Verdict("hold", reason, raises=raises, code=d, counts=counts)
 
 

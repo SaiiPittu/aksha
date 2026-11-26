@@ -20,6 +20,9 @@ refused ``already_decided``, and an approval's decision carries the dedup key
 4. :func:`edit` voids the approval (``approval.voided{replaced_by_edit}``, and its open
    interrupt) and requests a new one for the edited arguments, under a new signature.
 5. :func:`grant_budget` answers a budget interrupt with ``budget.granted`` (ADR-P14).
+   :func:`finalize` is its third answer (ADR-P24 D4): ``run.finalizing`` voids the work
+   not yet settled and lets only finalizer Tasks run, on the reserved budget. Refused
+   ``already_finalizing`` once the run is finalizing.
 6. :func:`handoff` is Friday's execution path (D8): it re-verifies the approval from current
    facts and only then writes the outbox entry, whose ``approval_id`` marks the approval
    used. A refusal writes no entry.
@@ -34,6 +37,8 @@ from aksha.runtime.budgets.facts import budget_granted
 from aksha.runtime.budgets.types import Dimension
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
+from aksha.runtime.finalization.finalize import finalize_facts
+from aksha.runtime.finalization.state import finalizing
 from aksha.runtime.grounding.spans import span_index, statement_span
 from aksha.runtime.grounding.types import SpanIndex
 from aksha.runtime.interrupts.approvals import (
@@ -77,6 +82,7 @@ EXPLICIT_COMMAND_REQUIRED = "explicit_command_required"
 NOT_AN_OPTION = "not_an_option"
 ANSWER_MISSING = "answer_missing"
 NOT_A_BUDGET_INTERRUPT = "not_a_budget_interrupt"
+ALREADY_FINALIZING = "already_finalizing"
 
 
 def _command(
@@ -377,6 +383,40 @@ def grant_budget(
     args: dict[str, Any] = {"interrupt": interrupt_id, "extra": dict(extra), "by": by}
     command = _command("grant_budget", owner, args, command_id, session, interrupt_id)
     return dispatch(store, command, grant_budget_spec())
+
+
+def finalize_spec(tree: CompiledTree) -> CommandSpec:
+    """The ``finalize`` command: ``run.finalizing`` answers the budget interrupt (ADR-P24)."""
+
+    def decide(command: Command, view: LogView) -> CommandAccepted | CommandRefused:
+        i = _open(view, str(command.args["interrupt"]))
+        if isinstance(i, CommandRefused):
+            return i
+        if i.kind != "budget" or i.run is None:
+            return CommandRefused(NOT_A_BUDGET_INTERRUPT, f"{i.id} is a {i.kind} interrupt")
+        if finalizing(view, i.run) is not None:
+            return CommandRefused(ALREADY_FINALIZING, f"run {i.run} is already finalizing")
+        by = str(command.args["by"])
+        facts = finalize_facts(view, tree, i.run, i.id, by)
+        return CommandAccepted((*facts, _resolved(i, by, decision="finalized")))
+
+    return CommandSpec("finalize", DECISION_BOUNDARY, decide)
+
+
+def finalize(
+    store: EventStore,
+    owner: str,
+    interrupt_id: str,
+    *,
+    tree: CompiledTree,
+    by: str,
+    command_id: str | None = None,
+    session: str | None = None,
+) -> CommandReceipt:
+    """A person answers a budget interrupt with "finalize" (ADR-P24 D4)."""
+    args: dict[str, Any] = {"interrupt": interrupt_id, "by": by}
+    command = _command("finalize", owner, args, command_id, session, interrupt_id)
+    return dispatch(store, command, finalize_spec(tree))
 
 
 # --- handoff --------------------------------------------------------------------------

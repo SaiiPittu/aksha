@@ -31,6 +31,7 @@ from typing import Literal
 from aksha.runtime.artifacts.types import ArtifactRef, WriterId
 from aksha.runtime.artifacts.versions import unaccepted_revisions
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.finalization.types import UnknownEntry
 from aksha.runtime.interrupts.approvals import APPROVAL_VOIDED, approvals
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.completion import (
@@ -77,7 +78,7 @@ class _Pick:
     def consider(self, ref: InstanceRef) -> Iterator[InstanceRef]:
         state = self.state
         status = state.status(ref)
-        if status in SETTLED or status == "suspended":
+        if status in SETTLED or status == "suspended" or state.voided(ref):
             return
         if not self.needs_met(ref) or self.awaiting_review(ref):
             return
@@ -103,13 +104,21 @@ class _Pick:
         node = state.tree.node(ref.task_path)
         prefix = "" if node.parent is None else f"{node.parent}/"
         mine = state.tree.key_source(ref.task_path)
+        finalizing = state.finalizing is not None
         for need in node.task.needs:
             path = prefix + need
             theirs = state.tree.key_source(path)
             if ref.key is not None and _same_source(mine, theirs):
-                if state.status(InstanceRef(ref.run, path, ref.key)) != "done":
+                other = InstanceRef(ref.run, path, ref.key)
+                if finalizing and state.settled(other):
+                    continue  # ADR-P24 D4: a finalizer reads what settled, unknowns and all
+                if state.status(other) != "done":
                     return False
-            elif not task_done(state, path).ok:
+                continue
+            found = task_done(state, path)
+            if finalizing and found.code in ("child_blocked", "keys_pending"):
+                continue  # D4: nothing in it may run again, so the finalizer goes ahead
+            if not found.ok:
                 return False
         return True
 
@@ -293,21 +302,33 @@ def pop_fields(popped: Popped) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class RunOutcome:
-    """How the Task tree ended: ``complete``, or ``partial`` naming the blocked instances."""
+    """How the Task tree ended (ADR-P24 D6).
 
-    outcome: Literal["complete", "partial"]
+    ``complete``: every top-level Task is done and no output holds an unknown.
+    ``partial``: every top-level Task is done with at least one explicit unknown, or the
+    run was finalized. ``blocked``: a block nothing tolerates left work undone.
+    ``blockers`` names the blocked instances; ``unknowns`` every explicit unknown.
+    """
+
+    outcome: Literal["complete", "partial", "blocked"]
     blockers: tuple[str, ...] = ()
+    unknowns: tuple[UnknownEntry, ...] = ()
 
 
 def run_outcome(view: LogView, tree: CompiledTree, run: str) -> RunOutcome | None:
     """None while an instance may run or is suspended; else the tree's outcome. Pure."""
+    from aksha.runtime.finalization.unknowns import unknowns_in  # deferred: it reads tasks
+
     state = run_state(view, tree, run)
     if runnable_in(state):
         return None
     refs = tuple(all_instances(state))
-    if any(state.status(r) == "suspended" for r in refs):
+    if any(state.status(r) == "suspended" and not state.voided(r) for r in refs):
         return None
     blocked = tuple(r.instance for r in refs if state.status(r) == "blocked")
-    if not blocked and all(task_done(state, root).ok for root in tree.roots):
-        return RunOutcome("complete")
-    return RunOutcome("partial", blocked)
+    found = unknowns_in(state)
+    if state.finalizing is not None:
+        return RunOutcome("partial", blocked, found)
+    if all(task_done(state, root).ok for root in tree.roots):
+        return RunOutcome("partial" if found else "complete", blocked, found)
+    return RunOutcome("blocked", blocked, found)

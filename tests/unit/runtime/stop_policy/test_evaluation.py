@@ -83,9 +83,11 @@ def test_the_retry_cap_fails_the_instance_at_the_third_refused_finish() -> None:
     assert d.counts["vetoes"] == 3
     assert d.pops == (("scope", "fail"),)
     assert statuses(log.view(), tree, RUN)["scope"] == "blocked"
-    assert d.verdict.kind == "stop" and d.verdict.outcome == "partial"
+    # ADR-P24 D6: a block nothing tolerates ends the run ``blocked``, never ``partial``.
+    assert d.verdict.kind == "stop" and d.verdict.outcome == "blocked"
     ended = [e for e in log.view().events if e.type == "run.ended"]
-    assert ended[0].payload["outcome"] == "partial"
+    assert ended[0].payload["outcome"] == "blocked"
+    assert "unknowns" not in ended[0].payload
     assert ended[0].payload["blockers"] == ["scope"]
 
 
@@ -199,7 +201,7 @@ def test_a_raising_check_is_fail_check_raised() -> None:
     assert first.pops == ()  # entry: the raising check failed, so the instance runs
     d = decide(log, tree, _finish(ref("only")))
     assert d.pops == (("only", "fail"),)
-    assert d.verdict.kind == "stop" and d.verdict.outcome == "partial"
+    assert d.verdict.kind == "stop" and d.verdict.outcome == "blocked"
 
 
 def test_evaluation_is_a_pure_function_of_the_log() -> None:

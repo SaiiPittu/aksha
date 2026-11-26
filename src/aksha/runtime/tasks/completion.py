@@ -9,7 +9,9 @@ facts it returns commit in that stop decision (U3). The rules:
    none). A child still to run makes the parent ``children_pending``. A blocked child blocks
    the parent and is named as the blocker (``child_blocked``), unless the parent declares
    ``on_child_blocked="partial"`` (S1): then it may finish once every child is done or
-   blocked, and the blocked ones stay named in ``blockers`` for readers (ADR-P24).
+   blocked, and the blocked ones stay named in ``blockers`` for readers (ADR-P24). A
+   child that can never start because an instance it needs for its key is blocked
+   (unreached), or that finalization voided, counts as blocked here.
 3. A keyed Task taken as a whole (what a sibling's ``needs`` waits on) is done when every
    current key's instance is done, under the same partial rule; ``keys_pending`` while its
    key source has no record yet.
@@ -66,7 +68,7 @@ def evaluate_in(state: RunState, ref: InstanceRef) -> Evaluation:
                 keys=tuple(pending[:FIRST_KEYS]),
                 code="children_pending",
             )
-        blocked = tuple(c.instance for c in children if state.status(c) == "blocked")
+        blocked = blockers(state, children)
         if blocked and task.on_child_blocked == "block":
             return Evaluation(
                 ref.instance,
@@ -117,7 +119,7 @@ def task_done(state: RunState, path: str) -> Evaluation:
             path, ok=False, message=f"waiting on {', '.join(pending[:FIRST_KEYS])}",
             count=len(pending), keys=tuple(pending[:FIRST_KEYS]), code="children_pending",
         )  # fmt: skip
-    blocked = tuple(r.instance for r in refs if state.status(r) == "blocked")
+    blocked = blockers(state, refs)
     if blocked and task.on_child_blocked == "block":
         return Evaluation(
             path, ok=False, message=f"blocked by {', '.join(blocked[:FIRST_KEYS])}",
@@ -172,5 +174,13 @@ def reset_fact(ref: InstanceRef, cause: ResetCause) -> NewEvent:
 
 
 def blockers(state: RunState, refs: Iterable[InstanceRef]) -> tuple[str, ...]:
-    """The blocked instances among ``refs``, in order."""
-    return tuple(r.instance for r in refs if state.status(r) == "blocked")
+    """The instances among ``refs`` that settled without being done, in order.
+
+    Blocked, unreached (an instance they need for their key is blocked) or voided by
+    finalization (ADR-P24): each is a key whose output a reader sees as an unknown.
+    """
+    return tuple(
+        r.instance
+        for r in refs
+        if state.status(r) == "blocked" or state.unreached(r) is not None or state.voided(r)
+    )

@@ -12,6 +12,9 @@ tree and the instance; it has no clock, no model and no network. Its readers:
 4. ``child_status(task_id)``: the statuses of a child Task's instances, by key.
 5. ``freshness(ref)``: a version's state in the invalidation view (ADR-P05), so a check
    that reads a tool's report can refuse a report the files moved past (D4).
+6. ``entries(kind)``: every key of a kind, its current version or, where its writer was
+   blocked under a partial rule or voided by finalization, an explicit ``Unknown``
+   (ADR-P24 D2, D4). A check that refuses unknowns still refuses them (D3).
 
 Kind names may be local (``line``); the view resolves them in the agent's namespace.
 """
@@ -25,6 +28,7 @@ from typing import Any
 
 from aksha.runtime.artifacts.types import ArtifactVersion
 from aksha.runtime.artifacts.versions import current, unaccepted_revisions, versions
+from aksha.runtime.grounding.types import Unknown
 from aksha.runtime.interrupts.reducers import INTERRUPT_RAISED, INTERRUPT_RESOLVED
 from aksha.runtime.invalidation.types import Freshness
 from aksha.runtime.invalidation.view import invalidation_view
@@ -93,6 +97,12 @@ class TaskView:
         child = self.instance.child(task_id)
         self.tree.node(child.task_path)
         return MappingProxyType({child.key: state.status(child)})
+
+    def entries(self, kind: str) -> Mapping[str | None, ArtifactVersion | Unknown]:
+        """Every key of ``kind``: its current version, or its explicit unknown (ADR-P24)."""
+        from aksha.runtime.finalization.unknowns import entries  # deferred: it reads statuses
+
+        return entries(self.log, self.tree, self.instance, kind)
 
     def freshness(self, ref: str) -> Freshness | None:
         """The version's state in the invalidation view, or None when the view lacks it."""

@@ -135,16 +135,29 @@ RUN_STARTED = EventTypeSpec(
     boundaries=frozenset({"U1", "U9"}),
     dedup_key="rstart:{run}",
 )
+_UNKNOWN_ENTRY: Mapping[str, Any] = {
+    "type": "object",
+    "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "reason": {"enum": ["unverified", "not_checked"]},
+        "blocker": {"type": "string", "minLength": 1},
+    },
+    "required": ["key", "reason"],
+    "additionalProperties": False,
+}
 RUN_ENDED = EventTypeSpec(
     name="run.ended",
     schema={
         "type": "object",
         "properties": {
-            # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``.
-            "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
+            # ADR-P18 D2: ``stopped`` is a person's stop, never ``partial``. ADR-P24 D6:
+            # ``partial`` ends with explicit unknowns, ``blocked`` with an untolerated block.
+            "outcome": {"enum": ["complete", "partial", "blocked", "failed", "stopped"]},
             "reason": {"type": "string"},
-            # ADR-P16 D3: the blocked instances a ``partial`` run ends with, for readers.
+            # ADR-P16 D3: the blocked instances a run ends with, for readers.
             "blockers": {"type": "array", "items": {"type": "string"}},
+            # ADR-P24 D6: every explicit unknown, its reason and its blocker.
+            "unknowns": {"type": "array", "items": _UNKNOWN_ENTRY},
         },
         "required": ["outcome", "reason"],
     },
@@ -565,7 +578,7 @@ STOP_DECIDED = EventTypeSpec(
             "trail": {"type": "array", "items": _POLICY_VERDICT},
             "decided_by": {"type": "string", "minLength": 1},
             "replaced": _POLICY_VERDICT,
-            "outcome": {"enum": ["complete", "partial", "failed", "stopped"]},
+            "outcome": {"enum": ["complete", "partial", "blocked", "failed", "stopped"]},
             "interrupt": {"type": "string", "minLength": 1},
         },
         "required": ["walk", "verdict"],
@@ -613,6 +626,30 @@ BUDGET_GRANTED = EventTypeSpec(
     writer="session",
     boundaries=frozenset({"U4"}),
     dedup_key="bgrant:{run}/{interrupt_id}",
+)
+RUN_FINALIZING = EventTypeSpec(
+    name="run.finalizing",
+    schema={
+        "type": "object",
+        "properties": {
+            # ADR-P24 D4: the budget interrupt "finalize" answered, and who answered it.
+            "interrupt": {"type": "string", "minLength": 1},
+            "by": {"type": "string", "minLength": 1},
+            # D5: the reserve per capped dimension, which only finalizer Tasks spend.
+            "reserve": {
+                "type": "object",
+                "propertyNames": _DIMENSION,
+                "additionalProperties": {"type": "integer", "minimum": 0},
+            },
+            "finalizers": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "voided": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        },
+        "required": ["interrupt", "by", "reserve", "finalizers", "voided"],
+        "additionalProperties": False,
+    },
+    writer="session",
+    boundaries=frozenset({"U4"}),
+    dedup_key="rfinal:{run}",
 )
 
 # --- P03 the transactional outbox and command receipts (``outbox/facts.py``, ----------
@@ -970,7 +1007,8 @@ INTERRUPT_RESOLVED = EventTypeSpec(
             # ADR-P17 D4: who answered, the answer per question ID (S2), or the decision.
             "by": {"type": "string", "minLength": 1},
             "answers": {"type": "object", "additionalProperties": {"type": "string"}},
-            "decision": {"enum": ["granted", "rejected"]},
+            # ADR-P24 D4: ``finalized`` answers a budget interrupt with ``finalize``.
+            "decision": {"enum": ["granted", "rejected", "finalized"]},
         },
         "required": ["interrupt"],
     },
@@ -1225,6 +1263,7 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     STOP_DECIDED,
     BUDGET_REACHED,
     BUDGET_GRANTED,
+    RUN_FINALIZING,
     RUN_STOP_REQUESTED,
     INTERRUPT_VOIDED,
     SOURCE_CHANGED,

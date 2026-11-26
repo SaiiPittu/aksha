@@ -121,7 +121,9 @@ def test_needs_wait_per_key_when_both_fan_out_over_one_source() -> None:
     assert runnable(log.view(), tree, RUN) == ()  # report needs every compare
     outcome = run_outcome(log.view(), tree, RUN)
     assert outcome is not None
-    assert (outcome.outcome, outcome.blockers) == ("partial", ("extract[C2]",))
+    # ADR-P24 D6: nothing tolerates the block (extract keeps the default rule): ``blocked``.
+    assert (outcome.outcome, outcome.blockers) == ("blocked", ("extract[C2]",))
+    assert outcome.unknowns == ()
 
 
 def test_a_pending_review_of_a_read_kind_holds_the_reader_not_the_writer() -> None:

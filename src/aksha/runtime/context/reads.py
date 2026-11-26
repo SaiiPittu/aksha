@@ -14,6 +14,9 @@ Each rendering names the citation spans whose text it showed (S1): the spans the
 cites (``citation.bound`` with the version as carrier), all of them for ``full``, and for
 ``summary`` those whose JSON-escaped text is inside the rendered text. A ``full`` or
 ``summary`` rendering is a read of the version: it becomes a lineage input of the step.
+
+After the versions, each slot an ``all`` or field read names that holds an explicit
+unknown (ADR-P24) is shown as one line, ``[unknown kind/key: reason, blocked by ...]``.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ from aksha.runtime.artifacts.types import ArtifactKind, ArtifactVersion, InputRe
 from aksha.runtime.artifacts.versions import current
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.types import ContextPolicy, Rendered, RenderMode
+from aksha.runtime.finalization.unknowns import unknown_reads
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.grounding.types import SpanIndex
 from aksha.runtime.projections.view import LogView
@@ -155,7 +159,8 @@ def render_reads(
 ) -> RenderedReads:
     """The read block of ``instance``'s context (module doc). Pure."""
     versions = declared_versions(view, tree, instance, blobs=blobs)
-    if not versions:
+    gaps = unknown_lines(view, tree, instance)
+    if not versions and not gaps:
         return RenderedReads("", (), ())
     index = span_index(view)
     cited = cited_spans(view)
@@ -174,4 +179,18 @@ def render_reads(
         parts.append(text)
         rendered.append(r)
     header = "Artifacts this Task reads (current versions):"
-    return RenderedReads("\n\n".join((header, *parts)), tuple(rendered), tuple(inputs))
+    return RenderedReads("\n\n".join((header, *parts, *gaps)), tuple(rendered), tuple(inputs))
+
+
+def unknown_lines(view: LogView, tree: CompiledTree, instance: InstanceRef) -> tuple[str, ...]:
+    """One line per slot an ``all`` or field read names that holds an explicit unknown.
+
+    ADR-P24 D2, D4: a key whose writer was blocked under a partial rule, or voided by
+    finalization, is shown as an unknown with its reason and blocker, never left out.
+    """
+    out = []
+    for kind, key, entry in unknown_reads(view, tree, instance):
+        slot = kind if key is None else f"{kind}/{key}"
+        by = f", blocked by {entry.blocker}" if entry.blocker else ""
+        out.append(f"[unknown {slot}: {entry.reason}{by}]")
+    return tuple(out)

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.finalization.types import UnknownEntry
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.storage.chain import content_hash
 from aksha.runtime.tasks.completion import evaluate_completion, reset_fact
@@ -53,7 +54,7 @@ def test_status_equals_full_rebuild(tmp_path: Path) -> None:
     assert set(statuses(full, tree, RUN).values()) == {"done"}
 
 
-def test_three_vetoes_then_blocked_and_the_run_ends_partial(tmp_path: Path) -> None:
+def test_three_vetoes_then_blocked_and_the_run_ends_blocked(tmp_path: Path) -> None:
     ledger = StoreLedger(tmp_path / "aksha.sqlite")
     work = obedient(("C1", "C2"))
     turns: list[str] = []
@@ -72,7 +73,10 @@ def test_three_vetoes_then_blocked_and_the_run_ends_partial(tmp_path: Path) -> N
     assert statuses(view, tree, RUN)["compare[C1]"] == "done"
     outcome = run_outcome(view, tree, RUN)
     assert outcome is not None
-    assert (outcome.outcome, outcome.blockers) == ("partial", ("extract[C2]",))
+    # ADR-P24: extract tolerates its blocked key, but compare[C2] can never start and
+    # compare keeps the default rule, so the block reaches the run: ``blocked``.
+    assert (outcome.outcome, outcome.blockers) == ("blocked", ("extract[C2]",))
+    assert outcome.unknowns == (UnknownEntry("extract[C2]", "unverified", "extract[C2]"),)
 
 
 def test_insist_does_not_unblock(tmp_path: Path) -> None:

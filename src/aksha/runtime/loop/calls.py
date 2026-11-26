@@ -44,6 +44,7 @@ from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ids import highest
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import Deadline, StepId, StepOutput, StepPolicy, StepResult
+from aksha.runtime.finalization.reserve import held_back
 from aksha.runtime.grounding.errors import MintRefused
 from aksha.runtime.grounding.spans import mint_for_result, span_index
 from aksha.runtime.interrupts.approvals import (
@@ -176,7 +177,7 @@ def run_position(
         task=setup.task(ref),
         ceiling=setup.permissions(),
         narrowing=narrowing,
-        meter=meter(view, ref.run).reading(),
+        meter=held_back(view, setup.tree, ref.run, meter(view, ref.run)).reading(),
         sources=setup.sources,
         sandbox=setup.sandbox,
         headless=bool(started.get("headless", False)),

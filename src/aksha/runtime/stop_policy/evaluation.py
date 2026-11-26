@@ -38,6 +38,8 @@ from aksha.runtime.budgets.limits import turns_used
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.cancellation.ending import ending_facts
 from aksha.runtime.events.envelope import Event, NewEvent
+from aksha.runtime.finalization.reserve import held_back
+from aksha.runtime.finalization.unknowns import unknowns_at_end
 from aksha.runtime.interrupts.reducers import INTERRUPT_RAISED, INTERRUPT_VOIDED, pending_interrupts
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy import hold as holds
@@ -53,7 +55,6 @@ from aksha.runtime.stop_policy.types import (
     StopView,
     Verdict,
 )
-from aksha.runtime.tasks.scheduler import run_outcome
 from aksha.runtime.tasks.status import STOP_DECIDED, all_instances, run_state
 from aksha.runtime.tasks.types import InstanceRef
 
@@ -119,7 +120,8 @@ def evaluate_stop(view: StopView, c: StopCandidate) -> StopDecision:
     """Decide candidate ``c`` (module doc, steps 1 to 6). Pure: writes nothing."""
     log0 = view.log
     seq_no = _seq_no(log0, c.run)
-    view = replace(view, meter=meter(log0, c.run, budget=view.budget))  # step 1
+    spent = held_back(log0, view.tree, c.run, meter(log0, c.run, budget=view.budget))
+    view = replace(view, meter=spent)  # step 1 (the reserve held back, ADR-P24 D5)
     stack = derive_stack(view, c)  # step 2
     derived = tuple(p.ref for p in stack)
     trail: list[PolicyVerdict] = []
@@ -311,10 +313,14 @@ def _ending(view: StopView, run: str, verdict: Verdict) -> tuple[NewEvent, ...]:
         for i in pending_interrupts(view.log, run)
     )
     payload: dict[str, Any] = {"outcome": verdict.outcome, "reason": verdict.reason or "ended"}
-    if verdict.outcome == "partial":
-        outcome = run_outcome(view.log, view.tree, run)
-        if outcome is not None and outcome.blockers:
-            payload["blockers"] = list(outcome.blockers)
+    if verdict.outcome in ("partial", "blocked"):
+        state = run_state(view.log, view.tree, run)
+        blocked = tuple(r.instance for r in all_instances(state) if state.status(r) == "blocked")
+        if blocked:
+            payload["blockers"] = list(blocked)
+        found = unknowns_at_end(state)
+        if found:
+            payload["unknowns"] = [u.as_json() for u in found]
     return (*voided, NewEvent("run.ended", payload, run=run))
 
 

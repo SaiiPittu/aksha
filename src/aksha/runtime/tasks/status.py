@@ -18,6 +18,13 @@ An instance whose key is not in its key source now is ``withdrawn`` whatever its
 say; one with no fact is ``new``. The key sources are read through ``keys.keys_of`` and
 filtered by the source's ``unless`` check. Because every arrow is a recorded fact, the
 status after a restart is the status before it (``test_status_equals_full_rebuild``).
+
+Two derived marks sit beside the status, also read from facts (ADR-P24). An instance is
+*unreached* while it is ``new`` and an instance it needs for its own key is blocked (or
+unreached itself): it can never start, so it counts as settled and as blocked by that
+instance. Once the run is finalizing (``run.finalizing``), every instance not yet settled
+is *voided* unless its Task is a finalizer, or above or below one: it never runs again,
+and it counts as settled.
 """
 
 from __future__ import annotations
@@ -27,6 +34,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 
 from aksha.runtime.events.envelope import Event
+from aksha.runtime.finalization.state import finalizing
+from aksha.runtime.finalization.types import Finalizing
 from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import run_check
@@ -93,6 +102,7 @@ class RunState:
     last_seq: Mapping[str, int]
     open_interrupts: Mapping[str, tuple[str, ...]]
     seen_keys: Mapping[str, tuple[str, ...]]
+    finalizing: Finalizing | None = None
     _keys: dict[str, tuple[str | None, ...] | None] = field(default_factory=dict, repr=False)
 
     def keys(self, path: str) -> tuple[str | None, ...] | None:
@@ -126,8 +136,53 @@ class RunState:
         return "suspended" if self.open_interrupts.get(ref.instance) else "running"
 
     def settled(self, ref: InstanceRef) -> bool:
-        """True when the instance is done, blocked or withdrawn."""
-        return self.status(ref) in SETTLED
+        """True when the instance is done, blocked or withdrawn, unreached or voided."""
+        if self.status(ref) in SETTLED:
+            return True
+        return self.unreached(ref) is not None or self.voided(ref)
+
+    def exempt(self, path: str) -> bool:
+        """Whether the Task at ``path`` is a finalizer, or above or below one (ADR-P24 D4)."""
+        for node in self.tree.walk():
+            if not node.task.finalizer:
+                continue
+            if node.path == path or node.path.startswith(path + "/"):
+                return True
+            if path.startswith(node.path + "/"):
+                return True
+        return False
+
+    def voided(self, ref: InstanceRef) -> bool:
+        """Whether finalization voided ``ref``: not settled, and not exempt (module doc)."""
+        if self.finalizing is None or self.status(ref) in SETTLED:
+            return False
+        return not self.exempt(ref.task_path)
+
+    def unreached(self, ref: InstanceRef) -> str | None:
+        """The blocked instance a ``new`` ``ref`` waits on for its own key, or None."""
+        if ref.key is None or self.status(ref) != "new":
+            return None
+        node = self.tree.node(ref.task_path)
+        prefix = "" if node.parent is None else f"{node.parent}/"
+        mine = self.tree.key_source(ref.task_path)
+        for need in node.task.needs:
+            path = prefix + need
+            theirs = self.tree.key_source(path)
+            if mine is None or theirs is None or mine != theirs:
+                continue
+            other = InstanceRef(self.run, path, ref.key)
+            if self.status(other) == "blocked":
+                return other.instance
+            upstream = self.unreached(other)
+            if upstream is not None:
+                return upstream
+        return None
+
+    def blocker(self, ref: InstanceRef) -> str | None:
+        """What blocks ``ref`` for a reader: itself when blocked, else what it waits on."""
+        if self.status(ref) == "blocked":
+            return ref.instance
+        return self.unreached(ref)
 
 
 def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
@@ -171,6 +226,7 @@ def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
         MappingProxyType(last_seq),
         MappingProxyType({k: tuple(v) for k, v in open_by.items()}),
         MappingProxyType({k: tuple(sorted(v)) for k, v in seen.items()}),
+        finalizing(view, run),
     )
 
 

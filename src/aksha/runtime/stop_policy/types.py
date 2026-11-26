@@ -151,7 +151,7 @@ class StopView:
 VerdictKind = Literal["pass", "continue", "push", "hold", "done", "fail", "stop"]
 VERDICT_KINDS: frozenset[str] = frozenset(get_args(VerdictKind))
 
-Outcome = Literal["complete", "partial", "failed", "stopped"]
+Outcome = Literal["complete", "partial", "blocked", "failed", "stopped"]
 """How a run ends; ``stopped`` is a person's stop (ADR-P18)."""
 
 
