@@ -1,6 +1,8 @@
 """``python -m aksha.interfaces.demo [--work DIR] [--json FILE]``: run the demo, print it.
 
-``--work`` is the folder the demo writes (default ``var/demo``, emptied first); ``--json``
+``--work`` is the folder the demo writes (default ``var/demo``). An existing folder is
+emptied only when an earlier demo wrote it (it holds the demo's marker file) or it is
+empty; any other folder is refused, so a mistyped path never loses data. ``--json``
 also writes the full report as JSON, which the demo's test reads.
 """
 
@@ -12,7 +14,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .story import DemoFailed, run_demo
+from .story import MARKER, DemoFailed, run_demo
 from .summary import render
 
 
@@ -24,6 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     work: Path = args.work
     if work.exists():
+        if not (work / MARKER).is_file() and any(work.iterdir()):
+            print(f"{work} exists and was not written by the demo: pick another --work",
+                  file=sys.stderr)  # fmt: skip
+            return 2
         shutil.rmtree(work)
     print("Running the change-and-recovery demo (about 20 seconds)...", flush=True)
     try:

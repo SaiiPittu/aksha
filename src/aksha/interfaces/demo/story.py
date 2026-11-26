@@ -47,6 +47,8 @@ REQUESTS = {
     "patent": "Assess the four invention candidates and prepare the chosen one for counsel.",
 }
 KILLED = -signal.SIGKILL
+MARKER = ".aksha-demo"
+"""The file that marks a folder as the demo's own, so a later run may empty it."""
 
 
 class DemoFailed(RuntimeError):
@@ -369,8 +371,9 @@ def run_demo(work: Path, script: Script | None = None) -> Report:
     report = Report()
     t0 = time.monotonic()
     work.mkdir(parents=True, exist_ok=True)
-    if any(work.iterdir()):
+    if any(work.iterdir()):  # never mix a run into another run's store
         raise FileExistsError(f"{work} is not empty")
+    (work / MARKER).write_text("written by make demo; safe to delete\n", encoding="utf-8")
     sources = copy_base(work)
     rt = open_demo(work, sources, REQUESTS)
     try:

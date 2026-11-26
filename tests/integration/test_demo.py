@@ -105,3 +105,14 @@ def test_the_change_set_is_the_variant_keys_change_and_nothing_else(tmp_path: Pa
         assert new.encode() in (variant / rel).read_bytes()
     for rel in change.added:
         assert (sources / rel).read_bytes() == (variant / rel).read_bytes()
+
+
+def test_an_existing_folder_the_demo_did_not_write_is_refused(tmp_path: Path) -> None:
+    keep = tmp_path / "notes.txt"
+    keep.write_text("not the demo's", encoding="utf-8")
+    out = subprocess.run(
+        [sys.executable, "-m", "aksha.interfaces.demo", "--work", str(tmp_path)],
+        capture_output=True, text=True, cwd=ROOT, timeout=60, check=False,
+    )  # fmt: skip
+    assert out.returncode == 2 and "not written by the demo" in out.stderr
+    assert keep.read_text(encoding="utf-8") == "not the demo's"
