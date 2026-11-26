@@ -132,6 +132,6 @@ exclude = ["^scratch-pad/", "^web/"]
 
 [[tool.mypy.overrides]]
 # The PostgreSQL driver is an optional extra. Without it installed, its types are Any; with
-# it installed (pip install 'aksha[postgres]'), mypy checks the adapter against them.
+# it installed (pip install 'aksha-harness[postgres]'), mypy checks the adapter against them.
 module = ["psycopg", "psycopg.*"]
 ignore_missing_imports = true

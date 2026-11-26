@@ -338,7 +338,7 @@ src/aksha/
 │   │   ├── __init__.py                      scripted, replay, live; the fakes are in runtime/models/rules.py
 │   │   ├── scripted.py                      Scripted*Model: fixed replies for tests, script_exhausted
 │   │   ├── replay.py                        Replay*Model, replay_adapters: answers by step key
-│   │   └── live.py                          LiveGenerationModel: chat-completions over HTTP (extra aksha-harness[live])
+│   │   └── live.py                          LiveGenerationModel: chat-completions over HTTP (not wired yet)
 │   ├── clock/                               Clock implementations
 │   │   ├── __init__.py                      the Clock port's adapters
 │   │   ├── system.py                        SystemClock
@@ -699,7 +699,7 @@ Each event's `hash` covers its own envelope and the previous event's `hash`, the
    4. Thresholds return a `Judgement` (accept or abstain, value, reason, spans, step) rather than a triple. `margin` is on `ConfidenceThresholds`; `QuestionSpec.adapted` holds the adapted thresholds (None judges an adapted answer by the native ones).
    5. The cascade puts natives before adapted candidates and asks each next candidate only what is still unaccepted. Generation fallback is not built: the step-ID grammar has no segment for a second generation candidate.
    6. Scripted, replay and live adapters are in `adapters/models/`; the rule-based fakes agents extend are in `runtime/models/rules.py`, because an agent imports only the extension API. Replay is keyed by the step key, the step ID without its run, and refuses `replay_missing` and `replay_mismatch`.
-   7. The live adapter uses only the standard library; the extra `aksha-harness[live]` names the opt-in and adds no dependency. Fractional numbers in tool arguments become decimal strings at its edge.
+   7. The live adapter uses only the standard library; no package extra installs it, and it is not wired until a live mode is accepted. Fractional numbers in tool arguments become decimal strings at its edge.
    8. Refusal codes chosen in the build: the alias refusals in `models/checks.py`, the bind refusals in `models/routing.py`, `options_unavailable`, `result_invalid`, `not_asked`, `live_config_missing`, `live_unauthorised`, `live_refused`. API 1.5.
 19. The agent loop and turn (ADR-P06) are built with these differences from the ADR's interface, for its amendment section:
    1. The ADR's `rt: Runtime` is `LoopSetup`: the store, owner, loaded agent, compiled tree, registry, alias table, ceiling, context policy, artifact store, sources, sandbox probe, limits and the definition's texts. Nothing a run writes lives in it.
