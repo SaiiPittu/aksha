@@ -1,0 +1,11 @@
+# The patent agent on the brackwen world: a warehouse-robotics venture (a lockable compliant
+# wrist, a grasp-ranking heuristic, acoustic slip sensing, a tote-wall sweep map) whose
+# inputs were authored from the world format alone, without reading any agent module or
+# offline model. Patent inputs only. Every shape differs from the other worlds: a YAML
+# credits file, a JSON disclosure register with a null date, a priorities table whose rows
+# are not in rank order, a saved video page, a quoted email chain, two publications in one
+# search report. A failure here is a finding about generality, not a fixture to tune to.
+[suite]
+name = "brackwen"
+description = "Patent agent on a held-out robotics world authored without sight of the agent code"
+k = 1

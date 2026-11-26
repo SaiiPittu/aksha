@@ -1,0 +1,29 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic issue-tracker export. Invented for testing; not a real company, person, product or ticket.",
+  "exported": "2026-10-30",
+  "project": "picking-cell",
+  "issues": [
+    {
+      "key": "PC-218",
+      "summary": "Detect slip from finger-pad sound and tighten the grip (BRK-103)",
+      "reporter": "Lena Brandt",
+      "created": "2026-05-02",
+      "labels": ["invention-candidate", "BRK-103", "prototype"],
+      "state": "In progress",
+      "body": {
+        "context": "Items slide out of the fingers on fast moves before the vision check sees it.",
+        "approach": [
+          "A1: a contact microphone sits under the silicone pad of each finger.",
+          "A2: call it a slip when the 2 to 6 kHz band energy from the pad microphone rises above three times its no-motion baseline for 5 ms.",
+          "A3: on each slip, raise the grip force by 15 percent, up to a 40 N ceiling."
+        ],
+        "results": "Prototype on one finger set; 41 of 50 induced slips caught on the bench.",
+        "open": "No second finger set built yet."
+      },
+      "comments": [
+        {"author": "Ravi Anand", "date": "2026-05-06", "text": "Ceiling of 40 N crushes the soft-fruit SKUs; check before field use."}
+      ]
+    }
+  ]
+}

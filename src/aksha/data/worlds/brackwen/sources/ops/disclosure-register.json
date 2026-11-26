@@ -1,0 +1,47 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic register of where Brackwen ideas were shown or discussed outside the team. Invented for testing; not a real record.",
+  "kept_by": "Dana Velasquez",
+  "entries": [
+    {
+      "ref": "SYN-EV-31",
+      "when": "2026-04-14",
+      "idea": "BRK-102",
+      "channel": "product video on vidshare.example",
+      "what": "Two-minute demo of the picking cell; the video description explains how the cell chooses where to grab",
+      "audience": "public, anyone with the link or a search",
+      "public": true,
+      "evidence": "media/pickwen-demo-video.txt"
+    },
+    {
+      "ref": "SYN-EV-32",
+      "when": "2026-02-03",
+      "idea": "BRK-101",
+      "channel": "email",
+      "what": "Contractor Ines Valcourt proposed releasing the wrist clutch above a torque limit",
+      "audience": "private thread between Ines Valcourt and Ravi Anand",
+      "public": false,
+      "evidence": "mail/wrist-breakaway-thread.eml.txt"
+    },
+    {
+      "ref": "SYN-EV-33",
+      "when": null,
+      "idea": "BRK-101",
+      "channel": "site visit",
+      "what": "Wrist shown locking and releasing on the bench to a visiting systems integrator",
+      "audience": "integrator staff, names and NDA status not recorded",
+      "public": "unclear",
+      "evidence": "none on file"
+    },
+    {
+      "ref": "SYN-EV-34",
+      "when": "2026-06-09",
+      "idea": "BRK-101",
+      "channel": "investor demo",
+      "what": "Bench demo of the wrist to two seed investors",
+      "audience": "two investors under the standard NDA",
+      "public": false,
+      "evidence": "NDA SYN-NDA-0609 (copy not on file)"
+    }
+  ]
+}

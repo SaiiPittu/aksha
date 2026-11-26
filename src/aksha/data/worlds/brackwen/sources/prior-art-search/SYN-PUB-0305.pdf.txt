@@ -1,0 +1,29 @@
+SYNTHETIC FIXTURE - text rendered from a PDF-like layout. Invented for testing; not a real patent.
+
+SYN-Office-3                                   (11) SYN-PUB-0305 B1
+(54) Gripper finger with acoustic slip sensing
+(73) Proprietor: Vellicor Hand Systems
+(22) Filing date: 2021-09-28        (30) Priority: SYN-PRI-2020-0929, 2020-09-29
+(45) Date of grant: 2023-02-14
+Status: Granted
+
+Description
+
+A contact microphone is mounted under the elastomer pad of a gripper finger. The controller
+band-pass filters the microphone signal between 2 and 6 kHz and declares a slip when the band
+energy exceeds a multiple of the no-motion baseline for a short interval, typically 3 to 10 ms.
+
+Page 1 of 2 - SYNTHETIC FIXTURE
+
+On each declared slip the grip force is raised by a fixed increment, for example 10 to 20
+percent, until a maximum grip force is reached.
+
+Claims
+
+1. A gripper finger comprising an elastomer pad and a contact microphone mounted under the pad.
+
+2. The finger of claim 1, with a controller that declares a slip when the energy of the
+microphone signal between 2 and 6 kHz exceeds a multiple of a no-motion baseline, and on each
+slip raises the grip force by an increment up to a maximum.
+
+Page 2 of 2 - SYNTHETIC FIXTURE

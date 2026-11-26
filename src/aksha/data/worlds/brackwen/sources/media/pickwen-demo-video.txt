@@ -1,0 +1,22 @@
+SYNTHETIC FIXTURE - text saved from a public video page. Invented for testing; not a real video, channel or company.
+
+Page: https://vidshare.example/watch/pc-demo-0414
+Channel: Brackwen Robotics
+Title: Pickwen picks 600 mixed items an hour - how it decides where to grab
+Published: 14 Apr 2026
+Views: 18,204
+
+Description:
+Pickwen clears a tote of mixed items without a single trained model. Here is how it decides where to grab: it scores every candidate grasp on the depth image by how flat the 12 mm patch under each fingertip is, how close the grasp is to the item's estimated centre of mass, and whether both fingers clear the neighbouring items by 8 mm. If no grasp scores above 0.35 it switches to the suction cup for that item.
+
+Chapters:
+0:00 The tote
+0:41 Scoring the grasps
+1:22 Suction fallback on a polybag
+1:50 Cycle time
+
+Comments (2 shown):
+- @warehouse_wren: does the wrist lock too or is that just the camera?
+- @Brackwen Robotics: The wrist is a story for another day.
+
+-- end of saved page -- SYNTHETIC FIXTURE --
