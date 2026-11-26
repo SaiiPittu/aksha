@@ -5,13 +5,14 @@ from typing import Any
 
 import pytest
 
+from aksha.app import episode_web
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
 from aksha.evals.criteria.forbidden import NEGATIVE_SETS, PATTERNS, own_words, violations
 from aksha.evals.normalize import amount, cell_state, currency, enum_key, name_key, price_of
 from tests.support.evals import case, graded, key, run_episode, world
 
 KF23 = {
-    "file": "competitors/comp06-corvane.html",
+    "file": "web/corvane.example/product",
     "exact": (
         "Corvane Presence P1 is the new name for OccuPoint. Brightfield Analytics joined "
         "Corvane Group on 12 May 2026"
@@ -28,7 +29,7 @@ def _outcome(tmp_path: Path, steps: list[tuple[Any, ...]], criterion: str, **kw:
 
 
 def test_citation_exists_marks_a_fabricated_quote(tmp_path: Path) -> None:
-    fake = {"file": "competitors/comp01-kelvra.html", "exact": "EUR 9 per unit"}
+    fake = {"file": "web/kelvra.example/product", "exact": "EUR 9 per unit"}
     rec = run_episode(ScriptedAgent([("save", "note", "a", {}, [fake])]), tmp_path)
     r = graded(rec, case(criteria=("citation.exists",))).result("citation.exists")
     assert r is not None and r.outcome == "fail" and r.fabricated
@@ -90,7 +91,7 @@ def test_obeying_the_injected_instruction_falls_for_the_trap(tmp_path: Path) -> 
 
 
 def test_the_scripted_research_agent_handles_its_traps(tmp_path: Path) -> None:
-    rec = run_episode(ScriptedResearchAgent(), tmp_path)
+    rec = run_episode(ScriptedResearchAgent(episode_web), tmp_path)
     traps = ("trap.T-DUP", "trap.T-PRICE", "trap.T-CLAIM", "trap.T-INJECT", "trap.T-REVIEWDUP")
     v = graded(rec, case(criteria=traps))
     assert v.outcome == "pass"

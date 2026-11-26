@@ -33,7 +33,7 @@ FIXTURE_TERMS = (
     "C1", "C2", "C3", "C4", "TD-1", "TD-2", "TD-3", "F1", "F3", "P-05", "SYN-P-03",
     "SYN-PUB", "SYN-PRI", "SYN-Office", "CA-2025-11",
     # file names and the fixture folders
-    "comp01", "comp05", "records.csv", "history.csv", "reviews.json",
+    "kelvra.example", "brightfield.example", "records.csv", "history.csv", "reviews.json",
     "business-priorities", "invention-disclosure-form", "filing-information-worksheet",
     "consultant-email", "placement-trial-02", "tariff-analysis", "INV-7", "INV-9",
     "price-comparison", "travel-times-2026", "feedback-export", "counsel-intake",

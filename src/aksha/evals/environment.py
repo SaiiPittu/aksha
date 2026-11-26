@@ -37,6 +37,7 @@ from aksha.evals.events import episode_catalogue
 from aksha.evals.faults import FaultProfile
 from aksha.evals.ports import AgentUnderTest, StoreOpener
 from aksha.evals.world import (
+    WEB_FILE,
     World,
     load_change_set,
     load_world,
@@ -111,6 +112,11 @@ class Environment:
             shutil.rmtree(folder)
         (folder / "world").mkdir(parents=True)
         shutil.copytree(self.world.sources, folder / "world" / "sources")
+        if self.world.web.is_dir():
+            # The pages go into the copy; the declaration (which pages are noise) stays
+            # beside it, out of every tool's reach, for the harness's search proxy.
+            shutil.copytree(self.world.web, folder / "world" / "web")
+            shutil.copyfile(self.world.root / WEB_FILE, folder / WEB_FILE)
         store = self.open_store(folder / "store.sqlite", episode_catalogue())
         seed = rollout_seed(self.seed, case.id, rollout)
         handle_box: list[EpisodeHandle] = []

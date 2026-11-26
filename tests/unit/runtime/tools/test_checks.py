@@ -221,7 +221,8 @@ def test_rights_of_reads_collections_kinds_aliases(echo: tuple[LoadedExtension, 
     rights = rights_of(AGENT, echo)
     assert rights.collections == {"notes"}
     assert rights.readable_kinds == rights.writable_kinds == {"toy.line", "toy.summary"}
-    assert rights.aliases == {"classify.tone"} and rights.egress == frozenset()
+    # No extension is named, so only the runtime's own policy (the web fetch's) is allowed.
+    assert rights.aliases == {"classify.tone"} and rights.egress == frozenset({"aksha.web"})
 
 
 def test_rights_refusals_list_every_ask_beyond_the_rights(

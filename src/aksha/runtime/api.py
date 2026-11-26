@@ -62,6 +62,11 @@ What an agent or extension declares, grouped by the primitive that owns it:
 12. Invalidation modes (decision 38): ``InvalidationMode`` (``Agent.invalidation``) and
    ``EditSpec`` (``ToolSpec.edits``, the record a tool edits or overwrites, checked at
    edit time from ``edit_guard`` up).
+13. The web (P26 A3): ``web_search_tool``, the generic ``web_search`` tool any agent may
+   list; ``fetch_url_spec``, the generic ``fetch_url`` tool's spec, and what an agent's own
+   ``fetch_url`` body reads a page through: ``fetch_text`` (the page as a returned text,
+   or the ``Err`` the model reads), ``FetchedText``, ``page_read`` (its lineage read),
+   ``WEB_SOURCE``, ``WEB_EGRESS`` and ``web_record_id``.
 """
 
 from __future__ import annotations
@@ -198,6 +203,9 @@ from aksha.runtime.tools.types import (
     ToolSpec,
     ToolUse,
 )
+from aksha.runtime.web.attempt import FetchedText
+from aksha.runtime.web.tools import fetch_text, fetch_url_spec, page_read, web_search_tool
+from aksha.runtime.web.types import WEB_EGRESS, WEB_SOURCE, web_record_id
 
 __all__ = [
     "API_VERSION",
@@ -205,6 +213,8 @@ __all__ = [
     "INSTRUCTION_FLAG",
     "OTHER_KIND",
     "SELF",
+    "WEB_EGRESS",
+    "WEB_SOURCE",
     "Agent",
     "ApprovalRule",
     "ArtifactKind",
@@ -241,6 +251,7 @@ __all__ = [
     "ExternalRecord",
     "ExtractionRequest",
     "ExtractionResult",
+    "FetchedText",
     "FieldAnswer",
     "FieldSpec",
     "ForcedTool",
@@ -316,12 +327,15 @@ __all__ = [
     "document_preview",
     "ended_runs",
     "external_records",
+    "fetch_text",
+    "fetch_url_spec",
     "find_dates",
     "from_field",
     "instruction_text",
     "kind_question",
     "maybe_unknown",
     "observe_time",
+    "page_read",
     "parse_date",
     "part_version",
     "passage_id",
@@ -335,5 +349,7 @@ __all__ = [
     "source_keys",
     "span_draft",
     "visible",
+    "web_record_id",
+    "web_search_tool",
     "where_part",
 ]

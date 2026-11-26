@@ -4,6 +4,7 @@ expects a folder: every input is one record of the ``input`` collection, read by
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,25 @@ from aksha.runtime.tools.types import Err, Ok, ToolContext
 from tests.support.fast import models_for
 from tests.support.research import AGENT_DIR, WORLDS
 
-SOURCES = WORLDS / "stillroom" / "sources"
 PAGE = "input/competitors/comp01-kelvra.html"
+VENDORS = ("kelvra", "veyra", "tallyway", "noctra", "brightfield", "corvane")
+"""The stillroom vendors, whose product pages are on the world's web."""
+
+
+@pytest.fixture(scope="module")
+def uploads(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The stillroom inputs with the vendors' pages saved among them, as a person may upload.
+
+    The read tools read any input; these tests read saved web pages as inputs, so the
+    pages the world serves on its web are copied in as ``competitors/compNN-<vendor>.html``.
+    """
+    root = tmp_path_factory.mktemp("uploads")
+    shutil.copytree(WORLDS / "stillroom" / "sources", root, dirs_exist_ok=True)
+    (root / "competitors").mkdir()
+    for n, vendor in enumerate(VENDORS, start=1):
+        page = WORLDS / "stillroom" / "web" / f"{vendor}.example" / "product"
+        shutil.copyfile(page, root / "competitors" / f"comp0{n}-{vendor}.html")
+    return root
 
 
 def _ctx(reader: Any, tool: str = "fetch_page") -> ToolContext:
@@ -28,8 +46,8 @@ def _ctx(reader: Any, tool: str = "fetch_page") -> ToolContext:
 
 
 @pytest.fixture
-def reader() -> AttemptReader:
-    return AttemptReader(FolderSource(tools.SOURCE, SOURCES, tools.COLLECTION))
+def reader(uploads: Path) -> AttemptReader:
+    return AttemptReader(FolderSource(tools.SOURCE, uploads, tools.COLLECTION))
 
 
 def test_fetch_page_drafts_one_span_per_passage_over_the_returned_text(
@@ -48,15 +66,15 @@ def test_fetch_page_drafts_one_span_per_passage_over_the_returned_text(
 
 
 def test_list_inputs_finds_pages_and_review_tables_by_content_not_by_folder(
-    reader: AttemptReader,
+    reader: AttemptReader, uploads: Path
 ) -> None:
     out = tools.list_inputs(_ctx(reader, "list_inputs"), {})
     assert isinstance(out.result, Ok) and out.result.spans == ()
     kinds = {r["record"]: r["kind"] for r in out.result.data["inputs"]}
-    assert len(kinds) == sum(1 for p in SOURCES.rglob("*") if p.is_file())
+    assert len(kinds) == sum(1 for p in uploads.rglob("*") if p.is_file())
     sellers = sorted(r for r, s in kinds.items() if s == "competitor_page")
     assert sellers == sorted(
-        f"input/competitors/{p.name}" for p in (SOURCES / "competitors").iterdir()
+        f"input/competitors/{p.name}" for p in (uploads / "competitors").iterdir()
     )
     assert [r for r, s in kinds.items() if s == "customer_reviews"] == [
         "input/reviews/reviews.json"
@@ -141,8 +159,8 @@ def test_a_record_id_with_a_dot_or_empty_segment_reads_as_none(
         "input/../key.json",
     ],
 )
-def test_folder_source_reads_only_canonical_record_ids(record: str) -> None:
-    source = FolderSource(tools.SOURCE, SOURCES, tools.COLLECTION)
+def test_folder_source_reads_only_canonical_record_ids(record: str, uploads: Path) -> None:
+    source = FolderSource(tools.SOURCE, uploads, tools.COLLECTION)
     assert source.read(tools.SOURCE, record) is None
     assert source.read(tools.SOURCE, PAGE) is not None
 

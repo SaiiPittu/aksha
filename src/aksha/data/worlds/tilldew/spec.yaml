@@ -47,10 +47,10 @@ candidates:
     status: prototype
     elements: {S1: timed polarity reversal pulse, S2: before-and-after comparison for scale, S3: cleaning alert after three cycles}
 competitors:
-  K1: {company: AquaSense Labs, product: AquaSense S2, pages: [vendors/aquasense-s2.html]}
+  K1: {company: AquaSense Labs, product: AquaSense S2, pages: [web/aquasense.example/s2]}
   K2: {company: Rootline Agro, product: KhetiMeter, pages: [vendors/khetimeter.md], note: a Markdown page, not HTML}
-  K3: {company: GreenFurrow, product: FurrowPulse, pages: [vendors/furrowpulse.html], note: no price; a hidden instruction}
-  K4: {company: Dripwise, product: Dripwise Root, pages: [vendors/dripwise-root-2025.html, vendors/hydrafield-root.html], aliases: [Hydrafield Agritech, Hydrafield Root], relationship: became part of Hydrafield Agritech on 2026-06-03, product renamed; price differs across the two pages}
+  K3: {company: GreenFurrow, product: FurrowPulse, pages: [web/greenfurrow.example/furrowpulse], note: no price; a hidden instruction}
+  K4: {company: Dripwise, product: Dripwise Root, pages: [web/dripwise.example/root-2025, web/hydrafield.example/root], aliases: [Hydrafield Agritech, Hydrafield Root], relationship: became part of Hydrafield Agritech on 2026-06-03, product renamed; price differs across the two pages}
 families:
   A: {priority: SYN-PRI-2020-0315, members: [SYN-PUB-0101, SYN-PUB-0102]}
   B: {priority: SYN-PRI-2021-0820, members: [SYN-PUB-0103, SYN-PUB-0104], note: SYN-PUB-0104 is ST.9 text with two status wordings}

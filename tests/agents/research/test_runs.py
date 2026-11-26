@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from aksha.adapters.models.replay import ReplayGenerationModel
-from aksha.adapters.sources.folder import FolderSource
+from aksha.adapters.search.world import WorldWeb
 from aksha.agents.research.fakes import ObedientModel, ResearchModel
 from aksha.runtime.canonical import thaw
-from aksha.runtime.grounding.types import ReturnedText
 from aksha.runtime.models.replay import recorded_model_steps
+from aksha.runtime.web.types import WebError, web_record_id
 from tests.support.research import WORLDS, ResearchBench, world_key
 
 ANSWER = {"geography": "EU"}
@@ -23,35 +23,30 @@ class Crash(BaseException):
     """The process dies here: nothing in the runtime catches a ``BaseException``."""
 
 
-class Reader:
-    """The folder reader, with records that fail (``None``) and one read that kills the process."""
+class FlakyWeb(WorldWeb):
+    """The world's web, with pages whose fetch fails (``WebError``) or kills the process."""
 
     def __init__(
-        self,
-        *,
-        failing: tuple[str, ...] = (),
-        after: int = 0,
-        crash_on: str | None = None,
+        self, *, failing: tuple[str, ...] = (), after: int = 0, crash_on: str | None = None,
         crash_at: int = 1,
-    ) -> None:
-        self.inner = FolderSource("inputs", SOURCES, "input")
+    ) -> None:  # fmt: skip
+        inner = WorldWeb.of_world(WORLDS / "stillroom")
+        super().__init__(inner.pages, inner._read)
         self.failing = failing
-        self.after = after  # reads of a failing record that still succeed first
+        self.after = after  # fetches of a failing page that still succeed first
         self.crash_on = crash_on
-        self.crash_at = crash_at  # the read of ``crash_on`` that kills the process
-        self.reads: list[str] = []
+        self.crash_at = crash_at  # the fetch of ``crash_on`` that kills the process
+        self.fetched: list[str] = []
 
-    def read(self, source: str, record_id: str) -> ReturnedText | None:
-        self.reads.append(record_id)
-        if record_id == self.crash_on and self.reads.count(record_id) >= self.crash_at:
+    def fetch(self, url: str, http: Any) -> Any:
+        record = web_record_id(url)
+        self.fetched.append(record)
+        if record == self.crash_on and self.fetched.count(record) >= self.crash_at:
             self.crash_on = None
-            raise Crash(f"killed while reading {record_id}")
-        if record_id in self.failing and self.reads.count(record_id) > self.after:
-            return None
-        return self.inner.read(source, record_id)
-
-    def records(self, source: str, collection: str) -> tuple[str, ...]:
-        return self.inner.records(source, collection)
+            raise Crash(f"killed while fetching {url}")
+        if record in self.failing and self.fetched.count(record) > self.after:
+            raise WebError("fetch_failed", f"{url} did not answer")
+        return super().fetch(url, http)
 
     def serves(self, source: str) -> bool:
         return self.inner.serves(source)
@@ -89,12 +84,10 @@ def test_a_model_that_obeys_page_text_is_refused_and_nothing_changes(tmp_path: P
 
 def test_a_blocked_source_ends_the_run_partial_with_the_gap_named(tmp_path: Path) -> None:
     key = world_key("stillroom")
-    (file,) = key["competitors"]["K4"]["pages"]
-    page = f"input/{file}"
-    # Before the company's own evidence fetch, the page is read four times: the scope's
-    # search, discovery's listing (the decide step) and manual search, and its fetch. Every
-    # later read fails.
-    b = ResearchBench(tmp_path, ResearchModel(), reader=Reader(failing=(page,), after=4))
+    (page,) = key["competitors"]["K4"]["pages"]
+    # A web page: discovery fetches it once from the search results; the company's own
+    # evidence fetch, and every later one, fails.
+    b = ResearchBench(tmp_path, ResearchModel(), web=FlakyWeb(failing=(page,), after=1))
     b.start()
     result = b.run_to_end(**ANSWER)
     assert (result.state, result.outcome) == ("ended", "partial")
@@ -137,9 +130,9 @@ def test_a_crash_mid_evidence_resumes_and_repeats_no_recorded_step(tmp_path: Pat
     expected = _outputs(whole)
     whole.close()
 
-    page = "input/" + world_key("stillroom")["competitors"]["K3"]["pages"][0]
-    reader = Reader(crash_on=page, crash_at=5)  # four reads come before its evidence fetch
-    b = ResearchBench(tmp_path / "crash", ResearchModel(), reader=reader)
+    page = world_key("stillroom")["competitors"]["K3"]["pages"][0]
+    web = FlakyWeb(crash_on=page, crash_at=2)  # discovery's fetch comes before its evidence
+    b = ResearchBench(tmp_path / "crash", ResearchModel(), web=web)
     b.start()
     held = b.drive()
     b.answer_open(**ANSWER)

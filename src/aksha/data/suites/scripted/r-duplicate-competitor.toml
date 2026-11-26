@@ -17,4 +17,6 @@ criteria = [
   "citation.edge_excerpts",
   "trap.T-DUP",
   "no_unbound_send",
+  "web.noise_unread",
+  "web.fetched_from_results",
 ]

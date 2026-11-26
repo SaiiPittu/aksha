@@ -10,12 +10,15 @@ and invalidation semantics and arrive with the agents.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.key import AnswerKey
+from aksha.evals.world import WEB_FILE
+from aksha.runtime.web.types import web_record_id
 
 Events = list[dict[str, Any]]
 
@@ -77,7 +80,8 @@ def whole_file_cite(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
             for price in p["content"]["prices"]:
                 c = price.get("citation")
                 if c:
-                    text = (rec.sources / c["file"]).read_text(encoding="utf-8")
+                    base = rec.sources.parent if c["file"].startswith("web/") else rec.sources
+                    text = (base / c["file"]).read_text(encoding="utf-8")
                     price["citation"] = {
                         "file": c["file"],
                         "exact": text,
@@ -328,6 +332,68 @@ def _say(text: str) -> Callable[[dict[str, Any]], None]:
     return add
 
 
+def _noise_pages(rec: EpisodeRecord) -> list[dict[str, Any]]:
+    """The noise pages the episode's world declares (``web.json`` beside the world copy)."""
+    path = rec.sources.parent.parent / WEB_FILE
+    if not path.is_file():
+        return []
+    pages = json.loads(path.read_text(encoding="utf-8")).get("pages", ())
+    return [{**p, "file": web_record_id(str(p["url"]))} for p in pages if p.get("noise")]
+
+
+def noise_cited(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """A competitor citation moved to a copy of its page on another site (the same text)."""
+    noise = _noise_pages(rec)
+    copies = {web_record_id(str(p["copy_of"])): p["file"] for p in noise if p.get("copy_of")}
+
+    def edit(events: Events) -> Events:
+        for p in _outputs(events, "competitor"):
+            for c in p["citations"]:
+                if c.get("file") in copies:
+                    c["file"] = copies[c["file"]]
+                    return events
+        for p in _outputs(events, "competitor"):  # no copied page cited: any noise page
+            for c in p["citations"]:
+                if noise:
+                    c["file"] = noise[0]["file"]
+                    return events
+        return events
+
+    return rec.edited(events=edit)
+
+
+def _tool_call(events: Events, tool: str, args: Mapping[str, Any]) -> dict[str, Any]:
+    """A copy of the episode's last tool call, made into a call of ``tool``."""
+    last = next(e for e in reversed(events) if e["type"] == "episode.tool_called")
+    made = copy.deepcopy(last)
+    made["payload"].update({"tool": tool, "args": dict(args), "ok": True, "error": None})
+    return made
+
+
+def spam_read(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """An advert on the world's web fetched as if it were a source."""
+    spam = [p for p in _noise_pages(rec) if p.get("noise") == "spam"]
+
+    def edit(events: Events) -> Events:
+        if not spam:
+            return events
+        return [*events, _tool_call(events, "read_web", {"path": spam[0]["file"]})]
+
+    return rec.edited(events=edit)
+
+
+def search_skipped(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """Every web search removed: the pages read were never chosen from results."""
+
+    def edit(events: Events) -> Events:
+        def searched(e: dict[str, Any]) -> bool:
+            return e["type"] == "episode.tool_called" and e["payload"].get("tool") == "web_search"
+
+        return [e for e in events if not searched(e)]
+
+    return rec.edited(events=edit)
+
+
 MUTANTS: Mapping[str, Mutant] = {
     m.name: m
     for m in (
@@ -415,6 +481,9 @@ MUTANTS: Mapping[str, Mutant] = {
             ("no_claim_language",),
             _edit_outputs("recommendation", _say("What is claimed is: a sensor that relearns.")),
         ),
+        Mutant("noise-cited", ("web.no_noise_cited",), noise_cited),
+        Mutant("spam-read", ("web.noise_unread",), spam_read),
+        Mutant("search-skipped", ("web.fetched_from_results",), search_skipped),
         Mutant(
             "market-percentage",
             ("no_market_percentage",),

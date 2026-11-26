@@ -65,9 +65,12 @@ class OracleAgent:
         Reading the injection page first is what lets ``trap.T-INJECT`` read ``handled``:
         an agent that never saw the instruction has not handled it.
         """
+        pages = self.world.web_pages()
+        if pages:  # the oracle knows every page; it still finds them by a search first
+            episode.searched_web("every page", [p.url for p in pages])
         for fact in self.key.facts.values():
             if fact.kind == "injection" and fact.anchor is not None:
-                episode.read_source(fact.anchor.file)
+                _read(episode, fact.anchor.file)
         self.research(episode)
         self.patent(episode)
 
@@ -339,13 +342,24 @@ class OracleAgent:
                 ep.relate("family_member_of", f"pub:{member}", f"pub:{members[0]}", excerpt)
 
     def _priority_cite(self, member: str, number: str) -> dict[str, Any] | None:
-        for path in sorted(self.world.sources.rglob(f"{member}*")):  # wherever the world keeps it
+        noise = {p.file for p in self.world.web_pages() or () if p.noise}
+        found = [(p, p.relative_to(self.world.sources).as_posix())
+                 for p in sorted(self.world.sources.rglob(f"{member}*"))]  # fmt: skip
+        if self.world.web.is_dir():  # a publication on the world's web, never a noise copy
+            found += [(p, rel) for p in sorted(self.world.web.rglob(f"{member}*"))
+                      for rel in [p.relative_to(self.world.root).as_posix()]
+                      if rel not in noise]  # fmt: skip
+        for path, rel in found:  # wherever the world keeps it
             text = path.read_text(encoding="utf-8")
             if text.count(number) == 1:
                 at = text.index(number)
-                rel = path.relative_to(self.world.sources).as_posix()
                 return {"file": rel, "exact": number, "start": at, "end": at + len(number)}
         return None
+
+
+def _read(episode: Episode, path: str) -> str:
+    """A world file through the episode: a web page by ``read_web``, an input otherwise."""
+    return episode.read_web(path) if path.startswith("web/") else episode.read_source(path)
 
 
 def _member(fact: KeyFact) -> str:
@@ -363,15 +377,21 @@ class NullAgent:
 
 
 class ListerAgent(OracleAgent):
-    """Lists everything: a company per page, every cell ``disclosed``, every file cited."""
+    """Lists everything: a company per page, every cell ``disclosed``, every file cited.
+
+    The pages are the world's web pages (every one but noise), else its ``competitors``.
+    """
 
     name = "lister"
 
     def run(self, episode: Episode) -> None:
         """Save one competitor per page and a matrix with every family disclosed."""
         families = sorted(dict(self.key.data.get("families", {})))
-        for path in episode.list_sources("competitors"):
-            text = episode.read_source(path)
+        pages = [p.file for p in self.world.web_pages() or () if not p.noise]
+        if not pages:
+            pages = episode.list_sources("competitors")
+        for path in pages:
+            text = _read(episode, path)
             episode.save(
                 "competitor",
                 path.rsplit("/", 1)[-1],

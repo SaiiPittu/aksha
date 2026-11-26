@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["cindral"]
 opening = "How much do the booking tools cut no-shows, for independent physiotherapy clinics in the UK? Compare no-shows (no-show*, no show*)."
 expect = ["facts.CF-08", "facts.CF-09", "traps.T-CLAIM"]
-criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]
+criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM", "web.noise_unread", "web.fetched_from_results"]

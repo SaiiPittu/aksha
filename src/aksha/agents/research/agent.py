@@ -4,8 +4,10 @@ The agent works on whatever the person gives it: the request says what to resear
 whom and on which dimensions, and the inputs (any folder or set of files) are what it reads.
 Task tree, in order: ``scope`` fixes the question, the segment, the geography, the boundary
 and what to compare (``dimensions``) and read reviews for (``themes``), asking only the
-questions whose answer changes the result; ``discover`` lists the inputs, reads every page
-and resolves the companies behind them, finding manual alternatives too; ``evidence``
+questions whose answer changes the result; ``discover`` lists the inputs, searches the web
+(``web_search``, ``fetch_url``: the generic web tools, ADR-P26 A3), reads every page that
+sells something, leaving the noise in the results unread, and resolves the companies behind
+them, finding manual alternatives too; ``evidence``
 fans out per resolved company (a blocked company leaves an explicit unknown,
 ``on_child_blocked="partial"``); ``voice`` reads the customer reviews; ``report``
 (the finalizer) saves the matrix, the findings and the tests to run next. The run is
@@ -17,6 +19,7 @@ from __future__ import annotations
 from typing import Any, Literal
 
 from aksha.runtime.api import (
+    WEB_SOURCE,
     Agent,
     ArtifactKind,
     Budget,
@@ -137,6 +140,9 @@ TESTS = ArtifactKind(
 )
 
 PAGE = f"record:{tools.COLLECTION}"
+WEB_PAGE = f"record:{WEB_SOURCE}"
+"""A page fetched from the web (``web/<host><path>``): a relation may join it to an input."""
+PAGES = (PAGE, WEB_PAGE)
 
 
 def _fast(name: str, model_class: Literal["extraction", "classification"], *fields: FieldSpec
@@ -261,11 +267,11 @@ AGENT = Agent(
     instructions="prompts/instructions.md",
     # Its sources move under it, and its findings must follow (decision 38).
     invalidation="rebuild",
-    reads=tuple(f"record:{c}" for c in tools.COLLECTIONS),
+    reads=(*(f"record:{c}" for c in tools.COLLECTIONS), WEB_PAGE),
     artifacts=(SCOPE, COMPETITORS, PROFILE, NEEDS, MATRIX, FINDINGS, TESTS),
     relations=(
-        RelationKind("same_entity_as", src=(PAGE,), dst=(PAGE,), symmetric=True),
-        RelationKind("contradicts", src=(PAGE,), dst=(PAGE,), symmetric=True, cites="per_end"),
+        RelationKind("same_entity_as", src=PAGES, dst=PAGES, symmetric=True),
+        RelationKind("contradicts", src=PAGES, dst=PAGES, symmetric=True, cites="per_end"),
     ),
     tools=(*tools.TOOLS, ToolUse("save_artifact")),
     tasks=(
@@ -283,7 +289,14 @@ AGENT = Agent(
             "discover",
             needs=("scope",),
             reads=("scope",),
-            tools=("list_inputs", "search", "fetch_page", "save_artifact"),
+            tools=(
+                "list_inputs",
+                "search",
+                "fetch_page",
+                "web_search",
+                "fetch_url",
+                "save_artifact",
+            ),
             writes=("competitors",),
             extracts=True,
             done=checks.discover_done,
@@ -295,7 +308,7 @@ AGENT = Agent(
             per=artifact_keys("competitors", "companies"),
             needs=("discover",),
             reads=("competitors",),
-            tools=("fetch_page", "save_artifact"),
+            tools=("fetch_page", "fetch_url", "save_artifact"),
             writes=("profile",),
             extracts=True,
             done=checks.profile_done,

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from aksha.app import eval_agents
+from aksha.app import episode_web, eval_agents
 from aksha.evals.agents.scripted import ScriptedAgent, ScriptedResearchAgent
 from aksha.evals.agents.tools import episode_tools
 from aksha.evals.bundle import EpisodeRecord, check_chain, read_bundle
@@ -38,7 +38,7 @@ RECIPIENT = "x@fixture.example"
 
 @pytest.fixture(scope="module")
 def research(tmp_path_factory: pytest.TempPathFactory) -> EpisodeRecord:
-    return run_episode(ScriptedResearchAgent(), tmp_path_factory.mktemp("research"))
+    return run_episode(ScriptedResearchAgent(episode_web), tmp_path_factory.mktemp("research"))
 
 
 # --- invariants run on every episode ----------------------------------------------------

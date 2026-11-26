@@ -13,7 +13,7 @@ from aksha.evals.state import fold
 from tests.support.evals import OPEN, case, run_episode, world
 
 KF17 = {
-    "file": "competitors/comp01-kelvra.html",
+    "file": "web/kelvra.example/product",
     "exact": "EUR 249 per unit",
     "start": 671,
     "end": 687,

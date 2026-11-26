@@ -1,13 +1,7 @@
 {
   "files": {
-    "key.json": "sha256:e551742e39f4791a3f470ec3b747bbd42b0ea00dc0c5563809cc52d214b361f2",
-    "manifest.json": "sha256:1a4c97a4117b0793ec74b5581fa700f3f33f5ee5e76830dad0ab560dd4ef3286",
-    "sources/competitors/comp01-thermyx.html": "sha256:6ab64d9e658a9ebd97935586753f750448ee1441cc4691bca3a6961c6f8eb1c3",
-    "sources/competitors/comp02-radiantloop.html": "sha256:41a17aac3331dd89e589ee04dff99d4f5d03c6fb8e19181f29bf57c2c897a056",
-    "sources/competitors/comp03-gatecount.html": "sha256:e94b839e9d42e89b137b1450675f0156db1d2dae53eda553dcdcad014d66b6a5",
-    "sources/competitors/comp04-airwise.html": "sha256:55ee1261794cb006da936e84c0786930f73c7c34f65ed650565a4e35b9851604",
-    "sources/competitors/comp05-lumenstat.html": "sha256:3b7ea1861429b1ac5fe67aac6c7d1909beb6fcd0b35d668a34e90324a36ef17c",
-    "sources/competitors/comp06-orrin.html": "sha256:66718a69a3a85232144d4bdfbedd1d5935d540c5bb76cbd8bb1151df1a724934",
+    "key.json": "sha256:d596dced3d3c8f196786d5a26a46ed4a6eed132a4d364d691c71eecf886bd31f",
+    "manifest.json": "sha256:c6f2dfbc226212011091474cf6ce61ee34a8aae2c2207f80903b7064a5b90760",
     "sources/contributors/records.csv": "sha256:d720f4cd057738bf92b6d626eb4d0a470cd41d8c53ff63b957cd33f4f59d913b",
     "sources/disclosures/2026-03-10-trade-show-demo.md": "sha256:a6079a067dd65111e71d923ae344234d8f318e4599560ea1a836b73a4ef49741",
     "sources/disclosures/consultant-email.eml.txt": "sha256:3b086d62faa75233633feb11d6898ba00012194d2f4007e42eea594a545b8d08",
@@ -31,7 +25,21 @@
     "sources/reviews/reviews.json": "sha256:f73e55e42bd39bf7b62e603e2d71c96b804bc85cc2be87426821952527d2c66f",
     "sources/templates/filing-information-worksheet.md": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2",
     "sources/templates/invention-disclosure-form.md": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451",
-    "spec.yaml": "sha256:af3a6792821a6dbed83526fd1d6c7fe23c267f598b3c6016d44d35fda1814a48"
+    "spec.yaml": "sha256:50c41f5ef3cdaefaef094742453a714e9e54681242fe17afe42cd56054267c3a",
+    "web.json": "sha256:2db0c6f2744708e838358c69a3c3653dfebad3abb531503112c40107317330de",
+    "web/airwise.example/product": "sha256:55ee1261794cb006da936e84c0786930f73c7c34f65ed650565a4e35b9851604",
+    "web/buildingwords.example/glossary/occupancy-sensor": "sha256:0ac3938f12498fdcc8bc408c33ab4e73596ef1b573f45fae1cd7736451aa61e0",
+    "web/gatecount.example/product": "sha256:e94b839e9d42e89b137b1450675f0156db1d2dae53eda553dcdcad014d66b6a5",
+    "web/hotelpulse.example/occupancy-report": "sha256:f4962b0146f5663361ba1f02be1afedf826a05bc3f616df8608a0a673698d363",
+    "web/ip-fast.example/file-a-patent": "sha256:0f933f9e5672217850473417d646111f5c6a8a1c491e79cb701cb6d639e86042",
+    "web/lumenstat.example/product": "sha256:3b7ea1861429b1ac5fe67aac6c7d1909beb6fcd0b35d668a34e90324a36ef17c",
+    "web/orrin.example/product": "sha256:66718a69a3a85232144d4bdfbedd1d5935d540c5bb76cbd8bb1151df1a724934",
+    "web/patentmirror.example/SYN-PUB-0001": "sha256:2af9a69d1040bf85086c6709d605ae2fa68c67f5803f20d28a575aa63e9a9790",
+    "web/radiantloop.example/product": "sha256:41a17aac3331dd89e589ee04dff99d4f5d03c6fb8e19181f29bf57c2c897a056",
+    "web/sensor-deals.example/occupancy": "sha256:365770ec093da087ec7d541d4a1e40e81748f83954667e957cfdddaedb655229",
+    "web/sensorindex.example/listing/thermyx-ts-32": "sha256:6ab64d9e658a9ebd97935586753f750448ee1441cc4691bca3a6961c6f8eb1c3",
+    "web/thermyx.example/archive/thermyx-ts-32-2025": "sha256:b7bdf0e94bcb65dc4151bfda65a28a32029e4580cf916128caa06b7ca3288f90",
+    "web/thermyx.example/product": "sha256:6ab64d9e658a9ebd97935586753f750448ee1441cc4691bca3a6961c6f8eb1c3"
   },
   "world": "stillroom-v2"
 }

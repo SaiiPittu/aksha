@@ -23,6 +23,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 from aksha.runtime.api import (
     GenerationRequest,
@@ -437,23 +438,40 @@ class PatentFake(RuleGenerationModel):
                 _call("save_artifact", 1, kind="prior_art", key=c, content=content),
                 _call("finish", 1, summary="no search asked for"),
             )
+        ext = ctx.read("extraction")
+        assert ext is not None, "prior_art reads the extraction"
+        groups = ext[1]["search"]
         if not ctx.called("search_publications"):
-            ext = ctx.read("extraction")
-            assert ext is not None, "prior_art reads the extraction"
-            return _reply(_call("search_publications", 1, all_of=ext[1]["search"]))
-        search = ctx.ok("search_publications")[-1][1]
-        if search["hits"] and not ctx.called("fetch_publication"):
             return _reply(
-                *(
-                    _call("fetch_publication", i, id=h["id"])
-                    for i, h in enumerate(search["hits"], 1)
-                )
+                _call("search_publications", 1, all_of=groups),
+                _call("web_search", 1, query=web_query(groups), limit=WEB_LIMIT),
             )
+        search = ctx.ok("search_publications")[-1][1]
+        if not ctx.called("fetch_publication") and not ctx.called("fetch_url"):
+            known = {_norm(str(h.get("title") or "")).lower() for h in search["hits"]}
+            urls = choose_results([d for _, d in ctx.ok("web_search")], known)
+            calls = [_call("fetch_publication", i, id=h["id"])
+                     for i, h in enumerate(search["hits"], 1)]  # fmt: skip
+            calls += [_call("fetch_url", i, url=u) for i, u in enumerate(urls, 1)]
+            if calls:
+                return _reply(*calls)
         pubs = [d for _, d in ctx.ok("fetch_publication")]
-        content = prior_art(c, search, pubs)
-        if not search.get("publications_searched", 1):
+        have = {p["id"] for p in pubs}
+        web = [d for _, d in ctx.ok("fetch_url")
+               if d.get("kind") == "publication" and d.get("id") not in have
+               and matches(groups, d)]  # fmt: skip
+        pubs += web
+        hits = [*search["hits"], *({"id": d["id"], "title": d["title"]} for d in web)]
+        content = prior_art(c, {**search, "hits": hits}, pubs)
+        content["web"] = {
+            "queries": [a.get("query") for a, _ in ctx.ok("web_search")],
+            "read": [d.get("url") for _, d in ctx.ok("fetch_url")],
+            "kept": [d["id"] for d in web],
+        }
+        if not search.get("publications_searched", 1) and not ctx.ok("fetch_url"):
             content["not_checked"] = {"question": "Which publications should be searched? None "
-                                      "is among the inputs.", "reason": "not_checked"}  # fmt: skip
+                                      "is among the inputs or on the web.",
+                                      "reason": "not_checked"}  # fmt: skip
         return _reply(
             _call("save_artifact", 1, kind="prior_art", key=c, content=content),
             _call("finish", 1, summary=f"{len(pubs)} publications recorded"),
@@ -908,6 +926,57 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         ),
         "counsel_questions": counsel,
     }
+
+
+WEB_LIMIT = 10
+SPAM = re.compile(
+    r"!!!|\b(best deals?|buy now|click here|limited[- ]time|limited offer|guaranteed|"
+    r"cheapest|lowest prices?|act now|in 24 hours)\b",
+    re.I,
+)
+"""Words of an advert or a content farm: a result that holds them is not read."""
+
+
+def web_query(groups: Sequence[Sequence[str]]) -> str:
+    """The web query of a publication search: every term of every group, once each."""
+    return " ".join(dict.fromkeys(str(t) for g in groups for t in g))
+
+
+def choose_results(searches: Sequence[Mapping[str, Any]], known: set[str]) -> list[str]:
+    """The web results worth reading, in rank order: no advert, no copy, no older version.
+
+    A result whose title is one a publication already found has (among the inputs or an
+    earlier result) is a copy of it on another site, and is not read again; of two results
+    on one site with mostly the same title words, the older is an outdated version.
+    """
+    out: list[dict[str, Any]] = []
+    titles = set(known)
+    for data in searches:
+        for h in data.get("results", ()):
+            title = _norm(str(h.get("title", ""))).lower()
+            if SPAM.search(f"{h.get('title', '')} {h.get('snippet', '')}") or title in titles:
+                continue
+            titles.add(title)
+            if all(o["url"] != h["url"] for o in out):
+                out.append({"url": str(h["url"]), "host": urlsplit(str(h["url"])).hostname,
+                            "words": set(re.findall(r"[a-z0-9]+", title)) - {"the", "a", "of"},
+                            "date": str(h.get("date") or "")})  # fmt: skip
+    older = {
+        a["url"]
+        for a in out
+        for b in out
+        if a is not b and a["host"] == b["host"] and a["words"] and b["words"]
+        and len(a["words"] & b["words"]) / len(a["words"] | b["words"]) >= 0.5
+        and a["date"] and b["date"] and a["date"] < b["date"]
+    }  # fmt: skip
+    return [o["url"] for o in out if o["url"] not in older]
+
+
+def matches(groups: Sequence[Sequence[str]], p: Mapping[str, Any]) -> bool:
+    """Whether publication ``p``'s text matches every group (any one term of each)."""
+    hay = " ".join([p.get("title") or "", p.get("abstract") or "", p.get("description") or "",
+                    *(c["text"] for c in p.get("claims", ()))]).casefold()  # fmt: skip
+    return all(any(str(t).casefold() in hay for t in g) for g in groups)
 
 
 def prior_art(

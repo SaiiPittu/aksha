@@ -7,4 +7,7 @@ k = 1
 
 [faults.flaky-pages]
 # Three in ten page reads time out; the agent retries, so a run recovers or loses a page.
-rules = [{ tool = "read_source", code = "timeout", probability_ppm = 300000 }]
+rules = [
+  { tool = "read_source", code = "timeout", probability_ppm = 300000 },
+  { tool = "read_web", code = "timeout", probability_ppm = 300000 },
+]

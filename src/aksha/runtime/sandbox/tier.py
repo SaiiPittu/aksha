@@ -5,6 +5,10 @@ every exec policy narrows from, the network adapters under the policed HTTP clie
 keeps the process offline: every request is refused ``network_off``), the egress policies
 and environment specs the loaded extensions declare, by full name, and the environment
 keys a person granted. The composition root builds one; the agent loop reads it.
+
+``search`` and ``web`` are the web ports (ADR-P26 A3) a tool body's ``ToolContext.web``
+searches and fetches through: a world's offline web, a live provider, or a recording's
+answers. None (the default) leaves every web tool refusing ``web_off``.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from aksha.runtime.egress.ports import Network
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.sandbox.ports import Sandbox
 from aksha.runtime.sandbox.types import Availability, EnvironmentSpec, ExecPolicy
+from aksha.runtime.web.ports import WebFetch, WebSearch
 
 RUN_CEILING = ExecPolicy.of(writable=(".",))
 """The default run ceiling: any path may be declared writable, the network is off, and the
@@ -41,6 +46,10 @@ class ExecutionTier:
     """An outer box the operator attests the process runs in (``AKSHA_SANDBOX=<name>:<strength>``
     for a name no built-in backend has). It lets a headless run start; it runs no program,
     so an exec tool still needs a built-in backend."""
+    search: WebSearch | None = None
+    """The web search port ``ToolContext.web`` searches through; None refuses ``web_off``."""
+    web: WebFetch | None = None
+    """The web fetch port ``ToolContext.web`` fetches through; None refuses ``web_off``."""
 
     @property
     def gate_availability(self) -> Availability | None:

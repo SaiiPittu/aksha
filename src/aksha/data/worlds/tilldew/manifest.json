@@ -51,31 +51,6 @@
       "synthetic": true
     },
     {
-      "path": "prior-art/SYN-PUB-0101.json",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0102.json",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0103.json",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0104.pdf.txt",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0105.json",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
       "path": "reports/district-irrigation-survey.pdf.txt",
       "folder": "reports",
       "synthetic": true
@@ -96,34 +71,11 @@
       "synthetic": true
     },
     {
-      "path": "vendors/aquasense-s2.html",
-      "folder": "vendors",
-      "synthetic": true,
-      "published": "2026-06-10"
-    },
-    {
-      "path": "vendors/dripwise-root-2025.html",
-      "folder": "vendors",
-      "synthetic": true,
-      "published": "2025-12-02"
-    },
-    {
-      "path": "vendors/furrowpulse.html",
-      "folder": "vendors",
-      "synthetic": true,
-      "published": "2026-07-02"
-    },
-    {
-      "path": "vendors/hydrafield-root.html",
-      "folder": "vendors",
-      "synthetic": true,
-      "published": "2026-08-20"
-    },
-    {
       "path": "vendors/khetimeter.md",
       "folder": "vendors",
       "synthetic": true,
       "published": "2026-04-18"
     }
-  ]
+  ],
+  "web": "web.json"
 }

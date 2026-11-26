@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["tilldew"]
 opening = "Who sells soil-moisture probes to smallholder farmers in India?"
 expect = ["facts.TF-06", "traps.T-DUP"]
-criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP", "web.noise_unread", "web.fetched_from_results"]

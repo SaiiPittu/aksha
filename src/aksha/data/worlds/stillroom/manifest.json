@@ -6,48 +6,6 @@
   "note": "What a server would know: paths, URLs, publish dates. No answers (no family IDs, no duplicate links).",
   "records": [
     {
-      "path": "competitors/comp01-kelvra.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://kelvra.example/product",
-      "published": "2026-10-14"
-    },
-    {
-      "path": "competitors/comp02-veyra.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://veyra.example/product",
-      "published": "2026-09-30"
-    },
-    {
-      "path": "competitors/comp03-tallyway.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://tallyway.example/product",
-      "published": "2026-08-21"
-    },
-    {
-      "path": "competitors/comp04-noctra.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://noctra.example/product",
-      "published": "2026-07-08"
-    },
-    {
-      "path": "competitors/comp05-brightfield.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://brightfield.example/product",
-      "published": "2026-04-02"
-    },
-    {
-      "path": "competitors/comp06-corvane.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://corvane.example/product",
-      "published": "2026-09-15"
-    },
-    {
       "path": "contributors/records.csv",
       "collection": "contributors",
       "synthetic": true
@@ -167,5 +125,6 @@
       "collection": "templates",
       "synthetic": true
     }
-  ]
+  ],
+  "web": "web.json"
 }

@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "What evidence supports C2?"
 expect = ["facts.KF-12", "traps.T-MISSING"]
-criteria = ["trap.T-MISSING", "citation.overlaps_key"]
+criteria = ["trap.T-MISSING", "citation.overlaps_key", "web.noise_unread", "web.fetched_from_results"]

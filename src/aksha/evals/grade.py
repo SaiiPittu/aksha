@@ -120,13 +120,16 @@ class GradeContext:
         if rel in self._texts:
             return self._texts[rel]
         out: list[str] = []
+        web = rel.startswith("web/")
+        tool = "read_web" if web else "read_source"
+        root = self.rec.sources.parent if web else self.rec.sources
         for call in self.state.tool_calls:
-            if call.get("tool") == "read_source" and call.get("args", {}).get("path") == rel:
+            if call.get("tool") == tool and call.get("args", {}).get("path") == rel:
                 text = self.rec.reads.get(str(call.get("result_hash")))
                 if text is not None and text not in out:
                     out.append(text)
-        final = self.rec.sources / rel
-        if final.is_file() and final.resolve().is_relative_to(self.rec.sources.resolve()):
+        final = root / rel
+        if final.is_file() and final.resolve().is_relative_to(root.resolve()):
             text = final.read_text(encoding="utf-8")
             if text not in out:
                 out.append(text)

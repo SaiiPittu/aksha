@@ -1,0 +1,17 @@
+{
+  "_comment": "SYNTHETIC FIXTURE. Invented for testing; not a real publication.",
+  "doc_number": "SYN-PUB-0202",
+  "kind": "B1",
+  "authority": "SYN-Office-1",
+  "abstract": "A clinic system sends each patient a booking reminder hours ahead of the appointment, asking for a reply. An appointment with no reply that arrives within the reply period after the reminder is marked as at risk.",
+  "biblio": {
+    "title": "Reminder replies for clinic appointments",
+    "dates": {"filed": "2022-03-01", "published": "2023-06-07", "granted": "2024-01-10"},
+    "priority": [{"number": "SYN-PRI-2021-0303", "date": "2021-03-03"}]
+  },
+  "legal": {"status": "Granted"},
+  "claims": [
+    {"n": 1, "text": "A system that sends a booking reminder hours ahead of each appointment asking the patient for a reply, and marks the appointment as at risk when no reply arrives within a reply period after the reminder."},
+    {"n": 2, "text": "The system of claim 1, wherein the reminder is sent by SMS.", "refers_to": 1}
+  ]
+}

@@ -33,6 +33,7 @@ from aksha.runtime.outbox.types import EffectSpec
 from aksha.runtime.sandbox.ports import ExecAPI
 from aksha.runtime.sandbox.types import SandboxNeeds
 from aksha.runtime.timers.reads import TimeReads
+from aksha.runtime.web.attempt import AttemptWeb
 
 if TYPE_CHECKING:
     from aksha.runtime.tools.ports import ToolModels
@@ -139,6 +140,9 @@ class ToolContext:
 
     ``models`` asks the fast-class aliases the tool declares (``ToolSpec.model_aliases``),
     recorded on the tool step (ADR-P07 G1); None for a tool that declares none.
+    ``web`` searches and fetches the web through the process's web ports (ADR-P26 A3): a
+    fetched page is kept as a text the attempt's reader returned, so its passages may be
+    drafted as spans; a search hit never is. None when the process has no web port.
     """
 
     owner: str
@@ -154,6 +158,7 @@ class ToolContext:
     time_reads: TimeReads | None = None
     artifacts: ArtifactReader | None = None
     models: ToolModels | None = None
+    web: AttemptWeb | None = None
 
     def __getattribute__(self, name: str) -> Any:
         """Every read of ``run_date`` is recorded in ``time_reads`` (class doc)."""

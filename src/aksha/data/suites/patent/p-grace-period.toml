@@ -7,5 +7,5 @@ agents = ["patent"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "Is the trade-show demo prior art against C1?"
 expect = ["facts.KF-09", "traps.T-GRACE"]
-criteria = ["trap.T-GRACE", "citation.overlaps_key"]
+criteria = ["trap.T-GRACE", "citation.overlaps_key", "web.noise_unread", "web.fetched_from_results"]
 should = ["no_file_by_date"]

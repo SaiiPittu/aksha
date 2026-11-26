@@ -8,4 +8,4 @@ worlds = ["stillroom", "stillroom-v2"]
 relation = "directional"
 opening = "Review the four invention candidates against the prior art and recommend a next action for each."
 expect = ["comparison_matrix", "recommendations"]
-criteria = ["patent.matrix", "patent.next_action", "patent.families_are_edges"]
+criteria = ["patent.matrix", "patent.next_action", "patent.families_are_edges", "web.noise_unread", "web.fetched_from_results"]

@@ -41,16 +41,6 @@
       "synthetic": true
     },
     {
-      "path": "pages/corlew-diary.html",
-      "folder": "pages",
-      "synthetic": true
-    },
-    {
-      "path": "pages/tidewell-booking.html",
-      "folder": "pages",
-      "synthetic": true
-    },
-    {
       "path": "people/inventors.json",
       "folder": "people",
       "synthetic": true
@@ -58,21 +48,6 @@
     {
       "path": "plans/priorities-2026.csv",
       "folder": "plans",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0201.txt",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0202.json",
-      "folder": "prior-art",
-      "synthetic": true
-    },
-    {
-      "path": "prior-art/SYN-PUB-0203.txt",
-      "folder": "prior-art",
       "synthetic": true
     },
     {
@@ -85,5 +60,6 @@
       "folder": "spreadsheets",
       "synthetic": true
     }
-  ]
+  ],
+  "web": "web.json"
 }

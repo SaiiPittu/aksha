@@ -1,0 +1,101 @@
+{
+  "world": "tilldew",
+  "synthetic": true,
+  "notice": "SYNTHETIC. The small web this world's agents can search and fetch: every page is invented for testing, under .example domains. A page's file is this folder's web/<host><path>. 'noise' marks a page an agent should leave alone; no tool or model sees it, the graders read it (web.no_noise_cited). 'fake' is what each agent's offline model is told about this world (the searches a person who knows the market would type); a live model writes its own.",
+  "fake": {
+    "research": {
+      "queries": [
+        "soil moisture probe",
+        "soil probe price farmers"
+      ]
+    }
+  },
+  "pages": [
+    {
+      "url": "https://aquasense.example/s2",
+      "published": "2026-06-10"
+    },
+    {
+      "url": "https://agri-listings.example/aquasense-s2",
+      "noise": "near_duplicate",
+      "copy_of": "https://aquasense.example/s2",
+      "why": "a listing site's verbatim copy of a vendor page",
+      "published": "2026-06-10"
+    },
+    {
+      "url": "https://dripwise.example/root-2025",
+      "published": "2025-12-02"
+    },
+    {
+      "url": "https://greenfurrow.example/furrowpulse",
+      "published": "2026-07-02"
+    },
+    {
+      "url": "https://kisan-mega-sale.example/probes",
+      "noise": "spam",
+      "why": "a sale site with prices no vendor states",
+      "published": "2026-10-02"
+    },
+    {
+      "url": "https://hydrafield.example/root",
+      "published": "2026-08-20"
+    },
+    {
+      "url": "https://soilwords.example/glossary/soil-moisture-probe",
+      "noise": "keyword_only",
+      "why": "a glossary that lists the words and sells nothing",
+      "published": "2026-01-15"
+    },
+    {
+      "url": "https://moisture-skin.example/probe-review",
+      "noise": "irrelevant",
+      "why": "a skin moisture probe for cosmetics, not soil",
+      "published": "2026-05-30"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0101",
+      "title": "Soil probe with two-frequency capacitance measurement",
+      "published": "2023-07-04"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0102",
+      "title": "Salinity-corrected soil moisture probe",
+      "published": "2021-09-23"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0103",
+      "title": "Irrigation scheduling from forecast evapotranspiration",
+      "published": "2023-02-23"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0104",
+      "title": "Weather-driven irrigation controller"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0105",
+      "title": "Descaling sensor electrodes by polarity reversal",
+      "published": "2022-01-18"
+    },
+    {
+      "url": "https://patentmirror.example/SYN-PUB-0101",
+      "noise": "near_duplicate",
+      "copy_of": "https://patents.synthetic.example/SYN-PUB-0101",
+      "why": "a mirror site's copy of a publication the patent office serves",
+      "title": "Soil probe with two-frequency capacitance measurement",
+      "published": "2023-07-04"
+    },
+    {
+      "url": "https://patents.synthetic.example/SYN-PUB-0190",
+      "noise": "irrelevant",
+      "why": "a publication about aquarium water that shares only the word probe",
+      "title": "Aquarium water probe with temperature correction",
+      "published": "2023-12-07"
+    },
+    {
+      "url": "https://ip-fast.example/file-a-patent",
+      "noise": "spam",
+      "why": "an advert for a filing service",
+      "published": "2026-09-09"
+    }
+  ]
+}

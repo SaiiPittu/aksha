@@ -5,6 +5,10 @@ ADR-P26 D2 to D4, ADR-P12 decisions 2, 9 and T6, ADR-P28 D5.
 - :func:`http_for`: the client bound to the tool's egress policy, or one that refuses
   everything: a tool with no policy (``no_egress_policy``), a process with the network off
   (``network_off``), a policy no loaded extension declares (``egress_policy_unknown``).
+  The runtime's own policies (``aksha.web``, the web fetch's: ADR-P26 A3) need no
+  extension.
+- :func:`web_for`: the attempt's web handle over the tier's search and fetch ports, its
+  fetched pages kept by the attempt's reader so they can be cited (ADR-P26 A3).
 - :func:`exec_for`: an exec tool's ``BoxedExec`` under the effective policy (the run ceiling
   narrowed by the tool's needs), its environment resolved through the recorded images.
   A policy that widens refuses every run of the attempt (``policy_widened``).
@@ -27,6 +31,7 @@ from aksha.runtime.egress.client import (
     RefusingHttpClient,
 )
 from aksha.runtime.execution.types import StepOutput
+from aksha.runtime.grounding.reading import AttemptReader
 from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.sandbox.errors import PolicyWidened
@@ -35,6 +40,8 @@ from aksha.runtime.sandbox.images import EnvironmentImages, recorded_images
 from aksha.runtime.sandbox.policy import effective_policy
 from aksha.runtime.sandbox.types import SessionRef
 from aksha.runtime.tools.types import ToolSpec
+from aksha.runtime.web.attempt import AttemptWeb
+from aksha.runtime.web.types import BUILTIN_EGRESS
 
 EGRESS_FIELD = "egress"
 EXEC_FIELD = "exec"
@@ -48,13 +55,21 @@ def http_for(setup: LoopSetup, spec: ToolSpec) -> HttpFor:
     if spec.egress is None:
         return RefusingHttpClient(NO_EGRESS_POLICY)
     name = resolve_kind(spec.egress, spec.owner)
-    policy = setup.tier.egress.get(name)
+    policy = setup.tier.egress.get(name) or BUILTIN_EGRESS.get(name)
     if policy is None:
         return RefusingHttpClient(EGRESS_POLICY_UNKNOWN, name)
     network = setup.tier.network
     if network is None:
         return RefusingHttpClient(NETWORK_OFF, name)
     return PolicedHttpClient(policy, network.resolver, network.transport)
+
+
+def web_for(setup: LoopSetup, reader: AttemptReader, http: HttpFor) -> AttemptWeb | None:
+    """The web handle of one attempt; None when the process has neither web port."""
+    tier = setup.tier
+    if tier.search is None and tier.web is None:
+        return None
+    return AttemptWeb(tier.search, tier.web, reader, http)
 
 
 def _built(view: LogView) -> dict[str, str]:

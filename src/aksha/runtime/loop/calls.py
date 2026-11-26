@@ -77,7 +77,14 @@ from aksha.runtime.invalidation.modes import guards_edits, run_mode, tracks_vers
 from aksha.runtime.invalidation.reading import ViewArtifactReader
 from aksha.runtime.invalidation.saving import save_origin, step_confirmations
 from aksha.runtime.loop.classify import position_outcome
-from aksha.runtime.loop.tier import HttpFor, exec_for, http_for, run_session, with_records
+from aksha.runtime.loop.tier import (
+    HttpFor,
+    exec_for,
+    http_for,
+    run_session,
+    web_for,
+    with_records,
+)
 from aksha.runtime.loop.types import SIGNAL_FIELD, LoopSetup, PositionOutcome, Signal, skip_code
 from aksha.runtime.models.calls import MODEL_CALLS_FIELD, ToolModelCalls
 from aksha.runtime.models.types import ToolCall as ReplyCall
@@ -267,7 +274,8 @@ def run_position(
         ) -> ToolContext:
             return ToolContext(setup.owner, setup.agent.name, ref.task_path, ref.key, str(step),
                                attempt, reader, run_date, http, exe, dates, versions,
-                               models if spec.model_aliases else None)  # fmt: skip
+                               models if spec.model_aliases else None,
+                               web=web_for(setup, reader, http))  # fmt: skip
 
         guarded = spec.edits is not None and guards_edits(run_mode(view, ref.run))
 

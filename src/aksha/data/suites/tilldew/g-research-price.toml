@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["tilldew"]
 opening = "What does each competitor charge smallholder farmers in India for a soil-moisture probe?"
 expect = ["facts.TF-03", "facts.TF-04", "facts.TF-05", "traps.T-PRICE"]
-criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE", "web.noise_unread", "web.fetched_from_results"]

@@ -33,6 +33,11 @@ again and drives on from what it holds; saving unchanged outputs records nothing
    and the rebuild runs, and each rebuild re-entry's mode and reason (decision 36). The
    runner records them on the episode's result row; no grader reads them.
 
+5. Searches the web. A world with a web (``web.json``, its pages under ``web/``) is served
+   to the agent's ``web_search`` and ``fetch_url`` by :class:`EpisodeWeb`, the world's
+   offline search proxy reading through the episode, so every fetch is a recorded,
+   guarded read and every search is recorded with what it returned.
+
 The composition root (:mod:`aksha.app`) builds the session (store, clock, blobs, the loaded
 agent bound to its fakes); this module never picks an adapter.
 """
@@ -40,6 +45,7 @@ agent bound to its fakes); this module never picks an adapter.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,6 +53,7 @@ from typing import Any
 
 from aksha.evals.episode import Episode, guard_path
 from aksha.evals.errors import EvalError, PathRefused
+from aksha.evals.world import WEB_FILE
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.grounding.parts import part_version
 from aksha.runtime.grounding.types import ReturnedText
@@ -61,8 +68,10 @@ SESSION = "S-eval"
 MAX_ROUNDS = 50
 """More person turns than any case needs: a bound on a loop, never a run limit."""
 
-SessionBuilder = Callable[[Path, "EpisodeReader", Mapping[str, Any], "EpisodeSource"], Session]
-"""Builds the writer session over ``<folder>/``, with the reader, systems and source given."""
+SessionBuilder = Callable[
+    [Path, "EpisodeReader", Mapping[str, Any], "EpisodeSource", "EpisodeWeb | None"], Session
+]
+"""Builds the writer session over ``<folder>/``, with the reader, systems, source and web."""
 
 
 INPUTS = "input"
@@ -190,6 +199,65 @@ def _digest(text: str) -> str:
     return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+class EpisodeWeb:
+    """The world's web as the episode serves it (module doc, item 5).
+
+    What the composition root builds the world's search proxy over
+    (``adapters.search.world``): ``read`` reads a page through ``Episode.read_web`` (the
+    path guard and the fault switches apply, and the read is recorded), ``index`` reads
+    the copy directly (a search indexing every page is the engine's work, not a fetch the
+    agent made), and ``searched`` records each search with the URLs it returned. The
+    declaration of which pages are noise (``declared``, the world's ``web.json``) sits
+    beside the copy, out of every tool's reach; a result never says it is noise. ``hints``
+    are what each agent's offline model is told about the world (``web.json`` ``fake``).
+    """
+
+    def __init__(
+        self, episode: Episode, declared: Mapping[str, Any], texts: dict[str, str] | None = None
+    ) -> None:
+        """Serve ``declared`` (a parsed ``web.json``) from ``episode``'s copy.
+
+        ``texts`` (the reader's, for citation offsets) is given each page's text as read.
+        """
+        self.episode = episode
+        self.declared = declared
+        self.hints: Mapping[str, Any] = dict(declared.get("fake", {}))
+        self._texts = texts if texts is not None else {}
+
+    @classmethod
+    def of(cls, episode: Episode, texts: dict[str, str] | None = None) -> EpisodeWeb | None:
+        """The episode's web, when its world declares one (``web.json`` beside the copy)."""
+        path = episode.root.parent / WEB_FILE
+        if not path.is_file():
+            return None
+        return cls(episode, json.loads(path.read_text(encoding="utf-8")), texts)
+
+    def read(self, rel: str) -> str | None:
+        """A page fetched by the agent: through the episode, kept for citation offsets."""
+        try:
+            text = self.episode.read_web(rel)
+        except EvalError:
+            return None
+        self._texts[rel] = text
+        return text
+
+    def index(self, rel: str) -> str | None:
+        """A page as the search engine's index reads it: the copy itself, not recorded."""
+        try:
+            path = guard_path(self.episode.root, rel)
+        except PathRefused:
+            return None
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+
+    def searched(self, query: str, urls: list[str]) -> None:
+        """Record one search and what it returned."""
+        self.episode.searched_web(query, urls)
+
+
+WebFor = Callable[[EpisodeWeb], Any]
+"""Builds the search and fetch ports over an episode's web (the composition root's)."""
+
+
 @dataclass
 class EpisodeMailbox:
     """The system of record an effect names, delivering through the episode (module doc)."""
@@ -273,7 +341,8 @@ class RuntimeUnderTest:
         boxes = {s: EpisodeMailbox(s, episode) for s in self.systems}
         source = EpisodeSource(episode, self.sources[0] if self.sources else "",
                                self.collections)  # fmt: skip
-        session = self.build(episode.root.parent / "runtime", reader, boxes, source)
+        web = EpisodeWeb.of(episode, reader.texts)
+        session = self.build(episode.root.parent / "runtime", reader, boxes, source, web)
         try:
             self._drive(session, episode, reader, boxes)
             self._rebuild(session, episode, reader, boxes)

@@ -6,48 +6,6 @@
   "note": "What a server would know: paths, URLs, publish dates. No answers (no family IDs, no duplicate links).",
   "records": [
     {
-      "path": "competitors/comp01-thermyx.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://thermyx.example/product",
-      "published": "2026-10-14"
-    },
-    {
-      "path": "competitors/comp02-radiantloop.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://radiantloop.example/product",
-      "published": "2026-09-30"
-    },
-    {
-      "path": "competitors/comp03-gatecount.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://gatecount.example/product",
-      "published": "2026-08-21"
-    },
-    {
-      "path": "competitors/comp04-airwise.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://airwise.example/product",
-      "published": "2026-07-08"
-    },
-    {
-      "path": "competitors/comp05-lumenstat.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://lumenstat.example/product",
-      "published": "2026-04-02"
-    },
-    {
-      "path": "competitors/comp06-orrin.html",
-      "collection": "competitors",
-      "synthetic": true,
-      "url": "https://orrin.example/product",
-      "published": "2026-09-15"
-    },
-    {
       "path": "contributors/records.csv",
       "collection": "contributors",
       "synthetic": true
@@ -173,5 +131,6 @@
       "collection": "templates",
       "synthetic": true
     }
-  ]
+  ],
+  "web": "web.json"
 }

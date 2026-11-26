@@ -30,7 +30,10 @@ PROMPT = re.search(r'^opening = "(.*)"$', REQUEST, re.M).group(1)  # type: ignor
 
 def aksha(tmp: Path, *argv: str) -> tuple[int, str]:
     out = io.StringIO()
-    extra = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS)}
+    # The farm's own files are uploaded; the vendor pages and the prior art are on the
+    # world's web, which AKSHA_SEARCH serves offline.
+    extra = {"AKSHA_AGENTS": str(DEFAULT_AGENTS), "AKSHA_EXTENSIONS": str(DEFAULT_EXTENSIONS),
+             "AKSHA_SEARCH": "world:tilldew"}  # fmt: skip
     code = main(["--user", "o1", *argv], out=out, env=env(tmp, **extra))
     return code, out.getvalue()
 
@@ -85,7 +88,7 @@ def test_research_runs_on_an_uploaded_folder_and_a_changed_file_reopens_only_its
     shutil.copytree(TILLDEW, data)
     code, out = aksha(tmp_path, "run", PROMPT, "--agent", "research", "--input", str(data))
     assert code == wire.EXIT_OK, out
-    assert "uploaded 23 input files" in out and "R-0001 research ended complete" in out
+    assert "uploaded 14 input files" in out and "R-0001 research ended complete" in out
     first = _steps(tmp_path, "R-0001")
     assert {"scope", "discover", "voice", "report"} <= first
 

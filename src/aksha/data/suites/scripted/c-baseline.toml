@@ -6,7 +6,7 @@ category = "capability"
 agents = ["scripted"]
 worlds = ["stillroom", "stillroom-v2"]
 opening = "Research the competitors."
-criteria = ["inv.one_row_per_key", "no_unbound_send", "citation.exists", "citation.edge_excerpts"]
+criteria = ["inv.one_row_per_key", "no_unbound_send", "citation.exists", "citation.edge_excerpts", "web.noise_unread", "web.fetched_from_results"]
 should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language", "no_market_percentage"]
 # Every criterion here holds for an episode that does nothing, so the null bundle passes it.
 needs_action = false
