@@ -6,7 +6,8 @@ Policy         Judges
 Run            outermost, one per open run. Relays the scheduler's pick (PUSH), holds when
                nothing may run but a person can unblock it, and is the only policy that
                returns STOP: ``complete``, ``partial`` (explicit unknowns, ADR-P24 D6),
-               ``blocked`` (naming the blocked instances) or ``failed`` on a run fault. Its
+               ``blocked`` (naming the blocked instances) or ``failed`` on a run fault. It
+               never relays a pick the evaluation under way already failed (ADR-P15 S6). Its
                limit replaces a CONTINUE with the budget interrupt once a budget dimension
                is spent (ADR-P14), or, once the run is finalizing, ends it ``partial``
                when the reserve is spent too (ADR-P24 D5); it ends a resumed run at the
@@ -119,10 +120,12 @@ class RunPolicy:
         # below is right before the withdrawal facts commit with this decision.
         facts = withdrawals(view.log, view.tree, self.run)
         state = run_state(view.log, view.tree, self.run)
-        for pick in runnable_in(state)[: view.tree.concurrency]:
+        # An instance this evaluation failed is not picked again in it (ADR-P15 S6, #95).
+        picks = tuple(p for p in runnable_in(state) if p not in view.failed)
+        for pick in picks[: view.tree.concurrency]:
             if holds.hold_reason(view.log, pick) is None:
                 return Verdict("push", child=pick, facts=facts)
-        outcome = run_outcome(view.log, view.tree, self.run)
+        outcome = run_outcome(view.log, view.tree, self.run, skip=view.failed)
         if outcome is None:
             waiting = pending_interrupts(view.log, self.run)
             reason = "waiting on a person: " + ", ".join(waiting) if waiting else "waiting"

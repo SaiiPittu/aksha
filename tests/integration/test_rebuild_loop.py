@@ -13,6 +13,7 @@ records a fresh approval request and never a grant.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,8 @@ from aksha.runtime.invalidation.plan import plan_of
 from aksha.runtime.invalidation.reviews import open_reviews
 from aksha.runtime.invalidation.view import invalidation_view
 from aksha.runtime.stop_policy.hold import held_auto_starts
-from tests.support.rebuild import OWNER, Rig
+from aksha.runtime.tasks.tree import compile_tree
+from tests.support.rebuild import AGENT, OWNER, Rig, tasks
 
 C2_WORK = ("demo.extract/C2@v1", "demo.compare/C2@v1", "demo.bundle/C2@v1")
 
@@ -121,6 +123,54 @@ def test_f2_a_finish_with_the_old_version_in_place_is_refused(rig: Rig) -> None:
               if e.instance == "extract[C1]"]  # fmt: skip
     assert [(c["ok"], c["code"]) for c in checks] == [(False, "rebuild_pending"), (True, "")]
     assert rig.setup.artifacts.latest(rig.view(), "demo.extract", "C1").ref.version == 2  # type: ignore[union-attr]
+
+
+def test_a_writer_that_fails_its_rebuild_ends_the_run_blocked_naming_it(rig: Rig) -> None:
+    """#95: an instance that fails while the plan still lists it is not re-entered.
+
+    The rebuilt extraction finishes without saving every time, so F2 refuses each finish
+    until the stop-veto limit fails it. The plan still lists its old version, so before
+    the fix the scheduler re-entered it in the same evaluation, again and again; now that
+    evaluation ends the rebuild run ``blocked``, naming the instance, after one entry.
+    """
+    change_c1(rig)
+    rig.finish_only.add("extract[C1]")
+    before = rig.calls.get("extract[C1]", 0)
+    (result,) = rig.rebuild()
+    run = result.run
+    assert (result.state, result.outcome) == ("ended", "blocked")
+    (ended,) = rig.events("run.ended", run)
+    assert list(ended.payload["blockers"]) == ["extract[C1]"]
+    entered = [e.instance for e in rig.events("task.entered", run)]
+    assert entered == ["extract[C1]"]  # entered once, never re-entered after its failure
+    vetoes = rig.setup.tree.node("extract").task.max_finish_vetoes
+    assert rig.calls["extract[C1]"] - before == vetoes  # one turn per refused finish
+    last = rig.events("stop.decided", run)[-1].payload
+    assert (last["verdict"], last["outcome"]) == ("stop", "blocked")
+    assert ["extract[C1]", "fail"] in [list(p) for p in last["pops"]]
+    assert last["limit"] == "stop_veto_limit"
+
+
+def test_a_writer_that_fails_on_its_reentry_is_not_entered_again_in_that_evaluation(
+    rig: Rig,
+) -> None:
+    """#95: a re-entry the Task's limit fails at once ends the run blocked, not refused.
+
+    With a turn limit of 0 the re-entered extraction fails in the very evaluation that
+    enters it. Before the fix the scheduler picked the blocked instance again in that
+    evaluation until the loop bound refused it (``evaluation_loop ... did not settle``).
+    """
+    change_c1(rig)
+    slim = tuple(replace(t, turn_limit=0) if t.id == "extract" else t for t in tasks())
+    rig.setup = replace(rig.setup, tree=compile_tree(AGENT, slim))
+    (result,) = rig.rebuild()
+    run = result.run
+    assert (result.state, result.outcome) == ("ended", "blocked")
+    assert [e.instance for e in rig.events("task.entered", run)] == ["extract[C1]"]
+    (decided,) = [e.payload for e in rig.events("stop.decided", run) if e.payload.get("pops")]
+    assert [list(p) for p in decided["pops"]] == [["extract[C1]", "fail"]]
+    assert (decided["verdict"], decided["outcome"]) == ("stop", "blocked")
+    assert decided["reason"] == "blocked: extract[C1]"
 
 
 def test_rebuild_run_opens_once_per_set_of_work(rig: Rig) -> None:

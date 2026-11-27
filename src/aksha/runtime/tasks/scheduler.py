@@ -395,16 +395,20 @@ class RunOutcome:
     unknowns: tuple[UnknownEntry, ...] = ()
 
 
-def run_outcome(view: LogView, tree: CompiledTree, run: str) -> RunOutcome | None:
+def run_outcome(
+    view: LogView, tree: CompiledTree, run: str, *, skip: frozenset[InstanceRef] = frozenset()
+) -> RunOutcome | None:
     """None while an instance may run or is suspended; else the tree's outcome. Pure.
 
     A rebuild run is ``complete`` once nothing it re-enters may run, and ``blocked`` if
     a re-entered instance blocked; the rest of its tree was never meant to run (D8).
+    ``skip`` names blocked instances that count as not runnable although the rebuild plan
+    still lists them: those the stop evaluation under way already failed (ADR-P15 S6).
     """
     from aksha.runtime.finalization.unknowns import unknowns_in  # deferred: it reads tasks
 
     state = run_state(view, tree, run)
-    if runnable_in(state):
+    if any(r not in skip for r in runnable_in(state)):
         return None
     refs = tuple(all_instances(state))
     if any(state.status(r) == "suspended" and not state.voided(r) for r in refs):

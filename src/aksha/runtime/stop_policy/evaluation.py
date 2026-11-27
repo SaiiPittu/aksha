@@ -12,7 +12,9 @@
    pops the instance's policies and offers the candidate to the Run policy as ``next``.
    PUSH offers it to the child (the policies inside the pusher, which passed, leave the
    stack): ``enter`` for a new instance, ``next`` for one already running. CONTINUE,
-   HOLD and STOP propose the decision.
+   HOLD and STOP propose the decision. An instance this evaluation popped FAIL is not
+   picked again in it (``StopView.failed``, ADR-P15 S6): one the rebuild plan still
+   lists stays blocked, and the Run policy goes on to other work or ends the run.
 5. Apply the limits to a proposed CONTINUE, outer to inner: the Run's budget first (a spent
    dimension becomes the budget interrupt's HOLD), then the Task's turn limit and stop-veto
    limit (a FAIL that pops and goes back to step 4). The first limit that bites decides.
@@ -189,6 +191,8 @@ def evaluate_stop(view: StopView, c: StopCandidate) -> StopDecision:
             pops.append((ref.instance, kind))
             mark = NewEvent(STOP_DECIDED, {"pops": [[ref.instance, kind]]}, run=c.run)
             working = with_facts(working, (mark,))
+            if kind == "fail":  # never picked again in this evaluation (ADR-P15 S6, #95)
+                working = replace(working, failed=working.failed | {ref})
             base = next(i for i, p in enumerate(stack) if isinstance(p, TaskPolicy))
             stack = stack[:base]
             level = len(stack) - 1
