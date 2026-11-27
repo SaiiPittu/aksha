@@ -62,7 +62,7 @@ import stat
 import subprocess
 import tempfile
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import IO
@@ -432,6 +432,26 @@ class BwrapSandbox:
         if _version_tuple(self._version) >= (0, 10):
             args += ["--size", str(limits.max_collect_bytes)]
         args += ["--tmpfs", "/tmp"]
+        return args
+
+    def jail_argv(
+        self, argv: Sequence[str], read_only: Sequence[str], input_file: str, box_input: str
+    ) -> list[str]:
+        """``argv`` in a box that sees the system, ``read_only`` and one file, all read-only.
+
+        For the ingest extension's parser worker (``Jail`` in
+        :mod:`aksha.extensions.ingest.worker`): the allowlisted root and a fresh ``/tmp`` as
+        for every box, no network (every namespace unshared), a cleared environment, each
+        ``read_only`` path bound read-only at its own path (the interpreter and its import
+        path) and ``input_file`` read-only at ``box_input``. No ``prlimit``: the worker sets
+        its own limits before it reads the input, and the host keeps the wall clock.
+        """
+        args = self._base_args(Limits())
+        for path in read_only:
+            args += ["--ro-bind", path, path]
+        args += ["--ro-bind", input_file, box_input, "--chdir", "/tmp",
+                 "--setenv", "PATH", BASE_PATH, "--setenv", "HOME", "/tmp",
+                 "--setenv", "LANG", "C.UTF-8", "--", *argv]  # fmt: skip
         return args
 
     def _command(

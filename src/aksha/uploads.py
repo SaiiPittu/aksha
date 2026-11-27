@@ -6,7 +6,8 @@
 1. Its doc key: the path's known key when it was uploaded before (its version moves only
    when the bytes moved), else the next new one. The input path plays the part of the doc
    key a client passes to replace a document (ADR D2): ``UploadInputs`` replaces by path.
-2. Intake runs; the original bytes, and an image's sent copy, go to the blob store.
+2. Intake runs, its parsers in worker processes (:mod:`aksha.extensions.ingest.worker`);
+   the original bytes, and an image's sent copy, go to the blob store.
 3. What the workspace serves at the path: a UTF-8 text file an agent's own tools parse
    (plain text, Markdown, CSV, JSON, HTML, SVG) as it is; anything converted (PDF, Office,
    email, images, text in another charset, a type conflict) as its header, a blank line
@@ -32,8 +33,10 @@ from typing import Any
 from aksha.extensions.ingest import events
 from aksha.extensions.ingest.header import DATA_RULE, escape_name
 from aksha.extensions.ingest.ingest import Ingested, ingest
+from aksha.extensions.ingest.parse import Parse
 from aksha.extensions.ingest.profiles import PROFILES, SentCopyCache
 from aksha.extensions.ingest.types import Caps, ImageProfile, Refusal
+from aksha.extensions.ingest.worker import ParserPool
 from aksha.runtime.inputs.types import (
     DOC_PREFIX,
     DOCUMENT_GAP,
@@ -76,11 +79,23 @@ def _refused_text(r: Refusal) -> bytes:
 class UploadIngester:
     """The ``DocumentIngester`` of the composition root (module doc)."""
 
-    def __init__(self, *, caps: Caps | None = None, profile: ImageProfile | None = None) -> None:
-        """Ingest with ``caps`` for a reader whose image profile is ``profile``."""
+    def __init__(
+        self,
+        *,
+        caps: Caps | None = None,
+        profile: ImageProfile | None = None,
+        parse: Parse | None = None,
+    ) -> None:
+        """Ingest with ``caps`` for a reader whose image profile is ``profile``.
+
+        ``parse`` runs the type check and the converters; the default is a
+        :class:`~aksha.extensions.ingest.worker.ParserPool`, so every parser runs in a worker
+        process under the caps' time, memory and CPU limits.
+        """
         self.caps = caps or Caps()
         self.profile = profile
         self.cache = SentCopyCache()
+        self.parse: Parse = parse if parse is not None else ParserPool()
 
     def ingest(
         self,
@@ -126,7 +141,7 @@ class UploadIngester:
 
             got = ingest(name, data, doc_key=doc_key, version=version, caps=self.caps,
                          key_for=key_for, put=put, profile=self.profile,
-                         cache=self.cache)  # fmt: skip
+                         cache=self.cache, parse=self.parse)  # fmt: skip
             assert isinstance(got, Ingested)  # the byte cap ran above
             for item in got.walk():
                 k = item.document.doc_key

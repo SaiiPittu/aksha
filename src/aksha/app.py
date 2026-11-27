@@ -70,6 +70,7 @@ from aksha.evals.case import Arm
 from aksha.evals.judge import Judge, RuleJudge
 from aksha.evals.ports import StoreOpener
 from aksha.evals.registry import AgentRegistry
+from aksha.extensions.ingest.worker import ParserPool
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.budgets.types import Limits
@@ -836,12 +837,31 @@ def input_workspace(
 
 
 def upload_ingester(config: RuntimeConfig) -> UploadIngester:
-    """The ingester every upload goes through, sizing images for ``AKSHA_IMAGE_PROFILE``."""
+    """The ingester every upload goes through, sizing images for ``AKSHA_IMAGE_PROFILE``.
+
+    Its parsers run in worker processes (:class:`ParserPool`). When ``AKSHA_SANDBOX`` names
+    the bubblewrap backend (``bwrap``, ``bwrap:os-jail`` or ``auto``) and it probes
+    available, each parse runs in its own bubblewrap box with read-only access to the one
+    input file; otherwise in a plain worker with the same limits.
+    """
     try:
         profile = profile_named(config.image_profile)
     except ValueError as e:
         raise StoreError("image_profile_unknown", str(e)) from None
-    return UploadIngester(profile=profile)
+    return UploadIngester(profile=profile, parse=parser_pool(config))
+
+
+def parser_pool(config: RuntimeConfig) -> ParserPool:
+    """The parser workers for uploads, jailed in bubblewrap when it is configured (above)."""
+    name = (config.sandbox or "").partition(":")[0]
+    if name not in ("bwrap", AUTO):
+        return ParserPool()
+    box = BwrapSandbox()
+    if not box.probe().available:
+        return ParserPool()
+    scratch = config.sandboxes.root / "parse"
+    scratch.mkdir(parents=True, exist_ok=True)
+    return ParserPool(jail=box.jail_argv, scratch=scratch)
 
 
 class ToolQueryRunner:

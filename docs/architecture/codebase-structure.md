@@ -405,6 +405,9 @@ src/aksha/
 │   │   ├── routing.py                       setup_of, resolve_bindings (three setups), resolve_route
 │   │   ├── offload.py                       offload_result, offload_message: oversized text as a document with a view
 │   │   ├── header.py                        render_header, escape_name: what the model is told
+│   │   ├── parse.py                         parse_in_process: the type check then the converter; Parsed; the parser_* gap names
+│   │   ├── worker.py                        ParserPool: parsers in worker processes, wall-clock, memory and CPU caps, no network
+│   │   ├── wire.py                          the worker's JSON-and-blobs frames, checked field by field, never unpickled
 │   │   ├── ingest.py                        ingest: intake for one input, its children and its header
 │   │   └── events.py                        stored, gap, refused: the document.* payloads
 │   ├── memory/                              P09 memory: artifacts, one recall tool, citations required

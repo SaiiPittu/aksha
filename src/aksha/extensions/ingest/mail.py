@@ -39,6 +39,8 @@ def convert(data: bytes) -> Converted:
     """The email's representation and its attachments as children (module doc)."""
     try:
         message = BytesParser(policy=policy.default).parsebytes(data)
+    except MemoryError:  # the worker's memory cap: parser_memory, not a damaged file
+        raise
     except Exception as e:  # the parser is lenient; this catches only hard failures
         return Converted(gap=Gap("unreadable", f"the email does not parse: {type(e).__name__}",
                                  ("parse_fast",)))  # fmt: skip

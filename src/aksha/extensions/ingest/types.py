@@ -47,6 +47,9 @@ class Caps:
     (ADR-P08 D4); ``message_cap_chars`` the user-message size over which a message is
     stored and paged (ING-4); ``head_chars`` and ``tail_chars`` are the view an offloaded
     result keeps; ``fallback_charset`` decodes text that is neither BOM-marked nor UTF-8.
+    ``parser_time_ms``, ``parser_cpu_s`` and ``parser_memory_bytes`` bound one parse in the
+    worker process (wall clock, CPU seconds, address space); past one the worker is killed
+    and the document is a named gap (``parser_timeout``, ``parser_memory``).
     """
 
     max_bytes: int = 8 * 1024 * 1024
@@ -66,6 +69,9 @@ class Caps:
     head_chars: int = 4_000
     tail_chars: int = 4_000
     fallback_charset: str = "latin-1"
+    parser_time_ms: int = 60_000
+    parser_cpu_s: int = 60
+    parser_memory_bytes: int = 2 * 1024 * 1024 * 1024
 
 
 @dataclass(frozen=True)
