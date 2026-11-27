@@ -226,6 +226,28 @@ def test_retries_used_up_end_in_an_error(h: Harness) -> None:
     assert retried == [True, True, False]
 
 
+def test_the_backoff_is_at_least_what_the_failure_asked_for(h: Harness) -> None:
+    script = Script()
+    work = script.raises("f", TransientStepError(retry_after_ms=7_000), TransientStepError())
+    result = h.executor().step(S1, "tool", "fetch", HASH, work, FAST)
+    assert (result.outcome, result.attempts) == ("ok", 3)
+    backoffs = [p["backoff_ms"] for t, _, p in log(h.store) if t == "step.failed"]
+    assert backoffs == [7_000, 1_000]  # the Retry-After, then the policy's own backoff
+    assert (h.clock.now() - START).total_seconds() == 8.0
+
+
+def test_no_retry_waits_past_the_step_s_wait_cap(h: Harness) -> None:
+    script = Script()
+    work = script.raises("f", *(TransientStepError() for _ in range(9)))
+    policy = StepPolicy(max_retries=8, backoff=Backoff(base_ms=500, factor=2, cap_ms=4_000),
+                        wait_cap_ms=2_000)  # fmt: skip
+    result = h.executor().step(S1, "tool", "fetch", HASH, work, policy)
+    assert (result.outcome, result.code, result.attempts) == ("error", "transient", 3)
+    failed = [(p["retried"], p["backoff_ms"]) for t, _, p in log(h.store) if t == "step.failed"]
+    assert failed == [(True, 500), (True, 1_000), (False, 0)]  # 500 + 1000 + 2000 > 2000
+    assert (h.clock.now() - START).total_seconds() == 1.5
+
+
 def test_an_unlisted_code_is_not_retried(h: Harness) -> None:
     script = Script()
     work = script.raises("f", TransientStepError("rate_limited"))

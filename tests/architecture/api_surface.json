@@ -1,5 +1,5 @@
 {
-  "api_version": "2.16",
+  "api_version": "2.17",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off', invalidation_keys: 'InvalidationKeys' = 'reads', reuse: \"Literal['on', 'off']\" = 'on') -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
@@ -57,7 +57,7 @@
     "InvalidationMode": "InvalidationMode = typing.Literal['off', 'edit_guard', 'notify', 'rebuild']",
     "Judgement": "class Judgement(name: 'str', outcome: 'Outcome', value: 'str | bool | tuple[str, ...] | None', reason: 'str', spans: 'tuple[SpanRef, ...]' = (), step: 'str | None' = None) -> None",
     "KeySource": "class KeySource(origin: \"Literal['source', 'artifact']\", name: 'str', path: 'str | None' = None, unless: 'Check | None' = None) -> None",
-    "Limits": "class Limits(turn_limit: 'int' = 10, stop_veto_limit: 'int' = 3, restart_limit: 'int' = 3, auto_starts: 'tuple[int, int]' = (3, 300000), max_retries: 'int' = 2, tool_timeout_ms: 'int' = 10000, model_timeout_ms: 'int' = 60000, backoff: 'Backoff' = Backoff(base_ms=500, factor=2, cap_ms=4000)) -> None",
+    "Limits": "class Limits(turn_limit: 'int' = 10, stop_veto_limit: 'int' = 3, restart_limit: 'int' = 3, auto_starts: 'tuple[int, int]' = (3, 300000), max_retries: 'int' = 2, tool_timeout_ms: 'int' = 10000, model_timeout_ms: 'int' = 60000, backoff: 'Backoff' = Backoff(base_ms=500, factor=2, cap_ms=4000), jitter: 'float' = 0.0, jitter_source: 'Callable[[], float] | None' = None) -> None",
     "LogView": "class LogView(owner: 'str', seq_read: 'int', events: 'tuple[Event, ...]', artifacts: 'ArtifactsView', complete: 'bool' = False) -> None",
     "Message": "class Message(role: 'Role', text: 'str | None' = None, tool_calls: 'tuple[ToolCall, ...]' = (), call_id: 'str | None' = None, files: 'tuple[FilePart, ...]' = ()) -> None",
     "ModelAdapterSpec": "class ModelAdapterSpec(name: 'str', model_class: 'ModelClass', factory: 'Callable[..., object]') -> None",

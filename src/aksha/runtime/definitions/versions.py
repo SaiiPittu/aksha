@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.16"
+API_VERSION = "2.17"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -85,6 +85,10 @@ record holding several kinds is decided section by section (ADR-P07 G4).
 reads its work board through, ``RECITATION`` (the fence line a model reads it under), the
 trailing field ``Prep.data`` behind it, and
 ``TaskView.spent``, the turns and tool calls spent below an instance on one key.
+2.17 (27 Nov 2026, ADR-P14 B2) added the trailing fields ``Limits.jitter`` (0 by default,
+so a backoff is the same every time) and ``Limits.jitter_source``, the injected source a
+jittered backoff draws from; ``Limits.max_retries`` and ``Limits.backoff`` are now the
+model step's.
 """
 
 Version = tuple[int, int]

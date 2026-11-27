@@ -24,7 +24,9 @@ ID, so a restarted process returns recorded results instead of running steps aga
    ``retry_on``) records ``step.failed`` and sleeps the backoff on the injected clock.
    Attempts are numbered from the recorded attempt facts (``budgets.limits.next_attempt``),
    so a restart never resets them: ``max_retries=2`` is three attempts across every
-   process that runs the step (ADR-P14 D3).
+   process that runs the step (ADR-P14 D3). The backoff is at least what the failure
+   asked (a provider's ``Retry-After`` on the ``TransientStepError``), and a retry whose
+   backoff would take the step past the policy's ``wait_cap_ms`` is not made (ADR-P14 B2).
    An ``at_most_once`` step is never retried; its timeout is ``outcome_unknown``. A step
    with a unit is never retried either: an exec timeout repeats (ADR-P14 D4), and a unit
    is one process, so a new attempt needs a new unit, which only the caller can make.
@@ -487,12 +489,15 @@ class StepExecutor:
         unit: KillableUnit | None = None,
     ) -> StepResult:
         once = policy.semantics == "at_most_once"
+        waited = 0  # this call's active time: its attempts and the backoffs between them
         while True:
             if once:
                 self._append(facts.DISPATCH, facts.step_dispatched(step_id, attempt))
-            code, output, spent, kill, detail = self._attempt(
+            code, output, spent, kill, transient = self._attempt(
                 step_id, attempt, work, policy.timeout_ms, unit
             )
+            detail = transient.detail if transient is not None else None
+            waited += spent
             self.drain_late()
             if kill is not None and code == RUN_STOPPED:
                 effects = policy.semantics != "at_least_once"
@@ -530,7 +535,12 @@ class StepExecutor:
                 return self._recorded(step_id, stored, replayed=False)
             retryable = not once and unit is None and code in policy.retry_on
             retried = retryable and attempt <= policy.max_retries
-            backoff = policy.delay_ms(attempt) if retried else 0
+            asked = transient.retry_after_ms if transient is not None else None
+            backoff = policy.delay_ms(attempt, asked) if retried else 0
+            cap = policy.wait_cap_ms
+            if retried and cap is not None and waited + backoff >= cap:
+                retried, backoff = False, 0  # the run's active time would be spent waiting
+            waited += backoff
             failed = facts.step_failed(
                 step_id,
                 attempt,
@@ -564,14 +574,15 @@ class StepExecutor:
         work: Callable[[Deadline], StepOutput],
         timeout_ms: int,
         unit: KillableUnit | None = None,
-    ) -> tuple[str, StepOutput | None, int, KillOutcome | None, Mapping[str, str | int] | None]:
+    ) -> tuple[str, StepOutput | None, int, KillOutcome | None, TransientStepError | None]:
         """Run one attempt on a worker thread and say how it ended.
 
-        The answer is ``(code, None, ms, None, detail)``, ``("", out, ms, None, None)``,
+        The answer is ``(code, None, ms, None, raised)``, ``("", out, ms, None, None)``,
         ``(run_stopped, None, ms, kill, None)`` when a stop ended its unit, or
         ``(timeout, None, ms, kill, None)`` when its deadline did. ``ms`` is the attempt's
-        active time on the injected clock; a timeout is its deadline. ``detail`` is what a
-        :class:`TransientStepError` said the failure was (``step.failed{error}``).
+        active time on the injected clock; a timeout is its deadline. ``raised`` is the
+        :class:`TransientStepError` the work raised: what the failure was
+        (``step.failed{error}``) and how long it asked to wait.
         """
         box = _Attempt(step_id, number, threading.Lock())
         began = self._clock.now()
@@ -614,7 +625,7 @@ class StepExecutor:
             if not isinstance(box.error, Exception):
                 raise box.error  # a crash: nothing recorded, as if the process died here
             if isinstance(box.error, TransientStepError):
-                return box.error.code, None, spent, None, box.error.detail
+                return box.error.code, None, spent, None, box.error
             return STEP_EXCEPTION, None, spent, None, None
         if not isinstance(box.output, StepOutput):
             return STEP_EXCEPTION, None, spent, None, None

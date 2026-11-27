@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import subprocess
 import sys
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -75,7 +76,7 @@ from aksha.extensions.ingest.types import FileInput
 from aksha.extensions.ingest.worker import ParserPool
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
-from aksha.runtime.budgets.types import Budget, Limits
+from aksha.runtime.budgets.types import Backoff, Budget, Limits
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import effective_policy
 from aksha.runtime.corrections.types import CorrectionRouting
@@ -361,12 +362,18 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # named; or no ``AKSHA_LIVE_API_KEY`` for a chat-completions server not on this machine).
 # ``run.started`` records each adapter's class, never a setting.
 #
-# A live model is slower than a fake, so live mode sizes two of the agent's limits up (and
-# ``run.started{budget}`` records the result): the active-time cap becomes
+# A live model is slower than a fake, so live mode sizes the agent's limits up (and
+# ``run.started{budget}`` records the active-time cap): the active-time cap becomes
 # ``AKSHA_LIVE_ACTIVE_MS`` when set, else at least :data:`LIVE_ACTIVE_MS` (an hour), and the
 # model step's timeout (``Limits.model_timeout_ms``) at least the generation adapter's
-# attempt timeout (``AKSHA_LIVE_TIMEOUT_S``) plus :data:`LIVE_TIMEOUT_MARGIN_MS`. Fake mode,
-# and so every offline eval, keeps the agent's own limits (:func:`live_limits`).
+# attempt timeout (``AKSHA_LIVE_TIMEOUT_S``) plus :data:`LIVE_TIMEOUT_MARGIN_MS`. A real
+# provider sheds load (a 429, a 503 "high demand", a timeout) for seconds to minutes, so
+# the model step's retries become ``AKSHA_LIVE_RETRIES`` (default :data:`LIVE_RETRIES`, or
+# the agent's own if higher) with :data:`LIVE_BACKOFF`: from ``AKSHA_LIVE_BACKOFF_MS``
+# (2 s) doubling to ``AKSHA_LIVE_BACKOFF_CAP_MS`` (60 s), a quarter of each delay drawn at
+# random, at least the provider's ``Retry-After``, and never past the run's active time
+# (ADR-P14 B2). Fake mode, and so every offline eval, keeps the agent's own limits
+# (:func:`live_limits`).
 #
 # ``AKSHA_NATIVE_FILES`` is ``off`` unless set to ``on``: off, no file is sent natively and
 # every upload goes through intake's parsers, its route recorded ``text`` with the reason
@@ -666,6 +673,15 @@ LIVE_ACTIVE_MS = 3_600_000
 LIVE_TIMEOUT_MARGIN_MS = 15_000
 """How much longer a live model step waits than its adapter's own attempt timeout."""
 
+LIVE_RETRIES = 6
+"""Live mode's least retries of a model step, unless ``AKSHA_LIVE_RETRIES`` says."""
+
+LIVE_BACKOFF = Backoff(base_ms=2_000, factor=2, cap_ms=60_000)
+"""Live mode's model-step backoff: 2, 4, 8, 16, 32, 60, 60 s..."""
+
+LIVE_JITTER = 0.25
+"""The share of each live backoff drawn at random, so runs that failed together spread out."""
+
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
 """Hosts a live server may be on without a key: this machine."""
 
@@ -770,18 +786,16 @@ def litellm_refusals(aliases: Sequence[ModelAlias], env: Mapping[str, str]) -> l
 
 
 def live_limits(loaded: LoadedDefinition, env: Mapping[str, str]) -> Agent:
-    """The agent with live mode's active-time cap and model step timeout (app comment above).
+    """The agent with live mode's active-time cap, model step timeout and retries (comment above).
 
-    Raises ``BindRefused`` (``live_config_missing``) for a malformed ``AKSHA_LIVE_ACTIVE_MS``
-    or ``AKSHA_LIVE_TIMEOUT_S``.
+    Raises ``BindRefused`` (``live_config_missing``) for a malformed ``AKSHA_LIVE_ACTIVE_MS``,
+    ``AKSHA_LIVE_TIMEOUT_S``, ``AKSHA_LIVE_RETRIES``, ``AKSHA_LIVE_BACKOFF_MS`` or
+    ``AKSHA_LIVE_BACKOFF_CAP_MS``.
     """
-    raw = (env.get("AKSHA_LIVE_ACTIVE_MS") or "").strip()
-    if raw and not raw.isdigit():
-        message = f"AKSHA_LIVE_ACTIVE_MS={raw!r}: milliseconds, a whole number"
-        raise BindRefused((BindRefusal("*", "live_config_missing", message),))
+    raw = _whole_number(env, "AKSHA_LIVE_ACTIVE_MS", "milliseconds")
     agent = loaded.agent
     budget = agent.budget or Budget()
-    active = int(raw) if raw else max(budget.active_ms, LIVE_ACTIVE_MS)
+    active = raw if raw is not None else max(budget.active_ms, LIVE_ACTIVE_MS)
     from aksha.adapters.models.litellm import timeout_s
 
     generation = [a for a in declared_aliases(loaded.model_aliases.values()).values()
@@ -792,11 +806,34 @@ def live_limits(loaded: LoadedDefinition, env: Mapping[str, str]) -> Agent:
         raise BindRefused((BindRefusal("*", e.code, e.message),)) from None
     limits = agent.limits or Limits()
     timeout_ms = max(limits.model_timeout_ms, int(seconds * 1000) + LIVE_TIMEOUT_MARGIN_MS)
+    retries = _whole_number(env, "AKSHA_LIVE_RETRIES", "a count of retries")
+    base = _whole_number(env, "AKSHA_LIVE_BACKOFF_MS", "milliseconds")
+    cap = _whole_number(env, "AKSHA_LIVE_BACKOFF_CAP_MS", "milliseconds")
+    base = LIVE_BACKOFF.base_ms if base is None else base
+    cap = max(base, LIVE_BACKOFF.cap_ms if cap is None else cap)
     return replace(
         agent,
         budget=replace(budget, active_ms=active),
-        limits=replace(limits, model_timeout_ms=timeout_ms),
+        limits=replace(
+            limits,
+            model_timeout_ms=timeout_ms,
+            max_retries=max(limits.max_retries, LIVE_RETRIES) if retries is None else retries,
+            backoff=replace(LIVE_BACKOFF, base_ms=base, cap_ms=cap),
+            jitter=LIVE_JITTER,
+            jitter_source=random.SystemRandom().random,
+        ),
     )
+
+
+def _whole_number(env: Mapping[str, str], name: str, unit: str) -> int | None:
+    """``env[name]`` as a whole number, None when unset; ``live_config_missing`` if malformed."""
+    raw = (env.get(name) or "").strip()
+    if not raw:
+        return None
+    if not raw.isdigit():
+        message = f"{name}={raw!r}: {unit}, a whole number"
+        raise BindRefused((BindRefusal("*", "live_config_missing", message),))
+    return int(raw)
 
 
 def bind_live(loaded: LoadedDefinition, env: Mapping[str, str]) -> Mapping[str, object]:

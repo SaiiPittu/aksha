@@ -9,12 +9,14 @@ process would. A restart opens the store again and resumes through recovery.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from aksha.runtime.budgets.meter import meter
+from aksha.runtime.budgets.types import Backoff, Limits
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority, approvals
@@ -24,6 +26,7 @@ from aksha.runtime.loop.classify import recorded_turn_end
 from aksha.runtime.loop.drive import control_point
 from aksha.runtime.loop.turn import run_turn as real_run_turn
 from aksha.runtime.loop.types import TurnEnd
+from aksha.runtime.models.errors import TransientModelError
 from aksha.runtime.models.types import GenerationRequest, GenerationResult
 from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.stop_policy.commit import commit_stop_decision
@@ -391,3 +394,45 @@ def test_the_model_step_waits_as_long_as_the_agents_model_timeout(make: Any) -> 
     release.set()
     failed = [e for e in b.events("step.failed") if e.step == T01]
     assert failed and {e.payload["code"] for e in failed} == {"timeout"}
+
+
+# --- the model step's retries come from the agent's limits (ADR-P14 B2) ------------------
+
+
+def _model_failures(b: Bench) -> list[tuple[bool, int]]:
+    return [(e.payload["retried"], e.payload["backoff_ms"]) for e in b.events("step.failed")
+            if e.step == T01]  # fmt: skip
+
+
+def test_the_model_step_keeps_today_s_fast_retries_by_default(make: Any) -> None:
+    model = Recorder([TransientModelError(message="503"), TransientModelError(message="503"),
+                      finish_reply()])  # fmt: skip
+    b = make(model)
+    result = b.drive()
+    assert (result.state, result.outcome) == ("ended", "complete")
+    assert _model_failures(b) == [(True, 500), (True, 1_000)]
+
+
+def test_the_model_step_retries_as_the_agent_s_limits_say(make: Any) -> None:
+    spike = [TransientModelError(message="503", retry_after_ms=9_000 if n == 2 else None)
+             for n in range(5)]  # fmt: skip
+    model = Recorder([*spike, finish_reply()])
+    b = make(model)
+    limits = Limits(max_retries=6, backoff=Backoff(2_000, 2, 60_000), jitter=0.5,
+                    jitter_source=lambda: 1.0)  # every delay cut by half  # fmt: skip
+    b.setup = replace(b.setup, limits=limits)
+    result = b.drive()
+    assert (result.state, result.outcome) == ("ended", "complete")
+    assert _model_failures(b) == [(True, 1_000), (True, 2_000), (True, 9_000), (True, 8_000),
+                                  (True, 16_000)]  # fmt: skip
+
+
+def test_the_model_step_s_waiting_is_bounded_by_the_run_s_active_time(make: Any) -> None:
+    model = Recorder([TransientModelError(message="503") for _ in range(9)])
+    b = make(model, budget={"model_turns": 100, "tool_calls": 100, "active_ms": 20_000})
+    b.setup = replace(b.setup, limits=Limits(max_retries=8, backoff=Backoff(2_000, 2, 60_000)))
+    b.drive()
+    assert _model_failures(b) == [(True, 2_000), (True, 4_000), (True, 8_000), (False, 0)]
+    assert meter(b.view(), RUN).used["active_ms"] == 14_000  # 2 + 4 + 8 s, under 20 s
+    done = b.completed(T01).payload
+    assert (done["outcome"], done["code"]) == ("error", "model_transient")

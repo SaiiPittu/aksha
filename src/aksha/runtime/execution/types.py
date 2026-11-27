@@ -32,7 +32,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
 
-from aksha.runtime.budgets.backoff import next_backoff_ms
+from aksha.runtime.budgets.backoff import jittered, next_backoff_ms
 from aksha.runtime.budgets.types import Backoff
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.errors import StepIdInvalid
@@ -216,6 +216,13 @@ class StepPolicy:
 
     Retries are counted from the event store, so a restart never resets them. An
     ``at_most_once`` step is never retried: running it again is what it forbids.
+
+    ``jitter`` cuts each backoff by up to that share, drawn from ``jitter_source`` (none
+    by default, so the delays are the same every run). ``wait_cap_ms`` bounds the step's
+    active time (its attempts and the backoffs between them, as budget accounting charges
+    them): a retry whose backoff would reach it is not made, and the step ends with the
+    failure's code. None is no bound beyond ``max_retries``. The model step sets it to what
+    is left of the run's active-time budget (ADR-P14 amendment B2).
     """
 
     timeout_ms: int = 10_000
@@ -225,6 +232,9 @@ class StepPolicy:
     semantics: StepSemantics = "at_least_once"
     on_unknown: OnUnknown = "tell_model"
     counted: bool = True
+    wait_cap_ms: int | None = None
+    jitter: float = 0.0
+    jitter_source: Callable[[], float] | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         """Refuse a semantics name outside the three, and negative limits."""
@@ -232,10 +242,29 @@ class StepPolicy:
             raise ValueError(f"semantics {self.semantics!r} is not one of {sorted(STEP_SEMANTICS)}")
         if self.timeout_ms <= 0 or self.max_retries < 0:
             raise ValueError("timeout_ms is positive and max_retries is not negative")
+        if self.wait_cap_ms is not None and self.wait_cap_ms < 0:
+            raise ValueError("wait_cap_ms is not negative")
+        if not 0.0 <= self.jitter <= 1.0 or (self.jitter > 0 and self.jitter_source is None):
+            raise ValueError("jitter is a share from 0 to 1, drawn from an injected jitter_source")
 
-    def delay_ms(self, attempt: int) -> int:
-        """The backoff after failed ``attempt`` (1-based): ``base * factor ** (attempt - 1)``."""
-        return next_backoff_ms(attempt, self.backoff)
+    def delay_ms(self, attempt: int, retry_after_ms: int | None = None) -> int:
+        """The backoff after failed ``attempt`` (1-based): ``base * factor ** (attempt - 1)``.
+
+        With ``jitter``, the delay is cut by a random share of up to that. ``retry_after_ms``
+        is how long the failure asked to be left alone (a provider's ``Retry-After``): the
+        backoff is at least that, up to :data:`RETRY_AFTER_CEILING_MS`.
+        """
+        delay = next_backoff_ms(attempt, self.backoff)
+        if self.jitter > 0 and self.jitter_source is not None:
+            delay = jittered(delay, self.jitter, self.jitter_source())
+        if retry_after_ms is not None and retry_after_ms > 0:
+            delay = max(delay, min(retry_after_ms, RETRY_AFTER_CEILING_MS))
+        return delay
+
+
+RETRY_AFTER_CEILING_MS = 600_000
+"""The longest wait a failure's ``Retry-After`` is honoured for (ten minutes); the step's
+``wait_cap_ms`` (the run's active-time budget) bounds it further."""
 
 
 @dataclass(frozen=True)
