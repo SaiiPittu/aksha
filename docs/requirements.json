@@ -13,7 +13,7 @@
         {
           "id": "R-01",
           "requirement": "Offer one simple interface: a web chat, a command line or a messaging bot.",
-          "how": "The `aksha` command line and an HTTP server (`aksha serve`) both drive one session API; a browser app and a chat terminal are in review in pull request 101.",
+          "how": "The `aksha` command line and an HTTP server (`aksha serve`) both drive one session API; a web app (`aksha serve --web`) and a chat terminal UI (`aksha chat`) are clients of the same API.",
           "evidence": [
             {
               "kind": "path",
@@ -30,6 +30,14 @@
             {
               "kind": "test",
               "ref": "tests/integration/test_http.py::test_a_message_returns_a_receipt_and_the_run_moves_on_the_writer"
+            },
+            {
+              "kind": "path",
+              "ref": "web/e2e/aksha.spec.ts"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_tui_conversation.py::test_the_offline_conversation_runs_to_complete_through_the_chat_client"
             },
             {
               "kind": "command",
