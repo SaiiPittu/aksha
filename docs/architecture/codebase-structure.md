@@ -258,6 +258,7 @@ src/aksha/
 │   │   ├── completion.py                    evaluate_completion, the parent rule, finish_verdict, task_done
 │   │   ├── scheduler.py                     runnable, next_instance, schedule, withdrawals, reentry, run_outcome
 │   │   ├── rebuilds.py                      rebuild_targets: what the plan re-enters in a run (D7, D8, F2)
+│   │   ├── reuse.py                         cross-run reuse by writer key: reuse_facts, hidden_for (P04 R1)
 │   │   └── supervisor.py                    is_supervisor, supervisor_step and its two limits
 │   ├── stop_policy/                         P16 stop policy and stop-policy evaluation
 │   │   ├── __init__.py                      what is built, what is planned
@@ -280,6 +281,12 @@ src/aksha/
 │   │   ├── ending.py                        stop_ending, honour_stop: voided interrupts, run.ended stopped
 │   │   ├── command.py                       the stop command, through dispatch
 │   │   └── kill.py                          kill_boundary: settle, bounded grace, terminate
+│   ├── corrections/                         P05 C1 corrections: proposal, owner decision, apply, outcome
+│   │   ├── __init__.py                      what it holds
+│   │   ├── types.py                         Target, Evidence, CorrectionRouting, Correction, Affected, codes
+│   │   ├── resolve.py                       resolve: a target against the live sources and artifacts; version_now
+│   │   ├── commands.py                      propose_correction, decide_correction, apply_upload, apply_outbox
+│   │   └── view.py                          corrections, outcome: state, what it reopened and replaced; a projection
 │   ├── session/                             P19 session API: commands, receipts, streams, capabilities
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── types.py                         Command, CommandSpec, CommandAccepted, CommandRefused, CommandReceipt
@@ -395,7 +402,8 @@ src/aksha/
 │   │   └── web.py                           RecordingSearch, RecordingFetch, ReplayWeb: searches and fetches answered again
 │   └── systems/                             SystemOfRecord implementations the outbox sends to (ADR-P03)
 │       ├── __init__.py                      each keeps its own ledger by idempotency key
-│       └── mailbox.py                       MailboxSystem: a mock mailbox ledgered in a JSON file, fsync
+│       ├── mailbox.py                       MailboxSystem: a mock mailbox ledgered in a JSON file, fsync
+│       └── folder.py                        FolderSystem: a mock system of record writing corrected records as files
 ├── extensions/                              EXTENSIONS: one folder per extension
 │   ├── __init__.py                          imports aksha.runtime.api only
 │   ├── ingest/                              document ingestion (ADR-P31 draft; parsers in extra aksha-harness[ingest])
@@ -509,6 +517,7 @@ src/aksha/
     │   ├── __main__.py                      python -m aksha.interfaces.cli
     │   ├── main.py                          the parser and the commands; aksha eval hands off to evals.py
     │   ├── evals.py                         aksha eval list, run, selftest, report, key-check, lock
+    │   ├── corrections.py                   aksha correct, aksha corrections, approve and reject of a K- ID
     │   ├── client.py                        the stdlib HTTP client of a running server
     │   └── pending.py                       pending command IDs a retry reuses (ADR-P19 D2)
     └── demo/                                make demo: change and recovery, offline, one command

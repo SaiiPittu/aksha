@@ -41,7 +41,9 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    content equals the latest version, which it adopts as a read. A ``writers="chain"`` kind
    lets every instance of one declared Task write the slot in turn (S4).
 8. Idempotency against the slot's latest version only (D8): equal content, reads and
-   relations return it and commit nothing. A reverted change is a new version.
+   relations return it and commit nothing. A reverted change is a new version, and so is
+   an equal save by a run that recomputes a version another run's line saved and this
+   run did not reuse (ADR-P04 R1).
 9. ``supersedes`` (ADR-P09 D11), checked with the relations: it must name the slot's
    latest version (``supersedes_invalid``). The store, not the request, then adds the
    ``supersedes`` relation (new version to old, no evidence: the relation is lineage, which
@@ -278,7 +280,11 @@ class ArtifactStore:
                 f"{ref.slot_id()} is written by {prior.writer.task_path!r} of agent "
                 f"{prior.writer.agent!r}; this instance may only adopt an equal version",
             )
-        if prior is not None and self._equal(view, prior, hashed, lineage, checked):
+        if (
+            prior is not None
+            and self._equal(view, prior, hashed, lineage, checked)
+            and not _hidden_from(view, run, writer, prior)
+        ):
             return Saved(prior, replayed=True)
         return self._new(
             view, kind, ref, content, hashed, lineage, checked, bound, request, writer,
@@ -579,6 +585,28 @@ def _relation_key(
 
     proof = tuple(sorted((x.source.sort_key(), x.quote, x.pointer, x.span or "") for x in evidence))
     return (kind, label or "", end(src), end(dst), proof)
+
+
+def _hidden_from(view: LogView, run: str, writer: WriterId, prior: ArtifactVersion) -> bool:
+    """Whether ``prior`` was written for another run's line that ``run`` did not reuse.
+
+    Cross-run reuse (ADR-P04 R1): a run that recomputes a writer's work does not see the
+    earlier run's versions, so an equal save is a new version for it, not a repeat (D8
+    stays: a retry within one line returns the version it saved).
+    """
+    from aksha.runtime.tasks.reuse import hidden_for  # the tasks layer reads this store
+
+    return str(prior.ref) in hidden_for(view, run, writer)
+
+
+def checked_content(kind: ArtifactKind, content: Mapping[str, Any]) -> str:
+    """Check 2 for a save made outside a Task (an approved correction): the content hash.
+
+    Raises ``SaveRefused`` (``not_canonical_content`` or ``schema``) as a Task's save would.
+    """
+    hashed = _content_hash(content)
+    _check_schema(kind, content)
+    return hashed
 
 
 def _content_hash(content: Mapping[str, Any]) -> str:

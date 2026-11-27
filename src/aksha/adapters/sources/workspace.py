@@ -119,6 +119,16 @@ class InputWorkspace:
         upload = FolderSource(self.name, self.folder(owner), self.collection)
         return OwnerInputs(self.name, self.collection, upload, self.base)
 
+    def uploaded(self, owner: str, record_id: str) -> bool:
+        """Whether ``record_id`` is one of ``owner``'s own uploads, not a base file."""
+        collection, _, path = record_id.partition("#")[0].partition("/")
+        if collection != self.collection:
+            return False
+        try:
+            return (self.folder(owner) / check_path(path)).is_file()
+        except UploadRefused:
+            return False
+
     def put(self, owner: str, files: Mapping[str, bytes]) -> tuple[str, ...]:
         """Write ``files`` (relative path to bytes) for ``owner``; the record IDs that changed.
 

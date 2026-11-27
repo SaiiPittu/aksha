@@ -13,6 +13,8 @@ exists; ``SendMessage`` carries ``headless`` (ADR-P11 D12: fixed at the run's st
 ``AcceptReview`` and ``RejectReview`` carry the shown ``card_hash`` (ADR-P05), not edits.
 Amendments from the build (ADR-P27, 26 Nov 2026): ``Steer`` carries ``instance`` and is
 built; ``AnswerInterrupt`` carries ``amend``.
+Amendment from the correction loop (ADR-P05 C1, 27 Nov 2026, Proposed): ``ProposeCorrection``
+and ``DecideCorrection``.
 """
 
 from __future__ import annotations
@@ -165,6 +167,37 @@ class Steer(CommandBase):
     lane: Literal["steer", "follow_up", "amend"] = "steer"
 
 
+@dataclass(frozen=True, kw_only=True)
+class ProposeCorrection(CommandBase):
+    """Propose a correction to a source record or an artifact value (ADR-P05 C1).
+
+    ``target`` is a record ID (``input/exports/reviews.csv``) or an artifact slot or
+    version (``catalog.item/c01``, ``catalog.item/c01@v2``), optionally with a
+    JSON pointer into the value (``catalog.item/c01#/pricing``). ``value`` is a
+    record's full new text, or the artifact value at the pointer. ``evidence`` says why,
+    at least one item; ``cites`` names records or artifacts that support it. ``by`` is
+    ``person`` or ``agent:<name>``.
+    """
+
+    target: str
+    value: object
+    evidence: tuple[str, ...] = ()
+    cites: tuple[str, ...] = ()
+    reason: str = ""
+
+
+@dataclass(frozen=True, kw_only=True)
+class DecideCorrection(CommandBase):
+    """The domain owner approves (``approve``) or rejects a proposed correction (ADR-P17 C1).
+
+    ``by`` must be the role the correction names as its approver.
+    """
+
+    correction_id: str
+    approve: bool
+    note: str = ""
+
+
 NamedCommand = (
     SendMessage
     | AnswerInterrupt
@@ -180,6 +213,8 @@ NamedCommand = (
     | Stop
     | Finalize
     | Steer
+    | ProposeCorrection
+    | DecideCorrection
 )
 """The closed union (D1)."""
 
@@ -198,5 +233,7 @@ COMMAND_NAMES: tuple[str, ...] = (
     "Stop",
     "Finalize",
     "Steer",
+    "ProposeCorrection",
+    "DecideCorrection",
 )
 """Every member's name, in the union's order; the capability record lists a subset."""

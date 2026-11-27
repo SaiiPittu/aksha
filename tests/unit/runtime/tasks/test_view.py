@@ -71,7 +71,8 @@ def test_freshness_reads_the_invalidation_view() -> None:
 def test_a_view_holds_no_store_clock_or_model() -> None:
     tree, log = demo_tree(), TaskLog()
     view = TaskView(log.view(), tree, ref("scope"))
-    assert set(vars(view)) == {"log", "tree", "instance"}
+    assert set(vars(view)) == {"log", "tree", "instance", "hidden"}
+    assert view.hidden == frozenset()  # refs only (ADR-P04 R1): no handle to anything live
 
 
 def test_called_counts_this_instances_completed_calls_of_one_tool() -> None:

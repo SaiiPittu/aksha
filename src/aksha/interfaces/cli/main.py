@@ -24,6 +24,10 @@ sandbox backend probes available (``AKSHA_SANDBOX``) or an outer box is declared
 exit codes are in :mod:`aksha.interfaces.wire`. A first Ctrl-C during an embedded run
 asks the run to stop (ADR-P18 D7) and exits 6.
 
+``aksha correct TARGET`` proposes a correction to a record or an output value, which the
+domain owner decides with ``aksha approve K-0001`` or ``aksha reject K-0001``
+(:mod:`aksha.interfaces.cli.corrections`, ADR-P05 C1).
+
 ``aksha eval`` (ADR-P22) is offline and touches no session store: its line goes whole to
 :func:`aksha.interfaces.cli.evals.main`, which keeps the eval exit codes. ``aksha demo``
 goes whole to :func:`aksha.interfaces.demo.__main__.main` the same way (``make demo`` runs
@@ -66,6 +70,8 @@ from aksha.app import (
 from aksha.interfaces import wire
 from aksha.interfaces.cli import evals
 from aksha.interfaces.cli.client import Client, ServerError, find_server
+from aksha.interfaces.cli.corrections import add_parsers as add_correction_parsers
+from aksha.interfaces.cli.corrections import decide, is_correction
 from aksha.interfaces.cli.pending import PENDING_FILE, PendingIds, invocation_key
 from aksha.runtime.definitions.errors import LoadError
 from aksha.runtime.errors import AkshaError
@@ -626,7 +632,11 @@ def _full_signature(ctx: Context, approval_id: str, shown: str) -> str:
 
 
 def cmd_approve(ctx: Context, args: argparse.Namespace) -> int:
-    """Grant an approval for the signature the person was shown."""
+    """Grant an approval for the signature the person was shown, or approve a correction."""
+    if is_correction(args.approval):
+        return decide(ctx, args.approval, approve=True, by=args.by, note=None)
+    if args.signature is None:
+        raise wire.WireInvalid(message=f"approving {args.approval} needs --signature")
     signature = _full_signature(ctx, args.approval, args.signature)
 
     def build(cid: str) -> n.NamedCommand:
@@ -637,7 +647,9 @@ def cmd_approve(ctx: Context, args: argparse.Namespace) -> int:
 
 
 def cmd_reject(ctx: Context, args: argparse.Namespace) -> int:
-    """Refuse an approval."""
+    """Refuse an approval, or reject a correction."""
+    if is_correction(args.approval):
+        return decide(ctx, args.approval, approve=False, by=args.by, note=args.note)
 
     def build(cid: str) -> n.NamedCommand:
         return n.Reject(owner=ctx.owner, approval_id=args.approval, note=args.note,
@@ -1041,17 +1053,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.set_defaults(handler=cmd_answer)
 
-    s = sub.add_parser("approve", help="grant an approval for the signature you were shown")
-    s.add_argument("approval")
-    s.add_argument(
-        "--signature", required=True, help="the signature shown, or its first 12 or more hex digits"
+    s = sub.add_parser(
+        "approve", help="grant an approval for the signature you were shown, or a correction"
     )
+    s.add_argument("approval", help="an approval (A-0001) or a correction (K-0001)")
+    s.add_argument(
+        "--signature", help="an approval's signature shown, or its first 12 or more hex digits"
+    )
+    s.add_argument("--by", default=n.DEFAULT_BY, help="for a correction: your role")
     s.set_defaults(handler=cmd_approve)
 
-    s = sub.add_parser("reject", help="refuse an approval")
-    s.add_argument("approval")
+    s = sub.add_parser("reject", help="refuse an approval, or a correction")
+    s.add_argument("approval", help="an approval (A-0001) or a correction (K-0001)")
     s.add_argument("--note")
+    s.add_argument("--by", default=n.DEFAULT_BY, help="for a correction: your role")
     s.set_defaults(handler=cmd_reject)
+
+    add_correction_parsers(sub)
 
     s = sub.add_parser("stop", help="ask a run to stop")
     s.add_argument("run")
