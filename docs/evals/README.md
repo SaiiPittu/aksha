@@ -1,6 +1,6 @@
 # Evals: running, writing cases, and plugging in an agent
 
-*Status on 27 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each case k times in each of its worlds (and once per arm for a comparison case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their suites on the runtime with their fake models. There are 12 suites over 10 worlds; six of the worlds were written without sight of the agent code. On a fresh clone of main on 27 Nov 2026 the six suites over the worlds the agents were built on all passed, the research agent passed 25 of 26 held-out cases and the patent agent 3 of 23; see "Results on 27 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build.*
+*Status on 27 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each case k times in each of its worlds (and once per arm for a comparison case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their suites on the runtime with their fake models. There are 12 suites over 10 worlds; six of the worlds were written without sight of the agent code. On a fresh clone of main on 27 Nov 2026 the six suites over the worlds the agents were built on all passed, the research agent passed 25 of 26 held-out cases and the patent agent 17 of 24 (3 of 23 before its reader and graders were made general); see "Results on 27 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build.*
 
 Each fixture world is an environment in the reinforcement-learning sense: a task (an eval case), a world state copied fresh for every episode, tools that read and write that state behind a path guard, and a grader the agent cannot reach. The agent is graded on what it leaves in the episode's event store, never on what it says it did.
 
@@ -168,14 +168,14 @@ From a fresh clone of main, `make venv`, then `aksha eval run <suite>` (and `--k
 | change | stillroom | 1 of 1 | pass, 36 of 36 | 0 | Resume against fresh, three arms at k = 3, all correct; see [resume-vs-fresh.md](resume-vs-fresh.md). |
 | tilldew | tilldew, no | 12 of 12 | pass, 36 of 36 | 0 | Both agents. |
 | cindral | cindral, no | 11 of 11 | pass, 35 of 35 | 0 | Both agents. |
-| rimefold | rimefold, yes | 7 of 8 | fail, 14 of 28 | 2 | Research. `rf-research-claim` fails: the claim is cited by its block, not its sentence. |
-| kelasora | kelasora, yes | 9 of 9 | fail, 14 of 28 | 2 | Research. |
-| vantlow | vantlow, yes | 9 of 9 | fail, 13 of 28 | 2 | Research. |
-| pulvane | pulvane, yes | 1 of 7 | fail, 0 of 27 | 2 | Patent. No candidate is found in a meeting transcript. |
-| quillmere | quillmere, yes | 0 of 7 | fail, 0 of 24 | 2 | Patent. No candidate is found in a lab notebook or an XML tracker. |
-| brackwen | brackwen, yes | 2 of 9 | fail, 0 of 27 | 2 | Patent. |
+| rimefold | rimefold, yes | 7 of 8 | pass, 16 of 28 | 1 | Research. `rf-research-claim` fails: the claim is cited by its block, not its sentence. |
+| kelasora | kelasora, yes | 9 of 9 | pass, 17 of 29 | 0 | Research. |
+| vantlow | vantlow, yes | 9 of 9 | pass, 15 of 28 | 0 | Research. |
+| pulvane | pulvane, yes | 7 of 8 | pass, 20 of 28 | 1 | Patent. The happy case's matrix and one next action. |
+| quillmere | quillmere, yes | 3 of 7 | pass, 19 of 28 | 1 | Patent. The happy case, both combination traps (matrix), the units trap. |
+| brackwen | brackwen, yes | 7 of 9 | pass, 19 of 27 | 1 | Patent. The happy and partial-disclosure cases (matrix). |
 
-A held-out suite exits 2 because its self-tests fail: the oracle and some graders still name fields in the first world's words, so they cannot pass on another world whatever the agent does. Each gap is listed in [limitations item 19](../limitations.md) and is left failing on purpose rather than fixed with a rule that fits one world.
+Every suite's self-tests now pass: the oracle and the graders read field names and expectations from each world's key (ADR-P22 G7). A suite with a failing case exits 1. Each remaining gap is listed in [limitations item 19](../limitations.md) and is left failing on purpose rather than fixed with a rule that fits one world.
 
 ## Not built yet
 
