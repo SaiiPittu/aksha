@@ -190,7 +190,7 @@ class Finalize(CommandBase): run_id: str                               # S4, ADR
 @dataclass(frozen=True)
 class Steer(CommandBase):                                              # S2, ADR-P27
     run_id: str; text: str; instance: str | None = None
-    lane: Literal["steer", "follow_up", "amend"]                      # required, no default (R1)
+    lane: Literal["steer", "follow_up", "amend"]                      # required, no default (R1, Proposed: the built code still defaults to "steer")
 
 Command = (OpenSession | SendMessage | AnswerInterrupt | Approve | Reject | EditAction | Handoff
            | AcceptReview | RejectReview | GrantBudget | ApplySourceChange | Stop

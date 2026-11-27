@@ -184,6 +184,20 @@ def test_an_equal_request_in_another_step_reaches_the_first_receipt(world: World
     assert [t for t, _ in world.log()].count("outbox.enqueued") == 1
 
 
+def test_a_different_request_under_a_reused_key_ends_the_step_refused(world: World) -> None:
+    # ADR-P03 B2: the second step's request shares the key fields but differs outside them,
+    # so it gets an error result naming the reuse, not the first request's receipt.
+    world.steps().effect_step(S1, "file", PACKET, FILE)
+    changed = {**PACKET, "cover": "a different cover note"}
+    second = world.steps().effect_step(S2, "file", changed, FILE)
+    assert (second.outcome, second.code) == ("error", "key_reused_with_different_request")
+    assert len(world.ledger.applied) == 1
+    assert [t for t, _ in world.log()].count("outbox.enqueued") == 1
+    world.restart()
+    again = world.steps().effect_step(S2, "file", changed, FILE)
+    assert again.replayed and again.code == "key_reused_with_different_request"
+
+
 def test_a_stopped_runs_unclaimed_effect_is_abandoned_not_sent(world: World) -> None:
     with pytest.raises(Crash):
         world.steps(FaultStore(world.store, lambda b, k: k == ("outbox.claimed",))).effect_step(

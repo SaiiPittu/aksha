@@ -67,7 +67,7 @@ class Steer(CommandBase):
     run_id: str
     text: str
     instance: str | None = None                   # None: The run's active instance
-    lane: Literal["steer", "follow_up", "amend"]  # required, no default (D1; ADR-P19 R1)
+    lane: Literal["steer", "follow_up", "amend"]  # required, no default (D1; R1, Proposed: built code defaults to "steer")
 
 # aksha/runtime/inputs.py (proposal; design only)
 @dataclass(frozen=True)
