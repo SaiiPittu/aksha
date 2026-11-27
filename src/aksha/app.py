@@ -1208,8 +1208,6 @@ def export_trace(
 DEMO_START = datetime(2026, 11, 26, 9, 0, 0, tzinfo=UTC)
 """The demo's fixed clock: every run of the demo records the same times."""
 DEMO_OWNER = "founder-1"
-DEMO_WORLD = "stillroom"
-"""The bundled world whose inputs the demo copies and whose web its agents search."""
 DEMO_AGENT_NAMES = ("research", "patent")
 COUNSEL_MAILBOX = "counsel_mail"
 """The system name the patent agent's ``send_packet`` effect is sent to."""
@@ -1297,12 +1295,15 @@ def open_demo(
     sources: Path,
     requests: Mapping[str, str],
     *,
+    web_world: str,
     mailbox: SystemOfRecord | None = None,
 ) -> DemoRuntime:
     """Open the demo's store in ``work`` and wire both agents over the ``sources`` folder.
 
-    ``requests`` holds each agent's request text by agent name. ``mailbox`` replaces the
-    counsel mailbox (the demo's kill step wraps it); by default it is :func:`counsel_mailbox`.
+    ``requests`` holds each agent's request text by agent name. ``web_world`` names the bundled
+    world whose offline web the agents search (the demo package picks it, so the app names no
+    world). ``mailbox`` replaces the counsel mailbox (the demo's kill step wraps it); by
+    default it is :func:`counsel_mailbox`.
     The agents' modules are imported here, so importing this module stays light.
     """
     from aksha.agents.patent.agent import build_agent as build_patent_agent
@@ -1318,7 +1319,7 @@ def open_demo(
     }
     research, patent = loaded["research"], loaded["patent"]
     folder = FolderSource(INPUTS_SOURCE, sources, "input")
-    web_root = data.worlds() / DEMO_WORLD
+    web_root = data.worlds() / web_world
     web = WorldWeb.of_world(web_root)
     tier = ExecutionTier(search=web, web=web)
     hints = world_hints(web_root)

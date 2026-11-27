@@ -40,7 +40,7 @@ from aksha.runtime.outbox.types import SystemReceipt
 from aksha.runtime.projections.runs import RunSummary
 from aksha.runtime.projections.view import LogView, load_view
 
-from .world import apply_change, copy_base, variant_key
+from .world import BASE, apply_change, copy_base, variant_key
 
 BY = "demo-script"
 """Who every scripted decision is recorded as: the log says it was not a person."""
@@ -304,7 +304,7 @@ def act_4_kill_and_recover(work: Path, sources: Path, run: str, report: Report) 
         raise DemoFailed(f"the send child was not killed: {child.returncode}\n{child.stderr}")
     box = counsel_mailbox(work)
     counted = Counted(box)
-    rt = open_demo(work, sources, REQUESTS, mailbox=counted)
+    rt = open_demo(work, sources, REQUESTS, web_world=BASE, mailbox=counted)
     try:
         rows_at_kill = box.deliveries()
         open_at_restart = len(pending_outbox(_view(rt)))
@@ -408,7 +408,7 @@ def run_demo(work: Path, script: Script | None = None) -> Report:
         raise FileExistsError(f"{work} is not empty")
     (work / MARKER).write_text("written by make demo; safe to delete\n", encoding="utf-8")
     sources = copy_base(work)
-    rt = open_demo(work, sources, REQUESTS)
+    rt = open_demo(work, sources, REQUESTS, web_world=BASE)
     try:
         _timed(report, "first runs", lambda: act_1_first_runs(rt, script, report))
         _timed(report, "change", lambda: act_2_change(rt, sources, report))
