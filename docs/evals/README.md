@@ -158,7 +158,7 @@ The agent under test is a port (`aksha.evals.ports.AgentUnderTest`): a `name`, a
 
 ## Results on 27 Nov 2026
 
-From a fresh clone of main, `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`). In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. No suite had an invariant failure.
+From main (`f8b8f58`, after the super agent, the shared input tools, the general patent reader, the fast tests and the LiteLLM adapter), `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`), re-run on 27 Nov 2026 with the same per-case results as before. In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. No suite had an invariant failure.
 
 | Suite | World, written blind | Cases passed | Self-tests | Exit code | Notes |
 |---|---|---|---|---|---|

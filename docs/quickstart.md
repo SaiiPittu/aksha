@@ -8,7 +8,7 @@
 
 ```sh
 make venv    # .venv with aksha (editable), dev tools, the server and the trace exporter
-make test    # the full suite on SQLite, offline
+make test    # the full suite on SQLite, offline, on every core (about 6 minutes)
 make demo    # the change-and-recovery demo, under a minute (creates .venv itself if missing)
 ```
 
