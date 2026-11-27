@@ -121,6 +121,9 @@ def start_server() -> PostgresServer | str:
     run = _docker(
         "run", "-d", "--rm", "--pull=never", "--name", CONTAINER, "--label", LABEL,
         "-e", "POSTGRES_USER=aksha", "-e", "POSTGRES_PASSWORD=aksha",
+        # Data on a tmpfs: the image declares a VOLUME for PGDATA, so without this every
+        # run (and every killed run) leaves an anonymous Docker volume behind.
+        "--tmpfs", "/var/lib/postgresql/data:rw",
         "-p", f"127.0.0.1:{port}:5432", IMAGE, "-c", "fsync=off",
     )  # fmt: skip
     if run.returncode != 0:
@@ -137,4 +140,4 @@ def start_server() -> PostgresServer | str:
 def stop_server(server: PostgresServer) -> None:
     """Remove the container if this suite started it; leave any other server alone."""
     if server.owned_container:
-        _docker("rm", "-f", CONTAINER)
+        _docker("rm", "-f", "-v", CONTAINER)
