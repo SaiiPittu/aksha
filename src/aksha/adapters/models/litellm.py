@@ -406,12 +406,9 @@ def _header(headers: object, name: str) -> str | None:
     items = getattr(headers, "items", None)
     if not callable(items):
         return None
-    try:
-        for key, value in items():
-            if isinstance(key, str) and key.lower() == name and isinstance(value, str):
-                return value.strip()
-    except Exception:  # a header object we cannot read says nothing
-        return None
+    for key, value in items():
+        if isinstance(key, str) and key.lower() == name and isinstance(value, str):
+            return value.strip()
     return None
 
 
