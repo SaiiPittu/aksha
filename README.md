@@ -37,22 +37,22 @@ uvx --from git+https://github.com/SaiiPittu/aksha aksha demo
 Two agents (research and patent) run on a synthetic world, one input set changes, only the dependent work is rebuilt, and a send to a mock mailbox survives a real `SIGKILL`. An excerpt from a run on 27 Nov 2026 (about a minute here; the timings depend on the machine):
 
 ```text
-1. Both agents run on the stillroom world (19.06 s)
-   research R-0001 complete: 11 outputs, 22 model calls
-   patent   R-0002 complete: 23 outputs, 43 model calls
-3. Invalidation reopens only what depends on the change (16.63 s)
-   strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed)
+1. Both agents run on the stillroom world (38.4 s)
+   research R-0001 complete: 11 outputs, 23 model calls
+   patent   R-0002 complete: 23 outputs, 50 model calls
+3. Invalidation reopens only what depends on the change (32.43 s)
+   strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed); C1~filing-information-worksheet: form (cites nothing, so read-keyed); C1~invention-disclosure-form: form (cites nothing, so read-keyed)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
    keyed on every read instead, the same change would reopen 27 outputs, not 14
    rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
    kept 13 patent outputs: ...
    kept 7 of 11 research outputs: ...
-   early cutoff: the 10 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
-4. SIGKILL mid-send, then recovery (6.02 s)
+   early cutoff: the 12 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
+4. SIGKILL mid-send, then recovery (8.29 s)
    at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times
    mailbox: 2 deliveries for 2 idempotency keys (patent.packet/C1@v1, patent.packet/C1@v2): each packet version exactly once
 5. Event store
-   hash chain verified: 1515 events, head sha256:186b6cd43a7f6910...
+   hash chain verified: 1782 events, head sha256:f95e14a35d6421b1...
 ```
 
 The command exits 0 only when every check passes.
@@ -116,7 +116,7 @@ Counted from the code on main on 27 Nov 2026:
 | Session commands | 16 named commands behind one `dispatch`, with stored receipts so a retried command gets its first receipt back |
 | Event types | 62 in the core catalogue |
 | Command line | 23 subcommands, one server (`aksha serve`), fixed exit codes |
-| Tests | 3,305 collected (unit, contract, integration, architecture, agents), offline |
+| Tests | 3,336 collected (unit, contract, integration, architecture, agents), offline |
 | Evals | 13 suites over 11 fixture worlds |
 
 The pieces around invalidation: a policy gate in code (deny by default, approvals bound to the exact action by signature), durable execution that resumes after a crash, a transactional outbox keyed by meaning so a retry never sends twice, model classes (extraction, classification, generation) with confidence thresholds, grounding that checks every quote at save, a correction loop (a person or an agent proposes a fix with evidence, the domain owner approves it, invalidation rebuilds what read the old value), cross-run reuse of outputs whose reads still hold, and tracing as a projection of the store. The tiers, ports and dependency rule are in the [architecture overview](docs/architecture/overview.md); the architecture tests in `tests/architecture/` enforce them.
