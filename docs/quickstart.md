@@ -109,7 +109,7 @@ export AKSHA_LIVE_MODEL=gemini/gemini-4-neon # LiteLLM's <provider>/<model> form
 # export AKSHA_LIVE_MODEL_GENERATION=gemini/gemini-4-neon
 # export AKSHA_LIVE_MODEL_CLASSIFICATION=gemini/a-smaller-model
 # export AKSHA_LIVE_MODEL_PAGE_FACTS=gemini/a-model-for-one-alias
-# export AKSHA_LIVE_REASONING_EFFORT=low     # minimal, low, medium, high or none; _<CLASS> or _<ALIAS> too
+# export AKSHA_LIVE_REASONING_EFFORT=low     # minimal, low, medium, high, xhigh or none; _<CLASS> or _<ALIAS> too
 aksha run --agent research --input my-inputs "Who sells ... and at what price?"
 ```
 

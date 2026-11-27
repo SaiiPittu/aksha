@@ -437,7 +437,7 @@ def field_answers(
 ) -> tuple[tuple[str, FieldAnswer], ...]:
     """Each field's answer from a ``{"fields": ...}`` object, every quote located in code.
 
-    Shared by every adapted extractor (this module's and the Gemini adapter's), so each one
+    Shared by every adapted extractor (this module's and the LiteLLM adapter's), so each one
     keeps only the spans :func:`locate` finds in the passage the quote names.
     """
     found = answer.get("fields") or {}

@@ -138,3 +138,22 @@ def test_no_native_file_input_offline_or_for_a_model_without_files() -> None:
         native_file_input(RuntimeConfig.from_env({"AKSHA_MODE": "live", **LIVE,
                                                   "AKSHA_NATIVE_FILES": "maybe"}))  # fmt: skip
     assert e.value.code == "native_files_invalid"
+
+
+@pytest.mark.parametrize(
+    "setting",
+    [{"AKSHA_LIVE_REASONING_EFFORT_CLASSIFICATION": "loud"},
+     {"AKSHA_LIVE_TIMEOUT_S_EXTRACTION": "soon"},
+     {"AKSHA_LIVE_SAMPLES": "three"},
+     {"AKSHA_NATIVE_FILES": "maybe"}],
+)  # fmt: skip
+def test_a_malformed_live_setting_is_a_bind_refusal_naming_it(
+    lib: StubLiteLLM, setting: dict[str, str]
+) -> None:
+    with pytest.raises(BindRefused) as refused:
+        bind_live(research(), {**LIVE, **setting})
+    (refusal,) = refused.value.refusals
+    assert refusal.code == "live_config_missing"
+    (name,) = setting
+    assert name.split("_")[2] in refusal.message  # the setting's own name
+    assert lib.calls == []

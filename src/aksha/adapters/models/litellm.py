@@ -21,7 +21,8 @@ Settings, each read per alias, then per class, then for all (:func:`live_setting
                                    generation and 90 for the fast classes (thinking models
                                    take minutes on a long context)
 ``AKSHA_LIVE_REASONING_EFFORT``    passed to LiteLLM as ``reasoning_effort`` (``minimal``,
-                                   ``low``, ``medium``, ``high``; ``none`` to switch it off),
+                                   ``low``, ``medium``, ``high``, ``xhigh``; ``none`` to
+                                   switch it off),
                                    which it maps to the provider's thinking setting; unset
                                    leaves the provider's default
 ``AKSHA_LIVE_BASE_URL``            passed as ``api_base`` (a local server); unset, the
@@ -540,7 +541,10 @@ class LiteLLMClassificationModel(_LiteLLMModel):
     def __init__(self, alias: str, env: Mapping[str, str], litellm: Any | None = None) -> None:
         """As every LiteLLM class, plus the sample count (``AKSHA_LIVE_SAMPLES``)."""
         super().__init__(alias, env, litellm)
-        self._samples = max(1, int(env.get("AKSHA_LIVE_SAMPLES", "1") or "1"))
+        raw = (env.get("AKSHA_LIVE_SAMPLES") or "1").strip()
+        if not raw.isdigit() or int(raw) < 1:
+            raise PermanentModelError(LIVE_CONFIG_MISSING, "AKSHA_LIVE_SAMPLES is a count above 0")
+        self._samples = int(raw)
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         """One call (or one per sample) for every question of ``request``."""

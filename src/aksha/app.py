@@ -763,7 +763,8 @@ def litellm_refusals(aliases: Sequence[ModelAlias], env: Mapping[str, str]) -> l
     for model, a in sorted(models.items()):
         missing = lite.missing_keys(model, module)
         if missing:
-            message = f"{model} needs {', '.join(missing)} in the environment (never recorded)"
+            names = ", ".join(missing)
+            message = f"LiteLLM finds no key for {model}; it reads {names} (never recorded)"
             out.append(BindRefusal(a.name, "live_key_missing", message))
     return out
 
@@ -803,7 +804,10 @@ def bind_live(loaded: LoadedDefinition, env: Mapping[str, str]) -> Mapping[str, 
     refusals = live_refusals(loaded, env)
     if refusals:
         raise BindRefused(tuple(refusals))
-    return live_adapters(loaded.model_aliases.values(), env, defaults=live_defaults(env))
+    try:
+        return live_adapters(loaded.model_aliases.values(), env, defaults=live_defaults(env))
+    except PermanentModelError as e:  # a malformed setting an adapter read (never a value)
+        raise BindRefused((BindRefusal("*", e.code, e.message),)) from None
 
 
 def session_agent(

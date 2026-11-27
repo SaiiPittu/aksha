@@ -47,7 +47,7 @@ from tests.support import litellm_stub as stub_errors
 from tests.support.litellm_stub import StubLiteLLM, json_message, message
 from tests.support.models import ModelHarness, floats_in
 
-KEY = "AIzaSyD-test-0000-0000-never-stored-000"
+KEY = "AIza" + "SyD-test-0000-0000-never-stored-000"  # built, so no literal looks like a key
 MODEL = "gemini/gemini-4-neon"
 ENV = {"AKSHA_LIVE_MODEL": MODEL}
 STEP = StepId("R-0001", "a", turn=1)
