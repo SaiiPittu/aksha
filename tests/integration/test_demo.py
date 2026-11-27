@@ -70,10 +70,11 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     assert rebuilt_by == {"patent", "research"}
     change = report["change"]
     # Every recorded query re-runs: four candidate searches, the candidate and template
-    # listings, and the research agent's two listings and two searches. Only C1's search
-    # finds the new publication; the new file is no seller page or review export, so the
-    # research listings stay as they were.
-    assert (change["queries_rerun"], change["queries_changed"]) == (10, 1)
+    # listings, and the research agent's two listings and three searches (the scope's, the
+    # manual alternatives' and the sellers' names). Only C1's search finds the new
+    # publication; the new file is no seller page or review export and names no seller, so
+    # the research queries stay as they were.
+    assert (change["queries_rerun"], change["queries_changed"]) == (11, 1)
     # The review no output cites (the demo's own edit): the patent portfolio read the
     # export outside what it rests on, so it is noticed and not rebuilt; the research
     # needs count every review, so they reopen (ADR-P05 M2). Keyed on every read, the

@@ -242,11 +242,31 @@ MODEL_ALIASES = (
             description="each market figure it states (a size, a share, a growth rate), quoted",
         ),
         FieldSpec("claims", "list", description="each claim about where the market is going"),
+        FieldSpec(
+            "prices",
+            "list",
+            description="each price it states for a named company's offer, quoted with its "
+            "currency and basis",
+        ),
         FieldSpec("published", "date", description="when the report was published"),
         FieldSpec(
             "addressed_to_agents",
             "list",
             description="text addressed to an automated reader or an AI assistant",
+        ),
+    ),
+    _fast(
+        "conversation_facts",
+        "extraction",
+        FieldSpec(
+            "prices",
+            "list",
+            description="each price a message quotes, with its currency and basis",
+        ),
+        FieldSpec(
+            "published",
+            "date",
+            description="when the message quoting a price was sent (else the first message)",
         ),
     ),
     _fast(

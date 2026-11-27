@@ -182,6 +182,7 @@ class ResearchUnderTest(RuntimeUnderTest):
                 "pages": [_file(p.get("record")) for p in company.get("pages", ())],
                 "prices": prices,
                 "claims": claims,
+                "price_notes": [{"citation": c} for c in notes],
             },
             [*own, *(c for _, c in merge)],
         )

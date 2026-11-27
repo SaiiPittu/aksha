@@ -117,14 +117,28 @@ def test_a_cross_posted_review_is_counted_once_and_its_theme_too() -> None:
         _row("R-2", "2026-03-02", "Beam", "We replace  batteries every 14 months."),
         _row(
             "R-3", "2026-03-03", "Halo", "We replace batteries every 14 months."
-        ),  # another product
+        ),  # the same words under another listing: a syndicated copy
         _row("R-4", "2026-03-04", "Halo", "Cheap and battery powered."),
     ]
     sample = analysis.review_sample(rows, {"battery": ["batter*", "not battery powered"]})
-    assert sample.duplicates == (("R-2", "R-1"),)
-    assert len(sample.unique) == 3
-    assert [r["fields"]["id"] for r in sample.themes["battery"]] == ["R-1", "R-3"]
-    assert sample.phrase("battery") == "2 of 3 reviews in this sample"
+    assert sample.duplicates == (("R-2", "R-1"), ("R-3", "R-1"))
+    assert len(sample.unique) == 2
+    assert [r["fields"]["id"] for r in sample.themes["battery"]] == ["R-1"]
+    assert sample.phrase("battery") == "1 of 2 reviews in this sample"
+
+
+def test_a_repost_is_found_after_a_rename_or_behind_a_lead_in() -> None:
+    long = "the overage line on our invoice doubled in June, which nobody had planned for."
+    rows = [
+        _row("R-1", "2026-01-01", "Oldname Pro", "Oldname Pro is good for drills, but slow."),
+        _row("R-2", "2026-05-01", "Newname", "Newname is good for drills, but slow."),
+        _row("R-3", "2026-01-02", "Tool", long.capitalize()),
+        _row("R-4", "2026-02-02", "Tool", "Cross-posting from the other thread: " + long),
+        _row("R-5", "2026-02-03", "Tool", "Slow."),
+        _row("R-6", "2026-02-04", "Tool", "It is slow."),  # too short to be a repost of R-5
+    ]
+    sample = analysis.review_sample(rows, {})
+    assert sample.duplicates == (("R-2", "R-1"), ("R-4", "R-3"))
 
 
 def test_themes_are_the_requests_own_terms() -> None:

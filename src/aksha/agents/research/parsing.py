@@ -44,8 +44,8 @@ PASSAGE_KINDS = (
     "offer",
 )
 
-ROLES = ("id", "text", "date", "product", "site", "geography", "rating", "rating_scale_max",
-         "rating_unit", "other")  # fmt: skip
+ROLES = ("id", "text", "date", "product", "site", "geography", "rating", "rating_scale",
+         "rating_basis", "other")  # fmt: skip
 """What a column of a table of customer voices can hold (the ``table_roles`` options)."""
 
 __all__ = ["FORMATS", "PASSAGE_KINDS", "ROLES", "Page", "Passage", "Table"]
@@ -103,7 +103,8 @@ class Table:
 SYMBOLS: Mapping[str, str] = {
     "€": "EUR", "$": "USD", "US$": "USD", "£": "GBP", "₹": "INR", "¥": "JPY", "₩": "KRW",
     "kr": "SEK", "zł": "PLN", "CHF": "CHF", "Rs": "INR", "Rs.": "INR", "R$": "BRL",
-    "A$": "AUD", "C$": "CAD", "S$": "SGD",
+    "A$": "AUD", "C$": "CAD", "S$": "SGD", "Rp": "IDR", "Rp.": "IDR", "RM": "MYR", "₱": "PHP",
+    "₫": "VND", "฿": "THB",
 }  # fmt: skip
 """Currency symbols to codes; an ambiguous symbol (``$``, ``kr``) takes its commonest code."""
 
@@ -111,12 +112,12 @@ ISO_CODES = (
     "EUR|USD|GBP|INR|JPY|CNY|AUD|CAD|CHF|SEK|NOK|DKK|PLN|BRL|MXN|SGD|HKD|NZD|ZAR|"
     "AED|SAR|KRW|TRY|IDR|THB|MYR|PHP|VND|CZK|HUF|ILS|KES|NGN|EGP|PKR|BDT|LKR|RON"
 )
-_CUR = rf"(?:\b(?:{ISO_CODES})\b|US\$|R\$|A\$|C\$|S\$|Rs\.?|\bkr\b|zł|[€$£₹¥₩])"
+_CUR = rf"(?:\b(?:{ISO_CODES})\b|US\$|R\$|A\$|C\$|S\$|Rs\.?|\bRp\.?|\bRM|\bkr\b|zł|[€$£₹¥₩₱₫฿])"
 _AMT = r"\d{1,3}(?:[ ,.\u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?"
 _BASIS = (
-    r"(?:\s*(?i:per|/|a|an|each)\s*(?P<per>[^.;,()\n|]{1,60}?)"
+    r"(?:\s*(?i:per|/|a|an|each)\s*(?P<per>[^.;,()\n|*_\"]{1,60}?)"
     r"|\s+(?P<per_word>(?i:monthly|yearly|annually|weekly|daily|one-off|one off|once)))"
-    r"(?=$|[.;,()\n|]| billed| plus| incl| excl| \+| or | and |\s*$)"
+    r"(?=$|[.;,()\n|*_\"]| billed| plus| incl| excl| \+| or | and | on an? | with | during |\s*$)"
 )
 MONEY = re.compile(
     rf"(?P<cond>\b(?i:from|starting at|starts at|only|just)\s+)?"
