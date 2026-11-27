@@ -421,6 +421,16 @@ def test_a_changed_definition_reopens_the_values_extracted_under_it(bench: Bench
     assert iv.state(f"{AGENT}.note@v1").freshness == "current"  # no model read it
 
 
+def test_a_definition_of_an_agent_this_process_did_not_load_is_not_taken_as_gone(
+    bench: Bench,
+) -> None:
+    # A process that loads other agents answers nothing about this one's definitions: it
+    # must not record them as gone and reopen everything extracted under them.
+    bench.change("other-agents", DefinitionSource({"another": (FACTS_V2,)}))
+    assert bench.events("source.changed") == []
+    assert bench.iv().state(f"{AGENT}.facts@v1").freshness == "current"
+
+
 def test_notify_mode_is_noticed_strongly_and_never_reopened(tmp_path: Path) -> None:
     b = Bench(tmp_path / "n.sqlite", mode="notify")
     try:

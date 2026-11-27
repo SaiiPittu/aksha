@@ -142,7 +142,7 @@ def _count(value: Any) -> bool:
 
 
 def _scope(value: Any) -> Scope | None:
-    if not isinstance(value, Mapping) or not value or set(value) - {"query", "records", "hits"}:
+    if not isinstance(value, Mapping) or not value or set(value) - {"query", "records"}:
         return None
     query, records = value.get("query"), value.get("records", [])
     if query is not None and (not isinstance(query, str) or not query):

@@ -157,7 +157,7 @@ src/aksha/
 │   ├── invalidation/                        P05 invalidation, early cutoff, rebuilds, diff reviews
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── types.py                         VersionedSourceSpec, ReadStatus, VersionState, RebuildEntry, DiffReview
-│   │   ├── ports.py                         VersionedSource, RecordTexts, QueryRunner, InputWorkspace (Protocols): outside the core
+│   │   ├── ports.py                         VersionedSource, RecordTexts, PartialSource, QueryRunner, InputWorkspace (Protocols): outside the core
 │   │   ├── sources.py                       the one writer of source.changed and query.reexecuted; source_facts
 │   │   ├── modes.py                         the four invalidation modes an agent opts into (decision 38)
 │   │   ├── guard.py                         the edit-time check: stale_edit, unread_overwrite (edit_guard and up)

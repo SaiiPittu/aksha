@@ -44,7 +44,12 @@ from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.invalidation.keying import SpanCheck, recheck, rechecked_event
-from aksha.runtime.invalidation.ports import QueryRunner, RecordTexts, VersionedSource
+from aksha.runtime.invalidation.ports import (
+    PartialSource,
+    QueryRunner,
+    RecordTexts,
+    VersionedSource,
+)
 from aksha.runtime.invalidation.types import (
     CLOCK_RECORD,
     CLOCK_SOURCE,
@@ -231,6 +236,8 @@ def _moved_records(
     for record_id, read_version in sorted(read.items()):
         if record_id.split("/", 1)[0] not in collections:
             continue
+        if isinstance(source, PartialSource) and not source.covers(record_id):
+            continue  # a record this source cannot answer is unknown here, not gone
         last = known.get(record_id, read_version)
         now = source.record_version(owner, record_id)
         if now != last:

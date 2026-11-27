@@ -55,6 +55,20 @@ class RecordTexts(Protocol):
         ...
 
 
+@runtime_checkable
+class PartialSource(Protocol):
+    """A versioned source that answers only some records of its collections (ADR-P05 M2).
+
+    The ``definitions`` source answers the definitions of the agents this process loaded;
+    a recorded read of another agent's definition is one it cannot answer, not one that is
+    gone, so ``record_source_changes`` skips a record the source does not cover.
+    """
+
+    def covers(self, record_id: str) -> bool:
+        """Whether this source can answer ``record_id``'s current version."""
+        ...
+
+
 class QueryRunner(Protocol):
     """Re-executes a recorded query for an owner and returns its result-set hash.
 

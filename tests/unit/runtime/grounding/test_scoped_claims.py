@@ -64,7 +64,14 @@ def test_a_claim_with_no_scope_is_refused_with_what_to_add() -> None:
 
 @pytest.mark.parametrize(
     "scope",
-    [{}, {"query": ""}, {"records": ["pages/P-0001"]}, {"query": QUERY, "where": "x"}, "all"],
+    [
+        {},
+        {"query": ""},
+        {"records": ["pages/P-0001"]},
+        {"query": QUERY, "where": "x"},
+        {"query": QUERY, "hits": ["pages/P-0001"]},
+        "all",
+    ],
 )
 def test_a_malformed_scope_is_refused(scope: Any) -> None:
     assert codes({"x": absence(scope)}) == ["scope_invalid"]

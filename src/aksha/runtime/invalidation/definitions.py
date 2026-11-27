@@ -6,8 +6,9 @@ A fast-class call made under an alias's declared definition records a read of
 such record's current version, so the one writer of source facts records a changed
 definition like any moved record (``source.changed``, cause ``command`` or ``recovery``)
 and the values read under the old definition reopen, though no source byte moved. A
-definition an agent no longer declares reads as gone. Citation keying treats every
-definition read as strong (``keying.Keyed.strength``).
+definition a loaded agent no longer declares reads as gone; a definition of an agent this
+process did not load is not covered (``PartialSource``), so it is never taken as gone.
+Citation keying treats every definition read as strong (``keying.Keyed.strength``).
 """
 
 from __future__ import annotations
@@ -30,6 +31,7 @@ class DefinitionSource:
     def __init__(self, aliases: Mapping[str, Iterable[ModelAlias]]) -> None:
         """Serve each agent's (by name) declared aliases."""
         self._versions: dict[str, str] = {}
+        self._agents = frozenset(aliases)
         for agent, declared in aliases.items():
             for alias in declared:
                 self._versions[definition_record(agent, alias.name)] = alias_definition(alias)
@@ -49,8 +51,13 @@ class DefinitionSource:
         """The one collection, ``definitions``."""
         return (DEFINITIONS_SOURCE,)
 
+    def covers(self, record_id: str) -> bool:
+        """Whether ``record_id`` is a definition of a loaded agent (``PartialSource``)."""
+        parts = record_id.split("/")
+        return len(parts) == 3 and parts[0] == DEFINITIONS_SOURCE and parts[1] in self._agents
+
     def record_version(self, owner: str, record_id: str) -> str | None:
-        """The definition's current version; None when no loaded agent declares it."""
+        """The definition's current version; None when its loaded agent no longer declares it."""
         return self._versions.get(record_id)
 
     def version(self, owner: str) -> str:
