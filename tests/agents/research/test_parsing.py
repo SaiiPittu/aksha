@@ -125,8 +125,7 @@ def test_each_review_text_is_found_inside_its_own_json_row_whatever_the_key_orde
     body = ", ".join(f'{{"text": "{t}", "rating": "{r}", "review_id": "{i}"}}' for t, i, r in rows)
     raw = '{"note": "synthetic", "reviews": [' + body + "]}"
     found = ReturnedText("inputs", "input/reviews/out-of-order.json", "v1", raw)
-    table = reading.read_table(models_for(AGENT_DIR, ADAPTERS, "read_table"), found, "json",
-                               "inputs")  # fmt: skip
+    table = reading.read_table(readers(), found, "json", "inputs")
     assert len(table.passages) == 3
     for passage, (text, review_id, _) in zip(table.passages, rows, strict=True):
         assert passage.text == text and raw[passage.start : passage.end] == text
