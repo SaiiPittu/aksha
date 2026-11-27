@@ -13,6 +13,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.patent import rules
 from aksha.agents.patent.fakes import ADAPTERS
@@ -215,3 +217,21 @@ def test_labels_quantities_and_units_follow_the_written_marks() -> None:
     assert quantity("after the test on 2 June we agreed 6 mA") == (35, "6", "mA")
     raw = "Deck\n\n--- page 1 ---\nOne\n\n--- page 2 ---\nTwo\n"
     assert len(record_units(raw, "text", segment(raw, "text"))) == 3
+
+
+@pytest.mark.parametrize(
+    ("key", "want"),
+    [
+        ("pubNo", "number"), ("Publication No", "number"), ("doc-number", "number"),
+        ("number", "number"), ("kindCode", "kind_code"), ("Legal status", "status"),
+        ("issuing_office", "office"), ("invention-title", "title"), ("summary", "abstract"),
+        ("priorityClaims", "priority_claims"), ("filing_date", "filing_date"),
+        ("dateGranted", "grant_date"), ("published", "publication_date"), ("href", "url"),
+        ("no", None), ("doc", None), ("priority_2", None), ("owner", None),
+    ],
+)  # fmt: skip
+def test_a_bibliographic_key_is_read_by_its_words(key: str, want: str | None) -> None:
+    """No export's spelling is listed: a key never seen before reads by what its words mean."""
+    from aksha.agents.patent.fakes_readers import biblio_field
+
+    assert biblio_field(key) == want

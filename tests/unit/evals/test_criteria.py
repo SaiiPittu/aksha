@@ -219,3 +219,25 @@ def test_a_quoted_claim_is_not_the_agents_own_words() -> None:
     assert list(own_words({"claims": [claim]})) == ["vendor_claim"]
     said = {**claim, "text": "60% of clinics churn."}  # the agent's own sentence, not the quote
     assert [h for s in own_words(said) for h in violations("no_market_percentage", s)] == ["60%"]
+
+
+@pytest.mark.parametrize(
+    ("text", "unit", "want"),
+    [
+        ("Rated -20 to 60 °F on the sheet.", "°C", "°F"),
+        ("Rated -20 to 60 °C on the sheet.", "°C", None),
+        ("A gap of 2 to 5 cm between the plates.", "mm", "cm"),
+        ("A gap of 2 to 5 mm between the plates.", "mm", None),
+        ("Between 2 and 5 percent of the time.", "%", None),  # one unit, spelled two ways
+        ("Between 2 and 5 hours of the time.", "%", "hours"),
+        ("From 2 to 5 across the range.", "mm", None),  # a word after the range is no unit
+        ("Rated -20 to 60 °F (converted from °C).", "°C", None),  # a labelled conversion
+    ],
+)
+def test_a_range_in_another_unit_is_found_whatever_the_unit(
+    text: str, unit: str, want: str | None
+) -> None:
+    from aksha.evals.criteria.traps import unlabelled_unit
+
+    low, high = ("-20", "60") if "-20" in text else ("2", "5")
+    assert unlabelled_unit(text, low, high, unit) == want

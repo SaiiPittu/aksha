@@ -96,9 +96,15 @@ _UNITS = {
     "h": "hours", "hr": "hours", "hrs": "hours", "hour": "hours",
     "d": "days", "day": "days",
     "m": "metres", "meter": "metres", "meters": "metres", "metre": "metres",
-    "cm": "centimetres", "mm": "millimetres",
+    "cm": "centimetres", "mm": "millimetres", "km": "kilometres", "\u03bcm": "micrometres",
+    "g": "grams", "gram": "grams", "kg": "kilograms", "mg": "milligrams",
+    "l": "litres", "litre": "litres", "liter": "litres", "ml": "millilitres",
+    "hz": "hertz", "khz": "kilohertz", "v": "volts", "volt": "volts", "w": "watts",
+    "watt": "watts", "pa": "pascals", "kpa": "kilopascals",
 }  # fmt: skip
 """Spellings of a unit that name the same unit (SI symbols and their words)."""
+KNOWN_UNITS = frozenset(_UNITS.values())
+"""The units :func:`unit_key` knows, each by its word."""
 
 
 def unit_key(value: object) -> str:

@@ -273,3 +273,42 @@ def test_the_guard_catches_planted_values() -> None:
     kinds = {(w, k) for w, k, _ in leaks(planted, Path("planted.py"))}
     assert {(world, "name"), (world, "id"), (world, "file")} <= kinds
     assert leaks("def read(rows):\n    return [r for r in rows if r]\n", Path("clean.py")) == []
+
+
+FAKE_KNOWN_LEAKS: dict[tuple[str, str], str] = {
+    ("agents/patent/fakes.py", "stillroom"): "names the hand-written lexicon it falls back to",
+    ("agents/patent/fakes_readers.py", "source_url"): "a publication key, read before item 19",
+    ("agents/patent/fakes_readers.py", "status_observations"): "the same, a status list key",
+    ("agents/research/fakes.py", "country_code"): "a function name that a world's header shares",
+    ("agents/research/fakes.py", "siltgrove"): "a docstring example",
+    ("agents/research/fakes.py", "siltgrove inc."): "a docstring example",
+    ("agents/research/fakes_readers.py", "brackpond"): "a docstring example",
+    ("agents/research/fakes_readers.py", "siltgrove"): "a docstring example",
+    ("agents/research/fakes_readers.py", "siltgrove inc."): "a docstring example",
+    ("agents/research/fakes_readers.py", "siltgrove logs"): "a docstring example",
+}
+"""Values the offline models named before they were scanned, by (file, lowercased value).
+
+The fakes are measured on held-out worlds, so a held-out world's own value in a fake would
+tune it to that world and make the measurement meaningless. This list only shrinks."""
+
+
+def fake_files() -> list[Path]:
+    """The offline models, except the stillroom lexicon, which is one world's by design."""
+    return sorted(p for p in (SRC / "agents").rglob("fakes*.py") if p.name != "fakes_stillroom.py")
+
+
+@pytest.mark.parametrize("path", fake_files(), ids=_rel)
+def test_offline_models_name_no_world_value(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    found = [h for h in leaks(text, path) if (_rel(path), h[2].lower()) not in FAKE_KNOWN_LEAKS]
+    assert found == []
+
+
+def test_known_fake_leaks_still_exist() -> None:
+    present = {
+        (_rel(p), value.lower())
+        for p in fake_files()
+        for _w, _k, value in leaks(p.read_text(encoding="utf-8"), p)
+    }
+    assert sorted(set(FAKE_KNOWN_LEAKS) - present) == []

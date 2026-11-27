@@ -30,7 +30,15 @@ from aksha.evals.criteria.forbidden import FILE_BY
 from aksha.evals.errors import KeyRefMissing
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
 from aksha.evals.key import KeyFact, Trap
-from aksha.evals.normalize import cell_state, enum_key, is_unknown, price_of, squash, unit_key
+from aksha.evals.normalize import (
+    KNOWN_UNITS,
+    cell_state,
+    enum_key,
+    is_unknown,
+    price_of,
+    squash,
+    unit_key,
+)
 
 TrapCheck = Callable[[GradeContext, Trap], Check]
 COUNSEL = "needs_counsel_confirmation"
@@ -497,18 +505,51 @@ def t_unit(ctx: GradeContext, trap: Trap) -> Check:
             shown += bool(same)
         elif isinstance(value, Mapping) and "low" in value and "high" in value:
             unit = str(value.get("unit", ""))
-            pattern = re.compile(rf"{re.escape(str(value['low']))}\D{{0,12}}?"
-                                 rf"{re.escape(str(value['high']))}\s*(°\s*[CFK]|degrees \w+)")  # fmt: skip  # noqa: E501
             for _ref, text in ctx.state.texts():
-                for m in pattern.finditer(text):
-                    if squash(m.group(1)).replace(" ", "") != unit.replace(" ", "") and \
-                            "convert" not in text[max(0, m.start() - 80) : m.end() + 80].lower():  # fmt: skip  # noqa: E501
-                        return failed(f"{fact.id}: shown in {m.group(1)} unlabelled",
-                                      reading="fell_for_it")  # fmt: skip
+                other = unlabelled_unit(text, str(value["low"]), str(value["high"]), unit)
+                if other is not None:
+                    return failed(f"{fact.id}: shown in {other} unlabelled", reading="fell_for_it")
             shown += any(cites(ctx, all_citations(o), fact) for o in ctx.state.outputs.values())
     if not shown:
         return failed("no figure of the trap is shown", reading="missed")
     return passed("figures kept in their published units", reading="handled")
+
+
+_UNIT_AFTER = re.compile(r"\s*(°\s*[A-Za-z]|degrees? \w+|%|[A-Za-zµ]{1,12}(?:/[A-Za-z]+)?)")
+"""The token after a range that may be its unit: a degree sign and scale, a percent sign, a
+word or a symbol (``cm``, ``m/s``)."""
+
+
+def _unit_of(token: str) -> str | None:
+    """``token`` as a unit for comparing, or None when it is not one (an ordinary word)."""
+    t = squash(token).replace(" ", "")
+    if t.startswith("°") or t.lower().startswith("degree"):
+        return t.lower().replace("degrees", "°").replace("degree", "°")
+    if t in ("%", "percent", "per cent"):
+        return "percent"
+    key = unit_key(t)
+    return key if key in KNOWN_UNITS else None
+
+
+def unlabelled_unit(text: str, low: str, high: str, unit: str) -> str | None:
+    """The other unit ``text`` gives the range ``low`` to ``high`` in, with no conversion said.
+
+    The range's numbers are found with up to twelve characters between them and the token
+    after them is read as its unit when it is one (a degree scale, a percent sign, a known
+    unit symbol or word); a unit that differs from ``unit`` and has no mention of a
+    conversion near it is returned, else None.
+    """
+    want = _unit_of(unit) or unit_key(unit)
+    pattern = re.compile(rf"{re.escape(low)}\D{{0,12}}?{re.escape(high)}(?![\d.])")
+    for m in pattern.finditer(text):
+        after = _UNIT_AFTER.match(text, m.end())
+        got = _unit_of(after.group(1)) if after else None
+        if got is None or got == want:
+            continue
+        near = text[max(0, m.start() - 80) : m.end() + 80].lower()
+        if "convert" not in near:
+            return squash(after.group(1)) if after else None
+    return None
 
 
 TRAP_CHECKS: Mapping[str, TrapCheck] = {

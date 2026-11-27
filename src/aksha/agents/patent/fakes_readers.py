@@ -934,23 +934,61 @@ def _enclosing(text: str, at: int) -> tuple[int, int]:
     return s, len(text)
 
 
-BIBLIO_KEYS: dict[str, str] = {
-    **dict.fromkeys(("pub_no", "publication", "publication_number", "doc-number", "doc_number",
-                     "publication_no", "pub", "number", "patent_number", "pub_number"), "number"),
-    **dict.fromkeys(("kind", "pub_kind", "kind_code"), "kind_code"),
-    **dict.fromkeys(("office", "authority", "issuing_office"), "office"),
-    **dict.fromkeys(("title", "invention-title", "invention_title"), "title"),
-    **dict.fromkeys(("abstract", "summary"), "abstract"),
-    "description": "description",
-    **dict.fromkeys(("link", "url", "web", "source_url"), "url"),
-    **dict.fromkeys(("priority", "priority_claim", "priorities"), "priority_claims"),
-    **dict.fromkeys(("filed", "filing", "filing_date", "application_date"), "filing_date"),
-    **dict.fromkeys(("published", "publication_date"), "publication_date"),
-    **dict.fromkeys(("granted", "grant", "grant_date"), "grant_date"),
-    **dict.fromkeys(("status", "status_line", "legal_status"), "status"),
-    **dict.fromkeys(("claims", "claim"), "claims"),
-}  # fmt: skip
-"""What a bibliographic key names, in the words publication data uses."""
+_KEY_WORDS = re.compile(r"[a-z0-9]+")
+_NUMBER_WORDS = frozenset({"no", "nr", "num", "number"})
+_DOCUMENT_WORDS = frozenset({"pub", "publication", "patent", "doc", "document"})
+_PRIORITY_WITH = frozenset({"claim", "claims", "date", "no", "nr", "number", "application", "data"})
+
+
+def biblio_field(key: str) -> str | None:
+    """What a bibliographic key names, read from the words the key is made of.
+
+    The key is split into words (``pubNo``, ``pub-kind`` and ``Legal status`` alike) and read
+    by the vocabulary of publication data in general (WIPO ST.9 and ST.16 terms and their
+    usual abbreviations), in a fixed order: a kind code, a priority claim, an event's date, a
+    status, an office, a title, an abstract, a description, claims, a link and, last, the
+    publication's number (a number word with a document word, or ``number`` alone). No
+    export's own spelling is listed: a key is read by what its words mean.
+    """
+    words = _KEY_WORDS.findall(re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", str(key)).lower())
+    has = set(words)
+    if not has:
+        return None
+
+    def stem(*stems: str) -> bool:
+        return any(w.startswith(s) for w in words for s in stems)
+
+    if "kind" in has:
+        return "kind_code"
+    if stem("priorit") and (len(words) == 1 or has & _PRIORITY_WITH):
+        return "priority_claims"
+    if stem("filed", "filing") or {"application", "date"} <= has:
+        return "filing_date"
+    if stem("grant"):
+        return "grant_date"
+    if stem("published") or {"publication", "date"} <= has:
+        return "publication_date"
+    if "status" in has:
+        return "status"
+    if has & {"office", "authority"}:
+        return "office"
+    if "title" in has:
+        return "title"
+    if has & {"abstract", "summary"}:
+        return "abstract"
+    if "description" in has:
+        return "description"
+    if stem("claim"):
+        return "claims"
+    if has & {"url", "uri", "link", "href", "web", "website"}:
+        return "url"
+    if has & _NUMBER_WORDS and len(words) > 1 and has & _DOCUMENT_WORDS:
+        return "number"
+    if len(words) == 1 and has & {"pub", "publication", "patent", "number"}:
+        return "number"
+    return None
+
+
 _NUMBER_KIND = re.compile(r"(?<![\w-])([A-Z]{2,}(?:-[A-Z0-9]+)*-\d[\w-]*)\s+([A-Z]\d?)\b(?!-)")
 """A publication number followed by its kind code (WIPO ST.16): ``XX-1234 B1``."""
 EVENT_DATES = (("priorit", "priority_date"), ("fil", "filing_date"), ("grant", "grant_date"),
@@ -1074,7 +1112,7 @@ class PublicationBiblio(RuleExtractionModel):
         had = {k for k, v in found.items.items() if v}
         for path, value, s0, e0, parent in spans:
             last = path.rsplit(".", 1)[-1]
-            field = BIBLIO_KEYS.get(last)
+            field = biblio_field(last)
             if field is None and "claims" in path.split(".") and last in ("text", "claim"):
                 field = "claims"
             if field in had:
@@ -1126,7 +1164,7 @@ class PublicationBiblio(RuleExtractionModel):
             body = ln.text[ln.body[0] : ln.body[1]]
             key, value, vs = "", "", ln.body[0]
             titled = _NUMBER_KIND.search(body) if len(body) <= 120 else None
-            if titled and not found.has("number"):  # "SYN-PUB-0301 A1: ...": number, kind code
+            if titled and not found.has("number"):  # "XX-1234 A1: ...": number, kind code
                 found.add("number", titled.group(1), ln.span, ln.body[0] + titled.start(1),
                           ln.body[0] + titled.end(1))  # fmt: skip
                 found.add("kind_code", titled.group(2), ln.span, ln.body[0] + titled.start(2),
@@ -1153,15 +1191,14 @@ class PublicationBiblio(RuleExtractionModel):
                 elif claims_on or ln.text.lstrip().startswith("<claim"):
                     found.add("claims", body, ln.span, *ln.body)
                     continue
-            elif ln.kind == "paragraph" and i + 1 < len(lines) and BIBLIO_KEYS.get(
-                    body.strip().lower()):  # fmt: skip
+            elif ln.kind == "paragraph" and i + 1 < len(lines) and biblio_field(body.strip()):
                 nxt = lines[i + 1]  # a term and its definition: "Office" then "SYN-Office-1"
                 key, value = body.strip().lower(), nxt.text[nxt.body[0] : nxt.body[1]]
                 ln, vs = nxt, nxt.body[0]
             if not key:
                 continue
             key = key.replace(" ", "_")
-            field = BIBLIO_KEYS.get(key)
+            field = biblio_field(key)
             if field is None:
                 continue
             ve = vs + len(value)

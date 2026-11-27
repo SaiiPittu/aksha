@@ -724,8 +724,9 @@ def _implementation(note: Mapping[str, Any]) -> str:
     return "unknown"
 
 
-IP_TERMS = re.compile(r"\b(own(?:ed|s|ership)?|assign\w*|notify|invention|intellectual property)\b",
-                      re.I)  # fmt: skip
+OWNERSHIP_CLAUSE = re.compile(
+    r"\b(own(?:ed|s|ership)?|assign\w*|notify|invention|intellectual property)\b", re.I
+)
 """A clause of an agreement about who owns or must be told of an invention."""
 OUTSIDE = re.compile(
     r"\b(outside|external|consultant|advisor|adviser|contractor|university)\b", re.I
@@ -919,7 +920,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                 continue
             for clause in doc.get("body", "").split("\n"):  # each clause as its line reads
                 clause = clause.strip()
-                if IP_TERMS.search(clause) and len(clause) < 400:
+                if OWNERSHIP_CLAUSE.search(clause) and len(clause) < 400:
                     terms.append(_q(doc["file"], clause))
     disclosures, outside = [], []
     conceived = note["date"]
