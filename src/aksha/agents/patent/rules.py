@@ -105,6 +105,22 @@ def family_of(publications: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]
     return {k: sorted(v) for k, v in sorted(families.items())}
 
 
+def form_counts(fields: Any) -> dict[str, int]:
+    """How many of a form's ``fields`` are in each status: computed, never the model's."""
+    listed = fields if isinstance(fields, list | tuple) else ()
+    return {
+        s: sum(1 for f in listed if isinstance(f, Mapping) and f.get("status") == s)
+        for s in FIELD_STATUSES
+    }
+
+
+def computed_form(content: dict[str, Any]) -> dict[str, Any]:
+    """A form's ``counts`` from its fields, at every save (a correction of one field too)."""
+    if isinstance(content.get("fields"), list):
+        content["counts"] = form_counts(content["fields"])
+    return content
+
+
 def required_missing(form: Mapping[str, Any]) -> list[str]:
     """The required fields of a filled form that are ``missing``: the packet is not ready."""
     return [

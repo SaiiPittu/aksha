@@ -55,7 +55,10 @@ class ArtifactKind:
     its grounded fields (ADR-P13 D4): each matched field cites its evidence or, where the
     policy allows, holds an explicit unknown. ``max_age_s`` is its freshness lifetime
     (ADR-P25 D3): each save schedules a recheck of the version saved, and once it fires the
-    version is out of date and is rebuilt like any invalidated one.
+    version is out of date and is rebuilt like any invalidated one. ``compute`` is a pure
+    function from the content saved to the content stored (ADR-P04 K1): the fields it
+    writes are computed by code, never taken from the model (a count, a total, a phrase
+    built from them), and every save of the kind, a correction's too, applies it first.
     """
 
     name: str
@@ -73,6 +76,7 @@ class ArtifactKind:
     summary: str | None = None
     cites: tuple[CitePolicy, ...] = ()
     max_age_s: int | None = None
+    compute: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None
 
 
 @dataclass(frozen=True)

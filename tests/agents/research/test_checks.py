@@ -230,3 +230,49 @@ def test_the_run_completes_only_with_its_four_outputs() -> None:
     assert checks.outputs_exist(_View(slots)).ok
     del slots[("tests", None)]
     assert checks.outputs_exist(_View(slots)).keys == ("tests",)
+
+
+def test_each_failing_check_states_what_it_found_what_it_expected_and_the_change() -> None:
+    """A real model fixes its work in one turn when the message names the values and the fix."""
+    slots: dict[tuple[str, str | None], Mapping[str, Any]] = {
+        ("competitors", None): {"companies": [_company("a", "p/1"), _company("b", "p/2")],
+                                "resolved": 3, "pages_found": 1},
+    }  # fmt: skip
+    message = checks.discover_done(_View(slots)).message
+    assert "resolved is 3 and pages_found 1" in message
+    assert "set resolved to 2 and pages_found to 2" in message
+    twice = {"companies": [_company("a", "p/1"), _company("b", "p/1")]}
+    assert (
+        "{'p/1': ['a', 'b']}" in checks.discover_done(_View({("competitors", None): twice})).message
+    )
+
+    themes = [*THEMES, {"id": "setup", "name": "setup"}, {"id": "price", "name": "price"}]
+    need = {"theme": "battery", "phrase": "2 of 9 reviews in this sample", "evidence": [{}] * 2}
+    needs = {"sample": {"rows": 9, "unique": 9, "duplicates": []}, "needs": [need]}
+    view = _View({("needs", None): needs, ("scope", None): _scope("EU", themes=themes)})
+    result = checks.needs_done(view)
+    assert result.message.startswith(
+        "needs saved for themes ['battery']; missing a need for themes ['price', 'setup']: "
+        "save the needs again with one need per theme of the scope"
+    )
+    assert result.keys == ("price", "setup")
+    rows = {"sample": {"rows": 12, "unique": 9, "duplicates": [{}]}, "needs": [need]}
+    view = _View({("needs", None): rows, ("scope", None): _scope("EU")})
+    assert "sample.rows is 12, but 9 unique reviews and 1 duplicates make 10: set rows to 10" in (
+        checks.needs_done(view).message
+    )
+    off = {**need, "phrase": "2 of 8 reviews in this sample"}
+    view = _View({("needs", None): {**needs, "needs": [off]}, ("scope", None): _scope("EU")})
+    assert "expected '2 of 9 reviews in this sample'" in checks.needs_done(view).message
+    cited = {**need, "evidence": [{"review": "r1"}, {"review": "r2"}],
+             "phrase": "2 of 1 reviews in this sample"}  # fmt: skip
+    few = {"sample": {"rows": 1, "unique": 1, "duplicates": []}, "needs": [cited]}
+    view = _View({("needs", None): few, ("scope", None): _scope("EU")})
+    assert "cite 2 distinct reviews" in checks.needs_done(view).message
+
+    report: dict[tuple[str, str | None], Mapping[str, Any]] = {
+        ("competitors", None): {"companies": [{"key": "a"}, {"key": "b"}]},
+        ("matrix", None): {"rows": [{"key": "a"}, {"key": "c"}]},
+        ("scope", None): _scope("EU"),
+    }
+    assert "add rows for ['b'], remove rows for ['c']" in checks.report_done(_View(report)).message

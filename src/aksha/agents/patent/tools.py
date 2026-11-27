@@ -185,7 +185,7 @@ def build_tools(bound: SourceWorld) -> tuple[ToolDecl, ...]:
         for f in fields:  # whether a field is required is the template's, never the model's
             f["required"] = bool(declared[f["field"]]["required"])
         fields.sort(key=lambda f: declared[f["field"]]["n"])
-        counts = {s: sum(1 for f in fields if f["status"] == s) for s in rules.FIELD_STATUSES}
+        counts = rules.form_counts(fields)
         content = {
             "template": name,
             "form": listed[name],

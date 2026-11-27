@@ -14,12 +14,16 @@ from fastapi.testclient import TestClient
 
 from aksha import data
 from aksha.app import open_reader, open_session, session_capabilities
+from aksha.interfaces.http.common import HostAllowList
 from aksha.interfaces.http.server import create_app
 from aksha.runtime.session.worker import RuntimeThread
 from tests.support.session import OWNER, SESSION, config
 
 H = {"X-Aksha-User": OWNER}
 STREAM_OPEN_S = 2.0
+
+TESTSERVER = HostAllowList.of(["testserver"])
+"""TestClient's own host name: loopback names alone are allowed by default."""
 
 
 @pytest.fixture
@@ -31,7 +35,8 @@ def served(tmp_path: Path) -> Iterator[tuple[TestClient, Any]]:
     def record() -> dict[str, Any]:
         return runtime.call(lambda s: session_capabilities(s, cfg).as_json()).result(10)
 
-    app = create_app(runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05)
+    app = create_app(runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05,
+                     allowed_hosts=TESTSERVER)  # fmt: skip
     with TestClient(app) as client:
         yield client, app
     app.state.closing.set()
@@ -185,7 +190,8 @@ def served_agents(tmp_path: Path) -> Iterator[TestClient]:
     def record() -> dict[str, Any]:
         return runtime.call(lambda s: session_capabilities(s, cfg).as_json()).result(10)
 
-    app = create_app(runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05)
+    app = create_app(runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05,
+                     allowed_hosts=TESTSERVER)  # fmt: skip
     with TestClient(app) as client:
         yield client
     app.state.closing.set()

@@ -9,8 +9,11 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
 
 1. The kind is declared (``kind_unknown``) and the Task writes it (``rights``); a keyed
    kind has a key and an unkeyed one has none (``key_required``, ``key_not_allowed``).
-2. The content is in the chain's encoding (``not_canonical_content``) and matches the
-   kind's schema (``schema``). The schema half runs after check 5, so a bare ``0`` in a
+2. The kind's computed fields (``compute``, ADR-P04 K1) are written over the request's
+   first, so what is stored, hashed and checked is the computed content and a count a
+   completion check asserts is the code's, never the model's. The content is then in the
+   chain's encoding (``not_canonical_content``) and matches the kind's schema
+   (``schema``). The schema half runs after check 5, so a bare ``0`` in a
    cited field is refused ``ungrounded_value``, which says what to do, not ``schema``.
 3. Lineage inputs: every read the instance recorded, never a subset (D6). Every primary
    input and every relation end and evidence source must be one of them
@@ -256,7 +259,7 @@ class ArtifactStore:
             raise SaveRefused("key_required", "/key", f"{kind_name} is keyed")
         if not kind.keyed and request.key is not None:
             raise SaveRefused("key_not_allowed", "/key", f"{kind_name} is not keyed")
-        content = request.content
+        content = computed(kind, request.content)
         hashed = _content_hash(content)
         reads = frozenset(_lineage.recorded_reads(view, run, instance)) | frozenset(pending_reads)
         for i, primary in enumerate(request.primary_inputs):
@@ -630,6 +633,27 @@ def _hidden_from(view: LogView, run: str, writer: WriterId, prior: ArtifactVersi
     from aksha.runtime.tasks.reuse import hidden_for  # the tasks layer reads this store
 
     return str(prior.ref) in hidden_for(view, run, writer)
+
+
+def computed(kind: ArtifactKind, content: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Check 2's first step: ``content`` with the kind's computed fields written over it.
+
+    The function gets a plain copy, so it may change it in place. One that raises, or
+    returns no object, refuses the save ``schema`` with the reason, as a malformed content
+    would be.
+    """
+    if kind.compute is None:
+        return content
+    try:
+        out = kind.compute(thaw(content))
+    except Exception as e:  # an agent's function: its failure is the save's refusal
+        raise SaveRefused(
+            "schema", "/content", f"{kind.name}: its computed fields could not be derived "
+            f"from this content ({type(e).__name__}: {e}); check the content's shape"
+        ) from None  # fmt: skip
+    if not isinstance(out, Mapping):
+        raise SaveRefused("schema", "/content", f"{kind.name}: compute returned no object")
+    return out
 
 
 def checked_content(kind: ArtifactKind, content: Mapping[str, Any]) -> str:

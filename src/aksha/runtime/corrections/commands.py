@@ -34,7 +34,7 @@ from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
 from aksha.runtime.artifacts.hashing import canonical_hash, reads_hash
-from aksha.runtime.artifacts.store import checked_content
+from aksha.runtime.artifacts.store import checked_content, computed
 from aksha.runtime.artifacts.types import ArtifactKind, ArtifactRef, ArtifactVersion
 from aksha.runtime.artifacts.versions import current, version
 from aksha.runtime.canonical import canonical_bytes, thaw
@@ -328,6 +328,7 @@ def _artifact_version(
         content = corrected_content(old, found.target.path, found.value)
         if not isinstance(content, dict):
             raise SaveRefused("schema", "", "an artifact's content is an object")
+        content = computed(kind, content)  # a corrected count is recomputed, as at any save
         hashed = checked_content(kind, content)
     except (KeyError, ValueError, SaveRefused) as e:
         return CommandRefused(VALUE_INVALID, f"{found.target}: {e}")

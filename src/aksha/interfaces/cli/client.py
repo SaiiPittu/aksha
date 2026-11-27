@@ -4,6 +4,10 @@ A CLI command finds the server from ``AKSHA_SERVER_URL`` or the server file ``se
 writes beside the store, and checks it answers ``/health``; with no server answering, the
 command runs embedded. Every write is one ``POST /api/v1/commands``, so the server's
 runtime thread stays the only writer.
+
+Against a server with accounts, ``AKSHA_TOKEN`` (an API token, ``aksha_pat_...``) goes as
+``Authorization: Bearer``; the ``X-Aksha-User`` header still goes too, for a server in
+local mode or one that trusts the header.
 """
 
 from __future__ import annotations
@@ -13,7 +17,7 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -56,18 +60,21 @@ def find_server(url: str | None, server_file: Path) -> str | None:
 
 @dataclass
 class Client:
-    """One owner's calls to the server at ``url``."""
+    """One owner's calls to the server at ``url``, with an API token when given."""
 
     url: str
     owner: str
+    token: str | None = field(default=None, repr=False)
 
     def _call(self, method: str, path: str, body: Mapping[str, Any] | None,
               timeout: float) -> dict[str, Any]:  # fmt: skip
         data = None if body is None else json.dumps(body).encode("utf-8")
+        headers = {"Content-Type": "application/json", "X-Aksha-User": self.owner}
+        if self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         request = urllib.request.Request(
-            self.url.rstrip("/") + "/api/v1" + path, data=data, method=method,
-            headers={"Content-Type": "application/json", "X-Aksha-User": self.owner},
-        )  # fmt: skip
+            self.url.rstrip("/") + "/api/v1" + path, data=data, method=method, headers=headers
+        )
         try:
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 loaded: dict[str, Any] = json.loads(response.read() or b"{}")

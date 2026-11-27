@@ -38,7 +38,7 @@ from aksha.runtime.api import (
     kind_question,
 )
 
-from . import checks, tools
+from . import checks, computed, tools
 from .reading import KINDS as DOC_KINDS
 
 OBJECT: dict[str, Any] = {"type": "object"}
@@ -115,6 +115,7 @@ COMPETITORS = ArtifactKind(
         CitePolicy("/companies/*/merge_evidence/*", forms=SPAN),
         CitePolicy("/manual_alternatives", may_be_unknown=True),
     ),
+    compute=computed.competitors,
 )
 PROFILE = ArtifactKind(
     "profile",
@@ -133,6 +134,7 @@ NEEDS = ArtifactKind(
         CitePolicy("/needs/*/evidence/*", forms=SPAN),
         CitePolicy("/sample/duplicates/*/evidence/*", forms=SPAN),
     ),
+    compute=computed.needs,
 )
 MATRIX = ArtifactKind(
     "matrix",

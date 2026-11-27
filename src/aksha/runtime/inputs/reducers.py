@@ -20,6 +20,7 @@ from aksha.runtime.inputs.types import (
     RENDERED_LANES,
     KnownDocument,
     QueuedInput,
+    StoredDocument,
 )
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.types import InstanceRef
@@ -100,6 +101,23 @@ def known_documents(view: LogView) -> Mapping[str, KnownDocument]:
             path = str(p["path"])
             out[path] = KnownDocument(path, str(p["doc_key"]), int(p["version"]), str(p["blob"]))
     return MappingProxyType(out)
+
+
+def stored_documents(view: LogView) -> tuple[StoredDocument, ...]:
+    """Every version of every document, from the ``document.stored`` facts, in log order."""
+    return tuple(
+        StoredDocument(
+            str(e.payload["doc_key"]),
+            int(e.payload["version"]),
+            str(e.payload["path"]),
+            str(e.payload["blob"]),
+            e.seq,
+            e.at,
+            e.payload,
+        )
+        for e in view.events
+        if e.type == DOCUMENT_STORED
+    )
 
 
 def documents_after(view: LogView, seq: int) -> tuple[tuple[str, Mapping[str, object]], ...]:

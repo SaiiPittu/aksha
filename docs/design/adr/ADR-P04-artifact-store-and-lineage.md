@@ -94,6 +94,15 @@ Takeaway: an artifact is a node that knows what it read, and a relation is a cla
 
 1. C1a, origin `correction`. An approved correction to an artifact value (ADR-P05 C1) saves the slot's next version in the decision's transaction (U4), with `origin: "correction"` and `correction: K-<n>`. Its content is the old version's with the value at the pointer replaced; it is checked against the kind's schema like any save. Its writer is the old version's writer, so the slot keeps one writer key (D4). Its reads are the old version's reads plus the old version itself, which is its one primary input: lineage says what it corrects. The old version's citations outside the corrected value are carried to it (`citation.bound` with the new carrier). Citations inside the corrected value are dropped, because the value they were bound in is gone, and the correction's evidence stays on `correction.proposed`.
 
+### Amendment K1: computed fields (28 Nov 2026, Proposed)
+
+A live run with a general model failed its completion checks on arithmetic, not research: the model saved the right companies, pages and reviews, then counted them wrong (`resolved`, `pages_found`, a review sample's `rows`), and the stop-veto limit blocked the run. The fast-and-slow rule is that code computes every value a check asserts; the model finds, reads and judges.
+
+1. K1a, the field. `ArtifactKind.compute` is a pure function from the content a save gives to the content stored. The fields it writes are the code's: a count, a total, a phrase built from them ("N of M reviews in this sample"). A model may leave them out, even where the schema requires them.
+2. K1b, where it runs. In the save path (D7) right after the kind, rights and key checks and before the encoding, grounding and schema checks, so what is stored, hashed and checked is the computed content; and in a correction's save (C1a), so a corrected list moves the counts over it. A correction of a computed field itself is recomputed over. The function gets a plain copy and may change it in place; one that raises, or returns no object, refuses the save `schema` with its reason.
+3. K1c, what stays. A completion check still holds every count, against a malformed save, and says the computed value and the change that passes. `compute` reads only the content: it is S1's content-only half, with no `EvidenceView` and no errors; S1 stays unbuilt. A value only the reads can give (the unique reviews in an export) stays the model's, or a tool's that returns it, and a check bounds it by what the content shows.
+4. K1d, users. The research agent counts its competitors' companies and pages and its review sample's rows and phrases; the patent agent counts a form's fields by status (its form tool already did, and now a correction does too); a coding agent would count its test results the same way.
+
 ### Amendment R1: a later run reuses an earlier run's versions (27 Nov 2026, Proposed)
 
 A second run of the same agent asked the same thing redid every step, or, before this amendment, passed its completion checks at entry on the earlier run's versions without checking that anything they read still held. R1 makes reuse a decision with a recorded reason (`runtime/tasks/reuse.py`). The rule follows the verifying traces of incremental build systems: a stored result is reused when every dependency it recorded still has the value it was recorded at (Mokhov, Mitchell and Peyton Jones, "Build systems à la carte", ICFP 2018).
@@ -166,6 +175,7 @@ class ArtifactKind:                            # declared by an agent; P-3: data
     canonicalize: Callable[[Mapping[str, Any]], Mapping[str, Any]] | None = None   # pure, new
     save: Literal["any", "tool_only"] = "any"  # v2 SR-9
     summary: str | None = None                 # template for the readable summary
+    compute: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None   # K1: computed fields
 
 @dataclass(frozen=True)
 class RelationKind:                            # v2: EdgeKind

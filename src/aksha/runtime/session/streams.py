@@ -5,8 +5,10 @@
 1. Replay: every stored event of the owner with a sequence number above ``after_seq``
    that belongs to the session, as :class:`EventItem`, in commit order. An event belongs
    to a session when its envelope names the session, when it belongs to a run the session
-   started (``run.started`` with that session), or when it names neither a session nor a
-   run (an owner-wide fact such as ``source.changed``, which every session's panels read).
+   started (``run.started`` with that session) or a rebuild run opened for one of those
+   (``run.started`` with no session and ``for_runs`` naming one, so a client sees its
+   rebuilds live), or when it names neither a session nor a run (an owner-wide fact such
+   as ``source.changed``, which every session's panels read).
 2. If the replay would hold more than ``max_replay`` items, one :class:`Resync` at the
    head replaces it: the client refetches every view and moves its cursor there.
 3. :class:`Synchronized` once, at the head the replay read to: the client has caught up.
@@ -143,6 +145,10 @@ class SessionFilter:
                 self._runs.add(event.run)
             return True
         if event.run is not None:
+            if event.type == "run.started" and event.session is None:
+                for_runs = event.payload.get("for_runs") or ()
+                if any(str(r) in self._runs for r in for_runs):
+                    self._runs.add(event.run)
             return event.run in self._runs
         return event.session is None
 
