@@ -120,7 +120,7 @@ class TaskView:
         """Every key of ``kind``: its current version, or its explicit unknown (ADR-P24)."""
         from aksha.runtime.finalization.unknowns import entries  # deferred: it reads statuses
 
-        return entries(self.log, self.tree, self.instance, kind)
+        return entries(self.log, self.tree, self.instance, kind, self.hidden)
 
     def freshness(self, ref: str) -> Freshness | None:
         """The version's state in the invalidation view, or None when the view lacks it."""

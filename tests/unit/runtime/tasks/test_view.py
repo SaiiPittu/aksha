@@ -91,3 +91,14 @@ def test_called_counts_this_instances_completed_calls_of_one_tool() -> None:
     view = TaskView(log.view(), tree, ref("scope"))
     assert view.called("recall") == 1
     assert view.called("fetch") == 0
+
+
+def test_a_hidden_version_is_absent_from_every_read_entries_included() -> None:
+    # ADR-P04 R1: a version reuse refused stays out of the view, also through entries().
+    tree, log = demo_tree(), TaskLog()
+    log.save("item", "C1", {"v": 1})
+    log.save("item", "C2", {"v": 9})
+    view = TaskView(log.view(), tree, ref("extract", "C1"), hidden=frozenset({"demo.item/C1@v1"}))
+    assert view.own("item") is None
+    assert set(view.all_latest("item")) == {"C2"}
+    assert set(view.entries("item")) == {"C2"}
