@@ -77,6 +77,8 @@ class OracleAgent:
             self.research(tracked)  # type: ignore[arg-type]
         if self.key.data.get("recommendations"):
             self.patent(tracked)  # type: ignore[arg-type]
+        if self.key.data.get("portfolio"):
+            self.portfolio(tracked)  # type: ignore[arg-type]
         self.cite_the_rest(episode, tracked.cited)
 
     def cite_the_rest(self, ep: Episode, cited: set[tuple[str, int]]) -> None:
@@ -280,6 +282,49 @@ class OracleAgent:
                 target_ref=f"packet/{candidates[0]}",
                 approval_id=approval,
             )
+
+    def portfolio(self, ep: Episode) -> None:
+        """The supervisor's four outputs as an ideal run under it would give them.
+
+        The patent adapter records them from the runtime's facts; the oracle builds them
+        from the key's ``portfolio`` section: one supervisor turn on the board alone, the
+        expected admissions and drops, the planted drop audited and re-opened, the goal
+        failing for the supervisor until every candidate is decided.
+        """
+        key = dict(self.key.data["portfolio"])
+        expected = dict(key.get("expected", {}))
+        every = sorted(dict(key.get("candidates", {})))
+        admitted = sorted(expected.get("admitted_after_audit") or key.get("should_admit") or ())
+        dropped = [k for k in every if k not in admitted]
+        planted = str(key["planted_wrong_drop"])
+        sampled = list(expected.get("audit_sample_keys", (planted,)))
+        effort = int(expected.get("deep_effort", 1))
+        ep.save("portfolio", "supervisor", {
+            "turns": 2, "rendered": [], "tool_calls": {"commit_round": 2, "finish": 2},
+            "max_context_chars": 1, "tools_offered": ["commit_round"],
+        })  # fmt: skip
+        ep.save("portfolio", "cost", {
+            "model_turns": {"supervisor": 2, "triage": len(every),
+                            "deep": effort * len(admitted), "other": 0},
+            "items": len(every), "triage_items": len(every), "deep_items": len(admitted),
+        })  # fmt: skip
+        ep.save("portfolio", "review", {
+            "admitted": admitted, "deferred": [],
+            "dropped": [{"key": k, "reason": "triage score below the deep tier's cut"}
+                        for k in dropped],
+            "audit": {"sampled": sampled, "misses": [planted],
+                      "miss_rate": f"1 of {len(sampled)}"},
+        })  # fmt: skip
+        ep.save("portfolio", "goal", {
+            "turns": [{"seq": 1, "goal_ok": False, "clears": "supervisor",
+                       "goal": "[supervisor] items have no decision"},
+                      {"seq": 3, "goal_ok": False, "clears": "supervisor",
+                       "goal": "[supervisor] re-open drops"}],
+            "evaluations": [{"seq": 2, "ok": False, "code": "check_failed"},
+                            {"seq": 4, "ok": False, "code": "check_failed"},
+                            {"seq": 5, "ok": True, "code": None}],
+            "done_seq": 5, "table_entered_seq": 6,
+        })  # fmt: skip
 
     def families(self, ep: Episode) -> None:
         """Each family with its differences, and one cited edge per extra member."""
