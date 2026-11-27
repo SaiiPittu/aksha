@@ -154,10 +154,14 @@ def _delimiter(lines: Sequence[str]) -> str | None:
             break
     if len(rows) < 2:
         return None
-    for d in ("\t", ";", ",", "|"):
-        counts = {r.count(d) for r in rows}
-        if len(counts) == 1 and min(counts) >= 1:
-            return d
+    for skip in (0, 1, 2):  # a title line or two pasted above the header
+        body = rows[skip:]
+        if skip and len(body) < 3:
+            break
+        for d in ("\t", ";", ",", "|"):
+            counts = {r.count(d) for r in body}
+            if len(counts) == 1 and min(counts) >= 1:
+                return d
     return None
 
 
@@ -245,6 +249,11 @@ class _Html(HTMLParser):
             return
         heading = self._inside("h1", "h2", "h3", "h4", "h5", "h6")
         attrs = {"class": self._classes()} if self._classes() else {}
+        owner = next((a["id"] for _, a in reversed(self.stack) if a.get("id")), "")
+        if owner:
+            attrs["id"] = owner  # the nearest element with an ID: the post or card it is in
+        if self._inside("blockquote", "q") is not None:
+            attrs["quoted"] = "true"  # words quoted from elsewhere, not the block's own
         if self._hidden():
             kind = "hidden"
         elif self._inside("footer"):
@@ -366,7 +375,13 @@ class _Html(HTMLParser):
 
 def _html(raw: str) -> list[Segment]:
     parser = _Html(raw)
-    th_rows = {m.start() for m in re.finditer(r"<tr[^>]*>\s*<th", raw, re.I)}
+    # A header row is one of only header cells: a row led by a row-header cell (``<th
+    # scope="row">``) and holding data cells is a data row.
+    th_rows = {
+        m.start()
+        for m in re.finditer(r"<tr\b[^>]*>(.*?)(?=<tr\b|</table|$)", raw, re.I | re.S)
+        if re.match(r"\s*<th\b", m.group(1), re.I) and not re.search(r"<td\b", m.group(1), re.I)
+    }
     parser.feed(raw)
     parser.close()
     parser.flush()
@@ -382,7 +397,7 @@ def _html(raw: str) -> list[Segment]:
 
 # --- text, Markdown, email ----------------------------------------------------------------
 
-_ITEM = re.compile(r"^([-*+•▪◦]|\d{1,3}[.)]|[a-z][.)]|\(\w{1,3}\))\s+")
+_ITEM = re.compile(r"^([-*+•▪◦]|\d{1,3}[.)]|[A-Z]{1,2}\d{1,2}[.)]|[a-z][.)]|\(\w{1,3}\))\s+")
 _HEADING_MD = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
 _BOLD_LINE = re.compile(r"^(\*\*|__)([^*_]{2,80}?)(\1)\s*:?\s*$")
 _SLIDE = re.compile(r"^(slide|page)\s+\d+\s*[:.\-\u2013\u2014]\s*(.+)$", re.I)
@@ -549,8 +564,17 @@ def segment(raw: str, fmt: str) -> tuple[Segment, ...]:
     if fmt in ("csv", "json"):
         table = read_rows(raw, fmt)
         head: list[Segment] = []
+        if fmt == "json":
+            for key, (value, vs, ve) in json_header_cells(raw):
+                if ve <= vs or raw[vs - 1 : vs] != '"':
+                    continue  # strings only: a number or a flag says nothing a reader quotes
+                ks = raw.rfind('"' + key.split(".", 1)[0] + '"', 0, vs)  # from the outer key
+                head.append(Segment("meta", ks if ks >= 0 else vs, ve + 1, raw[vs:ve],
+                                    attrs={"key": key, "value": value, "value_start": str(vs),
+                                           "value_end": str(ve)}))  # fmt: skip
         if fmt == "csv" and table.columns:
-            first = next(delimited_cells(raw, table.delimiter or ","), [])
+            found = list(delimited_cells(raw, table.delimiter or ","))
+            first = found[header_index(found)] if found else []
             if first:
                 head.append(
                     Segment(
@@ -734,19 +758,40 @@ def _lists(value: Any) -> Iterator[list[dict[str, Any]]]:
             yield from _lists(v)
 
 
+def _records(obj: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    """``obj``'s repeated records: ``(record, parent fields)`` pairs, deepest list first.
+
+    An export that groups its records under a parent (comments under each post, lines
+    under each order) holds them in a list of objects inside each object. The records are
+    the inner items, each carrying its parent's other fields; an object holding no such
+    list is its own record.
+    """
+    for k, v in obj.items():
+        if isinstance(v, list) and v and all(isinstance(x, dict) for x in v):
+            parent = {pk: pv for pk, pv in obj.items() if pk != k}
+            out = []
+            for item in v:
+                for rec, above in _records(item):
+                    out.append((rec, {**parent, **above}))
+            return out
+    return [(obj, {})]
+
+
 def _json_rows(raw: str) -> Rows:
     data, _ = _json_value(raw, 0)
     lists = list(_lists(data))
     if not lists:
         return Rows((), ())
-    best = max(lists, key=len)
+    expanded = [[r for obj in objs for r in _records(obj)] for objs in lists]
+    best = max(expanded, key=len)
     rows = []
-    for n, obj in enumerate(best):
-        cells = _flatten(obj)
-        if not cells:
+    for n, (obj, parent) in enumerate(best):
+        own = _flatten(obj)
+        if not own:
             continue
-        s = min(c[1] for c in cells.values())
-        e = max(c[2] for c in cells.values())
+        s = min(c[1] for c in own.values())
+        e = max(c[2] for c in own.values())
+        cells = {**own, **{k: v for k, v in _flatten(parent).items() if k not in own}}
         rows.append(Row(n, s, e, cells))
     columns = tuple(dict.fromkeys(k for r in rows for k in r.cells))
     header: dict[str, Any] = {}
@@ -754,7 +799,47 @@ def _json_rows(raw: str) -> Rows:
         for k, v in data.items():
             if isinstance(v, tuple) and not k.startswith("_"):
                 header[k] = v[0]
+            elif isinstance(v, dict) and not k.startswith("_"):
+                for sub, cell in _flatten(v, k + ".").items():
+                    header[sub] = cell[0]
     return Rows(columns, tuple(rows), header, "json")
+
+
+def json_header_cells(raw: str) -> list[tuple[str, tuple[str, int, int]]]:
+    """A JSON object's top-level fields outside its records: each key and its value's range.
+
+    A feed names its publisher there ("publisher", "title", "published"); nested objects
+    are flattened (``publisher.name``). Keys starting ``_`` are comments and are left out.
+    """
+    try:
+        data, _ = _json_value(raw, 0)
+    except (IndexError, KeyError, ValueError):
+        return []
+    out: list[tuple[str, tuple[str, int, int]]] = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k.startswith("_"):
+                continue
+            if isinstance(v, tuple):
+                out.append((k, v))
+            elif isinstance(v, dict):
+                out.extend(_flatten(v, k + ".").items())
+    return out
+
+
+def header_index(rows: Sequence[Sequence[tuple[str, int, int]]]) -> int:
+    """Which delimited row is the header: the first that fills most of the table's width.
+
+    A sheet pasted with a title line above its header ("Shortlist, pasted from the ops
+    sheet") starts with a row of one filled cell; the header is the first row that
+    fills at least half as many cells as the fullest row, and never a single cell.
+    """
+    filled = [sum(1 for v, _, _ in r if v.strip()) for r in rows]
+    widest = max(filled, default=0)
+    for i, n in enumerate(filled):
+        if n >= max(2, (widest + 1) // 2):
+            return i
+    return 0
 
 
 def read_rows(raw: str, fmt: str = "csv") -> Rows:
@@ -768,12 +853,15 @@ def read_rows(raw: str, fmt: str = "csv") -> Rows:
     all_rows = list(delimited_cells(raw, delimiter))
     if not all_rows:
         return Rows((), (), {}, delimiter)
-    columns = tuple(v.strip() for v, _, _ in all_rows[0])
+    at = header_index(all_rows)
+    columns = tuple(v.strip() for v, _, _ in all_rows[at])
     rows = []
-    for n, cells in enumerate(all_rows[1:]):
+    for n, cells in enumerate(all_rows[at + 1 :]):
         named = {c: cells[i] for i, c in enumerate(columns) if i < len(cells)}
         filled = [c for c in cells if c[2] > c[1]] or cells
         start, end = filled[0][1], filled[-1][2]
+        if cells[0][2] <= cells[0][1]:
+            start = cells[0][1]  # a blank first cell (a value filled down) stays in the row
         if start > 0 and raw[start - 1] == '"':
             start -= 1  # a quoted first cell: the row starts at its opening quote
         if end < len(raw) and raw[end] == '"':
