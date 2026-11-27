@@ -63,8 +63,9 @@ jobs:
     # say why; the test-postgres job is the one that proves them.
     name: Tests, SQLite (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04
-    # The full suite took 19.6 minutes on Python 3.13 before the correction loop's tests.
-    timeout-minutes: 30
+    # make test runs on every core (pytest-xdist, -n auto) with its temporary files on the
+    # runner's /dev/shm; one process took about 20 minutes per job before that.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

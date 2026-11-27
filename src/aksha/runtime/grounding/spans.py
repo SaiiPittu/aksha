@@ -17,8 +17,9 @@ source ``statement``, in the answer's transaction (U4).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from aksha.runtime.canonical import canonical_json
 from aksha.runtime.events.envelope import NewEvent
@@ -37,17 +38,22 @@ from aksha.runtime.tools.types import Ok, ToolOutcome, ToolResultView, ToolSpec
 
 
 def span_index(view: LogView) -> SpanIndex:
-    """Every span minted for ``view``'s owner, with who was shown each (a pure reducer)."""
-    spans: dict[str, CitationSpan] = {}
+    """Every span minted for ``view``'s owner, with who was shown each (a pure reducer).
+
+    Computed once per view (``LogView.derive``): many readers of one view ask for it.
+    """
+    return view.derive("grounding.span_index", lambda: _span_index(view))
+
+
+def _span_index(view: LogView) -> SpanIndex:
+    minted: dict[str, Mapping[str, Any]] = {}
+    seen: dict[str, set[tuple[str, str]]] = {}
+    """Who was shown each span since it was last minted."""
     for e in view.events:
         if e.type == "excerpts.minted":
             for s in e.payload["spans"]:
-                spans[s["span_id"]] = CitationSpan(
-                    span_id=s["span_id"], tenant=view.owner, source=s["source"],
-                    record_id=s["record_id"], version=s["version"], start=s["start"],
-                    end=s["end"], text=s["text"], tool=s["tool"],
-                    supersedes=s.get("supersedes"),
-                )  # fmt: skip
+                minted[s["span_id"]] = s
+                seen.pop(s["span_id"], None)  # a span minted again starts unshown
             shown = e.payload.get("shown", ())
         elif e.type == "excerpts.shown":
             shown = e.payload["spans"]
@@ -55,10 +61,26 @@ def span_index(view: LogView) -> SpanIndex:
             continue
         if e.run is None or e.instance is None:
             continue
+        pair = (e.run, e.instance)
         for span_id in shown:
-            if span_id in spans:
-                span = spans[span_id]
-                spans[span_id] = replace(span, shown_to=span.shown_to | {(e.run, e.instance)})
+            if span_id in minted:
+                seen.setdefault(span_id, set()).add(pair)
+    spans = {
+        span_id: CitationSpan(
+            span_id=s["span_id"],
+            tenant=view.owner,
+            source=s["source"],
+            record_id=s["record_id"],
+            version=s["version"],
+            start=s["start"],
+            end=s["end"],
+            text=s["text"],
+            tool=s["tool"],
+            shown_to=frozenset(seen.get(span_id, ())),
+            supersedes=s.get("supersedes"),
+        )
+        for span_id, s in minted.items()
+    }
     return SpanIndex(view.owner, spans)
 
 

@@ -7,7 +7,8 @@ Changes are reviewed as [REVIEWING.md](REVIEWING.md) describes. Python 3.12 or n
 ```sh
 make venv           # .venv with aksha (editable), dev tools, the server and the trace exporter
 make venv-postgres  # also install the PostgreSQL driver, so the PostgreSQL tests run
-make test           # pytest; the PostgreSQL tests skip, saying why, if they cannot run
+make test           # pytest on every core (pytest-xdist); the PostgreSQL tests skip, saying why, if they cannot run
+make test-serial    # the same suite in one process, for chasing an order dependence
 make test-postgres  # the storage tests, failing instead of skipping without PostgreSQL
 make lint           # ruff check and ruff format --check
 make typecheck      # mypy --strict over src/aksha/ and tests/

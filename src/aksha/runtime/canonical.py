@@ -78,8 +78,19 @@ def sha256_hex(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+_SCALARS = frozenset({str, int, float, bool, type(None)})
+"""Exact types :func:`freeze` returns as they are without the abstract-class checks."""
+
+
 def freeze(value: Any) -> Any:
     """Deep-freeze a JSON value: mappings become read-only proxies and lists become tuples."""
+    kind = type(value)  # exact-type fast paths first: decoded JSON is only these types
+    if kind in _SCALARS:
+        return value
+    if kind is dict:
+        return MappingProxyType({k: freeze(v) for k, v in value.items()})
+    if kind is list or kind is tuple:
+        return tuple([freeze(v) for v in value])
     if isinstance(value, Mapping):
         return MappingProxyType({k: freeze(v) for k, v in value.items()})
     if isinstance(value, list | tuple):

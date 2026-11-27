@@ -199,6 +199,7 @@ def scanned_files() -> list[Path]:
     return sorted(set(files))
 
 
+@cache  # about a thousand tokens: more than the re module's own cache keeps compiled
 def _text_pattern(token: str) -> re.Pattern[str]:
     flags = 0 if len(token) < 5 or token.isupper() else re.I
     return re.compile(rf"(?<![\w-]){re.escape(token)}(?![\w])", flags)
@@ -223,15 +224,30 @@ def leaks(text: str, path: Path | None = None) -> list[tuple[str, str, str]]:
     """Every (world, kind, value) whose value the text names."""
     hits = []
     numbers = _code_numbers(path, text) if path is not None else set()
+    lowered = text.lower() if text.isascii() else None
     for world, kinds in world_tokens().items():
         for kind, values in kinds.items():
             for value in sorted(values):
                 if kind == "number":
                     if value in numbers:
                         hits.append((world, kind, value))
-                elif _text_pattern(value).search(text):
+                elif _may_name(value, text, lowered) and _text_pattern(value).search(text):
                     hits.append((world, kind, value))
     return hits
+
+
+def _may_name(token: str, text: str, lowered: str | None) -> bool:
+    """A substring test that is False only where the token's pattern cannot match.
+
+    It only skips the slow regex search: a case-sensitive pattern needs the token as it is,
+    and a case-insensitive one needs it lowercased when token and text are ASCII (outside
+    ASCII, case folding pairs other characters, so the regex decides).
+    """
+    if _text_pattern(token).flags & re.I == 0:
+        return token in text
+    if lowered is not None and token.isascii():
+        return token.lower() in lowered
+    return True
 
 
 def test_every_world_yields_tokens() -> None:

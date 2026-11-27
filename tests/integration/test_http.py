@@ -19,6 +19,7 @@ from aksha.runtime.session.worker import RuntimeThread
 from tests.support.session import OWNER, SESSION, config
 
 H = {"X-Aksha-User": OWNER}
+STREAM_OPEN_S = 2.0
 
 
 @pytest.fixture
@@ -121,7 +122,9 @@ def test_the_event_stream_replays_marks_the_tail_and_follows(
     client.post(f"/api/v1/sessions/{SESSION}/messages", headers=H,
                 json={"text": "Write a note", "command_id": "c-1"})  # fmt: skip
     _wait_run(client, lambda r: r["state"] == "ended")
-    timer = threading.Timer(0.5, app.state.closing.set)
+    # The stream stays open this long: room for the replay and several 0.05 s heartbeats
+    # even when the test shares the machine with other test workers.
+    timer = threading.Timer(STREAM_OPEN_S, app.state.closing.set)
     timer.start()
     body = client.get(f"/api/v1/sessions/{SESSION}/events", headers=H).text
     timer.join()
@@ -135,7 +138,7 @@ def test_the_event_stream_replays_marks_the_tail_and_follows(
     assert first["type"] == "command.accepted" and first["kind"] == "event"
     assert ": heartbeat" in body
     app.state.closing.clear()
-    timer = threading.Timer(0.5, app.state.closing.set)
+    timer = threading.Timer(STREAM_OPEN_S, app.state.closing.set)
     timer.start()
     resumed = client.get(f"/api/v1/sessions/{SESSION}/events",
                          headers={**H, "Last-Event-ID": str(seqs[-2])}).text  # fmt: skip

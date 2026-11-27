@@ -53,6 +53,7 @@ ingest = [
 # Development tools (PEP 735): never an extra a user of the package sees.
 dev = [
     "pytest>=8",
+    "pytest-xdist>=3.6",  # make test runs the suite on every core (-n auto)
     "ruff>=0.6",
     "mypy>=1.11",
     "types-jsonschema",

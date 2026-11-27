@@ -37,7 +37,7 @@ def _version(view: LogView, event: Event, blobs: BlobStore | None) -> ArtifactVe
         content_hash=row.row.content_hash,
         canonical_hash=str(p.get("canonical_hash", row.row.canonical_hash)),
         reads=reads,
-        reads_hash=str(p.get("reads_hash", reads_hash(reads))),
+        reads_hash=str(p["reads_hash"]) if "reads_hash" in p else reads_hash(reads),
         writer=WriterId("", "") if writer is None else WriterId.from_json(writer),
         origin=p.get("origin", "task"),
         run=event.run,

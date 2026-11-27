@@ -41,8 +41,11 @@ def test_writer_holds_the_advisory_lock(
     try:
         with psycopg.connect(postgres_dsn, autocommit=True) as conn:
             row = conn.execute(
+                # pg_locks spans the server; other test workers hold their own databases'
+                # writer locks on it, so count only this database's.
                 "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND granted "
-                "AND objid = %s",
+                "AND objid = %s AND database = "
+                "(SELECT oid FROM pg_database WHERE datname = current_database())",
                 (postgres.WRITER_LOCK_KEY,),
             ).fetchone()
         assert row is not None and row[0] == 1

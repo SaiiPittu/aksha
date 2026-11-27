@@ -3,7 +3,10 @@
 The container is named ``aksha-pg-test-<8 hex digits>``, unique to the test session, and
 labelled ``aksha.test=contract``. It is started on a free local port and removed when the
 test session ends. Nothing here touches another container, so two suites running at once
-(in two worktrees, or by two agents) each keep their own server until they finish. The
+(in two worktrees, or by two agents) each keep their own server until they finish. Under
+pytest-xdist the workers of one run share one server (:func:`shared_server`): the first
+worker to need it starts it, each takes a reference, and the last to finish removes it;
+every test still gets its own database. The
 image is never pulled (``--pull=never``), so the suite needs no network; set
 ``AKSHA_PG_IMAGE`` to use another local image, or ``AKSHA_TEST_POSTGRES_DSN`` to use a
 server you already run instead of docker.
@@ -14,13 +17,18 @@ instead, so a run that was meant to prove the PostgreSQL adapter cannot pass by 
 
 from __future__ import annotations
 
+import fcntl
+import json
 import os
 import shutil
 import socket
 import subprocess
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 CONTAINER = f"aksha-pg-test-{uuid.uuid4().hex[:8]}"
@@ -48,6 +56,8 @@ class PostgresServer:
 
     admin_dsn: str
     owned_container: bool
+    container: str = CONTAINER
+    """The docker container this suite started, when ``owned_container``."""
 
     def dsn(self, database: str) -> str:
         """The DSN of ``database`` on this server."""
@@ -95,7 +105,7 @@ def _wait_ready(dsn: str) -> None:
             time.sleep(0.3)
 
 
-def start_server() -> PostgresServer | str:
+def start_server(container: str = CONTAINER) -> PostgresServer | str:
     """Start (or find) a server; return it, or a reason to skip the PostgreSQL tests."""
     try:
         import psycopg  # noqa: F401
@@ -114,12 +124,12 @@ def start_server() -> PostgresServer | str:
         return "PostgreSQL adapter not tested: the docker daemon is not reachable"
     if _docker("image", "inspect", IMAGE).returncode != 0:
         return f"PostgreSQL adapter not tested: image {IMAGE} is not present locally (no pull)"
-    found = _docker("ps", "-a", "--filter", f"name=^{CONTAINER}$", "--format", "{{.Labels}}")
+    found = _docker("ps", "-a", "--filter", f"name=^{container}$", "--format", "{{.Labels}}")
     if found.stdout.strip():
-        return f"PostgreSQL adapter not tested: a container named {CONTAINER} already exists"
+        return f"PostgreSQL adapter not tested: a container named {container} already exists"
     port = _free_port()
     run = _docker(
-        "run", "-d", "--rm", "--pull=never", "--name", CONTAINER, "--label", LABEL,
+        "run", "-d", "--rm", "--pull=never", "--name", container, "--label", LABEL,
         "-e", "POSTGRES_USER=aksha", "-e", "POSTGRES_PASSWORD=aksha",
         # Data on a tmpfs: the image declares a VOLUME for PGDATA, so without this every
         # run (and every killed run) leaves an anonymous Docker volume behind.
@@ -132,12 +142,58 @@ def start_server() -> PostgresServer | str:
     try:
         _wait_ready(f"{dsn} dbname=postgres")
     except Exception:
-        stop_server(PostgresServer(admin_dsn=dsn, owned_container=True))
+        stop_server(PostgresServer(admin_dsn=dsn, owned_container=True, container=container))
         raise
-    return PostgresServer(admin_dsn=f"{dsn} dbname=postgres", owned_container=True)
+    return PostgresServer(
+        admin_dsn=f"{dsn} dbname=postgres", owned_container=True, container=container
+    )
 
 
 def stop_server(server: PostgresServer) -> None:
     """Remove the container if this suite started it; leave any other server alone."""
     if server.owned_container:
-        _docker("rm", "-f", "-v", CONTAINER)
+        _docker("rm", "-f", "-v", server.container)
+
+
+@contextmanager
+def _locked(root: Path) -> Iterator[Path]:
+    """Hold the run-wide lock on ``root`` (shared by every xdist worker of one run)."""
+    root.mkdir(parents=True, exist_ok=True)
+    with open(root / "postgres.lock", "a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield root / "postgres.json"
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def shared_server(root: Path, run_id: str) -> PostgresServer | str:
+    """The server every worker of run ``run_id`` shares; start it if no worker has yet.
+
+    ``root`` is a directory all the run's workers see. Each call takes one reference;
+    :func:`release_shared` gives it back, and the last reference removes the container.
+    """
+    with _locked(root) as state:
+        if state.exists():
+            data = json.loads(state.read_text(encoding="utf-8"))
+            data["refs"] += 1
+            state.write_text(json.dumps(data), encoding="utf-8")
+            return PostgresServer(data["admin_dsn"], data["owned"], data["container"])
+        server = start_server(f"aksha-pg-test-{run_id[:8]}")
+        if isinstance(server, PostgresServer):
+            data = {"admin_dsn": server.admin_dsn, "owned": server.owned_container,
+                    "container": server.container, "refs": 1}  # fmt: skip
+            state.write_text(json.dumps(data), encoding="utf-8")
+        return server
+
+
+def release_shared(root: Path, server: PostgresServer) -> None:
+    """Give back one reference to the shared server; the last one removes it."""
+    with _locked(root) as state:
+        data = json.loads(state.read_text(encoding="utf-8"))
+        data["refs"] -= 1
+        if data["refs"] > 0:
+            state.write_text(json.dumps(data), encoding="utf-8")
+            return
+        state.unlink()
+        stop_server(server)

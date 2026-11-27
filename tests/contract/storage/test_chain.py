@@ -25,6 +25,7 @@ from aksha.runtime.storage.errors import AlreadyRecorded, StoreError
 from aksha.runtime.storage.ports import EventStore
 from tests.support.backends import Backend, PostgresBackend, SQLiteBackend
 from tests.support.events import (
+    ARTIFACT_CONTENT,
     START,
     artifact_row,
     probe,
@@ -84,6 +85,23 @@ def test_tampered_row_detected(store: EventStore, backend: Backend) -> None:
     backend.tamper('UPDATE events SET payload = \'{"n":3,"text":"edited"}\' WHERE seq = 3')
     found = store.verify()
     assert found is not None and (found.seq, found.reason) == (3, "hash_mismatch")
+
+
+def test_a_read_after_a_tamper_returns_the_stored_row_not_an_earlier_decoding(
+    store: EventStore, backend: Backend
+) -> None:
+    """Reads reuse decoded rows (``RowMemo``) only while the stored row is unchanged."""
+    _fill(store)
+    store.append("o1", "U2", [saved()], artifacts=[artifact_row()])
+    texts = {e.seq: e.payload.get("text") for e in store.read("o1")}
+    assert texts[3] == "t"
+    assert store.read_artifacts("o1")[0].row.content == ARTIFACT_CONTENT
+    backend.tamper(
+        'UPDATE events SET payload = \'{"n":3,"text":"edited"}\' WHERE seq = 3',
+        """UPDATE artifacts SET content = '{"body":"edited"}'""",
+    )
+    assert {e.seq: e.payload.get("text") for e in store.read("o1")} == {**texts, 3: "edited"}
+    assert store.read_artifacts("o1")[0].row.content == {"body": "edited"}
 
 
 def test_owner_change_breaks_chain(store: EventStore, backend: Backend) -> None:
