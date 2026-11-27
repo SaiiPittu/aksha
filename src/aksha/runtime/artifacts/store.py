@@ -636,7 +636,7 @@ def _hidden_from(view: LogView, run: str, writer: WriterId, prior: ArtifactVersi
 
 
 def computed(kind: ArtifactKind, content: Mapping[str, Any]) -> Mapping[str, Any]:
-    """Check 2's first step: ``content`` with the kind's computed fields (``compute``) written over it.
+    """Check 2's first step: ``content`` with the kind's computed fields written over it.
 
     The function gets a plain copy, so it may change it in place. One that raises, or
     returns no object, refuses the save ``schema`` with the reason, as a malformed content
