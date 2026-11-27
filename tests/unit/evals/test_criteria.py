@@ -149,17 +149,37 @@ def test_a_family_named_by_its_priority_number_grades_as_the_keys_family(tmp_pat
     assert _outcome(tmp_path / "b", status, "trap.T-STATUS") == "pass"
 
 
+def _anchor(fact: Any) -> dict[str, Any]:
+    a = fact.anchor
+    return {"file": a.file, "exact": a.exact, "start": a.start, "end": a.end}
+
+
 def test_known_values_with_no_listed_value_reads_the_cases_own_domain(tmp_path: Path) -> None:
     """A patent case that lists only a gap is not failed for the research prices."""
     k = key()
-    window = k.facts["KF-02"].value
-    fields = {
-        "quiet_window": {"value": dict(window), "status": "known"},
-        "conception_date": {"value": k.facts["KF-03"].value, "status": "known"},
-    }
-    steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"fields": fields})]
+    window, conceived = k.facts["KF-02"], k.facts["KF-03"]
+    entries = [
+        {"kind": "parameter", "value": dict(window.value), "status": "known",
+         "citations": [_anchor(window)]},
+        {"kind": "conception_record", "value": conceived.value, "status": "known",
+         "citations": [_anchor(conceived)]},
+    ]  # fmt: skip
+    steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"entries": entries})]
     got = _outcome(tmp_path, steps, "precision.known_values", expect=("facts.KF-05",))
     assert got == "pass"
+
+
+def test_an_entry_is_found_by_its_fact_kind_and_anchor_not_a_field_name(tmp_path: Path) -> None:
+    """The extraction check reads the key's fact kind and anchor; an uncited value fails."""
+    k = key()
+    window = k.facts["KF-02"]
+    cited = [{"kind": "parameter", "value": dict(window.value), "status": "known",
+              "citations": [_anchor(window)]}]  # fmt: skip
+    uncited = [{**cited[0], "citations": []}]
+    for name, entries, want in (("a", cited, "pass"), ("b", uncited, "fail")):
+        steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"entries": entries})]
+        got = _outcome(tmp_path / name, steps, "precision.known_values", expect=("facts.KF-02",))
+        assert got == want, name
 
 
 def test_a_family_the_variant_adds_is_changed_under_its_priority_number_too() -> None:
@@ -199,3 +219,25 @@ def test_a_quoted_claim_is_not_the_agents_own_words() -> None:
     assert list(own_words({"claims": [claim]})) == ["vendor_claim"]
     said = {**claim, "text": "60% of clinics churn."}  # the agent's own sentence, not the quote
     assert [h for s in own_words(said) for h in violations("no_market_percentage", s)] == ["60%"]
+
+
+@pytest.mark.parametrize(
+    ("text", "unit", "want"),
+    [
+        ("Rated -20 to 60 °F on the sheet.", "°C", "°F"),
+        ("Rated -20 to 60 °C on the sheet.", "°C", None),
+        ("A gap of 2 to 5 cm between the plates.", "mm", "cm"),
+        ("A gap of 2 to 5 mm between the plates.", "mm", None),
+        ("Between 2 and 5 percent of the time.", "%", None),  # one unit, spelled two ways
+        ("Between 2 and 5 hours of the time.", "%", "hours"),
+        ("From 2 to 5 across the range.", "mm", None),  # a word after the range is no unit
+        ("Rated -20 to 60 °F (converted from °C).", "°C", None),  # a labelled conversion
+    ],
+)
+def test_a_range_in_another_unit_is_found_whatever_the_unit(
+    text: str, unit: str, want: str | None
+) -> None:
+    from aksha.evals.criteria.traps import unlabelled_unit
+
+    low, high = ("-20", "60") if "-20" in text else ("2", "5")
+    assert unlabelled_unit(text, low, high, unit) == want

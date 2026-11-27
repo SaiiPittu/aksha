@@ -69,13 +69,14 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     rebuilt_by = {r["agent"] for r in report["runs"].values() if r["cause"] == "rebuild"}
     assert rebuilt_by == {"patent", "research"}
     change = report["change"]
-    # Every recorded query re-runs: four candidate searches; the patent agent's input
-    # listings of the kinds its scope, extract and prepare Tasks read, and its template
-    # listing; and the research agent's two listings and three searches (the scope's, the
-    # manual alternatives' and the sellers' names). Only C1's search finds the new
-    # publication; the new file is of no kind any listing asks for and names no seller, so
-    # every other query stays as it was.
-    assert (change["queries_rerun"], change["queries_changed"]) == (13, 1)
+    # Every recorded query re-runs: four candidate searches; six searches by a found
+    # family's priority number (each candidate's family members, wherever they are kept);
+    # the patent agent's input listings of the kinds its scope, extract and prepare Tasks
+    # read, and its template listing; and the research agent's two listings and three
+    # searches (the scope's, the manual alternatives' and the sellers' names). Only C1's
+    # search finds the new publication; the new file is of no kind any listing asks for and
+    # names no seller, so every other query stays as it was.
+    assert (change["queries_rerun"], change["queries_changed"]) == (19, 1)
     # The review no output cites (the demo's own edit): the patent portfolio read the
     # export outside what it rests on, so it is noticed and not rebuilt; the research
     # needs count every review, so they reopen (ADR-P05 M2). Keyed on every read, the

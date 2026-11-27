@@ -505,7 +505,9 @@ def _view(
     if section is not None:
         data["section"] = int(section)
     marks: list[tuple[int, str]] = [(line, label) for line, label in _pages(text, starts)]
-    marks += [(_line_of(starts, s.start), s.text[:80]) for s in segs if s.kind == "heading"]
+    paged = {line for line, _ in marks}  # a page marker the segmenter also reads as a heading
+    heads = ((_line_of(starts, s.start), s.text[:80]) for s in segs if s.kind == "heading")
+    marks += [(line, label) for line, label in heads if line not in paged]
     if marks:
         data["anchors"] = [[label, line] for line, label in sorted(marks)[:60]]
     if bool(args.get("extract", False)):

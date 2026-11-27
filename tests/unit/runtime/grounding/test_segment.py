@@ -114,3 +114,82 @@ def test_a_labelled_step_marker_starts_an_item() -> None:
 def test_a_title_line_pasted_above_a_tables_header_is_skipped() -> None:
     table = read_rows("Price list 2026\n\nname,price\nA,1\nB,2\n", "csv")
     assert table.columns == ("name", "price") and table.delimiter == ","
+
+
+# --- transcripts, XML, JSON Lines and YAML: structure, never meaning -----------------------
+
+VTT = """WEBVTT
+
+NOTE
+Design review, recorded 3 March 2026
+
+1
+00:00:01.000 --> 00:00:05.000
+<v Ana Ruiz>The first step is a filter: we drop a frame when it is blurred.
+
+2
+00:00:05.000 --> 00:00:09.000
+<v Ben Okafor>Then we count what is left.
+"""
+
+
+def test_a_webvtt_cue_is_a_speaker_turn_whose_range_is_only_the_words_said() -> None:
+    assert sniff_format("input/a.txt", VTT) == "vtt"
+    turns = [s for s in segment(VTT, "vtt") if s.attrs.get("speaker")]
+    assert [t.attrs["speaker"] for t in turns] == ["Ana Ruiz", "Ben Okafor"]
+    assert VTT[turns[0].start : turns[0].end].startswith("The first step")
+    assert turns[1].attrs["time"] == "00:00:05.000"
+
+
+def test_a_call_transcript_line_is_its_own_turn() -> None:
+    raw = (
+        "Call notes\n[00:00:07] Speaker 1: We sample once a minute.\n[00:00:12] Speaker 2: Fine.\n"
+    )
+    turns = [s for s in segment(raw, "text") if s.attrs.get("speaker")]
+    assert [(t.attrs["speaker"], raw[t.start : t.end]) for t in turns] == [
+        ("Speaker 1", "We sample once a minute."), ("Speaker 2", "Fine.")]  # fmt: skip
+
+
+def test_xml_leaves_are_fields_repeated_leaves_are_items_and_records_are_headings() -> None:
+    raw = (
+        '<?xml version="1.0"?>\n<export>\n  <rec key="SYN-A-1">\n    <title>One</title>\n'
+        '    <step n="1">Do this.</step>\n    <step n="2">Then that.</step>\n  </rec>\n'
+        '  <rec key="SYN-A-2">\n    <title>Two</title>\n  </rec>\n</export>\n'
+    )
+    assert sniff_format("input/x", raw) == "xml"
+    segs = segment(raw, "xml")
+    heads = [s for s in segs if s.kind == "heading" and s.attrs.get("tag") == "rec"]
+    assert [h.attrs["@key"] for h in heads] == ["SYN-A-1", "SYN-A-2"]
+    steps = [s for s in segs if s.kind == "item"]
+    assert [raw[s.start : s.end] for s in steps] == ["Do this.", "Then that."]
+    assert {s.attrs["key"] for s in segs if s.kind == "meta"} == {"title"}
+
+
+def test_json_lines_and_yaml_are_tables_with_raw_ranges() -> None:
+    jsonl = '{"id": "SYN-E-1", "when": "2026-01-02"}\n{"id": "SYN-E-2", "when": "2026-02-03"}\n'
+    assert sniff_format("input/log", jsonl) == "jsonl"
+    rows = read_rows(jsonl, "jsonl")
+    assert [r.value("id") for r in rows.rows] == ["SYN-E-1", "SYN-E-2"]
+    v, s, e = rows.rows[1].cells["when"]
+    assert jsonl[s:e] == v == "2026-02-03"
+    yaml = (
+        "# a list kept by hand\nexported: 2026-01-01\npeople:\n  - name: Ana Ruiz\n"
+        '    credits:\n      - {idea: SYN-X-1, what: "drew the filter"}\n'
+        "      - idea: SYN-X-2\n        what: wrote the counter\n  - name: Ben Okafor\n"
+        "    credits:\n      - {idea: SYN-X-1, what: tested it}\n"
+    )
+    assert sniff_format("input/people", yaml) == "yaml"
+    table = read_rows(yaml, "yaml")
+    got = [(r.value("name"), r.value("idea"), r.value("what")) for r in table.rows]
+    assert got == [("Ana Ruiz", "SYN-X-1", "drew the filter"), ("Ana Ruiz", "SYN-X-2",
+                   "wrote the counter"), ("Ben Okafor", "SYN-X-1", "tested it")]  # fmt: skip
+    for r in table.rows:
+        v, s, e = r.cells["what"]
+        assert yaml[s:e] == v
+
+
+def test_rule_lines_pages_and_bracketed_labels_are_structure() -> None:
+    raw = "Deck\n====\n\n--- page 1 ---\nMethod\na) one step here.\n[speaker notes]\nA note.\n"
+    segs = segment(raw, "text")
+    assert [s.text for s in segs if s.kind == "heading"] == ["Deck", "Method", "speaker notes"]
+    assert [s.attrs.get("page") for s in segs if s.kind == "rule"] == ["1"]

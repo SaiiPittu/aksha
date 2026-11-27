@@ -35,9 +35,21 @@ def test_every_gradeable_criterion_is_killed_by_a_mutant(
     # The change checks read a change set's derived key, never a world's own key, so they
     # are key gaps here; tests/unit/evals/test_change_criteria.py kills each with a mutant.
     change = ["change.stale_set", "change.unchanged_set", "research.scope_change"]
-    assert report.key_gaps == sorted(["precision.abstention_count", *change])
+    unkeyed = [c for c in REGISTRY if c.startswith("trap.") and c[5:] not in key(name).traps]
+    assert report.key_gaps == sorted(["precision.abstention_count", *change, *unkeyed])
     gaps = len(report.key_gaps)
     assert (killed, total) == (len(REGISTRY) - gaps, len(REGISTRY) - gaps)
+
+
+HELD_OUT = ("cindral", "tilldew", "pulvane", "quillmere", "brackwen", "rimefold", "kelasora",
+            "vantlow")  # fmt: skip
+
+
+@pytest.mark.parametrize("name", HELD_OUT)
+def test_every_world_passes_its_self_tests(tmp_path: Path, name: str) -> None:
+    """The graders and the oracle read every world's key alone, whatever its shape."""
+    report = self_test(world(name), key(name), open_store=OPEN, out=tmp_path, registry=REGISTRY)
+    assert [(c.bundle, c.problems) for c in report.checks if not c.ok] == []
 
 
 def test_each_mutant_names_a_registered_criterion() -> None:
@@ -81,3 +93,41 @@ def test_a_grader_that_cannot_fail_is_caught(tmp_path: Path) -> None:
     report = self_test(world(), key(), open_store=OPEN, out=tmp_path, registry=lenient)
     bad = {c.bundle for c in report.checks if not c.ok}
     assert bad == {"mutant:status-merged"}
+
+
+NEW_TRAPS = (
+    ("quillmere", "trap.T-NOTEBOOK"),
+    ("quillmere", "trap.T-UNITS"),
+    ("quillmere", "trap.T-OBVIOUS-4"),
+    ("quillmere", "trap.T-OBVIOUS-5"),
+    ("pulvane", "trap.T-PARAMCONFLICT"),
+    ("kelasora", "trap.T-REGION"),
+    ("kelasora", "trap.T-UNIT"),
+    ("vantlow", "trap.T-UNIT"),
+)
+
+
+@pytest.mark.parametrize(("name", "trap"), NEW_TRAPS)
+def test_each_trap_check_passes_the_oracle_and_a_mutant_fails_it(
+    tmp_path: Path, name: str, trap: str
+) -> None:
+    report = self_test(world(name), key(name), open_store=OPEN, out=tmp_path, registry=REGISTRY)
+    assert trap not in report.key_gaps
+    assert trap in report.killed
+
+
+def test_no_grader_names_a_field_one_world_extracted() -> None:
+    """The graders, the oracle and the adapter read field names from each key, never one world.
+
+    The words below are the extracted fields of the first world's candidate; a grader that
+    names one cannot pass on another world's candidate whatever the agent extracts.
+    """
+    import aksha.evals as evals
+
+    root = Path(evals.__file__).parent
+    first_world = ("quiet_window", "walk_test", '"gates"', "rejected_alternative",
+                   "conception_date", '"C1"')  # fmt: skip
+    for path in [*root.joinpath("criteria").glob("*.py"), *root.joinpath("selftest").glob("*.py"),
+                 root / "agents" / "patent.py", root / "judge.py"]:  # fmt: skip
+        text = path.read_text(encoding="utf-8")
+        assert [w for w in first_world if w in text] == [], path.name

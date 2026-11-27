@@ -87,3 +87,27 @@ def is_unknown(value: object) -> bool:
         "missing",
         "n_a",
     }
+
+
+_UNITS = {
+    "s": "seconds", "sec": "seconds", "secs": "seconds", "second": "seconds",
+    "ms": "milliseconds", "msec": "milliseconds", "millisecond": "milliseconds",
+    "min": "minutes", "mins": "minutes", "minute": "minutes",
+    "h": "hours", "hr": "hours", "hrs": "hours", "hour": "hours",
+    "d": "days", "day": "days",
+    "m": "metres", "meter": "metres", "meters": "metres", "metre": "metres",
+    "cm": "centimetres", "mm": "millimetres", "km": "kilometres", "\u03bcm": "micrometres",
+    "g": "grams", "gram": "grams", "kg": "kilograms", "mg": "milligrams",
+    "l": "litres", "litre": "litres", "liter": "litres", "ml": "millilitres",
+    "hz": "hertz", "khz": "kilohertz", "v": "volts", "volt": "volts", "w": "watts",
+    "watt": "watts", "pa": "pascals", "kpa": "kilopascals",
+}  # fmt: skip
+"""Spellings of a unit that name the same unit (SI symbols and their words)."""
+KNOWN_UNITS = frozenset(_UNITS.values())
+"""The units :func:`unit_key` knows, each by its word."""
+
+
+def unit_key(value: object) -> str:
+    """A unit for matching: ``s``, ``sec`` and ``Seconds`` agree; other units as ``enum_key``."""
+    key = enum_key(value or "")
+    return _UNITS.get(key, key)

@@ -133,14 +133,14 @@ Six of the ten worlds were written without sight of the agent code, to test whet
 | change | research | no | 1 of 1 (3 arms, k = 3) | pass |
 | tilldew | both | no | 12 of 12 | pass |
 | cindral | both | no | 11 of 11 | pass |
-| rimefold | research | yes | 7 of 8 | fail (oracle gaps) |
-| kelasora | research | yes | 9 of 9 | fail (oracle gaps) |
-| vantlow | research | yes | 9 of 9 | fail (oracle gaps) |
-| pulvane | patent | yes | 1 of 7 | fail (oracle gaps) |
-| quillmere | patent | yes | 0 of 7 | fail (oracle gaps) |
-| brackwen | patent | yes | 2 of 9 | fail (oracle gaps) |
+| rimefold | research | yes | 7 of 8 | pass |
+| kelasora | research | yes | 9 of 9 | pass |
+| vantlow | research | yes | 9 of 9 | pass |
+| pulvane | patent | yes | 7 of 8 | pass |
+| quillmere | patent | yes | 3 of 7 | pass |
+| brackwen | patent | yes | 7 of 9 | pass |
 
-On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 3 of 23. The patent agent's note reader does not yet find an invention in a meeting transcript, a lab notebook or a tracker export, and the self-test oracle and some graders still name fields in the first world's words; [limitations item 19](docs/limitations.md) lists each gap. They are left failing on purpose rather than fixed with a rule that fits one world. These are fake-model numbers, so they test the harness and the offline rules, not a model. A held-out suite exits 2 because its self-tests fail; no suite had an invariant failure.
+On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 17 of 24 (3 of 23 before its reader and the graders were made general; `pulvane` gained a case). What still fails is the offline comparison, which counts a step's words where the worlds' authors judged paraphrases, and one threshold stated in other units; [limitations item 19](docs/limitations.md) lists each gap, and says why the three patent worlds no longer count as held out. They are left failing on purpose rather than fixed with a rule that fits one world. These are fake-model numbers, so they test the harness and the offline rules, not a model. Every suite's grader self-tests pass, and no suite had an invariant failure.
 
 ## Live mode
 

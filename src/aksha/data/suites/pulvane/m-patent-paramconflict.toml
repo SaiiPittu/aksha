@@ -1,0 +1,10 @@
+id = "m-patent-paramconflict"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-PARAMCONFLICT"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-14", "facts.MF-15", "traps.T-PARAMCONFLICT"]
+criteria = ["trap.T-PARAMCONFLICT", "citation.exists"]

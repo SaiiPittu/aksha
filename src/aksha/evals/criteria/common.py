@@ -137,17 +137,41 @@ def family_output(ctx: GradeContext, kind: str, label: str) -> Output | None:
     return next((o for o in ctx.state.of_kind(kind) if family_label(ctx, o.key) == want), None)
 
 
-def field_of(out: Output | None, name: str) -> Mapping[str, Any] | None:
-    """A field of an extraction-style output (``content.fields.<name>``), or None."""
-    if out is None:
-        return None
-    fields = out.content.get("fields", {})
-    value = fields.get(name) if isinstance(fields, Mapping) else None
-    return value if isinstance(value, Mapping) else None
-
-
 def text_of(out: Output) -> str:
     """Every string an output holds, joined: what a text check scans for one output."""
     from aksha.evals.state import walk_strings
 
     return "\n".join(walk_strings(out.content))
+
+
+def entries(out: Output | None, kind: str | None = None) -> list[Mapping[str, Any]]:
+    """An extraction-style output's entries (``content.entries``), of ``kind`` when given.
+
+    An entry is one extracted item named by the key's own fact kind (``mechanism_step``,
+    ``parameter``, ``conception_record``, ``missing_detail``, ...) or by a counsel topic
+    (``inventorship``, ``ownership``): ``kind``, ``element`` when it is about one element,
+    ``value``, ``status``, ``question`` and ``citations``. Graders find the entry a keyed fact
+    stands for by its kind and its anchor, never by a field name one world used.
+    """
+    if out is None:
+        return []
+    got = out.content.get("entries", ())
+    if not isinstance(got, (list, tuple)):
+        return []
+    return [e for e in got if isinstance(e, Mapping) and (kind is None or e.get("kind") == kind)]
+
+
+def citing(
+    ctx: GradeContext, items: Iterable[Mapping[str, Any]], fact: KeyFact
+) -> list[Mapping[str, Any]]:
+    """The items (entries, events) whose citations overlap ``fact``'s anchor tightly."""
+    out = []
+    for item in items:
+        cs = [c for c in item.get("citations", ()) if isinstance(c, Mapping)]
+        one = item.get("citation")
+        if isinstance(one, Mapping):
+            cs.append(one)
+        cs += [c for c in item.get("evidence", ()) if isinstance(c, Mapping)]
+        if cites(ctx, cs, fact):
+            out.append(item)
+    return out

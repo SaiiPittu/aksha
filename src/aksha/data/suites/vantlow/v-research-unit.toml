@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["vantlow"]
 opening = "What does each hosted log tool charge for seed-stage developer-tools startups in North America, in each vendor's own billing unit?"
 expect = ["facts.VF-05", "facts.VF-15", "traps.T-UNIT"]
-criteria = ["research.prices", "precision.known_values", "citation.exists", "citation.overlaps_key"]
+criteria = ["trap.T-UNIT", "research.prices", "precision.known_values", "citation.exists", "citation.overlaps_key"]

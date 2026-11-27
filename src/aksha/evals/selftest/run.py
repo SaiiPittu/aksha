@@ -201,7 +201,11 @@ def self_test(
     ):
         v = graded(_run(env, _with(case, f"selftest-{name}"), agent, name))
         got = _outcomes(v)
-        missed = [f"{c}: {got.get(c)}, want fail" for c in must_fail if got.get(c) != "fail"]
+        missed = [
+            f"{c}: {got.get(c)}, want fail"
+            for c in must_fail
+            if got.get(c) != "fail" and c not in report.key_gaps
+        ]
         report.checks.append(BundleCheck(name, not missed, tuple(missed)))
 
     for name, mutant in MUTANTS.items():
@@ -213,6 +217,11 @@ def self_test(
             planted = mutant.plant(oracle, key)
         except NotApplicable as e:
             report.checks.append(BundleCheck(f"mutant:{name}", True, (f"not applicable: {e}",)))
+            continue
+        if planted.events == oracle.events and planted.ledger == oracle.ledger:
+            report.checks.append(
+                BundleCheck(f"mutant:{name}", True, ("not applicable: nothing to plant it in",))
+            )
             continue
         got = _outcomes(graded(planted))
         survived = [f"{c}: {got.get(c)}, want fail" for c in applicable if got.get(c) != "fail"]

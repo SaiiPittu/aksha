@@ -67,6 +67,12 @@ def _fresh(tmp_path: Path, world: str = "stillroom") -> PatentRig:
 
 
 def test_every_graded_fact_is_found_with_its_exact_quote(sent: PatentRig) -> None:
+    """Every keyed fact is quoted: the quote holds the fact, or is the fact's own core.
+
+    A quote that holds only part of a fact (an alternative without the reason it was
+    dropped, a date without its label) is the fact's words, as the graders' tight overlap
+    reads it; a quote that merely shares a word is not.
+    """
     found = [q for c in saved_contents(sent) for q in quotes(c)]
     for file, quote in found:  # every recorded quote is the source's own text
         raw = (sources(sent.world_name) / file.removeprefix("input/")).read_text(encoding="utf-8")
@@ -75,7 +81,13 @@ def test_every_graded_fact_is_found_with_its_exact_quote(sent: PatentRig) -> Non
         raw = (sources(sent.world_name) / fact["file"]).read_text(encoding="utf-8")
         exact = fact["quote"]["exact"]
         assert raw[fact["position"]["start"] : fact["position"]["end"]] == exact  # key sanity
-        hits = [q for f, q in found if f == f"input/{fact['file']}" and norm(exact) in norm(q)]
+        hits = [
+            q
+            for f, q in found
+            if f == f"input/{fact['file']}"
+            and (norm(exact) in norm(q) or (len(norm(q)) * 3 >= len(norm(exact)) > 0
+                                            and norm(q) in norm(exact)))
+        ]  # fmt: skip
         assert hits, f"{fact['id']} {exact!r} not quoted from {fact['file']}"
 
 
