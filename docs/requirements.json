@@ -803,7 +803,7 @@
         {
           "id": "R-36",
           "requirement": "Use Research Agent outputs through explicit artifact IDs and versions, not as proof of novelty.",
-          "how": "Research outputs are saved with IDs and versions, but the patent agent declares no read of them.",
+          "how": "The `recommend` Task declares reads of `research.needs` and `research.findings` by kind, so each recommendation's lineage records the exact versions read; it cites them as artifact cites (`research.needs@v2`) under `business_importance` only, with a note that research is not evidence of novelty. The check refuses a research output named anywhere else; run alone, business importance from research is unknown; a research rebuild reopens every recommendation that read it.",
           "evidence": [
             {
               "kind": "path",
@@ -811,11 +811,26 @@
             },
             {
               "kind": "test",
-              "ref": "tests/integration/test_context.py::test_patent_context_has_no_research_text"
+              "ref": "tests/integration/test_demo.py::test_c1s_recommendation_reads_and_cites_research_by_version"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_business_importance_cites_the_exact_research_versions_read"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_research_cited_as_novelty_or_prior_art_evidence_is_refused"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_without_research_business_importance_is_unknown_not_a_failure"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_the_patent_agent_alone_records_business_importance_from_research_as_unknown"
             }
           ],
-          "status": "not met",
-          "reason": "No patent Task reads a `research.*` artifact, so no recommendation cites research work; the two agents share only the uploaded inputs."
+          "status": "met"
         },
         {
           "id": "R-37",
@@ -1148,11 +1163,19 @@
         {
           "id": "R-55",
           "requirement": "Save Research Agent outputs with IDs and versions so the Patent Agent can read and cite them.",
-          "how": "Research outputs are versioned artifacts that any Task could read by ID, but the patent agent does not.",
+          "how": "Research outputs are versioned artifacts; the patent agent's `recommend` Task reads them by kind and cites each by ID and version.",
           "evidence": [
             {
               "kind": "test",
               "ref": "tests/integration/test_artifacts.py::test_version_cannot_be_overwritten"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_c1s_recommendation_reads_and_cites_research_by_version"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_recommend_task_declares_the_research_reads_by_kind"
             },
             {
               "kind": "command",
@@ -1160,13 +1183,12 @@
               "expect": "lists each saved output as kind@version"
             }
           ],
-          "status": "partly met",
-          "reason": "Saving with IDs and versions is met; the patent agent reading them is not (see the patent agent row on research outputs)."
+          "status": "met"
         },
         {
           "id": "R-56",
           "requirement": "Keep both agents separate, not one long prompt.",
-          "how": "Each agent has its own definition and context; the patent context holds no research text.",
+          "how": "Each agent has its own definition and context; the patent context holds no research run's turns or tool results, only the research outputs a Task declares it reads, as versioned artifacts.",
           "evidence": [
             {
               "kind": "test",

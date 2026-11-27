@@ -6,6 +6,9 @@
    must confirm, a complete field with no value, a template field left out).
 4. :func:`required_missing`: the required fields still missing, which keep a packet from
    becoming ready.
+5. :func:`research_misuse`: where a recommendation names a research output outside its
+   business-importance part, which would use market research as novelty or prior-art
+   evidence.
 
 Nothing here gives a legal opinion: the rule table orders work for counsel; it does not
 judge novelty, and ``not_found`` only ever means "no reference in this search shows it".
@@ -13,6 +16,7 @@ judge novelty, and ``not_found`` only ever means "no reference in this search sh
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -24,6 +28,44 @@ IMPLEMENTATION = ("built_and_tested", "in_use_under_nda", "prototype", "idea_onl
 """What ``extraction.implementation.status`` holds (declared in the extraction schema)."""
 TOP_PRIORITIES = 2
 """How many top business priorities count as top when the request names no number."""
+RESEARCH_KINDS = ("research.needs", "research.findings")
+"""The research outputs a recommendation reads for business importance, by kind: what
+customers need and what the research found. They are versioned artifacts of another agent,
+read by ID and version; a run with no research output records business importance from
+research as unknown."""
+RESEARCH_NOTE = (
+    "Research outputs support business importance only; they are not evidence of "
+    "technical novelty or prior art."
+)
+"""What every recommendation states about the research it read (``business_importance.note``)."""
+BUSINESS_PART = "business_importance"
+"""The one part of a recommendation that may name a research output."""
+_RESEARCH_REF = re.compile(r"\bresearch\.[a-z_]+(?:/[^@\s]+)?@v\d+")
+
+
+def research_misuse(content: Mapping[str, Any]) -> list[str]:
+    """Pointers outside ``business_importance`` that name a research output version.
+
+    A cite of a research artifact, or any text naming one (``research.needs@v2``), outside
+    the business-importance part would rest a novelty, prior-art or next-action claim on
+    market research: the recommendation check refuses it.
+    """
+    out: list[str] = []
+
+    def walk(value: Any, at: str) -> None:
+        if isinstance(value, Mapping):
+            for k, v in value.items():
+                walk(v, f"{at}/{k}")
+        elif isinstance(value, list | tuple):
+            for i, v in enumerate(value):
+                walk(v, f"{at}/{i}")
+        elif isinstance(value, str) and _RESEARCH_REF.search(value):
+            out.append(at)
+
+    for k, v in content.items():
+        if k != BUSINESS_PART:
+            walk(v, f"/{k}")
+    return out
 
 
 def element_states(comparison: Mapping[str, Any]) -> dict[str, list[str]]:

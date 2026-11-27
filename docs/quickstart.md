@@ -16,7 +16,7 @@ make demo    # the change-and-recovery demo, under a minute (creates .venv itsel
 
 1. The research agent and the patent agent run to completion on the synthetic `stillroom` world. The patent agent sends one invention's counsel-review packet to a mock mailbox after an approval.
 2. The input changes to the `stillroom-v2` change set: a new publication family, and an earlier date on an outside suggestion.
-3. Invalidation reopens only the work that read the moved records. In the run on 27 Nov 2026 it rebuilt 14 outputs (10 patent, 4 research) and kept the other 13 patent and 7 research outputs; keyed on every read instead, the same change would have reopened 27. The packet's diff review is accepted and a fresh approval is asked for the new version.
+3. Invalidation reopens only the work that read the moved records. In the run on 28 Nov 2026 it rebuilt 17 outputs (13 patent, 4 research) and kept the other 10 patent and 7 research outputs; keyed on every read instead, the same change would have reopened 27. Three of the 13 are the other candidates' recommendations: they read the research needs and findings for business importance, so the research rebuild reopens them, and their next actions stay the same. The packet's diff review is accepted and a fresh approval is asked for the new version.
 4. The new packet is sent by a child process that kills itself with a real `SIGKILL` after the mailbox stores it and before the runtime records the receipt. On restart, recovery asks the mailbox by idempotency key and does not send again: 2 deliveries for 2 keys, one per packet version.
 5. The event store's hash chain is verified.
 

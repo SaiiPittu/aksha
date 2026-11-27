@@ -614,8 +614,10 @@ class PatentFake(RuleGenerationModel):
         ext, cmp_ = ctx.read("extraction"), ctx.read("comparison")
         assert ext is not None and cmp_ is not None
         plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
+        research = [ctx.reads[k] for k in rules.RESEARCH_KINDS if k in ctx.reads]
         content = recommendation(c, ext, cmp_, int(plan.get("priority_cutoff",
-                                                            rules.TOP_PRIORITIES)))  # fmt: skip
+                                                            rules.TOP_PRIORITIES)),
+                                 research=research)  # fmt: skip
         return _reply(
             _call("save_artifact", 1, kind="recommendation", key=c, content=content),
             _call("finish", 1, summary=content["next_action"]),
@@ -632,6 +634,7 @@ class PatentFake(RuleGenerationModel):
                     "next_action": rec["next_action"],
                     "why": rec["why"],
                     "would_change_if": rec["would_change_if"],
+                    "business_importance": rec.get(rules.BUSINESS_PART, {}).get("summary"),
                     "recommendation": ref,
                 }
             )
@@ -1326,12 +1329,46 @@ def comparison(c: str, ext: Mapping[str, Any], art: Mapping[str, Any]) -> dict[s
     }
 
 
+def business_importance(
+    rank: Any, research: Sequence[tuple[str, Mapping[str, Any]]]
+) -> dict[str, Any]:
+    """The business-importance part: the stated priority, and the research read, cited.
+
+    ``research`` holds each research output read as ``(ref, content)``. Each is cited by its
+    exact version and summarised by how many items it holds; with none, business
+    importance from research is unknown. Never a novelty or prior-art claim.
+    """
+    cited = [{"value": ref, "cite": {"artifact": ref, "path": ""}} for ref, _ in research]
+    if research:
+        counts = []
+        for ref, content in research:
+            lists = [k for k, v in content.items() if isinstance(v, list)]
+            size = len(content[lists[0]]) if lists else 0
+            counts.append(f"{ref} ({size} {lists[0] if lists else 'items'})")
+        summary = (f"business priority {rank}; research read for business importance: "
+                   + ", ".join(counts))  # fmt: skip
+    else:
+        summary = f"business priority {rank}; business importance from research: unknown"
+    return {
+        "from_research": "read" if research else "unknown",
+        "research": cited,
+        "summary": summary,
+        "note": rules.RESEARCH_NOTE,
+    }
+
+
 def recommendation(
-    c: str, ext: tuple[str, Any], cmp_: tuple[str, Any], top_n: int = rules.TOP_PRIORITIES
+    c: str,
+    ext: tuple[str, Any],
+    cmp_: tuple[str, Any],
+    top_n: int = rules.TOP_PRIORITIES,
+    research: Sequence[tuple[str, Mapping[str, Any]]] = (),
 ) -> dict[str, Any]:
     """The rule table's next action, and the model's explanation of it.
 
     ``top_n`` is how many business priorities count as top: the plan's, as the request said.
+    ``research`` is each research output the Task read, ``(ref, content)``: it is cited in
+    the business-importance part only (:func:`business_importance`).
     """
     action, rule = rules.next_action(ext[1], cmp_[1], top_n=top_n)
     states = rules.element_states(cmp_[1])
@@ -1387,6 +1424,7 @@ def recommendation(
         "risks": risks,
         "would_change_if": change,
         "based_on": [ext[0], cmp_[0]],
+        rules.BUSINESS_PART: business_importance(rank, research),
     }
 
 

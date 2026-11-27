@@ -358,6 +358,7 @@ def test_the_definition_loads_and_declares_its_source() -> None:
 @dataclass
 class _V:
     content: dict[str, Any]
+    ref: str = ""
 
 
 @dataclass
@@ -388,17 +389,110 @@ class _View:
         return found
 
 
+def _business(*refs: str) -> dict[str, Any]:
+    return {
+        "from_research": "read" if refs else "unknown",
+        "research": [{"value": r, "cite": {"artifact": r, "path": ""}} for r in refs],
+        "summary": "business priority 1",
+        "note": rules.RESEARCH_NOTE,
+    }
+
+
+def _rec(action: str = "prioritize_counsel_review", **extra: Any) -> dict[str, Any]:
+    return {"next_action": action, "business_importance": _business(), **extra}
+
+
 def test_the_recommendation_check_vetoes_an_action_the_rules_do_not_give() -> None:
     ext, cmp_ = _ext(), _cmp("not_found")
-    good = _View(
-        recommendation={"next_action": "prioritize_counsel_review"}, extraction=ext, comparison=cmp_
-    )
+    good = _View(recommendation=_rec(), extraction=ext, comparison=cmp_)
     assert checks.recommendation_follows_rules(good).ok
-    bad = _View(
-        recommendation={"next_action": "deprioritize_for_now"}, extraction=ext, comparison=cmp_
-    )
+    bad = _View(recommendation=_rec("deprioritize_for_now"), extraction=ext, comparison=cmp_)
     result = checks.recommendation_follows_rules(bad)
     assert not result.ok and "prioritize_counsel_review" in result.message
+
+
+class _ResearchView(_View):
+    """A view where the research agent has saved ``research`` (kind to ref)."""
+
+    def __init__(self, research: dict[str, str], **own: dict[str, Any]) -> None:
+        super().__init__(**own)
+        self.research = {k: _V({"needs": []}, ref) for k, ref in research.items()}
+
+    def latest(self, kind: str, key: str | None = None) -> _V | None:
+        return self.research.get(kind) or self.mine.get(kind)
+
+
+READ = {"research.needs": "research.needs@v2", "research.findings": "research.findings@v1"}
+
+
+def test_business_importance_cites_the_exact_research_versions_read() -> None:
+    """R-36: each research output read is cited by its version; an older version is refused."""
+    ext, cmp_ = _ext(), _cmp("not_found")
+    cited = {"business_importance": _business("research.needs@v2", "research.findings@v1")}
+    good = _ResearchView(READ, recommendation={**_rec(), **cited}, extraction=ext,
+                         comparison=cmp_)  # fmt: skip
+    assert checks.recommendation_follows_rules(good).ok
+    old = {"business_importance": _business("research.needs@v1", "research.findings@v1")}
+    stale = _ResearchView(READ, recommendation={**_rec(), **old}, extraction=ext,
+                          comparison=cmp_)  # fmt: skip
+    result = checks.recommendation_follows_rules(stale)
+    assert not result.ok and "research.needs@v2" in result.message
+    silent = _ResearchView(READ, recommendation=_rec(), extraction=ext, comparison=cmp_)
+    assert not checks.recommendation_follows_rules(silent).ok  # read, so "unknown" is wrong
+
+
+def test_without_research_business_importance_is_unknown_not_a_failure() -> None:
+    """R-36: the patent agent alone records business importance from research as unknown."""
+    ext, cmp_ = _ext(), _cmp("not_found")
+    alone = _View(recommendation=_rec(), extraction=ext, comparison=cmp_)
+    assert checks.recommendation_follows_rules(alone).ok
+    claimed = {"business_importance": _business("research.needs@v1")}
+    invented = _View(recommendation={**_rec(), **claimed}, extraction=ext, comparison=cmp_)
+    result = checks.recommendation_follows_rules(invented)
+    assert not result.ok and "has not run" in result.message
+
+
+@pytest.mark.parametrize(
+    "misuse",
+    [
+        {"novelty": {"value": "new", "cite": {"artifact": "research.needs@v2", "path": ""}}},
+        {"why": "no family shows F2, and research.findings@v1 confirms it is new"},
+        {"prior_art": ["research.needs@v2"]},
+    ],
+)
+def test_research_cited_as_novelty_or_prior_art_evidence_is_refused(
+    misuse: dict[str, Any],
+) -> None:
+    """R-36: research is not evidence of technical novelty; naming it outside business
+    importance is refused, however the rest of the recommendation reads."""
+    ext, cmp_ = _ext(), _cmp("not_found")
+    cited = {"business_importance": _business("research.needs@v2", "research.findings@v1")}
+    rec = {**_rec(), **cited, **misuse}
+    result = checks.recommendation_follows_rules(
+        _ResearchView(READ, recommendation=rec, extraction=ext, comparison=cmp_)
+    )
+    assert not result.ok and "not evidence of novelty" in result.message
+    assert rules.research_misuse(rec) and not rules.research_misuse({**_rec(), **cited})
+
+
+def test_the_note_says_research_is_no_novelty_evidence() -> None:
+    ext, cmp_ = _ext(), _cmp("not_found")
+    part = {**_business(), "note": "research shows demand"}
+    rec = {**_rec(), "business_importance": part}
+    result = checks.recommendation_follows_rules(
+        _View(recommendation=rec, extraction=ext, comparison=cmp_)
+    )
+    assert not result.ok and rules.RESEARCH_NOTE in result.message
+
+
+def test_the_recommend_task_declares_the_research_reads_by_kind() -> None:
+    """R-55: the reads are declared (so lineage records them) and granted on the agent."""
+    from aksha.agents.patent.agent import DEEP
+
+    (recommend,) = [t for t in DEEP.children if t.id == "recommend"]
+    kinds = {r.kind if not isinstance(r, str) else r for r in recommend.reads}
+    assert set(rules.RESEARCH_KINDS) <= kinds
+    assert set(rules.RESEARCH_KINDS) <= set(AGENT.reads)
 
 
 def _form(*fields: tuple[str, bool, str]) -> dict[str, Any]:

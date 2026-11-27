@@ -4,6 +4,27 @@
    "patent.extraction/C4@v1",
    "patent.comparison/C4@v1"
   ],
+  "business_importance": {
+   "from_research": "read",
+   "note": "Research outputs support business importance only; they are not evidence of technical novelty or prior art.",
+   "research": [
+    {
+     "cite": {
+      "artifact": "research.needs@v1",
+      "path": ""
+     },
+     "value": "research.needs@v1"
+    },
+    {
+     "cite": {
+      "artifact": "research.findings@v1",
+      "path": ""
+     },
+     "value": "research.findings@v1"
+    }
+   ],
+   "summary": "business priority 2; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)"
+  },
   "candidate": "C4",
   "next_action": "collect_more_evidence",
   "risks": [

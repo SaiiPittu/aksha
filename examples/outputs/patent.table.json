@@ -3,6 +3,7 @@
   "note": "Next actions order work for counsel; none is a legal view.",
   "rows": [
    {
+    "business_importance": "business priority 1; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)",
     "candidate": "C1",
     "next_action": "prioritize_counsel_review",
     "recommendation": "patent.recommendation/C1@v1",
@@ -10,6 +11,7 @@
     "would_change_if": "a reference discloses F3, or an outside contributor's role changes inventorship or ownership"
    },
    {
+    "business_importance": "business priority 4; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)",
     "candidate": "C2",
     "next_action": "collect_more_evidence",
     "recommendation": "patent.recommendation/C2@v1",
@@ -17,6 +19,7 @@
     "would_change_if": "the missing evidence appears and the unmatched elements stay not found"
    },
    {
+    "business_importance": "business priority 3; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)",
     "candidate": "C3",
     "next_action": "deprioritize_for_now",
     "recommendation": "patent.recommendation/C3@v1",
@@ -24,6 +27,7 @@
     "would_change_if": "an element the closest family lacks proves material"
    },
    {
+    "business_importance": "business priority 2; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)",
     "candidate": "C4",
     "next_action": "collect_more_evidence",
     "recommendation": "patent.recommendation/C4@v1",

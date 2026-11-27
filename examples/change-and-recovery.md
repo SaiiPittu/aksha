@@ -54,22 +54,23 @@ Approval A-0001 named patent.packet/C1@v1 exactly, so it cannot cover the rebuil
 
 ```console
 3. Invalidation reopens only what depends on the change (n s)
-   reached 5 invalidated + 9 downstream: C1: extraction, prior_art, comparison, recommendation, packet, handoff; C1~filing-information-worksheet: form; C1~invention-disclosure-form: form; needs, matrix, findings, tests, table, selection
+   reached 5 invalidated + 12 downstream: C1: extraction, prior_art, comparison, recommendation, packet, handoff; C1~filing-information-worksheet: form; C1~invention-disclosure-form: form; C2: recommendation; C3: recommendation; C4: recommendation; needs, matrix, findings, tests, table, selection
    strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed); C1~filing-information-worksheet: form (cites nothing, so read-keyed); C1~invention-disclosure-form: form (cites nothing, so read-keyed)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
-   keyed on every read instead, the same change would reopen 27 outputs, not 14
+   keyed on every read instead, the same change would reopen 27 outputs, not 17
    spans rechecked against the new text: 57 kept, 4 changed, 0 gone
-   rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; C1~filing-information-worksheet: form; C1~invention-disclosure-form: form; findings, matrix, needs, tests, selection, table
-   kept 13 patent outputs: C2: comparison, extraction, prior_art, recommendation; C3: comparison, extraction, prior_art, recommendation; C4: comparison, extraction, prior_art, recommendation; portfolio
+   rebuilt 17: C1: comparison, extraction, handoff, packet, prior_art, recommendation; C1~filing-information-worksheet: form; C1~invention-disclosure-form: form; C2: recommendation; C3: recommendation; C4: recommendation; findings, matrix, needs, tests, selection, table
+   kept 10 patent outputs: C2: comparison, extraction, prior_art; C3: comparison, extraction, prior_art; C4: comparison, extraction, prior_art; portfolio
    kept 7 of 11 research outputs: c01-kelvra-systems: profile; c02-noctra: profile; c03-brightfield-analytics: profile; c04-veyra-labs: profile; c05-tallyway: profile; competitors, scope
    early cutoff: the 18 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
    C1 next action: prioritize_counsel_review -> collect_more_evidence (the v2 answer key expects collect_more_evidence)
+   C1 recommendation read research.findings@v1, research.needs@v1 (business importance only), then research.findings@v2, research.needs@v2 once the research rebuilt; C2-C4's recommendations reopened for the same reason, their next actions unchanged
    C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation for counsel
      question for counsel: An outside contributor suggested F2, F3 before the internal note and before their agreement's effective date. Who are the inventors, and who owns a suggestion made outside the agreement?
    A-0001 approved patent.packet/C1@v1 only, so it does not cover patent.packet/C1@v2; a fresh approval is requested
    scripted: accepted the packet's diff review, patent.packet/C1@v1 -> patent.packet/C1@v2
    scripted: approved the fresh request A-0002 for patent.packet/C1@v2
-   rebuild runs: R-0003 research (5 model calls), R-0004 patent (18 model calls), R-0005 patent (3 model calls)
+   rebuild runs: R-0003 research (5 model calls), R-0004 patent (21 model calls), R-0005 patent (3 model calls)
 ```
 
 ## 4. A crash in the middle of the send
@@ -87,9 +88,9 @@ A child process sends the new packet and is killed with a real SIGKILL after the
 
 ```console
 5. Event store
-   hash chain verified: 1833 events, head sha256:42ad2cc00c18902d...
+   hash chain verified: 1912 events, head sha256:0af763909b8949c2...
 
-Done in 23.94 s. Store, mailbox and sources: demo
+Done in 22.13 s. Store, mailbox and sources: demo
 ```
 
 ## What the new evidence did to the shortlist

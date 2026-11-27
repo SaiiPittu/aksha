@@ -42,7 +42,7 @@ R-0002 patent waiting
 $ aksha answer I-0003 C1
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent waiting
-  waiting for approval A-0001: aksha approve A-0001 --signature v1:58f18363f4f77cd2fcea3e1d8daeb6e84291e0782393a30ed22541444dcf4b28
+  waiting for approval A-0001: aksha approve A-0001 --signature v1:f0111802faab16c413fa60b1548bd82aac00f5e9886c26b92164eac434a9d937
     approves: send_packet
     packet: patent.packet/C1@v1
     recipient: counsel-primary
@@ -52,7 +52,7 @@ R-0002 patent waiting
 ## 4. Approve the exact send shown; the mock mailbox receives the packet once
 
 ```console
-$ aksha approve A-0001 --signature v1:58f18363f4f7
+$ aksha approve A-0001 --signature v1:f0111802faab
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent ended complete
 (exit code 0)
@@ -61,9 +61,9 @@ R-0002 patent ended complete
 ## 5. Approving again delivers nothing
 
 ```console
-$ aksha approve A-0001 --signature v1:58f18363f4f7
+$ aksha approve A-0001 --signature v1:f0111802faab
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
-refused: already_decided (command c-de4346edb69d633ddf8daee3, seq 1337)
+refused: already_decided (command c-bea7a0acfe631296141d6fc9, seq 1357)
 (exit code 7)
 ```
 
@@ -77,6 +77,27 @@ $ aksha show patent.recommendation/C1
       "patent.extraction/C1@v1",
       "patent.comparison/C1@v1"
     ],
+    "business_importance": {
+      "from_research": "read",
+      "note": "Research outputs support business importance only; they are not evidence of technical novelty or prior art.",
+      "research": [
+        {
+          "cite": {
+            "artifact": "research.needs@v1",
+            "path": ""
+          },
+          "value": "research.needs@v1"
+        },
+        {
+          "cite": {
+            "artifact": "research.findings@v1",
+            "path": ""
+          },
+          "value": "research.findings@v1"
+        }
+      ],
+      "summary": "business priority 1; research read for business importance: research.needs@v1 (4 needs), research.findings@v1 (12 findings)"
+    },
     "candidate": "C1",
     "next_action": "prioritize_counsel_review",
     "risks": [
@@ -106,6 +127,6 @@ R-0002 patent ended complete
 
 ```console
 $ aksha verify
-chain ok: 1337 events, head sha256:c00353df66664066929172889405f0f71fe0142c121f6992ea664f3b70c7eea7
+chain ok: 1357 events, head sha256:0bef5d4e44feec45627537cf033dfa3bd30e85820c9249b9f2456f9b6fb94160
 (exit code 0)
 ```
