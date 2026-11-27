@@ -102,7 +102,7 @@ def test_the_metadata_names_the_distribution_and_no_dev_extra(wheel: Path) -> No
         assert "aksha = aksha.interfaces.cli.main:entry" in z.read(entry).decode("utf-8")
     assert headers["Name"] == "aksha-harness"
     assert headers["Requires-Python"] == ">=3.12"
-    assert set(headers.get_all("Provides-Extra") or ()) == {"postgres", "server", "otel", "ingest"}
+    assert set(headers.get_all("Provides-Extra") or ()) == {"postgres", "server", "otel", "ingest", "live"}
     assert headers["Version"] in wheel.name
 
 
