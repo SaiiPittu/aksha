@@ -330,6 +330,9 @@ class SourceWorld:
     today: date | None = None
     reader: RecordReader | None = None
     models: ToolModels | None = None
+    names: tuple[str, ...] = ()
+    """Every input's record ID, when the reader holds only some of them (a model that read
+    some inputs knows the others' names from a listing): what a reference is matched against."""
     _cache: dict[str, ReturnedText] = field(default_factory=dict)
     _asked: dict[tuple[str, str], Any] = field(default_factory=dict)
 
@@ -371,28 +374,32 @@ class SourceWorld:
         """The record's format, from its content."""
         return sniff_format(record, self.raw(record))
 
+    def all_names(self) -> list[str]:
+        """Every input's record ID: :attr:`names` when given, else the reader's records."""
+        return sorted(set(self.names) | set(self.records()))
+
     def resolve(self, ref: str) -> str | None:
         """The input a reference names (a path, a file name, with or without its folder)."""
         ref = ref.strip().strip("/")
         if not ref or ref.startswith(("http://", "https://")):
             return None
-        exact = next((r for r in self.records() if r == ref or r.endswith("/" + ref)), None)
+        exact = next((r for r in self.all_names() if r == ref or r.endswith("/" + ref)), None)
         if exact is not None:
             return exact
         key = name_key(ref)
         if not key or not re.search(r"[./]", ref):
             return None
-        return next((r for r in self.records() if name_key(r) == key), None)
+        return next((r for r in self.all_names() if name_key(r) == key), None)
 
     def exists_anywhere(self, name: str) -> bool:
         """Whether an input's name is ``name``'s words (any extension or separators)."""
         key = name_key(name)
-        return bool(key) and any(name_key(r) == key for r in self.records())
+        return bool(key) and any(name_key(r) == key for r in self.all_names())
 
     def file_naming(self, ref: str) -> bool:
         """Whether any input's name holds ``ref``'s words (a referenced document)."""
         key = name_key(ref)
-        return bool(key) and any(key in name_key(r) for r in self.records())
+        return bool(key) and any(key in name_key(r) for r in self.all_names())
 
     # --- asking the aliases -------------------------------------------------------------
 

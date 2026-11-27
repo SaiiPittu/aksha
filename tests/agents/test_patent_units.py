@@ -15,6 +15,7 @@ from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.patent import checks, rules
 from aksha.agents.patent.agent import AGENT
 from aksha.agents.patent.fakes import ADAPTERS, parse
+from aksha.agents.patent.fakes_views import readers, view
 from aksha.agents.patent.tools import build_tools
 from aksha.agents.patent.world import NotInWorld, OneRecord, SourceWorld
 from aksha.runtime.api import Err, GenerationRequest, Message, Ok, ToolCall, ToolContext
@@ -30,13 +31,14 @@ def _folder(root: Path) -> FolderSource:
     return FolderSource("inputs", root, "input")
 
 
-def _models(tool: str = "read_note") -> Any:
-    """The fake-mode ``ToolContext.models`` a read tool's body gets (``tests.support.fast``)."""
+def _models(tool: str = "read_document") -> Any:
+    """The fake-mode ``ToolContext.models`` a tool's body gets (``tests.support.fast``)."""
     return models_for(AGENT_DIR, ADAPTERS, tool)
 
 
 def _world(root: Path = V1, today: date | None = TODAY) -> SourceWorld:
-    return SourceWorld(today).over(_folder(root), models=_models())
+    """The inputs read as the offline model reads them, with the agent's offline readers."""
+    return SourceWorld(today).over(_folder(root), models=readers())
 
 
 @pytest.fixture
@@ -66,21 +68,26 @@ def _changed(tmp_path: Path) -> Path:
 # --- the reader --------------------------------------------------------------------------
 
 
+def _rows(record: str, c: str, root: Path = V1) -> Any:
+    args = {"ref": record, "where": {"column": "candidate", "values": [c]}}
+    return _tools()["read_document"].body(_ctx(c, root), args).result
+
+
 def test_reads_name_only_the_rows_they_used(tmp_path: Path) -> None:
-    """A change to C1's history row moves C1's disclosure read only, never another's."""
-    tool = _tools()["read_disclosures"].body
-    before = {c: tool(_ctx(c), {"candidate": c}).result for c in ("C1", "C2", "C3", "C4")}
+    """A change to C1's history row moves C1's read of its rows only, never another's."""
+    history = "input/disclosures/history.csv"
+    before = {c: _rows(history, c) for c in ("C1", "C2", "C3", "C4")}
     root = _changed(tmp_path)
     folder = _folder(root)
     moved = set()
     for c, out in before.items():
         assert isinstance(out, Ok)
         (read,) = out.reads
-        assert read.id == f"input/disclosures/history.csv#where:candidate={c}"
+        assert read.id == f"{history}#where:candidate={c}"
         if folder.record_version("o1", read.id) != read.version:
             moved.add(c)
     assert moved == {"C1"}
-    contributors = _tools()["read_contributors"].body(_ctx("C1"), {"candidate": "C1"}).result
+    contributors = _rows("input/contributors/records.csv", "C1")
     assert isinstance(contributors, Ok)
     for read in contributors.reads:  # the contributor records did not change
         assert folder.record_version("o1", read.id) == read.version
@@ -133,11 +140,11 @@ def test_the_reader_reads_only_the_inputs(w1: SourceWorld) -> None:
         w1.raw("input/../key.json")
     with pytest.raises(NotInWorld):
         w1.raw("../spec.yaml")
-    out = _tools()["read_document"].body(_ctx(), {"path": "input/../key.json"})
+    out = _tools()["read_document"].body(_ctx(), {"ref": "input/../key.json"})
     assert isinstance(out.result, Err)
-    inside = {"path": "input/disclosures/../notes/C1-self-calibration.md"}
+    inside = {"ref": "input/disclosures/../notes/C1-self-calibration.md"}
     out = _tools()["read_document"].body(_ctx(), inside)
-    assert isinstance(out.result, Err) and out.result.code == "not_found"
+    assert isinstance(out.result, Err) and out.result.code == "not_an_input"
 
 
 def test_a_referenced_agreement_is_looked_for_not_assumed_absent(tmp_path: Path) -> None:
@@ -155,16 +162,19 @@ def test_missing_references_are_reported_not_found(w1: SourceWorld) -> None:
     assert refs == [{"name": "placement-trial-02.csv", "found": False}]
 
 
-def test_disclosure_reads_count_days_but_version_only_the_rows() -> None:
-    tool = _tools()["read_disclosures"]
-    out = tool.body(_ctx(), {"candidate": "C1"})
-    assert isinstance(out.result, Ok)
-    rows = {r["disclosure_id"]: r for r in out.result.data["rows"]}
+def test_disclosure_views_count_days_but_the_read_versions_only_the_rows() -> None:
+    # the days are counted in the model's turn, to the listing's as_of date; the read of the
+    # rows is the same record part whatever the date
+    got = view(_world(), "read_disclosures", {"candidate": "C1"})
+    assert got["status"] == "ok"
+    rows = {r["disclosure_id"]: r for r in got["data"]["rows"]}
     assert rows["DISC-01"]["elapsed_days"] == (date(2026, 11, 26) - date(2026, 3, 10)).days == 261
     assert rows["DISC-01"]["linked_file"] == "input/disclosures/2026-03-10-trade-show-demo.md"
-    later = _tools(SourceWorld(date(2026, 12, 1)))["read_disclosures"]
-    again = later.body(_ctx(), {"candidate": "C1"})
-    assert isinstance(again.result, Ok) and again.result.reads == out.result.reads
+    later = view(_world(today=date(2026, 12, 1)), "read_disclosures", {"candidate": "C1"})
+    assert {r["disclosure_id"]: r for r in later["data"]["rows"]}["DISC-01"]["elapsed_days"] == 266
+    first = _rows("input/disclosures/history.csv", "C1")
+    again = _rows("input/disclosures/history.csv", "C1")
+    assert isinstance(first, Ok) and isinstance(again, Ok) and first.reads == again.reads
 
 
 def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
@@ -471,10 +481,22 @@ def test_parse_reads_the_instance_reads_answers_and_starts_over_after_finish() -
 
 
 def test_the_tools_read_only_through_the_call_reader() -> None:
-    out = _tools()["list_candidates"].body(
+    out = _tools()["list_templates"].body(
         ToolContext("o1", "patent", "scope", None, "R-0001/scope/t01/c01", 1), {}
     )
     assert isinstance(out.result, Err) and out.result.code == "not_found"
-    dated = SourceWorld().over(_folder(V1), "2026-11-26", _models())
+    listed = _tools()["list_inputs"].body(
+        ToolContext("o1", "patent", "scope", None, "R-0001/scope/t01/c01", 1), {}
+    )
+    assert isinstance(listed.result, Ok) and listed.result.data["inputs"] == []
+    dated = SourceWorld().over(_folder(V1), "2026-11-26", readers())
     assert dated.today == TODAY
     assert dated.disclosure_rows("C1") == _world().disclosure_rows("C1")
+
+
+def test_the_agent_keeps_only_domain_tools_of_its_own() -> None:
+    names = {t.spec.name for t in build_tools(SourceWorld(TODAY))}
+    shared = {"web_search", "fetch_url", "list_inputs", "read_document", "search_inputs", "todo"}
+    domain = {"search_publications", "fetch_publication", "list_templates", "read_template",
+              "fill_form", "send_packet"}  # fmt: skip
+    assert names == shared | domain

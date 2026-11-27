@@ -1,6 +1,7 @@
-"""The research tools read only through the runtime's reader, and only the drafts they mint
-are citable: a read page's passages are, a listing or a search snippet is not. No tool
-expects a folder: every input is one record of the ``input`` collection, read by format."""
+"""The research agent's input tools (the harness's shared ones, as the agent declares them)
+read only through the runtime's reader, and only the units they mint are citable: a read
+document's units are, a listing or a search hit is not. No tool expects a folder: every
+input is one record of the ``input`` collection, read by format."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from tests.support.research import AGENT_DIR, WORLDS
 PAGE = "input/competitors/comp01-kelvra.html"
 VENDORS = ("kelvra", "veyra", "tallyway", "noctra", "brightfield", "corvane")
 """The stillroom vendors, whose product pages are on the world's web."""
+BODIES = {t.spec.name: t.body for t in tools.TOOLS}
 
 
 @pytest.fixture(scope="module")
@@ -39,10 +41,16 @@ def uploads(tmp_path_factory: pytest.TempPathFactory) -> Path:
     return root
 
 
-def _ctx(reader: Any, tool: str = "fetch_page") -> ToolContext:
+def _ctx(reader: Any, tool: str = "read_document") -> ToolContext:
     """The context the loop gives ``tool``'s body in fake mode, its fast models bound."""
     return ToolContext("o", "research", "evidence", "k", "R-0001/evidence[k]/t01/c01", 1, reader,
                        models=models_for(AGENT_DIR, ADAPTERS, tool))  # fmt: skip
+
+
+def call(name: str, ctx: ToolContext, args: dict[str, Any]) -> Any:
+    body = BODIES[name]
+    assert body is not None
+    return body(ctx, args)
 
 
 @pytest.fixture
@@ -50,17 +58,28 @@ def reader(uploads: Path) -> AttemptReader:
     return AttemptReader(FolderSource(tools.SOURCE, uploads, tools.COLLECTION))
 
 
-def test_fetch_page_drafts_one_span_per_passage_over_the_returned_text(
+def test_the_agent_lists_only_shared_tools() -> None:
+    assert sorted(BODIES) == ["fetch_url", "list_inputs", "read_document", "search_inputs",
+                              "todo", "web_search"]  # fmt: skip
+
+
+def test_read_document_drafts_one_span_per_unit_over_the_returned_text(
     reader: AttemptReader,
 ) -> None:
-    out = tools.fetch_page(_ctx(reader), {"record": PAGE})
+    out = call("read_document", _ctx(reader), {"ref": PAGE, "extract": True})
     assert isinstance(out.result, Ok)
     (returned,) = reader.returned
-    passages = out.result.data["passages"]
-    assert len(out.result.spans) == len(passages)
-    for draft, passage in zip(out.result.spans, passages, strict=True):
+    units = out.result.data["units"]
+    assert len(out.result.spans) == len(units)
+    for draft, unit in zip(out.result.spans, units, strict=True):
         assert (draft.source, draft.record_id, draft.version) == returned.locator()
-        assert returned.text[draft.start : draft.end] == passage["text"]
+        assert (draft.start, draft.end) == (unit[4], unit[5])
+    assert out.result.data["kind"] == "competitor_page"
+    prices = out.result.data["fields"]["prices"]
+    assert prices["value"] and len(prices["units"]) == len(prices["value"])
+    for n in prices["units"]:  # each price is a unit of its own, so it can be cited whole
+        quoted = returned.text[units[n][4] : units[n][5]]
+        assert any(c.isdigit() for c in quoted)
     assert [str(r) for r in out.result.reads] == [f"record:{PAGE}@{returned.version}"]
     assert returned.version.startswith("sha256:")
 
@@ -68,9 +87,9 @@ def test_fetch_page_drafts_one_span_per_passage_over_the_returned_text(
 def test_list_inputs_finds_pages_and_review_tables_by_content_not_by_folder(
     reader: AttemptReader, uploads: Path
 ) -> None:
-    out = tools.list_inputs(_ctx(reader, "list_inputs"), {})
+    out = call("list_inputs", _ctx(reader, "list_inputs"), {})
     assert isinstance(out.result, Ok) and out.result.spans == ()
-    kinds = {r["record"]: r["kind"] for r in out.result.data["inputs"]}
+    kinds = {r["ref"]: r["kind"] for r in out.result.data["inputs"]}
     assert len(kinds) == sum(1 for p in uploads.rglob("*") if p.is_file())
     sellers = sorted(r for r, s in kinds.items() if s == "competitor_page")
     assert sellers == sorted(
@@ -95,9 +114,9 @@ def test_a_listing_is_a_recorded_query_whose_version_is_its_hit_set(tmp_path: Pa
     args = {"kinds": ["competitor_page"]}
 
     def version() -> str:
-        out = tools.list_inputs(_ctx(folder, "list_inputs"), args)
+        out = call("list_inputs", _ctx(folder, "list_inputs"), args)
         assert isinstance(out.result, Ok)
-        return out.result.reads[0].version
+        return str(out.result.reads[0].version)
 
     first = version()
     (tmp_path / "note.md").write_text("# A note\n\nNothing for sale.\n", encoding="utf-8")
@@ -107,30 +126,33 @@ def test_a_listing_is_a_recorded_query_whose_version_is_its_hit_set(tmp_path: Pa
 
 
 def test_search_mints_nothing_and_records_only_its_hit_set(reader: AttemptReader) -> None:
-    out = tools.search(_ctx(reader), {"terms": ["occupancy"], "formats": ["html"]})
+    out = call("search_inputs", _ctx(reader, "search_inputs"),
+               {"terms": ["occupancy"], "formats": ["html"]})  # fmt: skip
     assert isinstance(out.result, Ok)
     assert out.result.spans == ()
     data = out.result.data
-    assert data["records_checked"] == 6 and data["hits"]
+    assert data["inputs_searched"] == 6 and data["hits"]
     assert "not citable" in data["note"]
     (read,) = out.result.reads
-    assert read.kind == "query" and data["query"] == f"query:{read.id}@{read.version}"
+    assert read.kind == "query" and data["recorded"] == f"query:{read.id}@{read.version}"
 
 
 def test_search_with_no_hit_still_records_its_query(reader: AttemptReader) -> None:
-    out = tools.search(_ctx(reader), {"terms": ["spreadsheet"], "formats": ["html"]})
+    out = call("search_inputs", _ctx(reader, "search_inputs"),
+               {"terms": ["spreadsheet"], "formats": ["html"]})  # fmt: skip
     assert isinstance(out.result, Ok)
     assert out.result.data["hits"] == [] and [r.kind for r in out.result.reads] == ["query"]
 
 
-def test_any_record_reads_through_any_tool_whatever_its_format(reader: AttemptReader) -> None:
-    # no tool refuses a format: a table read as a page is its rows, each citable, and the
-    # decide step says what kind it is (here ``other``, left to the general model)
-    out = tools.fetch_page(_ctx(reader), {"record": "input/contributors/records.csv"})
+def test_any_record_reads_whatever_its_format(reader: AttemptReader) -> None:
+    # no format is refused: a table is its rows, each citable, and the decide step says
+    # what kind it is (here ``other``, left to the general model)
+    out = call("read_document", _ctx(reader), {"ref": "input/contributors/records.csv",
+                                               "extract": True})  # fmt: skip
     assert isinstance(out.result, Ok)
     assert (out.result.data["kind"], out.result.data["unresolved"]) == ("other", ["kind"])
-    assert "unresolved" in out.result.data["note"] and out.result.spans
-    out = tools.read_table(_ctx(reader, "read_table"), {"record": PAGE})
+    assert out.result.spans
+    out = call("read_document", _ctx(reader), {"ref": "input/reviews/reviews.json"})
     assert isinstance(out.result, Ok)
 
 
@@ -140,14 +162,15 @@ def test_any_record_reads_through_any_tool_whatever_its_format(reader: AttemptRe
         "input/competitors/../../key.json",  # out of the source
         "input/competitors/./comp01-kelvra.html",  # a second name for one record
         "input/competitors//comp01-kelvra.html",
-        "competitors/comp01-kelvra.html",  # not in the input collection
+        "competitors/x/comp01-kelvra.html",  # no input of that name
     ],
 )
 def test_a_record_id_with_a_dot_or_empty_segment_reads_as_none(
     reader: AttemptReader, record: str
 ) -> None:
-    out = tools.fetch_page(_ctx(reader), {"record": record})
-    assert isinstance(out.result, Err) and out.result.code in ("not_an_input", "fetch_failed")
+    out = call("read_document", _ctx(reader), {"ref": record})
+    assert isinstance(out.result, Err)
+    assert out.result.code in ("not_an_input", "not_found")
     assert reader.returned == ()
 
 
@@ -165,28 +188,26 @@ def test_folder_source_reads_only_canonical_record_ids(record: str, uploads: Pat
     assert source.read(tools.SOURCE, PAGE) is not None
 
 
-def test_without_a_reader_a_fetch_fails_and_mints_nothing() -> None:
-    out = tools.fetch_page(_ctx(None), {"record": PAGE})
-    assert isinstance(out.result, Err) and out.result.code == "fetch_failed"
+def test_without_a_reader_a_read_fails_and_mints_nothing() -> None:
+    out = call("read_document", _ctx(None), {"ref": PAGE})
+    assert isinstance(out.result, Err) and out.result.code == "not_found"
     assert out.result.item == PAGE
 
 
-def test_read_table_and_read_note_draft_over_raw_offsets(reader: AttemptReader) -> None:
-    reviews = tools.read_table(_ctx(reader, "read_table"), {"record": "input/reviews/reviews.json"})
-    note = tools.read_note(_ctx(reader), {"record": "input/priorities/business-priorities.md"})
+def test_units_are_exact_raw_ranges(reader: AttemptReader) -> None:
+    reviews = call("read_document", _ctx(reader), {"ref": "input/reviews/reviews.json"})
+    note = call("read_document", _ctx(reader), {"ref": "input/priorities/business-priorities.md"})
     assert isinstance(reviews.result, Ok) and isinstance(note.result, Ok)
     texts = {r.record_id: r.text for r in reader.returned}
     for out in (reviews, note):
         assert isinstance(out.result, Ok)
         for d in out.result.spans:
             assert d.end > d.start and texts[d.record_id][d.start : d.end]
-    assert len(reviews.result.data["rows"]) == 42
-    assert reviews.result.data["roles"]["rating"] == "rating"
+    rows = [u for u in reviews.result.data["units"] if u[1] == "row"]
+    assert len(rows) == 42
 
 
-def test_a_csv_export_with_its_own_column_names_reads_like_any_other(
-    tmp_path: Path,
-) -> None:
+def test_a_csv_export_with_its_own_column_names_reads_like_any_other(tmp_path: Path) -> None:
     (tmp_path / "x.csv").write_text(
         "ref,platform,product,posted_on,country,stars,comment\n"
         'a1,s.example,P,2026-01-02,IN,4,"Good, and cheap."\n'
@@ -194,16 +215,13 @@ def test_a_csv_export_with_its_own_column_names_reads_like_any_other(
         encoding="utf-8",
     )
     folder = AttemptReader(FolderSource(tools.SOURCE, tmp_path, tools.COLLECTION))
-    out = tools.read_table(_ctx(folder, "read_table"), {"record": "input/x.csv"})
+    out = call("read_document", _ctx(folder), {"ref": "input/x.csv", "cells": True})
     assert isinstance(out.result, Ok)
-    rows = out.result.data["rows"]
-    assert [(r["id"], r["site"], r["date"], r["geography"], r["text"]) for r in rows] == [
-        ("a1", "s.example", "2026-01-02", "IN", "Good, and cheap."),
-        ("a2", "t.example", "2026-01-03", "KE", "Too slow"),
-    ]
     (returned,) = folder.returned
-    for d, r in zip(out.result.spans, rows, strict=True):
-        assert returned.text[d.start : d.end] == r["text"]
+    cells = [returned.text[d.start : d.end]
+             for d, u in zip(out.result.spans, out.result.data["units"], strict=True)
+             if u[1] == "cell"]  # fmt: skip
+    assert "Good, and cheap." in cells and "Too slow" in cells and "KE" in cells
 
 
 def test_folder_source_versions_change_with_the_bytes(tmp_path: Path) -> None:

@@ -1,8 +1,7 @@
 """The research agent's readers: decide the kind, extract by its schema, exact ranges.
 
-Each reader runs as a tool body would: through the fake-mode ``ToolContext.models`` of the
-tool (``tests.support.fast``), so the decide, extract and classify calls go through the
-real binder, cascade and thresholds.
+Each reader runs as the offline generation model reads a document a tool returned
+(``fakes_views.readers``): the agent's rule readers, judged by the declared thresholds.
 """
 
 from __future__ import annotations
@@ -13,10 +12,9 @@ import pytest
 
 import aksha.agents
 from aksha.agents.research import parsing, reading
-from aksha.agents.research.fakes import ADAPTERS
+from aksha.agents.research.fakes_views import readers
 from aksha.runtime.api import DocumentReading
 from aksha.runtime.grounding.types import ReturnedText
-from tests.support.fast import models_for
 from tests.support.research import WORLDS
 
 AGENT_DIR = Path(aksha.agents.__file__).parent / "research"
@@ -33,7 +31,7 @@ def _found(world: str, rel: str) -> ReturnedText:
 def _read(world: str, rel: str) -> tuple[str, parsing.Page, DocumentReading]:
     found = _found(world, rel)
     fmt = reading.record_format(found.record_id, found.text)
-    page, read = reading.read_page(models_for(AGENT_DIR, ADAPTERS, "fetch_page"), found, fmt,
+    page, read = reading.read_page(readers(), found, fmt,
                                    "inputs")  # fmt: skip
     return found.text, page, read
 
@@ -41,9 +39,7 @@ def _read(world: str, rel: str) -> tuple[str, parsing.Page, DocumentReading]:
 def _table(world: str, rel: str) -> tuple[str, parsing.Table]:
     found = _found(world, rel)
     fmt = reading.record_format(found.record_id, found.text)
-    return found.text, reading.read_table(
-        models_for(AGENT_DIR, ADAPTERS, "read_table"), found, fmt, "inputs"
-    )
+    return found.text, reading.read_table(readers(), found, fmt, "inputs")
 
 
 PAGES = sorted((WORLDS / "stillroom" / "web").glob("*/product"))
@@ -185,7 +181,7 @@ def test_a_markdown_page_names_its_product_and_maker_from_front_matter() -> None
 def test_the_decide_step_names_each_record_s_kind_by_its_content(record: str, kind: str) -> None:
     found = _found("tilldew", record)
     fmt = reading.record_format(found.record_id, found.text)
-    got = reading.decide(models_for(AGENT_DIR, ADAPTERS, "list_inputs"), found, fmt)
+    got = reading.decide(readers(), found, fmt)
     assert got == (kind, True)
 
 

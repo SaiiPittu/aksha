@@ -22,7 +22,13 @@ from aksha.runtime.loop.tier import web_for
 from aksha.runtime.sandbox.tier import ExecutionTier
 from aksha.runtime.tools.types import Err, Ok, ToolContext, ToolSpec
 from aksha.runtime.web.attempt import AttemptWeb
-from aksha.runtime.web.tools import fetch_url, fetch_url_spec, web_search, web_search_tool
+from aksha.runtime.web.tools import (
+    fetch_url,
+    fetch_url_spec,
+    fetch_url_tool,
+    web_search,
+    web_search_tool,
+)
 from aksha.runtime.web.types import (
     FetchedPage,
     SearchHit,
@@ -95,6 +101,22 @@ def test_a_fetched_page_is_kept_so_its_spans_mint() -> None:
                         run="R-0001", instance="t", step="R-0001/t/t01/c01")  # fmt: skip
     assert minted.spans and all(s.source == "web" for s in minted.spans)
     assert spec.egress == "aksha.web" and spec.mints_citation_spans
+
+
+def test_a_fetched_page_reads_as_an_input_reads() -> None:
+    # the generic fetch_url shows the page as read_document shows an input: numbered lines,
+    # its units in order, one span each, with the URL it was asked for and the one answering
+    reader = AttemptReader(None)
+    decl = fetch_url_tool("a")
+    assert decl.body is not None and decl.spec.schema["required"] == ["url"]
+    assert {"offset", "limit", "cells"} <= set(decl.spec.schema["properties"])
+    out = decl.body(_ctx(_handle(reader), reader), {"url": "https://a.example/probe"})
+    assert isinstance(out.result, Ok)
+    data = out.result.data
+    assert data["url"] == "https://a.example/probe" and data["lines"][0][0] == 1
+    assert len(out.result.spans) == len(data["units"])
+    texts = [PAGE[u[4] : u[5]] for u in data["units"]]
+    assert "INR 4,999 per probe." in texts
 
 
 def test_a_span_over_a_snippet_is_refused() -> None:

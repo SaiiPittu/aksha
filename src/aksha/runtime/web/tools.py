@@ -20,8 +20,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from aksha.runtime.artifacts.types import InputRef
-from aksha.runtime.grounding.segment import FORMATS, segment, sniff_format
-from aksha.runtime.grounding.types import SpanDraft
+from aksha.runtime.grounding.segment import FORMATS
+from aksha.runtime.inputs.tools import InputReading, read_schema, read_view
 from aksha.runtime.tools.types import (
     Err,
     Ok,
@@ -114,31 +114,54 @@ def page_read(fetched: FetchedText) -> InputRef:
     return InputRef("record", fetched.text.record_id, fetched.text.version)
 
 
-def fetch_url(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """The generic body: the page's format and its passages, one span each."""
+def fetch_url_schema(reading: InputReading | None = None) -> dict[str, Any]:
+    """The generic ``fetch_url``'s arguments: the URL and ``read_document``'s window."""
+    props = dict(read_schema(reading or InputReading("web", "web")))
+    props = {k: v for k, v in props["properties"].items() if k not in ("ref", "section", "where")}
+    return {"type": "object", "properties": {**FETCH_SCHEMA["properties"], **props},
+            "required": ["url"], "additionalProperties": False}  # fmt: skip
+
+
+def fetch_url(
+    ctx: ToolContext, args: Mapping[str, Any], reading: InputReading | None = None
+) -> ToolOutcome:
+    """The generic body: the page as ``read_document`` shows an input (``read_view``)."""
     fetched = fetch_text(ctx, str(args["url"]))
     if isinstance(fetched, Err):
         return ToolOutcome(fetched)
-    text = fetched.text
-    fmt = sniff_format(text.record_id, text.text)
-    try:
-        segs = list(segment(text.text, fmt))
-    except ValueError:
-        fmt, segs = "text", list(segment(text.text, "text"))
-    passages = [s for s in segs if s.end > s.start]
-    data = {"url": fetched.page.url, "final_url": fetched.page.final_url,
-            "record": text.record_id, "version": text.version, "format": fmt,
-            "content_type": fetched.page.content_type,
-            "passages": [{"n": n, "kind": s.kind, "text": text.text[s.start : s.end]}
-                         for n, s in enumerate(passages)]}  # fmt: skip
-    drafts = tuple(SpanDraft(text.source, text.record_id, text.version, s.start, s.end)
-                   for s in passages)  # fmt: skip
-    return ToolOutcome(Ok(data, spans=drafts, reads=(page_read(fetched),)))
+    extra = {"url": fetched.page.url, "final_url": fetched.page.final_url,
+             "content_type": fetched.page.content_type}  # fmt: skip
+    return read_view(ctx, fetched.text, args, reading or InputReading("web", "web"), extra)
 
 
-def fetch_url_tool(agent: str) -> ToolDecl:
-    """The generic ``fetch_url`` for ``agent``: passages as the format segments them."""
-    return ToolDecl(fetch_url_spec(agent), fetch_url)
+def fetch_url_tool(agent: str, reading: InputReading | None = None) -> ToolDecl:
+    """The generic ``fetch_url`` for ``agent``: the page read as an input is read.
+
+    With ``reading`` (the agent's :class:`InputReading`), ``extract`` decides the page's
+    kind and fills its typed fields, as ``read_document`` does for an input.
+    """
+    aliases = frozenset() if reading is None else reading.aliases()
+    spec = ToolSpec(
+        "fetch_url",
+        agent,
+        "read",
+        "Fetch one web page by URL and read it as read_document reads an input: numbered "
+        "lines (offset, limit) and its units, the citable passages, each with its anchor. "
+        "Cite a unit, never a search snippet."
+        + (" extract=true also decides the page's kind and fills its typed fields."
+           if aliases else ""),
+        fetch_url_schema(reading),
+        mints_citation_spans=True,
+        egress=WEB_EGRESS,
+        retry=_RETRY if reading is None else reading.retry,
+        model_aliases=aliases,
+    )
+
+    def body(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
+        return fetch_url(ctx, args, reading)
+
+    body.__name__ = "fetch_url"
+    return ToolDecl(spec, body)
 
 
 __all__ = ["BUILTIN_EGRESS", "FORMATS", "WEB_EGRESS", "fetch_text", "fetch_url_spec",

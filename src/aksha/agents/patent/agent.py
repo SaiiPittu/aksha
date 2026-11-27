@@ -3,8 +3,9 @@
 The Task tree, in the order the scheduler runs it:
 
 The inputs are whatever the person uploaded (invention notes, contributor and disclosure
-tables, emails, priorities, blank form templates, publications); ``world.py`` recognises
-each by its content, never by its name or folder.
+tables, emails, priorities, blank form templates, publications), read with the harness's
+shared input tools; each is recognised by its content (``world.KINDS``), never by its name
+or folder.
 
 1. ``scope`` lists the invention candidates and the blank forms, and reads the request
    into the ``portfolio``'s plan: which candidates, whether to search prior art, which
@@ -168,7 +169,7 @@ def tasks() -> tuple[Task, ...]:
         Task(
             "scope",
             extracts=True,
-            tools=("list_candidates", "list_templates", "read_document", SAVE),
+            tools=("list_inputs", "search_inputs", "read_document", "list_templates", "todo", SAVE),
             writes=("portfolio",),
             done=checks.portfolio_saved,
         ),
@@ -177,15 +178,14 @@ def tasks() -> tuple[Task, ...]:
             per=PER_CANDIDATE,
             extracts=True,
             tools=(
-                "read_note",
-                "read_contributors",
-                "read_disclosures",
+                "list_inputs",
+                "search_inputs",
                 "read_document",
-                "read_priorities",
                 "search_publications",
                 "fetch_publication",
                 "web_search",
                 "fetch_url",
+                "todo",
                 SAVE,
             ),
             writes=("extraction", "prior_art", "comparison", "recommendation"),
@@ -193,14 +193,7 @@ def tasks() -> tuple[Task, ...]:
                 Task(
                     "extract",
                     extracts=True,
-                    tools=(
-                        "read_note",
-                        "read_contributors",
-                        "read_disclosures",
-                        "read_document",
-                        "read_priorities",
-                        SAVE,
-                    ),
+                    tools=("list_inputs", "search_inputs", "read_document", "todo", SAVE),
                     writes=("extraction",),
                     interrupt=DeclaredInterrupt("input", "missing detail"),
                     done=checks.extraction_saved,
@@ -261,7 +254,14 @@ def tasks() -> tuple[Task, ...]:
             per=PER_SELECTED,
             extracts=True,
             reads=("extraction", "comparison", "recommendation", "prior_art", "portfolio"),
-            tools=("read_people", "list_templates", "read_template", "fill_form"),
+            tools=(
+                "list_inputs",
+                "search_inputs",
+                "read_document",
+                "list_templates",
+                "read_template",
+                "fill_form",
+            ),
             writes=("form",),
             done=checks.forms_filled,
         ),
@@ -386,12 +386,12 @@ MODEL_ALIASES = (
             ("url", "text", "where it was found"),
         ),
     ),
-    ModelAlias("table_roles", "classification", allow_adapted=True, on_exhausted="unknown"),
-    ModelAlias("candidate_of", "classification", allow_adapted=True, on_exhausted="unknown"),
 )
-"""The fast-class aliases the read tools ask (``world.py``): the decide alias, one schema per
-document kind, and the column and candidate classifiers. Which model answers each is
-configuration (fakes offline; a native or an adapted general model live)."""
+"""The fast-class aliases the tools ask (``world.py``): the decide alias and one schema per
+document kind, asked by the shared input tools (``tools.READING``) and the domain tools.
+Which model answers each is configuration (fakes offline; a native or an adapted general
+model live). Which column of a table holds what, and which candidate a row is about, the
+generation model reads itself."""
 
 
 def build_agent(world: SourceWorld) -> Agent:

@@ -68,7 +68,14 @@ What an agent or extension declares, grouped by the primitive that owns it:
    list; ``fetch_url_spec``, the generic ``fetch_url`` tool's spec, and what an agent's own
    ``fetch_url`` body reads a page through: ``fetch_text`` (the page as a returned text,
    or the ``Err`` the model reads), ``FetchedText``, ``page_read`` (its lineage read),
-   ``WEB_SOURCE``, ``WEB_EGRESS`` and ``web_record_id``.
+   ``WEB_SOURCE``, ``WEB_EGRESS`` and ``web_record_id``; ``fetch_url_tool``, the generic
+   ``fetch_url`` with its body, which shows a page as ``read_document`` shows an input.
+14. The harness's input and common tools (P10 T1, T2): ``input_tools`` and
+   ``InputReading`` (``list_inputs``, ``read_document``, ``search_inputs`` over an agent's
+   versioned source), ``INPUT_TOOLS`` (their names), ``read_view`` (the view
+   ``read_document`` returns, over any returned text), ``todo_tool`` and ``think_tool``;
+   ``OfflineReaders``, an agent's offline fast readers run in process by a rule-based
+   model over a text its request carries.
 """
 
 from __future__ import annotations
@@ -116,6 +123,7 @@ from aksha.runtime.grounding.types import (
     Unknown,
     maybe_unknown,
 )
+from aksha.runtime.inputs.tools import INPUT_TOOLS, InputReading, input_tools, read_view
 from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.keying import InvalidationKeys
 from aksha.runtime.invalidation.modes import InvalidationMode
@@ -133,6 +141,7 @@ from aksha.runtime.models.documents import (
     section_heading,
 )
 from aksha.runtime.models.fixed import decimal_string, distribution_ppm, ppm
+from aksha.runtime.models.offline import OfflineReaders
 from aksha.runtime.models.rules import (
     RuleClassificationModel,
     RuleExtractionModel,
@@ -192,6 +201,7 @@ from aksha.runtime.tasks.types import (
 )
 from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.timers.clock import observe_time
+from aksha.runtime.tools.common import think_tool, todo_tool
 from aksha.runtime.tools.ports import ToolModels
 from aksha.runtime.tools.types import (
     EditSpec,
@@ -207,12 +217,19 @@ from aksha.runtime.tools.types import (
     ToolUse,
 )
 from aksha.runtime.web.attempt import FetchedText
-from aksha.runtime.web.tools import fetch_text, fetch_url_spec, page_read, web_search_tool
+from aksha.runtime.web.tools import (
+    fetch_text,
+    fetch_url_spec,
+    fetch_url_tool,
+    page_read,
+    web_search_tool,
+)
 from aksha.runtime.web.types import WEB_EGRESS, WEB_SOURCE, web_record_id
 
 __all__ = [
     "API_VERSION",
     "FORMATS",
+    "INPUT_TOOLS",
     "INSTRUCTION_FLAG",
     "OTHER_KIND",
     "SELF",
@@ -263,6 +280,7 @@ __all__ = [
     "GenerationResult",
     "Goal",
     "HttpResponse",
+    "InputReading",
     "InputRef",
     "InstanceRef",
     "InstanceStatus",
@@ -278,6 +296,7 @@ __all__ = [
     "ModelCapabilities",
     "ModelClass",
     "NewEvent",
+    "OfflineReaders",
     "Ok",
     "Plan",
     "Projection",
@@ -333,8 +352,10 @@ __all__ = [
     "external_records",
     "fetch_text",
     "fetch_url_spec",
+    "fetch_url_tool",
     "find_dates",
     "from_field",
+    "input_tools",
     "instruction_text",
     "kind_question",
     "maybe_unknown",
@@ -346,12 +367,15 @@ __all__ = [
     "ppm",
     "read_document",
     "read_rows",
+    "read_view",
     "record_sections",
     "section_heading",
     "segment",
     "sniff_format",
     "source_keys",
     "span_draft",
+    "think_tool",
+    "todo_tool",
     "visible",
     "web_record_id",
     "web_search_tool",

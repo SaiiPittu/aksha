@@ -280,12 +280,12 @@ MODEL_ALIASES = (
             "quote per voice",
         ),
     ),
-    _fast("table_roles", "classification"),
-    _fast("theme_match", "classification"),
 )
-"""The fast-class aliases the read tools ask (``reading.py``): the decide alias, one schema
-alias per document kind, and the column and theme classifiers. Which model answers each is
-configuration (fakes offline; a native or adapted model live), never this module."""
+"""The fast-class aliases the shared input tools ask (``tools.READING``): the decide alias
+and one schema alias per document kind (``reading.KINDS``). Which model answers each is
+configuration (fakes offline; a native or adapted model live), never this module. Which
+column of an export holds what, and which theme a review speaks to, the generation model
+reads itself."""
 
 AGENT = Agent(
     name="research",
@@ -310,7 +310,7 @@ AGENT = Agent(
     tasks=(
         Task(
             "scope",
-            tools=("list_inputs", "search", "read_note", "save_artifact"),
+            tools=("list_inputs", "search_inputs", "read_document", "todo", "save_artifact"),
             writes=("scope",),
             done=checks.scope_done,
             interrupt=DeclaredInterrupt("input", "question"),
@@ -324,10 +324,11 @@ AGENT = Agent(
             reads=("scope",),
             tools=(
                 "list_inputs",
-                "search",
-                "fetch_page",
+                "search_inputs",
+                "read_document",
                 "web_search",
                 "fetch_url",
+                "todo",
                 "save_artifact",
             ),
             writes=("competitors",),
@@ -341,7 +342,7 @@ AGENT = Agent(
             per=artifact_keys("competitors", "companies"),
             needs=("discover",),
             reads=("competitors",),
-            tools=("fetch_page", "fetch_url", "save_artifact"),
+            tools=("read_document", "fetch_url", "todo", "save_artifact"),
             writes=("profile",),
             extracts=True,
             done=checks.profile_done,
@@ -354,7 +355,7 @@ AGENT = Agent(
             "voice",
             needs=("scope",),
             reads=("scope",),
-            tools=("list_inputs", "search", "read_table", "save_artifact"),
+            tools=("list_inputs", "search_inputs", "read_document", "todo", "save_artifact"),
             writes=("needs",),
             extracts=True,
             done=checks.needs_done,

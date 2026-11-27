@@ -128,10 +128,12 @@ def test_the_patent_agent_runs_offline_on_a_world_up_to_its_approval(tmp_path: P
         store.close()
     started = next(e for e in events if e.type == "run.started")
     shown = [json.loads(e.payload["value"]["view"]["text"])["data"] for e in events
-             if e.type == "step.completed" and e.payload.get("tool") == "read_disclosures"
+             if e.type == "step.completed" and e.payload.get("tool") == "list_inputs"
              and e.payload.get("outcome") == "ok"]  # fmt: skip
-    assert shown and all(d["as_of"] == started.at[:10] for d in shown)
-    assert all(r["elapsed_days"] is not None for d in shown for r in d["rows"] if r["date"])
+    assert shown and all(d["as_of"] == started.at[:10] for d in shown)  # the date days count to
+    saved = [e.payload for e in events if e.type == "artifact.saved"
+             and str(e.payload.get("ref", "")).startswith("patent.extraction/")]  # fmt: skip
+    assert saved
     questions = [e.payload for e in events if e.type == "interrupt.raised"]
     assert "None days" not in json.dumps(thaw(questions))
 

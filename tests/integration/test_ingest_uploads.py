@@ -145,7 +145,7 @@ def test_a_changed_pdf_keeps_its_key_moves_its_version_and_reopens_the_work_on_i
     assert " v2] " in served.splitlines()[0] and "by hand" in served
     changed = [q for q in _facts(tmp_path, "query.reexecuted") if q["changed"]]
     assert [q["query"] for q in changed] == [
-        'research.search?{"formats":["html","markdown","text","email"],"terms":["spreadsheet",'
+        'research.search_inputs?{"formats":["html","markdown","text","email"],"terms":["spreadsheet",'
         '"manual count","by hand","walk-round","clipboard","paper log"]}'
     ]
     assert "R-0002 research ended complete" in out, out

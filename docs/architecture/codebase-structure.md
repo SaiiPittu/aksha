@@ -113,6 +113,7 @@ src/aksha/
 │   │   ├── arguments.py                     schema_refusal (every failing path), JSON pointers
 │   │   ├── bodies.py                        call_body: a raising body is a tool_exception result
 │   │   ├── loader_added.py                  finish, ask (reserved effect) and save_artifact (store)
+│   │   ├── common.py                        todo and think: common tools any agent may list (T2)
 │   │   └── results.py                       render_result: the capped model view
 │   ├── policy/                              P11 policy gate and permissions
 │   │   ├── __init__.py                      deny by default, one checker, never appends
@@ -202,6 +203,7 @@ src/aksha/
 │   │   ├── calls.py                         ToolModelCalls: a body's extraction and classification calls, recorded on its step (G1)
 │   │   ├── definitions.py                   alias_definition: the version of an alias's declared schema (P05 M2)
 │   │   ├── documents.py                     DocumentKind, read_document: decide a record's kind, pick its schema, extract (G3)
+│   │   ├── offline.py                       OfflineReaders: rule readers run in process by a rule-based model
 │   │   ├── options.py                       resolve_questions: options read from a saved artifact (S1)
 │   │   ├── adapted.py                       AdaptedClassificationModel: generation under a forced choice
 │   │   ├── rules.py                         RuleGenerationModel, RuleExtractionModel, RuleClassificationModel
@@ -313,6 +315,7 @@ src/aksha/
 │   │   ├── ports.py                         DocumentIngester: uploaded bytes to what the workspace serves
 │   │   ├── reducers.py                      queued_inputs, pending_input, consumed_at, consumed_by_step, known_documents; pure
 │   │   ├── uploads.py                       upload_bytes: UploadInputs files and base64 binary as one map
+│   │   ├── tools.py                         list_inputs, read_document, search_inputs: the shared input tools (P10 T1)
 │   │   └── commands.py                      steer: input.queued, and an amendment's facts, in U4
 │   ├── router/                              P23 request router
 │   │   ├── __init__.py                      what is built, what is planned
@@ -443,23 +446,25 @@ src/aksha/
 │   ├── research/                            the research agent (scenarios 1, 11, 12)
 │   │   ├── __init__.py                      what it does, where each part lives
 │   │   ├── agent.py                         AGENT: kinds, cite policies, relations, the Task tree
-│   │   ├── tools.py                         list_inputs, search, fetch_page, read_table, read_note
+│   │   ├── tools.py                         READING and TOOLS: the shared input, web and plan tools, nothing of its own
 │   │   ├── parsing.py                       the passage, page and table values; a quoted price's currency, amount and basis; pure
 │   │   ├── reading.py                       the document kinds; decide, pick the schema, extract; passages as exact ranges
 │   │   ├── analysis.py                      entity resolution, price conflicts, term matching, review samples; pure
 │   │   ├── checks.py                        completion checks over a TaskView; pure
 │   │   ├── fakes.py                         ResearchModel: the offline rule-based policy, a test double; reads the request's grammar
 │   │   ├── fakes_readers.py                 the fast-class fakes: the decide rules and each kind's schema, general rules
+│   │   ├── fakes_views.py                   how the offline model reads the shared tools' results with the agent's rules
 │   │   └── prompts/                         the instructions and one prompt per Task
 │   └── patent/                              the patent-disclosure agent (example)
 │       ├── __init__.py                      what it does and never does
 │       ├── agent.py                         AGENT: kinds, the Task tree, build_agent(world)
 │       ├── world.py                         SourceWorld: inputs recognised by content, typed views, record parts, search
-│       ├── tools.py                         read tools, fill_form, send_packet (approval)
+│       ├── tools.py                         the shared reads, plus the domain's: publications, templates, fill_form, send_packet
 │       ├── rules.py                         the rule table, families, form refusals
 │       ├── checks.py                        pure completion checks
 │       ├── fakes.py                         PatentFake: the rule-based generation model, a test double; general rules
 │       ├── fakes_readers.py                 the fast-class fakes: the decide rules and each kind's schema, general rules
+│       ├── fakes_views.py                   how the offline model reads the shared tools' results: what to read, the views
 │       └── fakes_stillroom.py               the stillroom notes' hand-written lexicon; applies to those notes only
 ├── evals/                                   P22 EVALS: worlds as environments, graded by code
 │   ├── __init__.py                          the parts and the import rule

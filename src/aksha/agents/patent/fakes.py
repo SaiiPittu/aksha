@@ -33,7 +33,7 @@ from aksha.runtime.api import (
     find_dates,
 )
 
-from . import fakes_readers, fakes_stillroom, rules
+from . import fakes_stillroom, fakes_views, rules
 
 Groups = list[list[str]]
 
@@ -257,6 +257,13 @@ def parse(request: GenerationRequest) -> Context:
                 # Asked again after a finish: the work was re-entered (or the finish was
                 # refused), so what was read before may be out of date. Start over.
                 ctx.results.clear()
+    if any(n == "fetch_url" and r.get("status") == "ok" for n, _, r in ctx.results):
+        models = fakes_views.readers()
+        ctx.results = [
+            (n, a, {**r, "data": fakes_views.page_view(r["data"], models)})
+            if n == "fetch_url" and r.get("status") == "ok" else (n, a, r)
+            for n, a, r in ctx.results
+        ]  # fmt: skip
     # An own-key read is stored under its slot (kind/key); expose it by kind as well.
     for slot, value in list(ctx.reads.items()):
         if ctx.key is not None and slot.endswith(f"/{ctx.key}"):
@@ -363,8 +370,34 @@ class PatentFake(RuleGenerationModel):
         handler = getattr(self, f"_{ctx.task}", None)
         if handler is None:
             return _reply(_call("finish", 1, summary="nothing for this Task"))
-        result: GenerationResult = handler(ctx)
-        return result
+        world = None
+        for _ in range(12):
+            result: GenerationResult = handler(ctx)
+            wanted = [c for c in result.tool_calls if c.name in fakes_views.VIEWS]
+            if not wanted:
+                return result
+            # The rules ask for a view of the inputs: read them in full first, then work the
+            # view out in this turn over what was read (``fakes_views``).
+            linked = [str(c.arguments["path"]) for c in wanted if c.name == "read_linked"]
+            needed = fakes_views.reads_needed(ctx.results, ctx.task, ctx.key, linked)
+            if needed:
+                return _reply(*(_call(n, i, **a) for i, (n, a) in enumerate(needed, 1)))
+            if world is None or linked:
+                world = fakes_views.world_of(ctx.results, fakes_views.readers(), ctx.task)
+            for c in wanted:
+                query = fakes_views.listing_query(ctx.results, ctx.task)
+                got = fakes_views.view(world, c.name, c.arguments, query)
+                ctx.results.append((c.name, dict(c.arguments), got))
+            done = {(n, json.dumps(a, sort_keys=True)) for n, a, _ in ctx.results}
+            rest = [
+                c
+                for c in result.tool_calls
+                if c.name not in fakes_views.VIEWS
+                and (c.name, json.dumps(dict(c.arguments), sort_keys=True)) not in done
+            ]
+            if rest:
+                return _reply(*rest)
+        return _reply(_call("finish", 1, summary="no progress"))
 
     # --- portfolio ----------------------------------------------------------------------
 
@@ -374,8 +407,8 @@ class PatentFake(RuleGenerationModel):
             return _reply(_call("list_candidates", 1), _call("list_templates", 1))
         rows = listed[-1][1]["candidates"]
         unread = list(listed[-1][1].get("unread", []))
-        if unread and not ctx.called("read_document"):  # the fast readers left these: read them
-            return _reply(*(_call("read_document", i, path=p) for i, p in enumerate(unread, 1)))
+        if unread and not ctx.called("read_linked"):  # the fast readers left these: read them
+            return _reply(*(_call("read_linked", i, path=p) for i, p in enumerate(unread, 1)))
         forms = ctx.ok("list_templates")[-1][1] if ctx.ok("list_templates") else {}
         templates = forms.get("templates", [])
         plan = plan_of(ctx.request, [r["candidate"] for r in rows], templates)
@@ -397,7 +430,7 @@ class PatentFake(RuleGenerationModel):
             ],
             "unread": [
                 {"file": a["path"], "holds": "read; no invention recognised in it"}
-                for a, _ in ctx.ok("read_document")
+                for a, _ in ctx.ok("read_linked")
             ],
             "coverage": [c for c in coverage if c is not None],
         }
@@ -419,10 +452,10 @@ class PatentFake(RuleGenerationModel):
             )
         history = ctx.ok("read_disclosures")[-1][1]
         linked = sorted({r["linked_file"] for r in history["rows"] if r["linked_file"]})
-        done = {a["path"] for a, _ in ctx.ok("read_document")}
+        done = {a["path"] for a, _ in ctx.ok("read_linked")}
         todo = [p for p in linked if p not in done]
-        if todo and not ctx.called("read_document"):
-            return _reply(*(_call("read_document", i, path=p) for i, p in enumerate(todo, 1)))
+        if todo and not ctx.called("read_linked"):
+            return _reply(*(_call("read_linked", i, path=p) for i, p in enumerate(todo, 1)))
         note = ctx.ok("read_note")[-1][1]
         undecided = [p for p in note["parameters"] if _undecided(p)]
         if undecided and not ctx.answers and not ctx.called("ask"):
@@ -574,8 +607,8 @@ class PatentFake(RuleGenerationModel):
         listed = ctx.ok("list_templates")[-1][1]["templates"]
         wanted = [str(t) for t in plan.get("forms", ())]
         names = [t["template"] for t in listed if not wanted or t["template"] in wanted]
-        if not ctx.called("read_template"):
-            ids = sorted({r["person_id"] for r in ext[1]["contributors"]})
+        ids = sorted({r["person_id"] for r in ext[1]["contributors"]})
+        if not ctx.called("read_template") or (ids and not ctx.called("read_people")):
             reads = [_call("read_template", i, template=t) for i, t in enumerate(names, 1)]
             ask = [_call("read_people", 1, person_ids=ids)] if ids else []
             return _reply(*ask, *reads)
@@ -699,7 +732,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
     contrib = ctx.ok("read_contributors")[-1][1]
     history = ctx.ok("read_disclosures")[-1][1]
     prio = ctx.ok("read_priorities")[-1][1]
-    docs = {a["path"]: d for a, d in ctx.ok("read_document")}
+    docs = {a["path"]: d for a, d in ctx.ok("read_linked")}
     nf = note["file"]
     lex = lexicon_for(c, note)
     steps = [{"n": s["n"], "text": s["text"], **_q(nf, s["text"])} for s in note["mechanism_steps"]]
@@ -1537,12 +1570,6 @@ def packet(
 
 ADAPTERS = {
     "generate": PatentFake(),
-    "doc_kind": fakes_readers.DocKind(),
-    "note_structure": fakes_readers.NoteStructure(),
-    "priorities": fakes_readers.Priorities(),
-    "template_fields": fakes_readers.TemplateFields(),
-    "publication_biblio": fakes_readers.PublicationBiblio(),
-    "table_roles": fakes_readers.TableRoles(),
-    "candidate_of": fakes_readers.CandidateOf(),
+    **{k: v for k, v in fakes_views.READERS.items() if k not in ("table_roles", "candidate_of")},
 }
 """The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

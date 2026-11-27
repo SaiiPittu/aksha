@@ -117,7 +117,7 @@ def test_manual_alternatives_not_found_is_an_explicit_unknown(run: ResearchBench
     unknown = run.content("competitors")["manual_alternatives"]["unknown"]
     assert unknown["reason"] == "not_found"
     (checked,) = unknown["checked"]
-    assert checked.startswith("query:research.search?")  # the search, at its hit set
+    assert checked.startswith("query:research.search_inputs?")  # the search, at its hit set
 
 
 # --- prices -------------------------------------------------------------------------
@@ -206,12 +206,10 @@ def test_instruction_like_text_is_flagged_and_changes_nothing(run: ResearchBench
     }
     assert called <= {
         "list_inputs",
-        "search",
-        "fetch_page",
+        "search_inputs",
+        "read_document",
         "web_search",
         "fetch_url",
-        "read_table",
-        "read_note",
         "save_artifact",
         "finish",
         "ask",
