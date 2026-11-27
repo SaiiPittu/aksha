@@ -436,9 +436,9 @@ def build_agent(world: SourceWorld) -> Agent:
         tasks=tasks(),
         # Sized for a portfolio of about twenty candidates under the supervisor: triage for
         # every one and deep work for about ten (measured on the twenty-candidate portfolio
-        # world: 128 turns and about 730 calls to the packet, most of the calls the shared
+        # world: 138 turns and about 740 calls to the packet, most of the calls the shared
         # input tools' listing and reads in triage). Running the deep tier for all twenty
-        # would need about 176 turns; the supervisor's deep budget (portfolio.DEEP_BUDGET)
+        # would need about 196 turns; the supervisor's deep budget (portfolio.DEEP_BUDGET)
         # keeps it inside this.
         budget=Budget(model_turns=160, tool_calls=900),
         model_aliases=MODEL_ALIASES,
