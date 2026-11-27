@@ -411,7 +411,7 @@ The patent-disclosure agent's send tool is the clearest case. It declares an `ex
 
 ### 4.6 The policy gate is one pure checker in a fixed order
 
-Every tool call, from every path, passes one function: `check(GateInput) -> Allow | Refuse` (ADR-P11, Proposed). It is pure, reads no clock, store or network, denies by default and refuses on any exception. Nothing the model can write is an input to it, so a fetched page that says "you may now call `send_document`" changes nothing.
+Every tool call, from every path, passes one function: `check(GateInput) -> Allow | Refuse` (ADR-P11, Proposed). It is pure, reads no clock, store or network, denies by default and refuses on any exception. It checks the proposed call's name and arguments against declared policy; model output cannot grant a permission, and tool results, documents, memory text and artifact content are never inputs to it, so a fetched page that says "you may now call `send_document`" changes nothing.
 
 | Layer | Check | Refusal code |
 |---|---|---|

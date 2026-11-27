@@ -61,7 +61,7 @@ The five families split the work by the question their ADRs answer. Each row lin
 | ID | Primitive | Decision in one line | Status | First milestone | Tier |
 |---|---|---|---|---|---|
 | P10 | [Tool registry and schemas](adr/ADR-P10-tool-registry-and-schemas.md) | Every tool is declared data with one effect class, and the schema the model sees is the schema the gate checks | Proposed | Build now | 2 |
-| P11 | [Policy gate and permissions](adr/ADR-P11-policy-gate-and-permissions.md) | Deny by default, one checker in code, and nothing the model writes is an input to the decision | Proposed | Build now | 2 |
+| P11 | [Policy gate and permissions](adr/ADR-P11-policy-gate-and-permissions.md) | Deny by default, one checker in code; it checks the proposed call's name and arguments, model output cannot grant permission, and tool results, documents, memory text and artifact content are never gate inputs | Proposed | Build now | 2 |
 | P12 | [Sandbox and execution environment](adr/ADR-P12-sandbox-and-execution-environment.md) | The gate decides whether a program runs, the sandbox decides what it can reach, and a workspace is an artifact version | Proposed | Later (a refusing backend only) | 3; interface in 2 |
 | P13 | [Grounding and citations](adr/ADR-P13-grounding-and-citations.md) | Tools mint citation spans, the runtime verifies every quote at save, and a claim it cannot ground becomes an explicit unknown | Proposed; one part Accepted | Build now | 2 |
 | P14 | [Budgets, limits, timeouts and retries](adr/ADR-P14-budgets-limits-timeouts-retries.md) | Every cap is counted from the event store, so a restart never resets it | Proposed | Build now | 2 |

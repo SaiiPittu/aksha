@@ -41,7 +41,7 @@ My lean:
 | From | Allowed fallback | Rule |
 |---|---|---|
 | Generation | Another generation adapter | On a transient error, overflow or refusal, capped per step |
-| Native classification | Another native classification adapter | Once a native candidate is in the chain, only native candidates follow |
+| Native classification | Another native classification adapter | Natives come first in the chain; after them only an adapted classifier may follow, and only when the alias sets `allow_adapted` and the question gates no external effect (next row) |
 | Native classification | An adapted classifier (a generation model under a forced-choice schema) | Only when the alias sets `allow_adapted`; recorded `native=False`; judged by its own thresholds; never for a question that gates an external effect |
 | Extraction | Another native extraction adapter | An adapted extractor returns no spans, so it never stands in for a cited field |
 | Any fast-class alias | A generation call in its place | Not allowed |
