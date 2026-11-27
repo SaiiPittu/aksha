@@ -49,7 +49,7 @@ export function TryAksha() {
               <Kbd className="ml-1 bg-primary-foreground/15 text-primary-foreground">↵</Kbd>
             </Button>
             <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-              <UserPlus className="size-3.5" />Like it? Save as account later. Your sessions come with you.
+              <UserPlus className="size-3.5" />Like it? Save it as your own account later. Your sessions come with you.
             </p>
           </div>
         </CardContent>

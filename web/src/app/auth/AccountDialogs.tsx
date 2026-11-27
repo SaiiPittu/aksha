@@ -79,7 +79,7 @@ export function SaveGuestDialog({ open, onOpenChange }: { open: boolean; onOpenC
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Save as account</DialogTitle>
-          <DialogDescription>Your sessions come with you. The sandbox would otherwise expire.</DialogDescription>
+          <DialogDescription>Your sessions come with you and stay in your own workspace. Joining an organisation takes an invite from its admin.</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} noValidate aria-label="Save as account">
           <FieldGroup className="gap-4">

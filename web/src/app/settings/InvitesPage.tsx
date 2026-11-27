@@ -21,12 +21,14 @@ const stateTone = (s: string) =>
 
 export function InvitesPage() {
   const viewer = useViewer()
-  const manager = canManageOrg(viewer.role)
+  const guest = viewer.mode === "guest"
+  const manager = canManageOrg(viewer.role) && !guest
   return (
     <SettingsFrame active="invites">
       <PageHeader title="Invites" sub="Aksha does not send email: copy each link and share it yourself. Links expire in 7 days and work once." />
       <PageBody className="flex flex-col gap-5">
         {manager ? <><InviteForm /><InviteList /></>
+          : guest ? <PageEmpty icon={Send} title="A guest invites nobody" body="Save the sandbox as an account first. It stays your own workspace." />
           : <PageEmpty icon={Send} title="Only owners and admins invite people" body="Ask an admin of your organisation for an invite link." />}
       </PageBody>
     </SettingsFrame>

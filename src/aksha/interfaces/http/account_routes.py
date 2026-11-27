@@ -220,7 +220,7 @@ async def invite_accept(token: str, request: Request, response: Response) -> dic
 
 @router.post("/auth/guest")
 def guest(request: Request, response: Response) -> dict[str, Any]:
-    """Start a 24-hour guest account in its own tenant (only with ``AKSHA_GUESTS=1``)."""
+    """Start a 24-hour guest in its own tenant and personal org (``AKSHA_GUESTS=1``); 5 an hour."""
     accounts = accounts_of(request)
     if not auth_state(request).config.guests:
         raise AccountError(403, "guests_disabled", "this server has no guest sandbox")
@@ -229,7 +229,7 @@ def guest(request: Request, response: Response) -> dict[str, Any]:
 
 @router.post("/auth/guest/save")
 async def guest_save(request: Request, response: Response, who: AccountHolder) -> dict[str, Any]:
-    """Keep a guest's work as a normal account (email, password, name) in the server's org."""
+    """Keep a guest's work as a normal account (email, password, name) in its personal org."""
     assert who.member is not None
     body = await json_body(request)
     new = accounts_of(request).save_guest(who.member, body.get("email"), body.get("password"),

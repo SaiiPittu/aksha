@@ -74,3 +74,12 @@ def test_the_flag_wins_over_the_environment_and_none_serves_nothing(tmp_path: Pa
     assert web_dist(dist, {"AKSHA_WEB_DIST": str(tmp_path / "nope")}) == dist.resolve()
     with pytest.raises(WebDistMissing):
         web_dist(None, {"AKSHA_WEB_DIST": str(tmp_path / "nope")})
+
+
+@pytest.mark.parametrize("path", ["/", "/s/S-1", "/assets/index-abc123.js", "/favicon.svg"])
+def test_every_web_response_refuses_to_be_framed(tmp_path: Path, path: str) -> None:
+    res = _client(tmp_path).get(path)
+    assert res.status_code == 200
+    assert res.headers["x-frame-options"] == "DENY"
+    assert res.headers["content-security-policy"] == "frame-ancestors 'none'"
+    assert res.headers["x-content-type-options"] == "nosniff"

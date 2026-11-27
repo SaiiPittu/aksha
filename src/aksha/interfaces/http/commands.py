@@ -1,4 +1,9 @@
-"""The command routes: each write is one named command, submitted to the runtime thread."""
+"""The command routes: each write is one named command, submitted to the runtime thread.
+
+A command's ``by`` is set from the principal that sent it (``auth.ByRule``): ``user:<id>``
+for an account, ``local`` in local mode; a body ``by`` naming anyone else is refused 422
+``by_not_allowed``. Only with ``--trust-user-header`` is the body's ``by`` kept.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,15 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from aksha.interfaces import wire
-from aksha.interfaces.http.auth import Commander, StopTenant
+from aksha.interfaces.http.auth import (
+    ByRule,
+    Commander,
+    SignedIn,
+    StopTenant,
+    accounts_of,
+    by_rule,
+    client_ip,
+)
 from aksha.interfaces.http.common import (
     API,
     COMMAND_TIMEOUT_S,
@@ -42,13 +55,13 @@ def submit(context: AppContext, command: named.NamedCommand) -> JSONResponse:
 
 
 def command(context: AppContext, owner: str, name: str, args: dict[str, Any],
-            body: dict[str, Any]) -> JSONResponse:  # fmt: skip
-    """Build the named command ``name`` for ``owner`` and submit it."""
+            body: dict[str, Any], rule: ByRule) -> JSONResponse:  # fmt: skip
+    """Build the named command ``name`` for ``owner``, ``by`` bound by ``rule``; submit it."""
     try:
-        parsed = wire.command_from_json(owner, {
+        parsed = rule.bind(wire.command_from_json(owner, {
             "command": name, "args": args, "command_id": body.get("command_id"),
             "by": body.get("by"),
-        })  # fmt: skip
+        }))  # fmt: skip
     except wire.WireInvalid as e:
         return error(422, e.code, e.message)
     return submit(context, parsed)
@@ -56,12 +69,18 @@ def command(context: AppContext, owner: str, name: str, args: dict[str, Any],
 
 @router.post("/commands")
 async def any_command(request: Request, context: Context, who: Commander) -> JSONResponse:
-    """Any named command (``wire`` module doc)."""
+    """Any named command (``wire`` module doc); a correction's decider is audited."""
     body = await json_body(request)
     try:
-        parsed = wire.command_from_json(who.tenant, body)
+        parsed = by_rule(who, request).bind(wire.command_from_json(who.tenant, body))
     except wire.WireInvalid as e:
         return error(422, e.code, e.message)
+    if isinstance(parsed, named.DecideCorrection) and who.member is not None:
+        accounts_of(request).record(
+            "decide_correction", org_id=who.member.org_id, actor_id=who.member.user.id,
+            target=parsed.correction_id, ip=client_ip(request),
+            detail={"as": parsed.by, "approve": parsed.approve},
+        )  # fmt: skip
     return submit(context, parsed)
 
 
@@ -76,7 +95,7 @@ async def message(session: str, request: Request, context: Context,
             args[key] = body[key]
     if not isinstance(args["text"], str) or not args["text"]:
         return error(422, "validation", "text is a non-empty string")
-    return command(context, who.tenant, "SendMessage", args, body)
+    return command(context, who.tenant, "SendMessage", args, body, by_rule(who, request))
 
 
 @router.post("/interrupts/{interrupt}/answer")
@@ -86,7 +105,7 @@ async def answer(interrupt: str, request: Request, context: Context,
     body = await json_body(request)
     args = {"interrupt_id": interrupt}
     args.update({k: body[k] for k in ("text", "answers", "agent", "amend") if k in body})
-    return command(context, who.tenant, "AnswerInterrupt", args, body)
+    return command(context, who.tenant, "AnswerInterrupt", args, body, by_rule(who, request))
 
 
 @router.post("/approvals/{approval}/approve")
@@ -95,7 +114,7 @@ async def approve(approval: str, request: Request, context: Context,
     """``Approve`` (body ``shown_signature``)."""
     body = await json_body(request)
     args = {"approval_id": approval, "shown_signature": body.get("shown_signature")}
-    return command(context, who.tenant, "Approve", args, body)
+    return command(context, who.tenant, "Approve", args, body, by_rule(who, request))
 
 
 @router.post("/approvals/{approval}/reject")
@@ -106,23 +125,24 @@ async def reject(approval: str, request: Request, context: Context,
     args: dict[str, Any] = {"approval_id": approval}
     if "note" in body:
         args["note"] = body["note"]
-    return command(context, who.tenant, "Reject", args, body)
+    return command(context, who.tenant, "Reject", args, body, by_rule(who, request))
 
 
 @router.post("/runs/{run}/stop")
-async def stop(run: str, request: Request, context: Context, tenant: StopTenant) -> JSONResponse:
+async def stop(run: str, request: Request, context: Context, tenant: StopTenant,
+               who: SignedIn) -> JSONResponse:  # fmt: skip
     """``Stop``; an Admin may stop a member's run with ``?as_user=`` (audited first)."""
     body = await json_body(request)
     args: dict[str, Any] = {"run_id": run}
     if "reason" in body:
         args["reason"] = body["reason"]
-    return command(context, tenant, "Stop", args, body)
+    return command(context, tenant, "Stop", args, body, by_rule(who, request))
 
 
 @router.post("/inputs")
 async def inputs(request: Request, context: Context, who: Commander) -> JSONResponse:
-    """``UploadInputs`` (``files``: path to text, ``binary``: path to base64 bytes)."""
-    body = await json_body(request)
+    """``UploadInputs`` (``files``: path to text, ``binary``: path to base64 bytes); capped."""
+    body = await json_body(request, limit=context.upload_max_bytes)
     files = body.get("files", {})
     binary = body.get("binary", {})
     maps = (files, binary)
@@ -137,7 +157,7 @@ async def inputs(request: Request, context: Context, who: Commander) -> JSONResp
     args: dict[str, Any] = {"files": files}
     if binary:
         args["binary"] = binary
-    return command(context, who.tenant, "UploadInputs", args, body)
+    return command(context, who.tenant, "UploadInputs", args, body, by_rule(who, request))
 
 
 @router.post("/runs/{run}/steer")
@@ -150,4 +170,4 @@ async def steer(run: str, request: Request, context: Context, who: Commander) ->
     for key in ("lane", "instance"):
         if key in body:
             args[key] = body[key]
-    return command(context, who.tenant, "Steer", args, body)
+    return command(context, who.tenant, "Steer", args, body, by_rule(who, request))

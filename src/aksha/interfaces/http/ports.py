@@ -1,4 +1,4 @@
-"""The HTTP adapter's port: what the server layer keeps about a session beside the log.
+"""The HTTP adapter's ports: what the server keeps about a session, and who a command is by.
 
 A session's archive state and its title override are a person's view settings, not facts
 of the runtime: they live in the server's own store (the accounts store implements this
@@ -9,6 +9,8 @@ another's settings.
 from __future__ import annotations
 
 from typing import Protocol
+
+from aksha.runtime.session.named import NamedCommand
 
 
 class SessionMetaPort(Protocol):
@@ -28,4 +30,12 @@ class SessionMetaPort(Protocol):
 
     def set_title(self, owner: str, session: str, title: str | None) -> None:
         """Set ``session``'s title for ``owner``; None goes back to the default."""
+        ...
+
+
+class ByBinder(Protocol):
+    """Sets a command's ``by`` from the principal that sent it (``auth.ByRule``)."""
+
+    def bind(self, command: NamedCommand) -> NamedCommand:
+        """``command`` as the principal may send it; ``WireInvalid`` (``by_not_allowed``) if not."""
         ...

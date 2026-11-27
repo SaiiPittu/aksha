@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from aksha.app import RuntimeConfig, StorageConfig
+from aksha.interfaces.http.common import MB, upload_max_bytes
 from aksha.interfaces.http.serve import auth_config
 
 
@@ -39,3 +42,12 @@ def test_trusting_the_header_opens_no_accounts_database(tmp_path: Path) -> None:
     auth = auth_config(_config(tmp_path), {}, trust_user_header=True)
     assert auth.trust_user_header and auth.accounts is None
     assert not (tmp_path / "var" / "accounts.sqlite").exists()
+
+
+def test_the_upload_cap_is_50_mb_unless_the_environment_names_another() -> None:
+    assert upload_max_bytes({}) == 50 * MB
+    assert upload_max_bytes({"AKSHA_UPLOAD_MAX_MB": "2"}) == 2 * MB
+    assert upload_max_bytes({"AKSHA_UPLOAD_MAX_MB": "0.5"}) == MB // 2
+    for bad in ("lots", "0", "-1"):
+        with pytest.raises(ValueError, match="AKSHA_UPLOAD_MAX_MB"):
+            upload_max_bytes({"AKSHA_UPLOAD_MAX_MB": bad})

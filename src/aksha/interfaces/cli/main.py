@@ -882,6 +882,7 @@ EXTRAS = {
     "otel": ("opentelemetry.sdk", "opentelemetry.exporter.otlp.json.file"),
     "postgres": ("psycopg",),
     "ingest": ("pypdf", "docx", "pptx", "openpyxl", "PIL"),
+    "tui": ("textual",),
 }
 """Each optional extra and the modules it installs (``pyproject.toml``)."""
 

@@ -7,6 +7,10 @@ grant or change the Owner role; only the Owner hands it on (and becomes an Admin
 user's ``tenant`` is the runtime owner their work is kept under: their user ID, or
 ``local`` for the person who claims a server they used in local mode.
 
+A guest is the Owner of a personal org of their own, alone in it, and stays so when
+saved as an account; only an invite brings someone into the server's main org. Guest
+creation is limited per client address (five an hour), counted from the audit rows.
+
 Throttling counts the ``sign_in_failed`` audit rows of an (email, address) pair: five within
 fifteen minutes refuse that pair with ``throttled`` for fifteen minutes after the fifth.
 No counter is stored; the audit rows are the facts it is derived from.
@@ -55,6 +59,8 @@ SHORT_SESSION_TTL_S = 12 * HOUR
 """A session without ``remember`` is a browser-session cookie that ends 12 hours on."""
 INVITE_TTL_S = 7 * DAY
 GUEST_TTL_S = DAY
+GUESTS_PER_HOUR = 5
+"""Guests one client address may start in an hour."""
 THROTTLE_LIMIT = 5
 THROTTLE_WINDOW_S = 15 * 60.0
 TOUCH_EVERY_S = 60.0
@@ -260,6 +266,8 @@ class Accounts:
     def invite(self, actor: Member, emails: object, role: object,
                ip: str | None) -> list[tuple[Invite, str]]:  # fmt: skip
         """Invite each email with ``role``; returns each invite with its link token (once)."""
+        if actor.user.is_guest:
+            raise AccountError(403, "guest_forbidden", "a guest invites nobody: save it first")
         if role not in INVITABLE:
             raise AccountError(422, "validation", "role is admin, member or viewer")
         if not isinstance(emails, list) or not emails:
@@ -411,30 +419,37 @@ class Accounts:
     # --- guests -----------------------------------------------------------------------------
 
     def create_guest(self, ip: str | None) -> SignedIn:
-        """A guest (a Member of the guests org, its own tenant) for 24 hours, signed in."""
-        org = self.store.guests_org()
+        """A guest for 24 hours, alone in a personal org of their own (its Owner), signed in.
+
+        Each guest has their own org and tenant, so no guest sees another. An address may
+        start five guests an hour (``too_many_guests``), counted from the audit rows.
+        """
+        if self.store.actions_from("guest_created", ip, self.now() - HOUR) >= GUESTS_PER_HOUR:
+            message = f"at most {GUESTS_PER_HOUR} guests an hour from one address"
+            raise AccountError(429, "too_many_guests", message)
         guest_id = new_id("g")
-        self.store.create_user(guest_id, None, "Guest", None, tenant=guest_id,
-                               guest_expires_at=self.now() + GUEST_TTL_S, org_id=org.id,
-                               role="member")  # fmt: skip
+        org = self.store.create_personal(guest_id, "Guest", tenant=guest_id,
+                                         guest_expires_at=self.now() + GUEST_TTL_S)  # fmt: skip
         self.record("guest_created", org_id=org.id, actor_id=guest_id, target=guest_id, ip=ip)
         return self.start(self._member(guest_id), remember=True)
 
     def save_guest(self, member: Member, email: object, password: object, name: object,
                    ip: str | None) -> SignedIn:  # fmt: skip
-        """Turn a guest into a Member of the server's org, keeping their tenant and work."""
+        """Turn a guest into a normal account that keeps its personal org, tenant and work.
+
+        The account never joins the server's main org: that takes an invite.
+        """
         if not member.user.is_guest:
             raise AccountError(409, "not_a_guest", "this account is not a guest")
-        org = self.main_org()
-        if org is None:
+        if self.main_org() is None:
             raise AccountError(409, "setup_required", "the server has no owner yet")
         address = check_email(email)
         hashed = self.passwords.hash(check_password(password))
         try:
-            self.store.save_guest(member.user.id, address, _name(name), hashed, org.id)
+            self.store.save_guest(member.user.id, address, _name(name), hashed)
         except StoreRefused as e:
             raise AccountError(409, e.code, e.message) from None
         self.store.delete_sessions_of(member.user.id)
-        self.record("guest_saved", org_id=org.id, actor_id=member.user.id,
+        self.record("guest_saved", org_id=member.org_id, actor_id=member.user.id,
                     target=member.user.id, ip=ip)  # fmt: skip
         return self.start(self._member(member.user.id), remember=True)

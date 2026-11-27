@@ -229,8 +229,14 @@ def test_an_upload_again_says_what_is_new_changed_and_unchanged(conv: Conversati
 
 
 def test_an_upload_with_no_file_part_is_refused(conv: Conversation) -> None:
-    r = conv.client.post("/api/v1/inputs/upload", headers=H, data={"command_id": "c-x"})
+    r = conv.client.post("/api/v1/inputs/upload", headers=H,
+                         files=[("command_id", (None, b"c-x"))])  # fmt: skip
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation"
+
+
+def test_an_upload_that_is_not_multipart_is_refused(conv: Conversation) -> None:
+    r = conv.client.post("/api/v1/inputs/upload", headers=H, data={"command_id": "c-x"})
+    assert r.status_code == 415 and r.json()["error"]["code"] == "unsupported_media_type"
 
 
 # --- sessions ---
@@ -478,3 +484,49 @@ def test_without_a_writer_or_session_settings_the_writes_are_absent_or_501(
     assert bare.post("/api/v1/inputs/upload", headers=H).status_code in (404, 405)
     assert bare.post("/api/v1/reviews/I-0001/accept", headers=H, json={}).status_code == 404
     assert bare.get("/api/v1/sessions").status_code == 422  # the tenant dependency holds
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("pages/x.html", "<html><body><script>fetch('/api/v1/auth/me')</script></body></html>"),
+        (
+            "pages/logo.svg",
+            '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+        ),
+    ],
+)
+def test_an_uploaded_document_is_sent_as_a_sandboxed_attachment_never_inline(
+    scribe: tuple[TestClient, TestClient], path: str, body: str
+) -> None:
+    client, _ = scribe
+    r = client.post("/api/v1/inputs/upload", headers=H, files=multipart({path: body}))
+    assert r.status_code == 200, r.text
+    (doc,) = r.json()["documents"]
+    back = client.get(f"/api/v1/documents/{doc['doc_key']}", headers=H)
+    assert back.status_code == 200 and back.text == body
+    assert back.headers["x-content-type-options"] == "nosniff"
+    assert back.headers["content-security-policy"] == "sandbox; default-src 'none'"
+    name = path.rsplit("/", 1)[-1]
+    assert back.headers["content-disposition"] == f"attachment; filename*=UTF-8''{name}"
+
+
+def test_an_upload_over_the_cap_is_refused_too_large_and_nothing_is_stored(tmp_path: Path) -> None:
+    cfg = config(tmp_path, agent_paths=(DEFAULT_AGENTS,))
+    runtime = RuntimeThread(lambda: open_session(cfg))
+    runtime.start()
+    app = FastAPI()
+    app.include_router(reads_router(lambda: open_reader(cfg), lambda: open_blob_store(cfg.storage),
+                                    header_tenant, submit=runtime.submit,
+                                    upload_max_bytes=1024))  # fmt: skip
+    try:
+        with TestClient(app) as client:
+            r = client.post("/api/v1/inputs/upload", headers=H,
+                            files=multipart({"notes/big.md": "x" * 2048}))  # fmt: skip
+            assert r.status_code == 413 and r.json()["error"]["code"] == "too_large"
+            assert client.get("/api/v1/documents", headers=H).json() == {"documents": []}
+            r = client.post("/api/v1/inputs/upload", headers=H,
+                            files=multipart({"notes/small.md": "# small"}))  # fmt: skip
+            assert r.status_code == 200, r.text
+    finally:
+        runtime.stop()

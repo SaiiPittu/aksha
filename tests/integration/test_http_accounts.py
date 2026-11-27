@@ -6,6 +6,8 @@ agent, with the accounts database in the test's folder and a clock the test move
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import time
 from collections.abc import Iterator
 from contextlib import ExitStack
@@ -16,12 +18,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from aksha.app import open_blob_store, open_reader, open_session, session_capabilities
-from aksha.interfaces.http.accounts.credentials import Passwords
+from aksha.interfaces.http.accounts.credentials import Passwords, digest
 from aksha.interfaces.http.accounts.service import Accounts
 from aksha.interfaces.http.accounts.store import AccountStore
-from aksha.interfaces.http.auth import AuthConfig, command_tenant, read_tenant
+from aksha.interfaces.http.auth import COOKIE, AuthConfig, command_tenant, read_tenant
 from aksha.interfaces.http.reads import reads_router
 from aksha.interfaces.http.server import create_app
+from aksha.runtime.projections.view import load_view
 from aksha.runtime.session.worker import RuntimeThread
 from tests.support.session import SESSION, config
 
@@ -43,9 +46,10 @@ class Tick:
 class Bench:
     """The app over a runtime thread and an accounts database, and the clients made for it."""
 
-    def __init__(self, tmp: Path, **auth: Any) -> None:
+    def __init__(self, tmp: Path, *, upload_max_bytes: int = 50 * 1024 * 1024,
+                 **auth: Any) -> None:  # fmt: skip
         self.clock = Tick()
-        cfg = config(tmp)
+        cfg = self.cfg = config(tmp)
         self.runtime = RuntimeThread(lambda: open_session(cfg))
         self.runtime.start()
         self.accounts = Accounts(AccountStore(tmp / "accounts.sqlite", clock=self.clock), FAST)
@@ -59,7 +63,8 @@ class Bench:
                              command_tenant_dep=command_tenant)  # fmt: skip
         self.app = create_app(self.runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05,
                               auth=AuthConfig(accounts=self.accounts, **auth),
-                              extra_routers=(reads,))  # fmt: skip
+                              extra_routers=(reads,),
+                              upload_max_bytes=upload_max_bytes)  # fmt: skip
         self.stack = ExitStack()
 
     def client(
@@ -75,6 +80,15 @@ class Bench:
         self.app.state.closing.set()
         self.runtime.stop()
         self.accounts.close()
+
+    def payloads(self, tenant: str, event_type: str) -> list[dict[str, Any]]:
+        """Every ``event_type`` payload of ``tenant`` in the event store, oldest first."""
+        store = open_reader(self.cfg)
+        try:
+            events = load_view(store, tenant).events
+        finally:
+            store.close()
+        return [dict(e.payload) for e in events if e.type == event_type]
 
     def audit(self, action: str) -> list[Any]:
         return [r for r in self.accounts.store.audit_records(org_id=None) if r.action == action]
@@ -315,6 +329,59 @@ def test_a_cookie_write_needs_the_csrf_header_and_a_bearer_write_does_not(bench:
     bearer = bench.client()
     bearer.headers["Authorization"] = f"Bearer {secret}"
     assert message(bearer, "Write a note").status_code == 200
+
+
+@pytest.mark.parametrize("route", ["/api/v1/auth/claim", "/api/v1/auth/signup"])
+def test_a_text_plain_post_to_an_unauthenticated_route_is_refused(bench: Bench, route: str) -> None:
+    """A cross-site ``no-cors`` post sends ``text/plain``: it never reaches the route."""
+    local = bench.client(local=True)
+    body = json.dumps({"email": "x@example.org", "password": PW, "name": "X", "org_name": "X"})
+    for media in ("text/plain", "application/x-www-form-urlencoded", "multipart/form-data"):
+        r = local.post(route, content=body, headers={"Content-Type": media})
+        assert r.status_code == 415, (media, r.text)
+        assert r.json()["error"]["code"] == "unsupported_media_type"
+    assert local.post(route, content=body).status_code == 415  # no type at all
+    assert not bench.accounts.has_accounts()
+    assert local.get("/api/v1/auth/status").json()["mode"] == "local"
+    r = local.post(route, content=body, headers={"Content-Type": "application/json; charset=utf-8"})
+    assert r.status_code == 200, r.text
+
+
+def test_an_unsafe_request_from_another_origin_is_refused(bench: Bench) -> None:
+    local = bench.client(local=True)
+    body = {"email": "x@example.org", "password": PW, "name": "X", "org_name": "X"}
+    for origin in ("http://evil.example", "null", "http://127.0.0.1:9999", "http://localhost:8765"):
+        r = local.post("/api/v1/auth/claim", json=body, headers={"Origin": origin})
+        assert r.status_code == 403, (origin, r.text)
+        assert r.json()["error"]["code"] == "cross_origin"
+    assert not bench.accounts.has_accounts()
+    read = local.get("/api/v1/auth/status", headers={"Origin": "http://evil.example"})
+    assert read.status_code == 200  # a read is not refused
+    same = local.post("/api/v1/auth/claim", json=body, headers={"Origin": "http://127.0.0.1:8765"})
+    owner = signed(local, same)
+    r = message(owner, "Write a note")
+    assert r.status_code == 200
+    r = owner.post(f"/api/v1/sessions/{SESSION}/messages", json={"text": "Again"},
+                   headers={"Origin": "http://evil.example"})  # fmt: skip
+    assert r.status_code == 403 and r.json()["error"]["code"] == "cross_origin"
+
+
+def test_a_json_upload_over_the_cap_is_refused_too_large(tmp_path: Path) -> None:
+    bench = Bench(tmp_path, upload_max_bytes=256)
+    try:
+        owner = signup(bench)
+        r = owner.post("/api/v1/inputs", json={"files": {"notes/big.md": "x" * 512}})
+        assert r.status_code == 413 and r.json()["error"]["code"] == "too_large"
+    finally:
+        bench.close()
+
+
+def test_a_multipart_body_is_taken_only_by_the_upload_route(bench: Bench) -> None:
+    owner = signup(bench)
+    r = owner.post(f"/api/v1/sessions/{SESSION}/messages", data={"text": "Write a note"})
+    assert r.status_code == 415 and r.json()["error"]["code"] == "unsupported_media_type"
+    r = owner.post("/api/v1/inputs/upload", files=[("file", ("a.md", b"# A", "text/markdown"))])
+    assert r.status_code != 415
 
 
 # --- invites --------------------------------------------------------------------------------
@@ -609,7 +676,7 @@ def test_a_guest_works_in_their_own_tenant_then_saves_the_account(guest_bench: B
     guest = bench.client()
     signed(guest, guest.post("/api/v1/auth/guest"))
     me = guest.get("/api/v1/auth/me").json()
-    assert me["is_guest"] is True and me["role"] == "member" and me["tenant"].startswith("g-")
+    assert me["is_guest"] is True and me["role"] == "owner" and me["tenant"].startswith("g-")
     assert me["guest_expires_at"] is not None and me["org"]["name"] != "Acme"
     assert message(guest, "Write a note").status_code == 200
     wait_run(guest, lambda r: r["state"] == "ended")
@@ -618,14 +685,58 @@ def test_a_guest_works_in_their_own_tenant_then_saves_the_account(guest_bench: B
     signed(guest, r)
     saved = guest.get("/api/v1/auth/me").json()
     assert saved["is_guest"] is False and saved["tenant"] == me["tenant"]
-    assert saved["org"]["name"] == "Acme" and saved["guest_expires_at"] is None
+    assert saved["guest_expires_at"] is None and saved["role"] == "owner"
+    assert saved["org"] == me["org"]  # the personal org is kept; the main org is not joined
     assert [x["run"] for x in guest.get("/api/v1/runs").json()["runs"]] == ["R-0001"]
-    emails = {m["email"] for m in owner.get("/api/v1/org/members").json()["members"]}
-    assert "g@example.org" in emails
     assert len(bench.audit("guest_created")) == len(bench.audit("guest_saved")) == 1
     assert owner.post("/api/v1/auth/guest/save",
                       json={"email": "z@example.org", "password": PW, "name": "Z"}
                       ).json()["error"]["code"] == "not_a_guest"  # fmt: skip
+
+
+def test_a_saved_guest_never_joins_the_main_org_or_sees_its_members(guest_bench: Bench) -> None:
+    bench = guest_bench
+    owner = signup(bench)
+    _, member_id = join(bench, owner, "m@example.org", "member")
+    guest = bench.client()
+    signed(guest, guest.post("/api/v1/auth/guest"))
+    body = {"email": "g@example.org", "password": PW, "name": "G"}
+    signed(guest, guest.post("/api/v1/auth/guest/save", json=body))
+    gid = guest.get("/api/v1/auth/me").json()["user"]["id"]
+    main = owner.get("/api/v1/org/members").json()["members"]
+    assert {m["email"] for m in main} == {"owner@example.org", "m@example.org"}
+    mine = guest.get("/api/v1/org/members").json()["members"]
+    assert [m["id"] for m in mine] == [gid]
+    assert guest.get("/api/v1/runs", params={"as_user": member_id}).status_code == 404
+    again = bench.client()
+    assert login(again, "g@example.org").status_code == 200
+    assert {m["email"] for m in signed(again, login(again, "g@example.org"))
+            .get("/api/v1/org/members").json()["members"]} == {"g@example.org"}  # fmt: skip
+
+
+def test_guests_never_see_each_other(guest_bench: Bench) -> None:
+    signup(guest_bench)
+    a, b = guest_bench.client(ip="198.51.100.1"), guest_bench.client(ip="198.51.100.2")
+    signed(a, a.post("/api/v1/auth/guest"))
+    signed(b, b.post("/api/v1/auth/guest"))
+    a_me, b_me = a.get("/api/v1/auth/me").json(), b.get("/api/v1/auth/me").json()
+    assert a_me["org"]["id"] != b_me["org"]["id"]
+    assert [m["id"] for m in a.get("/api/v1/org/members").json()["members"]] == [a_me["user"]["id"]]
+    assert a.get("/api/v1/runs", params={"as_user": b_me["user"]["id"]}).status_code == 404
+    r = a.post("/api/v1/org/invites", json={"emails": ["x@example.org"], "role": "member"})
+    assert r.status_code == 403 and r.json()["error"]["code"] == "guest_forbidden"
+
+
+def test_guest_creation_is_limited_per_address(guest_bench: Bench) -> None:
+    signup(guest_bench)
+    one = guest_bench.client(ip="198.51.100.9")
+    for _ in range(5):
+        assert one.post("/api/v1/auth/guest").status_code == 200
+    r = one.post("/api/v1/auth/guest")
+    assert r.status_code == 429 and r.json()["error"]["code"] == "too_many_guests"
+    assert guest_bench.client(ip="198.51.100.10").post("/api/v1/auth/guest").status_code == 200
+    guest_bench.clock.t += 3601
+    assert one.post("/api/v1/auth/guest").status_code == 200
 
 
 def test_an_expired_guest_is_signed_out(guest_bench: Bench) -> None:
@@ -642,6 +753,113 @@ def test_a_guest_cannot_be_saved_before_the_server_has_an_owner(guest_bench: Ben
     r = guest.post("/api/v1/auth/guest/save",
                    json={"email": "g@example.org", "password": PW, "name": "G"})  # fmt: skip
     assert r.status_code == 409 and r.json()["error"]["code"] == "setup_required"
+
+
+# --- secrets at rest ------------------------------------------------------------------------
+
+
+def _every_value(path: Path) -> list[str]:
+    """Every cell of every table of the accounts database, as text, read past the service."""
+    db = sqlite3.connect(path)
+    try:
+        tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+        return [str(cell) for t in tables for row in db.execute(f'SELECT * FROM "{t}"')
+                for cell in row if cell is not None]  # fmt: skip
+    finally:
+        db.close()
+
+
+def test_only_digests_of_the_cookie_invite_and_api_token_are_stored(bench: Bench) -> None:
+    owner = signup(bench)
+    again = bench.client()
+    assert login(again, "owner@example.org").status_code == 200
+    cookies = [c.cookies[COOKIE] for c in (owner, again)]
+    link = owner.post("/api/v1/org/invites", json={"emails": ["m@example.org"], "role": "member"})
+    (sent,) = link.json()["invites"]
+    first = sent["link"].rsplit("/", 1)[-1]
+    resent = owner.post(f"/api/v1/org/invites/{sent['id']}/resend").json()["invite"]["token"]
+    other = owner.post("/api/v1/org/invites", json={"emails": ["v@example.org"], "role": "viewer"})
+    (kept,) = other.json()["invites"]
+    api = owner.post("/api/v1/tokens", json={"name": "cli"}).json()["secret"]
+    secrets = [*cookies, first, resent, kept["token"], api]
+    assert all(len(x) >= 32 for x in secrets) and len(set(secrets)) == len(secrets)
+    values = _every_value(bench.accounts.store.path)
+    for secret in secrets:
+        assert not [v for v in values if secret in v], "a raw secret is stored"
+    for secret in (*cookies, resent, kept["token"], api):  # the live ones, by their digest
+        assert digest(secret) in values
+    bearer = bench.client()
+    bearer.headers["Authorization"] = f"Bearer {api}"
+    assert bearer.get("/api/v1/auth/me").status_code == 200  # and they still resolve
+
+
+# --- who a command is by --------------------------------------------------------------------
+
+
+def test_an_accounts_command_is_recorded_as_its_user_and_another_by_is_refused(
+    bench: Bench,
+) -> None:
+    owner = signup(bench)
+    me = owner.get("/api/v1/auth/me").json()
+    user, tenant = f"user:{me['user']['id']}", me["tenant"]
+    assert message(owner, "Ask first please").status_code == 200
+    run = wait_run(owner, lambda r: r["state"] == "waiting")
+    (waiting,) = run["waiting_on"]
+    answer = f"/api/v1/interrupts/{waiting['interrupt_id']}/answer"
+    for body in ({"answers": {"q1": "x"}, "by": "agent:scribe"},
+                 {"answers": {"q1": "x"}, "by": "user:u-someone-else"}):  # fmt: skip
+        r = owner.post(answer, json=body)
+        assert r.status_code == 422 and r.json()["error"]["code"] == "by_not_allowed", r.text
+    r = owner.post("/api/v1/commands", json={"command": "Stop", "args": {"run_id": run["run"]},
+                                             "by": "agent:scribe"})  # fmt: skip
+    assert r.status_code == 422 and r.json()["error"]["code"] == "by_not_allowed"
+    assert bench.payloads(tenant, "interrupt.resolved") == []
+    r = owner.post(answer, json={"answers": {"q1": "x"}, "by": "person"})  # the CLI's default
+    assert r.status_code == 200, r.text
+    assert [p["by"] for p in bench.payloads(tenant, "interrupt.resolved")] == [user]
+    wait_run(owner, lambda r: r["state"] == "ended")
+    assert message(owner, "Ask first again").status_code == 200
+    second = wait_run(owner, lambda r: r["state"] == "waiting" and r["run"] != run["run"])
+    r = owner.post("/api/v1/commands", json={"command": "Stop", "args": {"run_id": second["run"]}})
+    assert r.status_code == 200, r.text
+    assert [p["by"] for p in bench.payloads(tenant, "run.stop_requested")] == [user]
+
+
+def test_a_local_mode_command_is_recorded_as_local(bench: Bench) -> None:
+    cli = bench.client(local=True)
+    cli.headers["X-Aksha-User"] = "local"
+    assert message(cli, "Ask first please").status_code == 200
+    run = wait_run(cli, lambda r: r["state"] == "waiting")
+    r = cli.post(f"/api/v1/runs/{run['run']}/stop", json={"by": "ops"})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "by_not_allowed"
+    assert cli.post(f"/api/v1/runs/{run['run']}/stop", json={}).status_code == 200
+    assert [p["by"] for p in bench.payloads("local", "run.stop_requested")] == ["local"]
+
+
+def test_the_trusted_header_mode_keeps_the_bodys_by(tmp_path: Path) -> None:
+    cfg = config(tmp_path)
+    runtime = RuntimeThread(lambda: open_session(cfg))
+    runtime.start()
+    app = create_app(runtime, lambda: open_reader(cfg), dict,
+                     auth=AuthConfig(trust_user_header=True))  # fmt: skip
+    h = {"X-Aksha-User": "o7"}
+    try:
+        with TestClient(app) as c:
+            r = c.post(f"/api/v1/sessions/{SESSION}/messages", headers=h,
+                       json={"text": "Ask first please"})  # fmt: skip
+            assert r.status_code == 200
+            run = wait_run(TestClient(app, headers=h), lambda r: r["state"] == "waiting")
+            r = c.post(f"/api/v1/runs/{run['run']}/stop", headers=h, json={"by": "ops"})
+            assert r.status_code == 200, r.text
+        store = open_reader(cfg)
+        try:
+            events = load_view(store, "o7").events
+        finally:
+            store.close()
+        assert [e.payload["by"] for e in events if e.type == "run.stop_requested"] == ["ops"]
+    finally:
+        app.state.closing.set()
+        runtime.stop()
 
 
 # --- the trusted header switch --------------------------------------------------------------

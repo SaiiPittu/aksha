@@ -9,6 +9,7 @@ Authentication is real accounts by default, in ``accounts.sqlite`` beside the st
 (``AKSHA_ACCOUNTS_PATH`` moves it): until someone signs up or claims the server, it runs
 in local mode for loopback clients. ``AKSHA_GUESTS=1`` turns on the guest sandbox and
 ``AKSHA_COOKIE_SECURE=1`` marks the session cookie Secure behind a TLS proxy.
+``AKSHA_UPLOAD_MAX_MB`` (default 50) caps an upload's body; a larger one is refused 413.
 ``--trust-user-header`` trusts ``X-Aksha-User`` instead, as before accounts existed.
 
 ``--web DIR`` (or ``AKSHA_WEB_DIST``) also serves the built web app from that folder on the
@@ -33,7 +34,8 @@ from aksha.app import (
 )
 from aksha.interfaces.http.accounts.service import Accounts
 from aksha.interfaces.http.accounts.store import AccountStore
-from aksha.interfaces.http.auth import AuthConfig, command_tenant, read_tenant
+from aksha.interfaces.http.auth import AuthConfig, command_tenant, principal_by, read_tenant
+from aksha.interfaces.http.common import upload_max_bytes
 from aksha.interfaces.http.reads import reads_router
 from aksha.interfaces.http.server import create_app
 from aksha.interfaces.http.web import check_dist, mount_web
@@ -83,6 +85,7 @@ def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], N
             record.update(future.result(timeout=30))
         return record
 
+    cap = upload_max_bytes(environ)
     reads = reads_router(
         lambda: open_reader(config),
         lambda: open_blob_store(config.storage),
@@ -90,9 +93,11 @@ def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], N
         submit=runtime.submit,
         session_meta=auth.accounts.store if auth.accounts is not None else None,
         command_tenant_dep=command_tenant,
+        principal_by_dep=principal_by,
+        upload_max_bytes=cap,
     )
     app = create_app(runtime, lambda: open_reader(config), capability_record, auth=auth,
-                     extra_routers=(reads,))  # fmt: skip
+                     extra_routers=(reads,), upload_max_bytes=cap)  # fmt: skip
     if dist is not None:
         mount_web(app, dist)
     url = f"http://{host}:{port}"

@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("fastapi")
-pytest.importorskip("uvicorn")
+pytest.importorskip("fastapi", reason="the server extra (aksha-harness[server]) is not installed")
+pytest.importorskip("uvicorn", reason="the server extra (aksha-harness[server]) is not installed")
 
 from aksha import data
 from aksha.app import SERVER_FILE

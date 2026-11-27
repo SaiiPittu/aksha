@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS orgs (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (kind IN ('main', 'guests')),
+    kind TEXT NOT NULL CHECK (kind IN ('main', 'personal')),
     created_at REAL NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS orgs_one_per_kind ON orgs (kind);
+CREATE UNIQUE INDEX IF NOT EXISTS orgs_one_main ON orgs (kind) WHERE kind = 'main';
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE COLLATE NOCASE,
@@ -124,7 +124,11 @@ class StoreRefused(Exception):
 
 @dataclass(frozen=True)
 class Org:
-    """An organisation: the main one people sign up or are invited into, or the guests'."""
+    """An organisation: the main one people sign up or are invited into, or a personal one.
+
+    A guest gets a ``personal`` org of their own at creation, as its Owner and only member,
+    and keeps it when the guest is saved as an account: a guest never joins the main org.
+    """
 
     id: str
     name: str
@@ -322,14 +326,14 @@ class AccountStore:
     # --- orgs and users ---------------------------------------------------------------------
 
     def create_org(self, name: str, kind: str, *, org_id: str | None = None) -> Org:
-        """A new org; there is at most one of each kind."""
+        """A new org; there is at most one ``main`` org."""
         org = Org(org_id or new_id("org"), name, kind, self.clock())
         try:
             with self._tx() as db:
                 db.execute("INSERT INTO orgs (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
                            (org.id, org.name, org.kind, org.created_at))  # fmt: skip
         except sqlite3.IntegrityError:
-            raise StoreRefused("org_exists", f"there is already a {kind} org") from None
+            raise StoreRefused("org_exists", "there is already a main org") from None
         return org
 
     def org(self, org_id: str) -> Org | None:
@@ -338,15 +342,23 @@ class AccountStore:
         return None if row is None else Org(row["id"], row["name"], row["kind"], row["created_at"])
 
     def org_of_kind(self, kind: str) -> Org | None:
-        """The main or the guests org, or None before it exists."""
-        row = self._one("SELECT * FROM orgs WHERE kind = ?", (kind,))
+        """The main org (or the oldest of ``kind``), or None before it exists."""
+        row = self._one("SELECT * FROM orgs WHERE kind = ? ORDER BY created_at, id LIMIT 1",
+                        (kind,))  # fmt: skip
         return None if row is None else Org(row["id"], row["name"], row["kind"], row["created_at"])
 
-    def guests_org(self) -> Org:
-        """The per-server guests org, created on first use."""
-        with self._lock:
-            found = self.org_of_kind("guests")
-            return found if found is not None else self.create_org("Guests", "guests")
+    def create_personal(self, user_id: str, name: str, *, tenant: str,
+                        guest_expires_at: float | None, org_name: str = "Personal workspace",
+                        ) -> Org:  # fmt: skip
+        """A user (a guest, when ``guest_expires_at``) and their own org, its Owner, at once."""
+        org = Org(new_id("org"), org_name, "personal", self.clock())
+        user = User(user_id, None, name, tenant, guest_expires_at is not None, guest_expires_at,
+                    self.clock(), None)  # fmt: skip
+        with self._tx() as db:
+            db.execute("INSERT INTO orgs (id, name, kind, created_at) VALUES (?, ?, ?, ?)",
+                       (org.id, org.name, org.kind, org.created_at))  # fmt: skip
+            self._insert_user(db, user, org.id, "owner")
+        return org
 
     def create_user(self, user_id: str, email: str | None, name: str, password_hash: str | None,
                     *, tenant: str, guest_expires_at: float | None = None,
@@ -410,9 +422,8 @@ class AccountStore:
         with self._tx() as db:
             db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
 
-    def save_guest(self, user_id: str, email: str, name: str, password_hash: str,
-                   org_id: str) -> None:  # fmt: skip
-        """Turn a guest into a normal user of ``org_id`` (a member), keeping the tenant."""
+    def save_guest(self, user_id: str, email: str, name: str, password_hash: str) -> None:
+        """Turn a guest into a normal user, keeping the tenant and their personal org."""
         try:
             with self._tx() as db:
                 db.execute(
@@ -420,8 +431,6 @@ class AccountStore:
                     "guest_expires_at = NULL WHERE id = ?",
                     (email, name, password_hash, user_id),
                 )
-                db.execute("UPDATE memberships SET org_id = ?, role = 'member' WHERE user_id = ?",
-                           (org_id, user_id))  # fmt: skip
         except sqlite3.IntegrityError:
             raise StoreRefused("email_taken", "an account has this email") from None
 
@@ -640,6 +649,12 @@ class AccountStore:
             )
             for r in rows
         ]
+
+    def actions_from(self, action: str, ip: str | None, since: float) -> int:
+        """How many ``action`` audit rows ``ip`` caused since ``since`` (a rate, never stored)."""
+        row = self._one("SELECT COUNT(*) FROM audit WHERE action = ? AND ip IS ? AND at > ?",
+                        (action, ip, since))  # fmt: skip
+        return 0 if row is None else int(row[0])
 
     def failed_sign_ins(self, email: str, ip: str | None, since: float) -> list[float]:
         """When sign-in failed for ``email`` from ``ip`` since ``since``, newest first.

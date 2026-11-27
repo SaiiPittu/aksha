@@ -36,11 +36,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import functools
-import json
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Future
 from contextlib import contextmanager
 from typing import Annotated, Any, Literal
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.concurrency import run_in_threadpool
@@ -48,7 +48,17 @@ from fastapi.responses import JSONResponse, Response
 from starlette.datastructures import UploadFile
 
 from aksha.interfaces import wire
-from aksha.interfaces.http.ports import SessionMetaPort
+from aksha.interfaces.http.common import (
+    MB,
+    MULTIPART_MEDIA,
+    UPLOAD_MAX_MB,
+    RequestRefused,
+    json_body,
+    read_body,
+    replayed,
+    require_media,
+)
+from aksha.interfaces.http.ports import ByBinder, SessionMetaPort
 from aksha.runtime.artifacts.lineage import lineage
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind, ArtifactRef, ArtifactVersion, InputRef
@@ -259,6 +269,26 @@ def document_to_json(doc_versions: list[StoredDocument]) -> dict[str, Any]:
     }
 
 
+DOCUMENT_CSP = "sandbox; default-src 'none'"
+"""The policy every document's bytes are sent under: no script, no fetch, no same origin."""
+
+
+def document_headers(path: str) -> dict[str, str]:
+    """The headers of a document's bytes: an attachment, never sniffed, sandboxed.
+
+    An uploaded HTML or SVG file served inline from the app's own origin would run its
+    script with the reader's cookie (stored XSS). Sent as an attachment with ``nosniff``
+    and a ``sandbox`` policy, it never renders as a page; the web app reads the bytes with
+    ``fetch`` and shows them as text, so nothing it does needs them inline.
+    """
+    name = path.rsplit("/", 1)[-1] or "document"
+    return {
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": DOCUMENT_CSP,
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(name, safe='')}",
+    }
+
+
 def upload_documents(
     paths: list[str],
     after: tuple[tuple[str, Mapping[str, object]], ...],
@@ -312,6 +342,8 @@ def reads_router(
     session_meta: SessionMetaPort | None = None,
     command_tenant_dep: Callable[..., str] | None = None,
     command_timeout_s: float = COMMAND_TIMEOUT_S,
+    upload_max_bytes: int = UPLOAD_MAX_MB * MB,
+    principal_by_dep: Callable[..., ByBinder] | None = None,
 ) -> APIRouter:
     """The reads router (module doc) over a read-only store and the blob store.
 
@@ -319,9 +351,12 @@ def reads_router(
     ``command_tenant_dep`` (default: ``tenant_dep``) returns the owner a write acts for, so
     the accounts layer can refuse a Viewer and an Admin's ``as_user`` on writes. ``submit`` (usually
     ``RuntimeThread.submit``) enables the three writes; ``session_meta`` the archive state
-    and title overrides.
+    and title overrides. An upload over ``upload_max_bytes`` is refused 413 ``too_large``.
+    ``principal_by_dep`` returns the :class:`ByBinder` that sets a write's ``by`` from its
+    sender (``auth.principal_by``); without one the body's ``by`` is kept.
     """
     command_dep = command_tenant_dep or tenant_dep
+    by_dep = principal_by_dep or _keep_by
     router = APIRouter(prefix=API)
     meta = session_meta
 
@@ -387,9 +422,11 @@ def reads_router(
         session: str, request: Request, owner: str = Depends(command_dep)
     ) -> JSONResponse:
         try:
-            body = await _json_body(request)
+            body = await json_body(request)
         except wire.WireInvalid as e:
             return error(422, e.code, e.message)
+        except RequestRefused as e:
+            return error(e.status, e.code, e.message)
         title = body.get("title")
         if "title" not in body or not (title is None or isinstance(title, str)):
             return error(422, "validation", "title is a string, or null for the default")
@@ -595,7 +632,7 @@ def reads_router(
         except AkshaError as e:
             return error(404, e.code, e.message)
         media = str(pick.facts.get("detected_type") or "application/octet-stream")
-        return Response(data, media_type=media)
+        return Response(data, media_type=media, headers=document_headers(pick.path))
 
     # --- reviews and invalidation ---
 
@@ -670,30 +707,36 @@ def reads_router(
         return receipt
 
     def parsed(
-        owner: str, name: str, args: dict[str, Any], body: Mapping[str, Any]
+        owner: str, name: str, args: dict[str, Any], body: Mapping[str, Any], by: ByBinder
     ) -> named.NamedCommand:
-        return wire.command_from_json(
-            owner,
-            {
-                "command": name,
-                "args": args,
-                "command_id": body.get("command_id"),
-                "by": body.get("by"),
-            },
+        return by.bind(
+            wire.command_from_json(
+                owner,
+                {
+                    "command": name,
+                    "args": args,
+                    "command_id": body.get("command_id"),
+                    "by": body.get("by"),
+                },
+            )
         )
 
-    async def review_command(name: str, review: str, request: Request, owner: str) -> JSONResponse:
+    async def review_command(
+        name: str, review: str, request: Request, owner: str, by: ByBinder
+    ) -> JSONResponse:
         try:
-            body = await _json_body(request)
+            body = await json_body(request)
         except wire.WireInvalid as e:
             return error(422, e.code, e.message)
+        except RequestRefused as e:
+            return error(e.status, e.code, e.message)
         if "edits" in body:
             return error(422, "validation", "edits are not supported: accept, then correct")
         card = body.get("card_hash")
         if not isinstance(card, str) or not card:
             return error(422, "validation", "card_hash is the hash of the card the person saw")
         try:
-            command = parsed(owner, name, {"review_id": review, "card_hash": card}, body)
+            command = parsed(owner, name, {"review_id": review, "card_hash": card}, body, by)
         except wire.WireInvalid as e:
             return error(422, e.code, e.message)
         receipt = await commit(command)
@@ -703,21 +746,36 @@ def reads_router(
 
     @router.post("/reviews/{review}/accept")
     async def accept(
-        review: str, request: Request, owner: str = Depends(command_dep)
+        review: str,
+        request: Request,
+        owner: str = Depends(command_dep),
+        by: ByBinder = Depends(by_dep),  # noqa: B008 (a FastAPI dependency, resolved per request)
     ) -> JSONResponse:
-        return await review_command("AcceptReview", review, request, owner)
+        return await review_command("AcceptReview", review, request, owner, by)
 
     @router.post("/reviews/{review}/reject")
     async def reject(
-        review: str, request: Request, owner: str = Depends(command_dep)
+        review: str,
+        request: Request,
+        owner: str = Depends(command_dep),
+        by: ByBinder = Depends(by_dep),  # noqa: B008 (a FastAPI dependency, resolved per request)
     ) -> JSONResponse:
-        return await review_command("RejectReview", review, request, owner)
+        return await review_command("RejectReview", review, request, owner, by)
 
     @router.post("/inputs/upload")
-    async def upload(request: Request, owner: str = Depends(command_dep)) -> JSONResponse:
+    async def upload(
+        request: Request,
+        owner: str = Depends(command_dep),
+        by: ByBinder = Depends(by_dep),  # noqa: B008 (a FastAPI dependency, resolved per request)
+    ) -> JSONResponse:
         files: dict[str, str] = {}
         binary: dict[str, str] = {}
-        async with request.form() as form:  # closes the spooled parts
+        try:
+            raw = await read_body(request, upload_max_bytes)
+            require_media(request, raw, MULTIPART_MEDIA)
+        except RequestRefused as e:
+            return error(e.status, e.code, e.message)
+        async with replayed(request, raw).form() as form:  # closes the spooled parts
             for part in form.getlist("file"):
                 if not isinstance(part, UploadFile) or not part.filename:
                     return error(
@@ -737,7 +795,7 @@ def reads_router(
         if binary:
             args["binary"] = binary
         try:
-            command = parsed(owner, "UploadInputs", args, body)
+            command = parsed(owner, "UploadInputs", args, body, by)
         except wire.WireInvalid as e:
             return error(422, e.code, e.message)
         receipt = await commit(command)
@@ -756,6 +814,17 @@ def reads_router(
     return router
 
 
+class _KeepBy:
+    """The default :class:`ByBinder`: the body's ``by`` is kept (a trusted caller)."""
+
+    def bind(self, command: named.NamedCommand) -> named.NamedCommand:
+        return command
+
+
+def _keep_by() -> ByBinder:
+    return _KeepBy()
+
+
 def _invalid_as_422[**P](fn: Callable[P, Any]) -> Callable[P, Any]:
     """A read endpoint that answers 422 ``validation`` for a malformed ref, not 500."""
 
@@ -767,16 +836,3 @@ def _invalid_as_422[**P](fn: Callable[P, Any]) -> Callable[P, Any]:
             return error(422, e.code, e.message)
 
     return endpoint
-
-
-async def _json_body(request: Request) -> dict[str, Any]:
-    raw = await request.body()
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-    except ValueError as e:
-        raise wire.WireInvalid(message=f"the body is not JSON: {e}") from None
-    if not isinstance(data, dict):
-        raise wire.WireInvalid(message="the body is a JSON object")
-    return data

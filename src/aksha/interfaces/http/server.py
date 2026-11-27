@@ -51,7 +51,9 @@ GET      ``/{path}`` (outside ``/api``)              the built web app (``web.py
 =======  ==========================================  =========================================
 
 Reads take ``?as_user=<user id>``: an Admin or the Owner reads a member of their org, and
-an audit record is written first. A cookie's unsafe request sends ``X-CSRF-Token``.
+an audit record is written first. A cookie's unsafe request sends ``X-CSRF-Token``. Every
+unsafe request sends a JSON body (multipart on ``/inputs/upload``) and, when a browser
+names its ``Origin``, comes from this server's own host (``common`` module doc).
 
 The SSE stream sends each event with its ``seq`` as the SSE ``id``, then one
 ``synchronized`` event at the tail, then live events and a comment line as a heartbeat
@@ -69,13 +71,22 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from aksha.interfaces import wire
 from aksha.interfaces.http import account_routes, commands, status
 from aksha.interfaces.http.accounts.errors import AccountError
 from aksha.interfaces.http.auth import AuthConfig, AuthState
-from aksha.interfaces.http.common import API, COMMAND_TIMEOUT_S, AppContext, error
+from aksha.interfaces.http.common import (
+    API,
+    COMMAND_TIMEOUT_S,
+    MB,
+    UPLOAD_MAX_MB,
+    AppContext,
+    RequestRefused,
+    cross_origin,
+    error,
+)
 from aksha.interfaces.http.status import sse
 from aksha.runtime.session.worker import RuntimeThread
 from aksha.runtime.storage.ports import EventStore
@@ -94,18 +105,21 @@ def create_app(
     heartbeat_s: float = 15.0,
     auth: AuthConfig | None = None,
     extra_routers: Sequence[APIRouter] = (),
+    upload_max_bytes: int = UPLOAD_MAX_MB * MB,
 ) -> FastAPI:
     """The HTTP app over ``runtime`` (writes) and ``open_reader`` (reads).
 
     ``auth`` defaults to trusting ``X-Aksha-User`` (the session API tests and
     ``aksha serve --trust-user-header``); ``aksha serve`` passes accounts with local mode.
+    ``upload_max_bytes`` caps ``POST /inputs`` (``AKSHA_UPLOAD_MAX_MB``).
     """
     config = auth if auth is not None else AuthConfig(trust_user_header=True)
     config.check()
     app = FastAPI(title="Aksha session API", version="1")
     closing = threading.Event()
     app.state.closing = closing
-    app.state.context = AppContext(runtime, open_reader, capability_record, heartbeat_s, closing)
+    app.state.context = AppContext(runtime, open_reader, capability_record, heartbeat_s, closing,
+                                   upload_max_bytes)  # fmt: skip
     app.state.auth = AuthState(config)
 
     @app.exception_handler(wire.WireInvalid)
@@ -115,6 +129,19 @@ def create_app(
     @app.exception_handler(AccountError)
     async def refused(_: Request, e: AccountError) -> JSONResponse:
         return error(e.status, e.code, e.message, e.details)
+
+    @app.exception_handler(RequestRefused)
+    async def refused_request(_: Request, e: RequestRefused) -> JSONResponse:
+        return error(e.status, e.code, e.message)
+
+    @app.middleware("http")
+    async def same_origin(request: Request, call_next: Callable[[Request], Any]) -> Response:
+        """Refuse a cross-origin write (``common`` module doc, rule 2); never sniff a body."""
+        if cross_origin(request):
+            return error(403, "cross_origin", "a write must come from this server's own origin")
+        response: Response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
 
     for router in (*ROUTERS, *extra_routers):
         app.include_router(router)

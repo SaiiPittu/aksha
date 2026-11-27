@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-pytest.importorskip("textual")
+pytest.importorskip("textual", reason="the tui extra (aksha-harness[tui]) is not installed")
 
 from rich.console import Console
 from textual.pilot import Pilot

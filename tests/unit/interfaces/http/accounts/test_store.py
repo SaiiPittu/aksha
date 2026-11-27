@@ -75,12 +75,17 @@ def test_emails_are_unique_ignoring_case(store: AccountStore) -> None:
     assert found is not None and found.id == "u-1"
 
 
-def test_one_main_org_and_one_guests_org(store: AccountStore) -> None:
+def test_one_main_org_and_a_personal_org_per_guest(store: AccountStore) -> None:
     store.create_org("Acme", "main")
     with pytest.raises(StoreRefused):
         store.create_org("Other", "main")
-    guests = store.guests_org()
-    assert guests.kind == "guests" and store.guests_org().id == guests.id
+    a = store.create_personal("g-1", "Guest", tenant="g-1", guest_expires_at=1.0)
+    b = store.create_personal("g-2", "Guest", tenant="g-2", guest_expires_at=1.0)
+    assert a.kind == b.kind == "personal" and a.id != b.id
+    for user, org in (("g-1", a), ("g-2", b)):
+        found = store.member(user)
+        assert found is not None and found.org_id == org.id and found.role == "owner"
+        assert [m.user.id for m in store.members(org.id)] == [user]
 
 
 def test_the_audit_table_refuses_update_and_delete(store: AccountStore, tmp_path: Path) -> None:

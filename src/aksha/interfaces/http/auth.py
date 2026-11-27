@@ -18,13 +18,16 @@ take ``?as_user=<user id>``: an Admin or the Owner may read (or stop the run of)
 of their org, and an audit record is written before the read or the stop. Every other
 command refuses ``as_user`` (``as_user_refused``): nobody answers, approves, steers or
 sends on another member's behalf. A Viewer's command is refused ``forbidden_role``.
+
+A command's ``by`` is set from the principal (:class:`ByRule`, ADR-P19 B19): ``user:<id>``
+or ``local``, so the event store records who acted; with the trusted header it is kept.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import secrets
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -32,6 +35,9 @@ from fastapi import Depends, Request
 from aksha.interfaces.http.accounts.errors import AccountError
 from aksha.interfaces.http.accounts.service import LOCAL_TENANT, RANK, Accounts
 from aksha.interfaces.http.accounts.store import AuthSession, Member
+from aksha.interfaces.http.common import UNSAFE
+from aksha.interfaces.wire import WireInvalid
+from aksha.runtime.session.named import DEFAULT_BY, DecideCorrection, NamedCommand
 
 __all__ = [
     "COOKIE",
@@ -39,6 +45,7 @@ __all__ = [
     "AccountHolder",
     "AdminPrincipal",
     "AuthConfig",
+    "ByRule",
     "Commander",
     "Principal",
     "ReadTenant",
@@ -49,12 +56,12 @@ __all__ = [
     "command_principal",
     "current_principal",
     "is_local",
+    "principal_by",
     "read_tenant",
     "signed_in",
 ]
 
 COOKIE = "aksha_session"
-UNSAFE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 
 @dataclass(frozen=True)
@@ -283,6 +290,70 @@ def stop_tenant(
     if not who.at_least("member"):
         raise AccountError(403, "forbidden_role", "a viewer reads only")
     return _tenant_as(request, who, as_user, "stop_run_as_admin", {"run": run})
+
+
+# --- who a command is recorded as (``by``) ------------------------------------------------
+
+
+IDENTITY_PREFIXES = ("user:", "agent:", "g-", "u-")
+"""A ``by`` that starts with one of these names someone, never a role."""
+
+
+@dataclass(frozen=True)
+class ByRule:
+    """How the server sets a command's ``by`` from the principal that sent it.
+
+    ``identity`` is what the event store records: ``user:<id>`` for an account (cookie or
+    API token), ``local`` in local mode, None when the app trusts ``X-Aksha-User`` (the
+    body's ``by`` is kept, as before accounts). With an identity:
+
+    - A command whose body names no ``by``, the default ``person`` (the role of anyone who
+      sends one, and what the CLI sends when given no ``--by``) or the identity itself is
+      recorded under the identity. Any other ``by`` (``agent:<name>``, another user, a
+      role) is refused 422 ``by_not_allowed``: nobody sends as someone else.
+    - ``DecideCorrection`` is the exception: the runtime decides it only for the role the
+      correction names as its domain owner (ADR-P05 C1, ``not_domain_owner``), so its
+      ``by`` stays a role name. ``person`` maps to every principal that may command; any
+      other role name (a domain owner set by ``AKSHA_CORRECTION_APPROVER``) maps only to
+      an Admin or the Owner, since the org has no per-domain roles yet. An identity-shaped
+      ``by`` is refused. Who decided is written to the audit log beside it.
+    """
+
+    identity: str | None
+    role: str = "owner"
+
+    def may_act_as(self, role_name: str) -> bool:
+        """Whether this principal may decide a correction as ``role_name`` (class doc)."""
+        if not role_name or role_name == LOCAL_TENANT or role_name.startswith(IDENTITY_PREFIXES):
+            return False
+        if role_name == DEFAULT_BY:
+            return RANK[self.role] >= RANK["member"]
+        return RANK[self.role] >= RANK["admin"]
+
+    def bind(self, command: NamedCommand) -> NamedCommand:
+        """``command`` with ``by`` set from the principal; ``by_not_allowed`` otherwise."""
+        if self.identity is None:
+            return command
+        if isinstance(command, DecideCorrection):
+            if not self.may_act_as(command.by):
+                raise WireInvalid("by_not_allowed", f"you may not decide as {command.by!r}")
+            return command
+        if command.by not in (DEFAULT_BY, self.identity):
+            raise WireInvalid("by_not_allowed", f"by is set from who you are ({self.identity}), "
+                              f"not {command.by!r}")  # fmt: skip
+        return replace(command, by=self.identity)
+
+
+def by_rule(who: Principal, request: Request) -> ByRule:
+    """The :class:`ByRule` of ``who`` (``via`` header trusts the body's ``by``)."""
+    if who.via == "header" or auth_state(request).config.trust_user_header:
+        return ByRule(None, who.role)
+    return ByRule("local" if who.member is None else f"user:{who.member.user.id}", who.role)
+
+
+def principal_by(request: Request, who: Annotated[Principal, Depends(current_principal)]) -> ByRule:
+    """The dependency the reads router takes to bind ``by`` on its writes."""
+    return by_rule(who, request)
 
 
 SignedIn = Annotated[Principal, Depends(current_principal)]

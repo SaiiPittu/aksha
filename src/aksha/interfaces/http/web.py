@@ -5,6 +5,10 @@ build's folder is sent as is, and any other path that is not under ``/api`` gets
 ``index.html``, so the app's own routes (``/s/S-…``, ``/settings/members``) load on a
 reload or a pasted link. Hashed build output under ``assets/`` is cached for a year as
 immutable; ``index.html`` is sent with ``no-cache`` so a new build is picked up at once.
+
+Every response refuses to be framed (``X-Frame-Options: DENY`` and
+``Content-Security-Policy: frame-ancestors 'none'``): in local mode no cookie is needed, so a
+page on another site that framed the app could lead the person into clicking Approve.
 """
 
 from __future__ import annotations
@@ -19,6 +23,12 @@ from aksha.interfaces.http.common import error
 INDEX = "index.html"
 LONG_CACHE = "public, max-age=31536000, immutable"
 NO_CACHE = "no-cache"
+FRAMING = {
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+}
+"""The headers every web app response carries: never framed, never sniffed."""
 
 
 class WebDistMissing(ValueError):
@@ -56,6 +66,8 @@ def mount_web(app: FastAPI, dist: Path) -> None:
             return error(404, "not_found", f"no route {request.url.path}")
         found = _within(root, path)
         if found is None or found == index:
-            return FileResponse(index, media_type="text/html", headers={"Cache-Control": NO_CACHE})
+            return FileResponse(index, media_type="text/html",
+                                headers={"Cache-Control": NO_CACHE, **FRAMING})  # fmt: skip
         hashed = found.parent.name == "assets"
-        return FileResponse(found, headers={"Cache-Control": LONG_CACHE if hashed else NO_CACHE})
+        return FileResponse(found, headers={"Cache-Control": LONG_CACHE if hashed else NO_CACHE,
+                                            **FRAMING})  # fmt: skip
