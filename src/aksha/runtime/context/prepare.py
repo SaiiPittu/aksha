@@ -38,7 +38,7 @@ from aksha.runtime.context.types import (
     ContextPolicy,
 )
 from aksha.runtime.execution.ports import DurableStepExecutor
-from aksha.runtime.execution.types import StepId
+from aksha.runtime.execution.types import StepId, StepPolicy
 from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.projections.view import LogView, load_view
 from aksha.runtime.stop_policy.types import Prep
@@ -82,6 +82,7 @@ def prepare_context(
     recovery: bool = False,
     blobs: BlobStore | None = None,
     approve_summary: SummaryApproval | None = None,
+    model_policy: StepPolicy | None = None,
 ) -> Prepared:
     """Turn ``turn``'s context for ``instance``, with a summary step when due (module doc)."""
     step = StepId(instance.run, instance.instance, turn=turn)
@@ -116,5 +117,7 @@ def prepare_context(
     if refused is not None:
         return Prepared(build(), None, refused)
     previous = latest_compaction(before, instance.run, instance.instance, since_turn=start)
-    outcome = summarise(executor, table, step, turns, through, policy, previous)
+    outcome = summarise(
+        executor, table, step, turns, through, policy, previous, model_policy=model_policy
+    )
     return Prepared(build(), outcome)

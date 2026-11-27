@@ -1,11 +1,12 @@
 """``LiveGenerationModel``: generation over a chat-completions HTTP server (``live`` mode only).
 
-Not wired yet: the composition root accepts only ``AKSHA_MODE=fake``, so no released
-command runs it, and no package extra installs it. It is never imported by an offline run:
-the binder imports it only in ``live`` mode, when ``AKSHA_ALIAS_GENERATE`` (or another
-alias's variable) names ``aksha.adapters.models.live:LiveGenerationModel`` (ADR-P07 D9).
-It speaks the widely used ``POST <base>/chat/completions`` shape, so a hosted model and a
-local server on ``localhost`` both fit. It uses only the standard library.
+The standard-library fallback to the LiteLLM adapters (:mod:`aksha.adapters.models.litellm`),
+chosen with ``AKSHA_LIVE_PROVIDER=chat-completions``: it needs no extra installed. It is
+never imported by an offline run: the binder imports it only in ``live`` mode (ADR-P07 D9,
+G6). It speaks the widely used ``POST <base>/chat/completions`` shape, so a hosted model
+and a local server on ``localhost`` both fit. Its message mapping, answer parsing and the
+adapted fast-class answer readers (:func:`field_answers`, :func:`class_answers`) are shared
+with the LiteLLM adapters.
 
 Configuration is read from the environment in ``__init__`` and held on the instance:
 ``AKSHA_LIVE_BASE_URL`` (required), ``AKSHA_LIVE_MODEL`` (required), ``AKSHA_LIVE_API_KEY``
@@ -29,7 +30,7 @@ import json
 import re
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any, ClassVar, Literal
 
@@ -131,18 +132,19 @@ def to_wire(request: GenerationRequest, model: str) -> dict[str, Any]:
     return body
 
 
-def _fraction(text: str) -> str:
+def json_fraction(text: str) -> str:
     """A JSON number with a fraction or exponent, as a decimal string (D4)."""
     return decimal_string(Decimal(text))
 
 
-def _arguments(raw: object) -> dict[str, Any]:
+def tool_arguments(raw: object) -> dict[str, Any]:
+    """A tool call's arguments as a JSON object; a fraction becomes a decimal string."""
     if isinstance(raw, Mapping):
         raw = json.dumps(raw)
     if not isinstance(raw, str) or not raw.strip():
         return {}
     try:
-        parsed = json.loads(raw, parse_float=_fraction)
+        parsed = json.loads(raw, parse_float=json_fraction)
     except json.JSONDecodeError:
         return {"_unparsed": raw}
     return parsed if isinstance(parsed, dict) else {"_value": parsed}
@@ -157,7 +159,7 @@ def from_wire(data: Mapping[str, Any]) -> GenerationResult:
         ToolCall(
             str(c.get("id") or f"call_{i + 1}"),
             str((c.get("function") or {}).get("name", "")),
-            _arguments((c.get("function") or {}).get("arguments")),
+            tool_arguments((c.get("function") or {}).get("arguments")),
         )
         for i, c in enumerate(msg.get("tool_calls") or ())
         if isinstance(c, Mapping)
@@ -210,16 +212,20 @@ class LiveGenerationModel:
         status, raw = self._transport(
             f"{self._base}/chat/completions", headers, body, self._timeout_s
         )
+        said = f"the server answered {status}"
+        detail = {"type": "http_status", "status": status, "provider": "chat-completions",
+                  "message": said}  # fmt: skip
         if status == 429 or status >= 500:
-            raise TransientModelError(message=f"the server answered {status}")
+            raise TransientModelError(message=said, detail=detail)
         if status in (401, 403):
-            raise PermanentModelError(LIVE_UNAUTHORISED, f"the server answered {status}")
+            raise PermanentModelError(LIVE_UNAUTHORISED, said, detail=detail)
         if status >= 400:
             if status == 400 and b"context" in raw.lower():
-                raise ContextOverflow(message="the request is over the context window")
-            raise PermanentModelError(LIVE_REFUSED, f"the server answered {status}")
+                message = "the request is over the context window"
+                raise ContextOverflow(message=message, detail=detail)
+            raise PermanentModelError(LIVE_REFUSED, said, detail=detail)
         try:
-            data = json.loads(raw.decode("utf-8"), parse_float=_fraction)
+            data = json.loads(raw.decode("utf-8"), parse_float=json_fraction)
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise TransientModelError(message="the server's answer is not JSON") from e
         if not isinstance(data, Mapping):
@@ -260,7 +266,7 @@ def _content_json(data: Mapping[str, Any]) -> Mapping[str, Any]:
     if found is None:
         raise PermanentModelError(LIVE_REFUSED, "the answer holds no JSON object")
     try:
-        parsed = json.loads(found.group(0), parse_float=_fraction)
+        parsed = json.loads(found.group(0), parse_float=json_fraction)
     except json.JSONDecodeError as e:
         raise PermanentModelError(LIVE_REFUSED, "the answer's JSON does not parse") from e
     if not isinstance(parsed, Mapping):
@@ -353,37 +359,7 @@ class LiveExtractionModel(LiveGenerationModel):
             "response_format": {"type": "json_object"},
         }
         data = self._post(wire)
-        found = _content_json(data).get("fields") or {}
-        texts = {s.span_id: s.text for s in request.state}
-        answers = []
-        for f in request.fields:
-            item = found.get(f.name) if isinstance(found, Mapping) else None
-            if not isinstance(item, Mapping):
-                answers.append((f.name, FieldAnswer(None, (), None, None)))
-                continue
-            spans: list[SpanRef] = []
-            for q in item.get("quotes") or ():
-                if not isinstance(q, Mapping):
-                    continue
-                pid, quote = str(q.get("passage", "")), str(q.get("quote", ""))
-                at = locate(quote, texts.get(pid, ""))
-                if at is not None:
-                    spans.append(SpanRef(pid, at[0], at[1]))
-            value = _value(item.get("value"), f)
-            if f.type == "list" and isinstance(value, tuple) and len(value) != len(spans):
-                value = tuple(texts[r.span_id][r.start : r.end] for r in spans)
-            answers.append(
-                (
-                    f.name,
-                    FieldAnswer(
-                        value,
-                        tuple(spans),
-                        _probability(item.get("absent")),
-                        _probability(item.get("confidence")),
-                    ),
-                )
-            )
-        return ExtractionResult(tuple(answers), _usage_of(data))
+        return ExtractionResult(field_answers(_content_json(data), request), _usage_of(data))
 
 
 class LiveClassificationModel(LiveGenerationModel):
@@ -436,7 +412,7 @@ class LiveClassificationModel(LiveGenerationModel):
             ],
             "response_format": {"type": "json_object"},
         }
-        votes: dict[str, dict[str, Decimal]] = {q.name: {} for q in request.questions}
+        rounds = []
         usage = Usage()
         for _ in range(self._samples):
             data = self._post(wire)
@@ -444,36 +420,8 @@ class LiveClassificationModel(LiveGenerationModel):
             usage = Usage(
                 usage.input_tokens + u.input_tokens, usage.output_tokens + u.output_tokens
             )
-            found = _content_json(data).get("answers") or {}
-            for q in request.questions:
-                item = found.get(q.name) if isinstance(found, Mapping) else None
-                probs = item.get("probabilities") if isinstance(item, Mapping) else None
-                if not isinstance(probs, Mapping):
-                    continue
-                stated = {str(k): Decimal(str(v)) for k, v in probs.items()
-                          if str(k) in _options(q) and _probability(v) is not None}  # fmt: skip
-                if not stated:
-                    continue
-                if self._samples == 1 and sum(stated.values()) < _COMPLETE:
-                    # Mass left unstated is not the stated options' to share: an answer
-                    # of only "offer: 0.6" abstains rather than becoming offer at 1.0.
-                    continue
-                if self._samples > 1:
-                    best = max(sorted(stated), key=lambda k: stated[k])
-                    votes[q.name][best] = votes[q.name].get(best, Decimal(0)) + 1
-                else:
-                    votes[q.name] = stated
-        answers = []
-        for q in request.questions:
-            weights = {o: votes[q.name].get(o, Decimal(0)) for o in _options(q)}
-            if sum(weights.values()) <= 0:
-                answers.append((q.name, ClassAnswer(None, ())))
-                continue
-            dist = distribution_ppm(weights)
-            top = dist[0][0]
-            choice: Choice = (top == TRUE) if q.type == "boolean" else top
-            answers.append((q.name, ClassAnswer(choice, dist)))
-        return ClassificationResult(tuple(answers), usage)
+            rounds.append(_content_json(data))
+        return ClassificationResult(class_answers(rounds, request), usage)
 
 
 _COMPLETE = Decimal("0.99")
@@ -482,3 +430,92 @@ _COMPLETE = Decimal("0.99")
 
 def _options(q: QuestionSpec) -> tuple[str, ...]:
     return (TRUE, FALSE) if q.type == "boolean" else tuple(q.options)
+
+
+def field_answers(
+    answer: Mapping[str, Any], request: ExtractionRequest
+) -> tuple[tuple[str, FieldAnswer], ...]:
+    """Each field's answer from a ``{"fields": ...}`` object, every quote located in code.
+
+    Shared by every adapted extractor (this module's and the Gemini adapter's), so each one
+    keeps only the spans :func:`locate` finds in the passage the quote names.
+    """
+    found = answer.get("fields") or {}
+    texts = {s.span_id: s.text for s in request.state}
+    answers = []
+    for f in request.fields:
+        item = found.get(f.name) if isinstance(found, Mapping) else None
+        if not isinstance(item, Mapping):
+            answers.append((f.name, FieldAnswer(None, (), None, None)))
+            continue
+        spans: list[SpanRef] = []
+        for q in item.get("quotes") or ():
+            if not isinstance(q, Mapping):
+                continue
+            pid, quote = str(q.get("passage", "")), str(q.get("quote", ""))
+            at = locate(quote, texts.get(pid, ""))
+            if at is not None:
+                spans.append(SpanRef(pid, at[0], at[1]))
+        value = _value(item.get("value"), f)
+        if f.type == "list" and isinstance(value, tuple) and len(value) != len(spans):
+            value = tuple(texts[r.span_id][r.start : r.end] for r in spans)
+        answers.append(
+            (
+                f.name,
+                FieldAnswer(
+                    value,
+                    tuple(spans),
+                    _probability(item.get("absent")),
+                    _probability(item.get("confidence")),
+                ),
+            )
+        )
+    return tuple(answers)
+
+
+def stated_probabilities(item: object, q: QuestionSpec) -> dict[str, Decimal]:
+    """The listed options' probabilities in one ``{"probabilities": ...}`` answer."""
+    probs = item.get("probabilities") if isinstance(item, Mapping) else None
+    if not isinstance(probs, Mapping):
+        return {}
+    return {str(k): Decimal(str(v)) for k, v in probs.items()
+            if str(k) in _options(q) and _probability(v) is not None}  # fmt: skip
+
+
+def class_answers(
+    rounds: Sequence[Mapping[str, Any]], request: ClassificationRequest
+) -> tuple[tuple[str, ClassAnswer], ...]:
+    """Each question's answer from one ``{"answers": ...}`` object per sample.
+
+    One round: the stated distribution, which must hold at least :data:`_COMPLETE` of the
+    mass. Several: the share of votes each option's top answer won. Shared by every
+    adapted classifier.
+    """
+    votes: dict[str, dict[str, Decimal]] = {q.name: {} for q in request.questions}
+    for answer in rounds:
+        found = answer.get("answers") or {}
+        for q in request.questions:
+            item = found.get(q.name) if isinstance(found, Mapping) else None
+            stated = stated_probabilities(item, q)
+            if not stated:
+                continue
+            if len(rounds) == 1 and sum(stated.values()) < _COMPLETE:
+                # Mass left unstated is not the stated options' to share: an answer
+                # of only "offer: 0.6" abstains rather than becoming offer at 1.0.
+                continue
+            if len(rounds) > 1:
+                best = max(sorted(stated), key=lambda k: stated[k])
+                votes[q.name][best] = votes[q.name].get(best, Decimal(0)) + 1
+            else:
+                votes[q.name] = stated
+    answers = []
+    for q in request.questions:
+        weights = {o: votes[q.name].get(o, Decimal(0)) for o in _options(q)}
+        if sum(weights.values()) <= 0:
+            answers.append((q.name, ClassAnswer(None, ())))
+            continue
+        dist = distribution_ppm(weights)
+        top = dist[0][0]
+        choice: Choice = (top == TRUE) if q.type == "boolean" else top
+        answers.append((q.name, ClassAnswer(choice, dist)))
+    return tuple(answers)

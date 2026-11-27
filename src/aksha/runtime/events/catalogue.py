@@ -480,6 +480,18 @@ STEP_STARTED = EventTypeSpec(
     boundaries=frozenset({"U2a"}),
     dedup_key="sstart:{step}",
 )
+_STEP_ERROR = {
+    # ADR-P07 G6: what a live provider said about a failed call (its error class, HTTP
+    # status, provider and a short message), never a key, a header or a request body.
+    "type": "object",
+    "properties": {
+        "type": {"type": "string", "minLength": 1, "maxLength": 80},
+        "status": {"type": "integer", "minimum": 0, "maximum": 999},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 80},
+        "message": {"type": "string", "minLength": 1, "maxLength": 300},
+    },
+    "additionalProperties": False,
+}
 STEP_COMPLETED = EventTypeSpec(
     name="step.completed",
     schema={
@@ -499,6 +511,7 @@ STEP_COMPLETED = EventTypeSpec(
             "duration_ms": {"type": "integer", "minimum": 0},
             # ADR-P18 D6: whether the unit settled on request or was terminated.
             "kill": {"enum": ["settled", "killed"]},
+            "error": _STEP_ERROR,
             # ADR-P14 D9: what a model step reported spending.
             "usage": {
                 "type": "object",
@@ -545,6 +558,7 @@ STEP_FAILED = EventTypeSpec(
             "retried": {"type": "boolean"},
             "backoff_ms": {"type": "integer", "minimum": 0},
             "duration_ms": {"type": "integer", "minimum": 0},
+            "error": _STEP_ERROR,
         },
         "required": ["attempt", "code", "retried", "backoff_ms"],
         "additionalProperties": False,

@@ -71,10 +71,11 @@ from aksha.evals.case import Arm
 from aksha.evals.judge import Judge, RuleJudge
 from aksha.evals.ports import StoreOpener
 from aksha.evals.registry import AgentRegistry
+from aksha.extensions.ingest.types import FileInput
 from aksha.extensions.ingest.worker import ParserPool
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.store import ArtifactStore
-from aksha.runtime.budgets.types import Limits
+from aksha.runtime.budgets.types import Budget, Limits
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import effective_policy
 from aksha.runtime.corrections.types import CorrectionRouting
@@ -101,17 +102,23 @@ from aksha.runtime.interrupts.approvals import ApprovalTool, approval_authority
 from aksha.runtime.invalidation.types import VersionedSourceSpec
 from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.models.calls import ModelCallFailed, ToolModelCalls
-from aksha.runtime.models.errors import BindRefusal, BindRefused
+from aksha.runtime.models.errors import BindRefusal, BindRefused, PermanentModelError
 from aksha.runtime.models.routing import (
     LIVE_ENV_PREFIX,
     AliasTable,
     bind_aliases,
     declared_aliases,
+    import_class,
     live_adapters,
     live_env_name,
 )
 from aksha.runtime.models.routing import live_model_name as model_for
-from aksha.runtime.models.types import RunMode
+from aksha.runtime.models.types import (
+    IMPLICIT_GENERATION_ALIAS,
+    ModelAlias,
+    ModelCapabilities,
+    RunMode,
+)
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.worker import OutboxWorker
 from aksha.runtime.projections.view import load_view
@@ -337,15 +344,33 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``aksha sandbox clean <session>`` removes one (:func:`clean_sandbox_session`).
 #
 # ``AKSHA_MODE=live`` binds every alias of every agent to a live adapter (ADR-P07 D9 as
-# amended G2): ``AKSHA_ALIAS_<NAME>=module:Class`` names one, else the built-in adapter
-# of the alias's class (``adapters.models.live``) over ``AKSHA_LIVE_BASE_URL`` (any
-# server speaking the chat-completions shape, hosted or on localhost) with
-# ``AKSHA_LIVE_API_KEY``. The model is ``AKSHA_LIVE_MODEL_<ALIAS>``, else
-# ``AKSHA_LIVE_MODEL_<CLASS>`` (``GENERATION``, ``EXTRACTION``, ``CLASSIFICATION``), else
-# ``AKSHA_LIVE_MODEL``. The start is refused, before any call, with
-# ``live_config_missing`` (no server or no model for an alias) or ``live_key_missing``
-# (no key for a server that is not on this machine). The key is read from the
-# environment only and never recorded; ``run.started`` records each adapter's class.
+# amended G2 and G6): ``AKSHA_ALIAS_<NAME>=module:Class`` names one, else the built-in
+# adapter of the alias's class under ``AKSHA_LIVE_PROVIDER`` (``AKSHA_LIVE_PROVIDER_<CLASS>``
+# for one class). The default provider is ``litellm`` (``adapters.models.litellm``, the
+# extra ``aksha-harness[live]``): one adapter per class over LiteLLM, which reaches every
+# provider it supports, the model named in LiteLLM's form (``gemini/gemini-4-neon``). Its
+# keys are the providers' own variables (``GEMINI_API_KEY``, ...), which LiteLLM reads from
+# the environment: Aksha never takes, passes or records them. ``chat-completions`` is the
+# standard-library fallback (``adapters.models.live``) over ``AKSHA_LIVE_BASE_URL`` (any
+# server speaking the chat-completions shape) with ``AKSHA_LIVE_API_KEY``. The model is
+# ``AKSHA_LIVE_MODEL_<ALIAS>``, else ``AKSHA_LIVE_MODEL_<CLASS>`` (``GENERATION``,
+# ``EXTRACTION``, ``CLASSIFICATION``), else ``AKSHA_LIVE_MODEL``. The start is refused,
+# before any call, with ``live_config_missing`` (no model for an alias, an unknown
+# provider, LiteLLM not installed, or no server for ``chat-completions``) or
+# ``live_key_missing`` (the provider variables LiteLLM says the model needs are unset,
+# named; or no ``AKSHA_LIVE_API_KEY`` for a chat-completions server not on this machine).
+# ``run.started`` records each adapter's class, never a setting.
+#
+# A live model is slower than a fake, so live mode sizes two of the agent's limits up (and
+# ``run.started{budget}`` records the result): the active-time cap becomes
+# ``AKSHA_LIVE_ACTIVE_MS`` when set, else at least :data:`LIVE_ACTIVE_MS` (an hour), and the
+# model step's timeout (``Limits.model_timeout_ms``) at least the generation adapter's
+# attempt timeout (``AKSHA_LIVE_TIMEOUT_S``) plus :data:`LIVE_TIMEOUT_MARGIN_MS`. Fake mode,
+# and so every offline eval, keeps the agent's own limits (:func:`live_limits`).
+#
+# ``AKSHA_NATIVE_FILES`` is ``off`` unless set to ``on``: off, no file is sent natively and
+# every upload goes through intake's parsers, its route recorded ``text`` with the reason
+# (:func:`native_file_input`).
 #
 # ``AKSHA_NETWORK`` is ``off`` unless set to ``on``: off, every tool's HTTP client
 # refuses ``network_off``, so the default process is offline (ADR-P26 amendment A2).
@@ -466,7 +491,10 @@ class RuntimeConfig:
                 if k.strip()
             ),
             live_env={
-                k: v for k, v in env.items() if k.startswith(("AKSHA_LIVE_", LIVE_ENV_PREFIX)) and v
+                k: v
+                for k, v in env.items()
+                if k.startswith(("AKSHA_LIVE_", LIVE_ENV_PREFIX)) or k == "AKSHA_NATIVE_FILES"
+                if v
             },
             search=env.get("AKSHA_SEARCH") or None,
             web_world=env.get("AKSHA_WEB_WORLD") or None,
@@ -617,14 +645,57 @@ LIVE_ADAPTERS: Mapping[str, str] = {
 }
 """The built-in live adapter of each model class, imported only in live mode."""
 
+LITELLM_ADAPTERS: Mapping[str, str] = {
+    "generation": "aksha.adapters.models.litellm:LiteLLMGenerationModel",
+    "extraction": "aksha.adapters.models.litellm:LiteLLMExtractionModel",
+    "classification": "aksha.adapters.models.litellm:LiteLLMClassificationModel",
+}
+"""The LiteLLM adapter of each model class (``AKSHA_LIVE_PROVIDER=litellm``, ADR-P07 G6)."""
+
+LIVE_PROVIDERS: Mapping[str, Mapping[str, str]] = {
+    "litellm": LITELLM_ADAPTERS,
+    "chat-completions": LIVE_ADAPTERS,
+}
+"""``AKSHA_LIVE_PROVIDER`` (or ``AKSHA_LIVE_PROVIDER_<CLASS>``): whose built-in adapters."""
+
+DEFAULT_LIVE_PROVIDER = "litellm"
+
+LIVE_ACTIVE_MS = 3_600_000
+"""Live mode's least active-time cap (an hour), unless ``AKSHA_LIVE_ACTIVE_MS`` says."""
+
+LIVE_TIMEOUT_MARGIN_MS = 15_000
+"""How much longer a live model step waits than its adapter's own attempt timeout."""
+
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
 """Hosts a live server may be on without a key: this machine."""
+
+
+def live_provider(model_class: str, env: Mapping[str, str]) -> str:
+    """The provider of a class's built-in adapter: per class, else for all, else LiteLLM."""
+    return (
+        (
+            env.get(f"AKSHA_LIVE_PROVIDER_{model_class.upper()}")
+            or env.get("AKSHA_LIVE_PROVIDER")
+            or DEFAULT_LIVE_PROVIDER
+        )
+        .strip()
+        .lower()
+    )
+
+
+def live_defaults(env: Mapping[str, str]) -> dict[str, str]:
+    """Each class's built-in live adapter under the configured providers (known ones only)."""
+    out: dict[str, str] = {}
+    for model_class in ("generation", "extraction", "classification"):
+        table = LIVE_PROVIDERS.get(live_provider(model_class, env))
+        if table is not None:
+            out[model_class] = table[model_class]
+    return out
 
 
 def live_refusals(loaded: LoadedDefinition, env: Mapping[str, str]) -> list[BindRefusal]:
     """Why live mode cannot start for ``loaded`` with ``env`` (app comment above)."""
     out: list[BindRefusal] = []
-    base = env.get("AKSHA_LIVE_BASE_URL", "")
     custom = {
         a for a in declared_aliases(loaded.model_aliases.values()) if env.get(live_env_name(a))
     }
@@ -632,9 +703,20 @@ def live_refusals(loaded: LoadedDefinition, env: Mapping[str, str]) -> list[Bind
                if a.name not in custom]  # fmt: skip
     if not builtin:
         return out
+    for model_class in sorted({a.model_class for a in builtin}):
+        provider = live_provider(model_class, env)
+        if provider not in LIVE_PROVIDERS:
+            message = f"AKSHA_LIVE_PROVIDER is one of {sorted(LIVE_PROVIDERS)}, not {provider!r}"
+            out.append(BindRefusal("*", "live_config_missing", message))
+    chat = [a for a in builtin if live_provider(a.model_class, env) == "chat-completions"]
+    lite = [a for a in builtin if live_provider(a.model_class, env) == "litellm"]
+    out.extend(litellm_refusals(lite, env))
+    if not chat:
+        return out
+    base = env.get("AKSHA_LIVE_BASE_URL", "")
     if not base:
         out.append(BindRefusal("*", "live_config_missing", "set AKSHA_LIVE_BASE_URL"))
-    for a in builtin:
+    for a in chat:
         if not model_for(a.name, a.model_class, env):
             var = "AKSHA_LIVE_MODEL_" + "".join(c if c.isalnum() else "_" for c in a.name).upper()
             message = f"set AKSHA_LIVE_MODEL, AKSHA_LIVE_MODEL_{a.model_class.upper()} or {var}"
@@ -646,12 +728,82 @@ def live_refusals(loaded: LoadedDefinition, env: Mapping[str, str]) -> list[Bind
     return out
 
 
+def _need_model(a: ModelAlias) -> BindRefusal:
+    var = "AKSHA_LIVE_MODEL_" + "".join(c if c.isalnum() else "_" for c in a.name).upper()
+    message = f"set AKSHA_LIVE_MODEL, AKSHA_LIVE_MODEL_{a.model_class.upper()} or {var}"
+    return BindRefusal(a.name, "live_config_missing", message)
+
+
+def litellm_refusals(aliases: Sequence[ModelAlias], env: Mapping[str, str]) -> list[BindRefusal]:
+    """Why the LiteLLM adapters cannot serve ``aliases``: no model, no LiteLLM, or no key.
+
+    LiteLLM is imported here, in live mode only, to ask which provider variables each
+    model needs (``validate_environment``); the refusal names them, never a value.
+    """
+    if not aliases:
+        return []
+    out: list[BindRefusal] = []
+    models: dict[str, ModelAlias] = {}
+    for a in aliases:
+        model = model_for(a.name, a.model_class, env)
+        if not model:
+            out.append(_need_model(a))
+        else:
+            models.setdefault(model, a)
+    if not models:
+        return out
+    from aksha.adapters.models import litellm as lite
+
+    try:
+        module = lite.load_litellm()
+    except PermanentModelError as e:
+        return [*out, BindRefusal("*", e.code, e.message)]
+    if env.get("AKSHA_LIVE_BASE_URL"):
+        return out  # a server of the operator's own: LiteLLM's key rules are not its rules
+    for model, a in sorted(models.items()):
+        missing = lite.missing_keys(model, module)
+        if missing:
+            message = f"{model} needs {', '.join(missing)} in the environment (never recorded)"
+            out.append(BindRefusal(a.name, "live_key_missing", message))
+    return out
+
+
+def live_limits(loaded: LoadedDefinition, env: Mapping[str, str]) -> Agent:
+    """The agent with live mode's active-time cap and model step timeout (app comment above).
+
+    Raises ``BindRefused`` (``live_config_missing``) for a malformed ``AKSHA_LIVE_ACTIVE_MS``
+    or ``AKSHA_LIVE_TIMEOUT_S``.
+    """
+    raw = (env.get("AKSHA_LIVE_ACTIVE_MS") or "").strip()
+    if raw and not raw.isdigit():
+        message = f"AKSHA_LIVE_ACTIVE_MS={raw!r}: milliseconds, a whole number"
+        raise BindRefused((BindRefusal("*", "live_config_missing", message),))
+    agent = loaded.agent
+    budget = agent.budget or Budget()
+    active = int(raw) if raw else max(budget.active_ms, LIVE_ACTIVE_MS)
+    from aksha.adapters.models.litellm import timeout_s
+
+    generation = [a for a in declared_aliases(loaded.model_aliases.values()).values()
+                  if a.model_class == "generation"]  # fmt: skip
+    try:
+        seconds = max(timeout_s(a.name, a.model_class, env) for a in generation)
+    except PermanentModelError as e:
+        raise BindRefused((BindRefusal("*", e.code, e.message),)) from None
+    limits = agent.limits or Limits()
+    timeout_ms = max(limits.model_timeout_ms, int(seconds * 1000) + LIVE_TIMEOUT_MARGIN_MS)
+    return replace(
+        agent,
+        budget=replace(budget, active_ms=active),
+        limits=replace(limits, model_timeout_ms=timeout_ms),
+    )
+
+
 def bind_live(loaded: LoadedDefinition, env: Mapping[str, str]) -> Mapping[str, object]:
     """Every alias's live adapter (app comment above); raises ``BindRefused`` first if unset."""
     refusals = live_refusals(loaded, env)
     if refusals:
         raise BindRefused(tuple(refusals))
-    return live_adapters(loaded.model_aliases.values(), env, defaults=LIVE_ADAPTERS)
+    return live_adapters(loaded.model_aliases.values(), env, defaults=live_defaults(env))
 
 
 def session_agent(
@@ -671,6 +823,8 @@ def session_agent(
     ``reentry`` is the setting its request runs record (decision 36); None is ``fresh``.
     """
     agent = loaded.agent
+    if mode == "live":
+        agent = live_limits(loaded, live_env or {})
     if adapters is None:
         if mode == "live":
             adapters = bind_live(loaded, live_env or {})
@@ -910,7 +1064,33 @@ def upload_ingester(config: RuntimeConfig) -> UploadIngester:
         profile = profile_named(config.image_profile)
     except ValueError as e:
         raise StoreError("image_profile_unknown", str(e)) from None
-    return UploadIngester(profile=profile, parse=parser_pool(config))
+    return UploadIngester(
+        profile=profile, parse=parser_pool(config), files=native_file_input(config)
+    )
+
+
+def native_file_input(config: RuntimeConfig) -> FileInput | None:
+    """The reading model's native file input and the operator's opt-in (ADR-P07 G6).
+
+    Only in live mode: the generation adapter's declared ``file_types`` (the one
+    ``AKSHA_ALIAS_GENERATE`` names, else the provider's built-in), enabled only when
+    ``AKSHA_NATIVE_FILES=on``. None when the model declares none, so intake records no
+    file route; with the opt-in off every file is routed ``text`` and the reason recorded.
+    """
+    if config.mode != "live":
+        return None
+    env = config.live_env
+    value = (env.get("AKSHA_NATIVE_FILES") or "off").strip().lower()
+    if value not in ("on", "off"):
+        raise StoreError("native_files_invalid", "AKSHA_NATIVE_FILES is on or off")
+    path = env.get(live_env_name(IMPLICIT_GENERATION_ALIAS)) or live_defaults(env).get("generation")
+    try:
+        caps = getattr(import_class(path), "capabilities", None) if path else None
+    except (ImportError, AttributeError, TypeError, ValueError):
+        return None  # the binder names the bad setting when the run starts
+    if not isinstance(caps, ModelCapabilities) or not caps.file_types:
+        return None
+    return FileInput(caps.file_types, caps.max_inline_bytes, enabled=value == "on")
 
 
 def parser_pool(config: RuntimeConfig) -> ParserPool:

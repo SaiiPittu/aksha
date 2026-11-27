@@ -35,7 +35,7 @@ from aksha.extensions.ingest.header import DATA_RULE, escape_name
 from aksha.extensions.ingest.ingest import Ingested, ingest
 from aksha.extensions.ingest.parse import Parse
 from aksha.extensions.ingest.profiles import PROFILES, SentCopyCache
-from aksha.extensions.ingest.types import Caps, ImageProfile, Refusal
+from aksha.extensions.ingest.types import Caps, FileInput, ImageProfile, Refusal
 from aksha.extensions.ingest.worker import ParserPool
 from aksha.runtime.inputs.types import (
     DOC_PREFIX,
@@ -85,8 +85,12 @@ class UploadIngester:
         caps: Caps | None = None,
         profile: ImageProfile | None = None,
         parse: Parse | None = None,
+        files: FileInput | None = None,
     ) -> None:
         """Ingest with ``caps`` for a reader whose image profile is ``profile``.
+
+        ``files`` is the reader's native file input and its opt-in (ADR-P07 G6); None when
+        the bound model declares none, so no file route is recorded.
 
         ``parse`` runs the type check and the converters; the default is a
         :class:`~aksha.extensions.ingest.worker.ParserPool`, so every parser runs in a worker
@@ -94,6 +98,7 @@ class UploadIngester:
         """
         self.caps = caps or Caps()
         self.profile = profile
+        self.files = files
         self.cache = SentCopyCache()
         self.parse: Parse = parse if parse is not None else ParserPool()
 
@@ -141,7 +146,7 @@ class UploadIngester:
 
             got = ingest(name, data, doc_key=doc_key, version=version, caps=self.caps,
                          key_for=key_for, put=put, profile=self.profile,
-                         cache=self.cache, parse=self.parse)  # fmt: skip
+                         cache=self.cache, parse=self.parse, files=self.files)  # fmt: skip
             assert isinstance(got, Ingested)  # the byte cap ran above
             for item in got.walk():
                 k = item.document.doc_key

@@ -143,3 +143,26 @@ def test_the_preview_is_structure_only() -> None:
     state = _state()
     assert state.startswith("record: input/a.txt\nformat: text")
     assert "EUR 9 per month" in state  # the start of the text, as a reader sees it
+
+
+def test_a_transient_fast_call_hands_the_providers_detail_to_the_tool_step() -> None:
+    import pytest
+
+    from aksha.runtime.execution.errors import TransientStepError
+    from aksha.runtime.models.errors import TransientModelError
+    from aksha.runtime.models.types import QuestionSpec
+
+    class Busy(Decide):
+        def classify(self, request: ClassificationRequest) -> ClassificationResult:
+            detail = {"type": "ServiceUnavailableError", "status": 503, "provider": "syn",
+                      "message": "busy"}  # fmt: skip
+            raise TransientModelError(message="busy", detail=detail)
+
+    calls = _calls(Busy("offer", "0.95"), Extract())
+    with pytest.raises(TransientStepError) as e:
+        calls.classify(
+            "doc_kind", "a record", (QuestionSpec("kind", "Which?", options=("a", "b")),)
+        )
+    assert e.value.code == "transient"
+    assert e.value.detail == {"type": "ServiceUnavailableError", "status": 503,
+                              "provider": "syn", "message": "busy"}  # fmt: skip

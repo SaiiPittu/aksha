@@ -37,6 +37,15 @@ postgres = ["psycopg[binary]>=3.2"]
 server = ["fastapi>=0.115", "uvicorn>=0.30"]
 # The trace exporter extension (ADR-P21 D8): OTLP JSON Lines files, offline.
 otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.66b2"]
+# Live mode's provider layer (ADR-P07 G6): LiteLLM reaches every provider it supports, so
+# Aksha writes no adapter per provider. Pinned to one exact release, checked on 27 Nov 2026:
+# 1.111.0 is the newest stable release on the package index (25 Nov 2026), it fixes every
+# advisory the project and the GitHub advisory database list (the newest, GHSA-w5h5-479w-p5hx,
+# is fixed in 1.111.0; the others earlier), and it is not one of the two releases published
+# with credential-harvesting malware in March 2026 (1.82.7 and 1.82.8, GHSA-5mg7-485q-xm76),
+# which a pin must never name. Its wheel ships no .pth start-up hook. Aksha uses only the
+# library's completion call, not its proxy server, which most advisories concern.
+live = ["litellm==1.111.0"]
 # The ingest extension's parsers: PDF (BSD-3-Clause), Word, PowerPoint and Excel (MIT),
 # images (MIT-CMU). Without them those types are named gaps; text, CSV, JSON, HTML and
 # email need only the standard library. HEIC needs pillow-heif, installed separately:
@@ -147,6 +156,11 @@ exclude = ["^scratch-pad/", "^web/"]
 # The ingest extension's parsers are an optional extra; some ship no type information.
 module = ["pypdf", "pypdf.*", "docx", "docx.*", "pptx", "pptx.*", "openpyxl", "openpyxl.*",
           "PIL", "PIL.*", "pillow_heif", "pillow_heif.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# LiteLLM is the optional extra aksha-harness[live]; the adapter treats it as Any.
+module = ["litellm", "litellm.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

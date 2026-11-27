@@ -490,7 +490,7 @@ class StepExecutor:
         while True:
             if once:
                 self._append(facts.DISPATCH, facts.step_dispatched(step_id, attempt))
-            code, output, spent, kill = self._attempt(
+            code, output, spent, kill, detail = self._attempt(
                 step_id, attempt, work, policy.timeout_ms, unit
             )
             self.drain_late()
@@ -532,12 +532,25 @@ class StepExecutor:
             retried = retryable and attempt <= policy.max_retries
             backoff = policy.delay_ms(attempt) if retried else 0
             failed = facts.step_failed(
-                step_id, attempt, code, retried=retried, backoff_ms=backoff, duration_ms=spent
+                step_id,
+                attempt,
+                code,
+                retried=retried,
+                backoff_ms=backoff,
+                duration_ms=spent,
+                error=detail,
             )
             self._append(facts.ATTEMPT_FAILED, failed)
             if not retried:
                 event = facts.step_completed(
-                    step_id, kind, name, "error", attempts=attempt, code=code, duration_ms=0
+                    step_id,
+                    kind,
+                    name,
+                    "error",
+                    attempts=attempt,
+                    code=code,
+                    duration_ms=0,
+                    error=detail,
                 )
                 (stored,) = self._append(facts.STEP_RESULT, event)
                 return self._recorded(step_id, stored, replayed=False)
@@ -551,13 +564,14 @@ class StepExecutor:
         work: Callable[[Deadline], StepOutput],
         timeout_ms: int,
         unit: KillableUnit | None = None,
-    ) -> tuple[str, StepOutput | None, int, KillOutcome | None]:
+    ) -> tuple[str, StepOutput | None, int, KillOutcome | None, Mapping[str, str | int] | None]:
         """Run one attempt on a worker thread and say how it ended.
 
-        The answer is ``(code, None, ms, None)``, ``("", out, ms, None)``,
-        ``(run_stopped, None, ms, kill)`` when a stop ended its unit, or
-        ``(timeout, None, ms, kill)`` when its deadline did. ``ms`` is the attempt's active
-        time on the injected clock; a timeout is its deadline.
+        The answer is ``(code, None, ms, None, detail)``, ``("", out, ms, None, None)``,
+        ``(run_stopped, None, ms, kill, None)`` when a stop ended its unit, or
+        ``(timeout, None, ms, kill, None)`` when its deadline did. ``ms`` is the attempt's
+        active time on the injected clock; a timeout is its deadline. ``detail`` is what a
+        :class:`TransientStepError` said the failure was (``step.failed{error}``).
         """
         box = _Attempt(step_id, number, threading.Lock())
         began = self._clock.now()
@@ -591,20 +605,20 @@ class StepExecutor:
             if kill is not None:
                 box.abandoned = not box.done
                 if cause == TIMEOUT:
-                    return TIMEOUT, None, timeout_ms, kill
-                return RUN_STOPPED, None, spent, kill
+                    return TIMEOUT, None, timeout_ms, kill, None
+                return RUN_STOPPED, None, spent, kill, None
             if not box.done:
                 box.abandoned = True
-                return TIMEOUT, None, timeout_ms, None
+                return TIMEOUT, None, timeout_ms, None, None
         if box.error is not None:
             if not isinstance(box.error, Exception):
                 raise box.error  # a crash: nothing recorded, as if the process died here
             if isinstance(box.error, TransientStepError):
-                return box.error.code, None, spent, None
-            return STEP_EXCEPTION, None, spent, None
+                return box.error.code, None, spent, None, box.error.detail
+            return STEP_EXCEPTION, None, spent, None, None
         if not isinstance(box.output, StepOutput):
-            return STEP_EXCEPTION, None, spent, None
-        return "", box.output, spent, None
+            return STEP_EXCEPTION, None, spent, None, None
+        return "", box.output, spent, None, None
 
     def _watch(
         self, run: str, finished: threading.Event, deadline: Deadline, unit: KillableUnit
@@ -656,7 +670,7 @@ class StepExecutor:
         event = facts.step_completed(
             step_id, kind, name, output.outcome, attempts=attempts, value=output.value,
             code=output.code, reconciled=reconciled, duration_ms=duration_ms,
-            usage=output.usage,
+            usage=output.usage, error=output.error,
         )  # fmt: skip
         events = (*output.events, event)
         if self._blobs is not None:

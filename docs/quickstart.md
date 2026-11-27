@@ -95,22 +95,31 @@ Nobody describes your files in advance, so no single extraction schema fits them
 
 What the fast models cannot read, a record of kind `other` or a field they abstained on, goes to the Task's general model: the tool returns the record's passages, each citable, and says what is `unresolved`. The kinds are declared data in each agent (`reading.KINDS`, `world.KINDS`), so adding one is a kind and its alias.
 
-## Running the agents live, with your own key
+## Running the agents live, on any provider
 
-Offline, every model is a rule-based fake (`AKSHA_MODE=fake`, the default). `AKSHA_MODE=live` binds every model alias to a live adapter. With one general model (any server that speaks the chat-completions shape, hosted or on your machine), it fills the generation contract and, in adapted mode, the decide and extract contracts too: the same pipeline and the same citation checks, its quotes located in code, recorded `native=False`.
+Offline, every model is a rule-based fake (`AKSHA_MODE=fake`, the default). `AKSHA_MODE=live` binds every model alias to a live adapter. Aksha has no adapter per provider: it calls every provider through [LiteLLM](https://docs.litellm.ai/docs/providers), installed as the extra `aksha-harness[live]`. One general model fills the generation contract (with tool calls for the agent's tools) and, in adapted mode, the decide and extract contracts too, under a forced JSON schema: the same pipeline and the same citation checks, its quotes located in code, recorded `native=False`.
+
+On Google Gemini:
 
 ```sh
+pip install 'aksha-harness[live]'
 export AKSHA_MODE=live
-export AKSHA_LIVE_BASE_URL=https://your-provider.example/v1   # or http://127.0.0.1:8000/v1
-export AKSHA_LIVE_API_KEY=...        # read from the environment only; never recorded
-export AKSHA_LIVE_MODEL=your-model   # one model for every alias, or set per class or alias:
-# export AKSHA_LIVE_MODEL_GENERATION=a-large-model
-# export AKSHA_LIVE_MODEL_CLASSIFICATION=a-small-model
-# export AKSHA_LIVE_MODEL_PAGE_FACTS=a-model-for-one-alias
+export GEMINI_API_KEY=...                    # the provider's own variable, read by LiteLLM; Aksha never records it
+export AKSHA_LIVE_MODEL=gemini/gemini-4-neon # LiteLLM's <provider>/<model> form; one model for every alias, or:
+# export AKSHA_LIVE_MODEL_GENERATION=gemini/gemini-4-neon
+# export AKSHA_LIVE_MODEL_CLASSIFICATION=gemini/a-smaller-model
+# export AKSHA_LIVE_MODEL_PAGE_FACTS=gemini/a-model-for-one-alias
+# export AKSHA_LIVE_REASONING_EFFORT=low     # minimal, low, medium, high or none; _<CLASS> or _<ALIAS> too
 aksha run --agent research --input my-inputs "Who sells ... and at what price?"
 ```
 
-A native System 1 service (an extraction or classification API with its own spans and probabilities) is named per alias with `AKSHA_ALIAS_<ALIAS>=module:Class`, a class built as `cls(alias, env)` that implements the class's contract. The start is refused before any call, naming the setting to set, when the server or a model is missing (`live_config_missing`) or a server not on this machine has no key (`live_key_missing`). `AKSHA_LIVE_SAMPLES=N` asks each classification N times and uses the votes as its distribution. `tests/integration/test_live_mode.py` runs the research agent this way against a stub server on localhost.
+Any other provider is the same with its own variable and model name: `ANTHROPIC_API_KEY` and `anthropic/<model>`, `OPENAI_API_KEY` and `openai/<model>`, a local Ollama server as `ollama/<model>` (with `AKSHA_LIVE_BASE_URL=http://127.0.0.1:11434`, passed to LiteLLM as `api_base`). The start is refused before any call, naming what to set, when a model is unset or LiteLLM is not installed (`live_config_missing`), or when the provider variable the model needs is unset (`live_key_missing`).
+
+What a live run records: each call's tokens (thinking counted as output) and, when LiteLLM has a price for the model, its cost, so token and money budgets see real numbers. LiteLLM's own retries are off; a rate limit, a 5xx or a timeout is retried by the model step, and each failed attempt's `step.failed` says what the provider answered (error type, HTTP status, a short message, never a key). One attempt waits `AKSHA_LIVE_TIMEOUT_S` (default 240 seconds for generation, 90 for decide and extract), and a live run's active-time budget is at least an hour (`AKSHA_LIVE_ACTIVE_MS` sets it), since a real model is much slower than the fakes. `AKSHA_LIVE_SAMPLES=N` asks each classification N times and uses the votes as its distribution.
+
+Files stay off the native path by default: every upload goes through intake's own parsers and then decide and extract, so one model exercises every path, and intake records each PDF's route as `text` with the reason. `AKSHA_NATIVE_FILES=on` opts in: intake records `native_file` for a PDF or image within the inline limit, and the adapter sends a message's file parts for LiteLLM to pass on. The loop does not yet attach a document's bytes to a model request (see the limitations), so today the opt-in changes what is recorded and what the adapter would send, not what the agents read.
+
+`AKSHA_LIVE_PROVIDER=chat-completions` uses the standard-library adapter instead, with no extra: any server that speaks the chat-completions shape at `AKSHA_LIVE_BASE_URL`, its key in `AKSHA_LIVE_API_KEY` (not needed on localhost). `tests/integration/test_live_mode.py` runs the research agent that way against a stub server on localhost; `tests/unit/adapters/models/test_litellm.py` runs each LiteLLM class against a stubbed LiteLLM. A native System 1 service (an extraction or classification API with its own spans and probabilities) is named per alias with `AKSHA_ALIAS_<ALIAS>=module:Class`, a class built as `cls(alias, env)` that implements the class's contract.
 
 ## Record a run, replay it offline
 

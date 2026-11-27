@@ -260,7 +260,7 @@ class ToolModelCalls:
             try:
                 data, found = ask(candidate, pending)
             except TransientModelError as e:
-                raise TransientStepError("transient", e.message) from e
+                raise TransientStepError("transient", e.message, detail=e.detail) from e
             except (PermanentModelError, ContextOverflow) as e:
                 steps.append({**entry, "error": e.code})
                 continue

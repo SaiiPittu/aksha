@@ -69,6 +69,7 @@ def aksha(tmp: Path, live: dict[str, str], *argv: str) -> tuple[int, str]:
 
 def _live(stub: StubServer, **more: str) -> dict[str, str]:
     out = {
+        "AKSHA_LIVE_PROVIDER": "chat-completions",
         "AKSHA_LIVE_BASE_URL": stub.base_url,
         "AKSHA_LIVE_API_KEY": KEY,
         "AKSHA_ALIAS_GENERATE": "tests.support.live_stub:OfflineGeneration",

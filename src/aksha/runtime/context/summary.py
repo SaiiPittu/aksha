@@ -32,9 +32,9 @@ from aksha.runtime.context.types import (
 )
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import DurableStepExecutor
-from aksha.runtime.execution.types import StepId
+from aksha.runtime.execution.types import StepId, StepPolicy
 from aksha.runtime.models.routing import AliasTable
-from aksha.runtime.models.steps import GenerationOutcome, generation_step
+from aksha.runtime.models.steps import MODEL_STEP_POLICY, GenerationOutcome, generation_step
 from aksha.runtime.models.types import GenerationRequest, GenerationResult, Message
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tools.results import cap_text
@@ -189,8 +189,14 @@ def summarise(
     through: int,
     policy: ContextPolicy,
     previous: Compaction | None,
+    *,
+    model_policy: StepPolicy | None = None,
 ) -> SummaryOutcome:
-    """Run (or replay) the summary step before turn ``step`` (module doc, point 3)."""
+    """Run (or replay) the summary step before turn ``step`` (module doc, point 3).
+
+    ``model_policy`` is the model step's timeout and retries (the agent's
+    ``Limits.model_timeout_ms``); None is the default model step policy.
+    """
     request = summary_request(step, turns, through, policy, previous)
 
     def facts(result: GenerationResult) -> tuple[NewEvent, ...]:
@@ -199,7 +205,7 @@ def summarise(
 
     out = generation_step(
         executor, step.compaction(), table, request, started={"summary_through": through},
-        facts=facts,
+        facts=facts, policy=model_policy or MODEL_STEP_POLICY,
     )  # fmt: skip
     if out.result is None:
         return SummaryOutcome(out, None, out.code)

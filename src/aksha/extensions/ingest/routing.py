@@ -19,8 +19,12 @@ general model decides, adapted, and the System 1 model extracts. The answer-writ
 document: an image goes natively, as a sent copy sized for the bound model's image
 profile, when that model takes images; to a model with no image input it is the header
 alone with the named gap ``no vision-capable model configured``. Every other type is its
-text representation; native pass-through of PDF and Office files is designed only
-(ING-6). Intake itself calls no model in any setup, so it is the same in all three.
+text representation, unless the reading model declares native file input for the type and
+the operator opted in (:class:`FileInput`, ``AKSHA_NATIVE_FILES=on``, off by default): then
+the route is ``native_file`` while the file fits the model's inline limit. With the opt-in
+off the route is recorded ``text`` with the reason, so a single general model still
+exercises the parsers and the decide-then-extract path for every file (ADR-P07 G6).
+Intake itself calls no model in any setup, so it is the same in all three.
 """
 
 from __future__ import annotations
@@ -28,9 +32,19 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from aksha.extensions.ingest.sniff import IMAGE_TYPES
-from aksha.extensions.ingest.types import Binding, Document, ImageProfile, Route, SentImage, Setup
+from aksha.extensions.ingest.types import (
+    Binding,
+    Document,
+    FileInput,
+    ImageProfile,
+    Route,
+    SentImage,
+    Setup,
+)
 
 NO_VISION = "no vision-capable model configured"
+NATIVE_FILES_OFF = "native file input is off (AKSHA_NATIVE_FILES)"
+OVER_INLINE = "over the model's inline file limit"
 
 
 def setup_of(decide: str | None, extract: str | None) -> Setup:
@@ -68,15 +82,23 @@ def resolve_route(
     profile: ImageProfile | None,
     *,
     prepare: Callable[[ImageProfile], SentImage] | None = None,
+    files: FileInput | None = None,
 ) -> Route:
     """The route of ``document`` to a step whose bound model has image ``profile``.
 
     ``profile`` is None when the bound model takes no images. ``prepare`` makes the sent
     copy for a profile (:func:`~aksha.extensions.ingest.profiles.prepare_image` over the
-    document's canonical frame); without it an image route carries no copy yet.
+    document's canonical frame); without it an image route carries no copy yet. ``files``
+    is the reading model's native file input (module doc); None when it declares none.
     """
     if document.detected_type in IMAGE_TYPES:
         if profile is None:
             return Route("header_only", None, NO_VISION)
         return Route("native_image", None if prepare is None else prepare(profile), None)
-    return Route("text")
+    if files is None or document.detected_type not in files.accepts:
+        return Route("text")
+    if not files.enabled:
+        return Route("text", None, NATIVE_FILES_OFF)
+    if document.size_bytes > files.max_inline_bytes:
+        return Route("text", None, OVER_INLINE)
+    return Route("native_file")
