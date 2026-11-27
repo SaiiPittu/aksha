@@ -35,7 +35,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aksha.runtime.budgets.limits import limit_reached, turns_used, vetoes_since_entry
+from aksha.runtime.budgets.limits import limit_reached, turns_since_entry, vetoes_since_entry
 from aksha.runtime.context.reentry import choose_reentry
 from aksha.runtime.context.types import effective_policy
 from aksha.runtime.finalization.state import finalizing
@@ -298,7 +298,7 @@ class TaskPolicy:
             return None
         ref = self.instance
         task = view.tree.node(ref.task_path).task
-        turns = turns_used(view.log, ref.run, ref.instance)
+        turns = turns_since_entry(view.log, ref.run, ref.instance)
         if turns >= task.turn_limit:
             reason = f"turn limit {task.turn_limit} reached"
             counts = (("turns", turns), ("allowed", task.turn_limit))
