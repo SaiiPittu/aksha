@@ -35,7 +35,7 @@ from aksha.evals.selftest.bundles import (
     OracleAgent,
     Perturb,
 )
-from aksha.evals.selftest.mutants import MUTANTS
+from aksha.evals.selftest.mutants import MUTANTS, NotApplicable
 from aksha.evals.state import fold
 from aksha.evals.world import Renaming, World, load_change_set
 
@@ -209,7 +209,12 @@ def self_test(
         if not applicable:
             report.checks.append(BundleCheck(f"mutant:{name}", True, ("not applicable: key gap",)))
             continue
-        got = _outcomes(graded(mutant.plant(oracle, key)))
+        try:
+            planted = mutant.plant(oracle, key)
+        except NotApplicable as e:
+            report.checks.append(BundleCheck(f"mutant:{name}", True, (f"not applicable: {e}",)))
+            continue
+        got = _outcomes(graded(planted))
         survived = [f"{c}: {got.get(c)}, want fail" for c in applicable if got.get(c) != "fail"]
         killed = tuple(c for c in applicable if got.get(c) == "fail")
         report.checks.append(BundleCheck(f"mutant:{name}", not survived, tuple(survived), killed))

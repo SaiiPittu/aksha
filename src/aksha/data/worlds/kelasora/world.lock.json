@@ -1,6 +1,6 @@
 {
   "files": {
-    "key.json": "sha256:4978e60196df636230e5f655024b8be9b65c0f64d964d78980e0df1755b85253",
+    "key.json": "sha256:608d1b7ec56e797f5c41bca4cfa8127a1085e164dda0e933f8ab99a11c54f194",
     "manifest.json": "sha256:0b2395648683c415f325f664793167e10bba5d1dc25cfbbcb9e24e702cc3473d",
     "sources/brief/kelasora-brief.md": "sha256:eae6bb20f477a209c37bdeffc9b94c05c604765f95d168d8b95d1cc2e6af6f17",
     "sources/chats/pintaria-sales-chat.txt": "sha256:8f1b061b4865b6a725212ee9404c7bc0f8000ecd3ca5d84ac09d6ae223015add",

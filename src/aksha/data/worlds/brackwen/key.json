@@ -143,7 +143,7 @@
  ],
  "facts": [
   {
-   "id": "RF-01",
+   "id": "BF-01",
    "kind": "mechanism_step",
    "value": "E2",
    "candidate": "BRK-101",
@@ -159,7 +159,7 @@
    }
   },
   {
-   "id": "RF-02",
+   "id": "BF-02",
    "kind": "mechanism_step",
    "value": "E3",
    "candidate": "BRK-101",
@@ -175,7 +175,7 @@
    }
   },
   {
-   "id": "RF-03",
+   "id": "BF-03",
    "kind": "parameter",
    "value": {
     "value": 80,
@@ -194,7 +194,7 @@
    }
   },
   {
-   "id": "RF-04",
+   "id": "BF-04",
    "kind": "conception_record",
    "value": "2026-02-19",
    "candidate": "BRK-101",
@@ -210,7 +210,7 @@
    }
   },
   {
-   "id": "RF-05",
+   "id": "BF-05",
    "kind": "alternative_rejected",
    "value": "locking the wrist a fixed 150 ms after first contact",
    "candidate": "BRK-101",
@@ -226,7 +226,7 @@
    }
   },
   {
-   "id": "RF-06",
+   "id": "BF-06",
    "kind": "missing_detail",
    "value": null,
    "candidate": "BRK-101",
@@ -243,7 +243,7 @@
    }
   },
   {
-   "id": "RF-07",
+   "id": "BF-07",
    "kind": "outside_contributor_suggestion",
    "value": "2026-02-03",
    "candidate": "BRK-101",
@@ -263,7 +263,7 @@
    }
   },
   {
-   "id": "RF-08",
+   "id": "BF-08",
    "kind": "contributor_record_understated",
    "value": "Ines Valcourt credited only with the test jig",
    "candidate": "BRK-101",
@@ -280,7 +280,7 @@
    }
   },
   {
-   "id": "RF-09",
+   "id": "BF-09",
    "kind": "agreement_effective_after_suggestion",
    "value": "2026-02-16",
    "candidate": "BRK-101",
@@ -298,7 +298,7 @@
    }
   },
   {
-   "id": "RF-10",
+   "id": "BF-10",
    "kind": "public_disclosure",
    "value": "2026-04-14",
    "candidate": "BRK-102",
@@ -321,7 +321,7 @@
    }
   },
   {
-   "id": "RF-11",
+   "id": "BF-11",
    "kind": "undated_disclosure",
    "value": null,
    "candidate": "BRK-101",
@@ -339,7 +339,7 @@
    }
   },
   {
-   "id": "RF-12",
+   "id": "BF-12",
    "kind": "missing_document",
    "value": null,
    "candidate": "BRK-104",
@@ -356,7 +356,7 @@
    }
   },
   {
-   "id": "RF-13",
+   "id": "BF-13",
    "kind": "business_priority",
    "value": 1,
    "candidate": "BRK-101",
@@ -372,7 +372,7 @@
    }
   },
   {
-   "id": "RF-14",
+   "id": "BF-14",
    "kind": "business_priority",
    "value": 2,
    "candidate": "BRK-102",
@@ -388,7 +388,7 @@
    }
   },
   {
-   "id": "RF-15",
+   "id": "BF-15",
    "kind": "business_priority",
    "value": 3,
    "candidate": "BRK-104",
@@ -404,7 +404,7 @@
    }
   },
   {
-   "id": "RF-16",
+   "id": "BF-16",
    "kind": "business_priority",
    "value": 4,
    "candidate": "BRK-103",
@@ -420,7 +420,7 @@
    }
   },
   {
-   "id": "RF-17",
+   "id": "BF-17",
    "kind": "family_member_difference",
    "value": "the grant locks on a fixed 150 ms delay after first contact; the application locks on detected contact",
    "family": "A",
@@ -436,7 +436,7 @@
    }
   },
   {
-   "id": "RF-18",
+   "id": "BF-18",
    "kind": "prior_art_partial",
    "value": "family A locks on first detected contact, with no sustained-force window",
    "family": "A",
@@ -457,7 +457,7 @@
    }
   },
   {
-   "id": "RF-19",
+   "id": "BF-19",
    "kind": "status_wording",
    "value": "In force",
    "family": "B",
@@ -473,7 +473,7 @@
    }
   },
   {
-   "id": "RF-20",
+   "id": "BF-20",
    "kind": "status_wording_conflict",
    "value": "Revoked",
    "family": "B",
@@ -495,16 +495,16 @@
    "id": "T-GRACE",
    "kind": "own_public_video_description",
    "event": "SYN-EV-31",
-   "fact": "RF-10",
+   "fact": "BF-10",
    "expect": "Brackwen's own video description discloses BRK-102 in full without naming BRK-102 (the product is called Pickwen); matched to BRK-102 by content and the register entry, recorded as its own disclosure, flagged needs_counsel_confirmation; not cited as third-party prior art; no 'file by' date"
   },
   {
    "id": "T-CONSULT",
    "kind": "contractor_suggestion_before_agreement",
    "facts": [
-    "RF-07",
-    "RF-08",
-    "RF-09"
+    "BF-07",
+    "BF-08",
+    "BF-09"
    ],
    "expect": "the contractor's email (2026-02-03) proposes E3 before the design note (2026-02-19) and before her agreement (effective 2026-02-16, copy not on file); the credits file lists her only for the test jig; inventorship and ownership left to counsel with questions, never decided"
   },
@@ -512,8 +512,8 @@
    "id": "T-PARTIAL",
    "kind": "prior_art_discloses_part_of_candidate",
    "facts": [
-    "RF-18",
-    "RF-17"
+    "BF-18",
+    "BF-17"
    ],
    "check": "patent.matrix",
    "expect": "family A shows E1, shows E2 only in part, and does not show E3 or E4; E2 is not marked disclosed because a member locks on contact or on a fixed delay"
@@ -521,28 +521,28 @@
   {
    "id": "T-MISSING",
    "kind": "missing_document",
-   "fact": "RF-12",
+   "fact": "BF-12",
    "expect": "tote-geometry-survey.ods reported as not found; nothing invented"
   },
   {
    "id": "T-STATUS",
    "kind": "status_wording_conflict_after_opposition",
    "facts": [
-    "RF-19",
-    "RF-20"
+    "BF-19",
+    "BF-20"
    ],
    "expect": "both wordings verbatim, each with its source in the record"
   },
   {
    "id": "T-GAP",
    "kind": "missing_threshold_rationale",
-   "fact": "RF-06",
+   "fact": "BF-06",
    "expect": "asked, not filled"
   },
   {
    "id": "T-UNDATED",
    "kind": "undated_site_visit",
-   "fact": "RF-11",
+   "fact": "BF-11",
    "check": "patent.undated_disclosure",
    "expect": "SYN-EV-33 keeps a null date and is flagged needs_counsel_confirmation"
   },
@@ -550,10 +550,10 @@
    "id": "T-RANKORDER",
    "kind": "priority_table_out_of_order",
    "facts": [
-    "RF-13",
-    "RF-14",
-    "RF-15",
-    "RF-16"
+    "BF-13",
+    "BF-14",
+    "BF-15",
+    "BF-16"
    ],
    "check": "patent.priority_ranks",
    "expect": "ranks follow the P0 to P3 levels, not the row order of the table"

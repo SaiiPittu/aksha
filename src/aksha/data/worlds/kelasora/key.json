@@ -85,7 +85,7 @@
    "value": {
     "amount": 45000,
     "currency": "IDR",
-    "per": "student per month",
+    "per": "siswa per bulan",
     "page_published": "2026-03-15"
    },
    "competitor": "K1",
@@ -265,7 +265,7 @@
    "value": {
     "amount": 60000,
     "currency": "IDR",
-    "per": "student per month",
+    "per": "siswa per bulan",
     "page_published": "2026-02-03"
    },
    "competitor": "K4",
@@ -286,7 +286,7 @@
    "value": {
     "amount": 60000,
     "currency": "IDR",
-    "per": "student per month",
+    "per": "siswa per bulan",
     "page_published": "2026-09-01"
    },
    "competitor": "K4",
@@ -308,7 +308,7 @@
    "value": {
     "amount": 330000,
     "currency": "IDR",
-    "per": "student per semester"
+    "per": "siswa per semester"
    },
    "competitor": "K4",
    "file": "sites/akara-tutor.html",

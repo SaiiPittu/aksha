@@ -6,5 +6,5 @@ category = "capability"
 agents = ["patent"]
 worlds = ["brackwen"]
 opening = "Here is everything we have on the four Brackwen picking-cell ideas, plus the prior-art search counsel ran. Go through each idea against the prior art, tell me what we should do next with each one, and get the strongest one ready for our patent attorney."
-expect = ["facts.RF-13", "facts.RF-14", "facts.RF-15", "facts.RF-16", "traps.T-RANKORDER"]
+expect = ["facts.BF-13", "facts.BF-14", "facts.BF-15", "facts.BF-16", "traps.T-RANKORDER"]
 criteria = ["patent.priority_ranks"]
