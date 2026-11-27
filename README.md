@@ -155,7 +155,7 @@ These are fake-model numbers. They test the harness and the offline rules, not a
 
 ## Live models
 
-Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. So far the adapters have been smoke-tested on one Gemini model. Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). No agent has yet completed a whole task on a real model. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
+Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. So far the adapters have been smoke-tested on one Gemini model. Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). On 28 Nov 2026 the Research Agent ran a whole task on GPT-6.2 Sol: 392 model calls in 28 minutes, ending partial with two competitors left unknown rather than guessed. That recording ships in `src/aksha/data/recordings/research-live-gpt/` and replays offline with no key. The evals have not yet run live. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
 
 ## Documentation map
 

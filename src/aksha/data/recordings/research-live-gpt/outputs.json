@@ -1,0 +1,1070 @@
+{
+  "research.competitors": {
+    "companies": [
+      {
+        "aliases": [
+          {
+            "cite": {
+              "quote": "Brightfield Analytics joined Corvane Group on 12 May 2026",
+              "span": "EX-0025"
+            },
+            "label": "fact",
+            "value": "Brightfield Analytics"
+          }
+        ],
+        "canonical": {
+          "cite": {
+            "quote": "Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand.",
+            "span": "EX-0025"
+          },
+          "label": "fact",
+          "value": "Corvane Group"
+        },
+        "key": "corvane-group",
+        "merge_evidence": [
+          {
+            "cite": {
+              "quote": "Corvane Presence P1 is the new name for OccuPoint. Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand.",
+              "span": "EX-0025"
+            },
+            "label": "fact"
+          }
+        ],
+        "pages": [
+          {
+            "record": "web/corvane.example/product",
+            "url": "https://corvane.example/product"
+          },
+          {
+            "record": "web/brightfield.example/product",
+            "url": "https://brightfield.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Noctra, noctra.example.",
+            "span": "EX-0043"
+          },
+          "label": "fact",
+          "value": "Noctra"
+        },
+        "key": "noctra",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/noctra.example/product",
+            "url": "https://noctra.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Tallyway, tallyway.example.",
+            "span": "EX-0060"
+          },
+          "label": "fact",
+          "value": "Tallyway"
+        },
+        "key": "tallyway",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/tallyway.example/product",
+            "url": "https://tallyway.example/product"
+          }
+        ]
+      }
+    ],
+    "dimensions": [
+      "still_occupant_accuracy",
+      "battery_and_cabling",
+      "privacy",
+      "installer_effort"
+    ],
+    "manual_alternatives": {
+      "unknown": {
+        "question": "Which manual office occupancy alternatives are documented for Germany or the Netherlands?",
+        "reason": "not_located"
+      }
+    },
+    "pages_found": 4,
+    "resolved": 3
+  },
+  "research.findings": {
+    "findings": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Synthetic fixture page. Invented for testing; not a real company or offer.",
+              "span": "EX-0031"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Corvane pricing is fixture data, not a real offer."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Synthetic customer reviews, invented for testing. Not real customers.",
+              "span": "EX-0077"
+            }
+          },
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0080"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Batteries died after about a year, not seven.",
+              "span": "EX-0085"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our works council wanted written proof that no image leaves the sensor.",
+              "span": "EX-0095"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Sensor placement guide was unclear; two rooms needed remounting.",
+              "span": "EX-0114"
+            }
+          }
+        ],
+        "label": "inference",
+        "value": "Synthetic feedback only: still-occupant detection appeared in 5 of 40 reviews in this sample; battery and cabling in 13 of 40; privacy in 3 of 40; mounting in 2 of 40. These are not market shares or buyer validation."
+      }
+    ],
+    "unknowns": [
+      {
+        "unknown": {
+          "question": "Which products can facilities buyers actually purchase in Germany and the Netherlands, and at what local prices and terms?",
+          "reason": "not_checked"
+        }
+      },
+      {
+        "unknown": {
+          "question": "How do verified products perform on all four dimensions, and what do real buyers report?",
+          "reason": "not_checked"
+        }
+      }
+    ]
+  },
+  "research.matrix": {
+    "columns": [
+      "still_occupant_accuracy",
+      "battery_and_cabling",
+      "privacy",
+      "installer_effort"
+    ],
+    "pages_found": 4,
+    "resolved": 3,
+    "rows": [
+      {
+        "cells": {
+          "battery_and_cabling": [
+            {
+              "cite": {
+                "quote": "Battery life up to 3 years.",
+                "span": "EX-0030"
+              },
+              "label": "vendor_claim",
+              "value": "Battery life up to 3 years."
+            },
+            {
+              "unknown": {
+                "question": "What duty cycle and cabling apply?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "installer_effort": [
+            {
+              "unknown": {
+                "question": "What mounting effort and revisits are required?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What leaves the device and what is documented?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "still_occupant_accuracy": [
+            {
+              "unknown": {
+                "question": "What is still-occupant accuracy?",
+                "reason": "not_located"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Brightfield Analytics joined Corvane Group on 12 May 2026",
+            "span": "EX-0025"
+          },
+          "label": "fact",
+          "value": "Corvane Group"
+        },
+        "key": "corvane-group",
+        "prices": [
+          {
+            "basis": "one-off launch offer",
+            "cite": {
+              "quote": "USD 199 per unit</td><td>one-off, launch offer",
+              "span": "EX-0028"
+            },
+            "date": "2026-09-15",
+            "label": "fact",
+            "page": "https://corvane.example/product",
+            "value": "USD 199 per unit"
+          },
+          {
+            "basis": "historical one-off; contradicts launch price",
+            "cite": {
+              "quote": "USD 229 per unit</td><td>one-off",
+              "span": "EX-0074"
+            },
+            "date": "2026-04-02",
+            "label": "fact",
+            "page": "https://brightfield.example/product",
+            "value": "USD 229 per unit"
+          },
+          {
+            "basis": "billed annually",
+            "cite": {
+              "quote": "USD 7 per sensor per month</td><td>billed annually",
+              "span": "EX-0029"
+            },
+            "label": "fact",
+            "value": "USD 7 per sensor per month"
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_and_cabling": [
+            {
+              "unknown": {
+                "question": "What battery life and cabling apply?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "installer_effort": [
+            {
+              "unknown": {
+                "question": "What installation effort is required?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data leaves the device?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "still_occupant_accuracy": [
+            {
+              "unknown": {
+                "question": "What is still-occupant accuracy?",
+                "reason": "not_checked"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Noctra, noctra.example.",
+            "span": "EX-0043"
+          },
+          "label": "fact",
+          "value": "Noctra"
+        },
+        "key": "noctra",
+        "prices": [
+          {
+            "unknown": {
+              "question": "What is the current price and basis?",
+              "reason": "not_checked"
+            }
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_and_cabling": [
+            {
+              "unknown": {
+                "question": "What battery life and cabling apply?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "installer_effort": [
+            {
+              "unknown": {
+                "question": "What installation effort is required?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data leaves the device?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "still_occupant_accuracy": [
+            {
+              "unknown": {
+                "question": "What is still-occupant accuracy?",
+                "reason": "not_checked"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Tallyway, tallyway.example.",
+            "span": "EX-0060"
+          },
+          "label": "fact",
+          "value": "Tallyway"
+        },
+        "key": "tallyway",
+        "prices": [
+          {
+            "unknown": {
+              "question": "What is the current price and basis?",
+              "reason": "not_checked"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "research.needs": {
+    "needs": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0080"
+            },
+            "review": "R-002"
+          },
+          {
+            "cite": {
+              "quote": "Seated people are counted reliably, even when they barely move.",
+              "span": "EX-0082"
+            },
+            "review": "R-004"
+          },
+          {
+            "cite": {
+              "quote": "Display says empty while four of us sat still in a workshop.",
+              "span": "EX-0091"
+            },
+            "review": "R-013"
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0094"
+            },
+            "review": "R-016"
+          },
+          {
+            "cite": {
+              "quote": "Motion sensor misses people on calls who do not move.",
+              "span": "EX-0104"
+            },
+            "review": "R-026"
+          }
+        ],
+        "label": "inference",
+        "phrase": "5 of 40 reviews in this sample",
+        "theme": "false_vacancy",
+        "value": "Keep rooms marked occupied when people sit still."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "every sensor needed a new PoE cable",
+              "span": "EX-0079"
+            },
+            "review": "R-001"
+          },
+          {
+            "cite": {
+              "quote": "every unit needs a power socket on the ceiling",
+              "span": "EX-0083"
+            },
+            "review": "R-005"
+          },
+          {
+            "cite": {
+              "quote": "Batteries died after about a year, not seven.",
+              "span": "EX-0085"
+            },
+            "review": "R-007"
+          },
+          {
+            "cite": {
+              "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+              "span": "EX-0087"
+            },
+            "review": "R-009"
+          },
+          {
+            "cite": {
+              "quote": "Easy install, no wiring at all.",
+              "span": "EX-0088"
+            },
+            "review": "R-010"
+          },
+          {
+            "cite": {
+              "quote": "Cheap and battery powered. Setup app is clunky.",
+              "span": "EX-0092"
+            },
+            "review": "R-014"
+          },
+          {
+            "cite": {
+              "quote": "Battery warnings started after eight months on most units.",
+              "span": "EX-0093"
+            },
+            "review": "R-015"
+          },
+          {
+            "cite": {
+              "quote": "Battery swap schedule is a constant chore for facilities.",
+              "span": "EX-0098"
+            },
+            "review": "R-020"
+          },
+          {
+            "cite": {
+              "quote": "the cabling cost more than the sensors",
+              "span": "EX-0101"
+            },
+            "review": "R-023"
+          },
+          {
+            "cite": {
+              "quote": "Battery life nowhere near the advertised figure in a busy office.",
+              "span": "EX-0103"
+            },
+            "review": "R-025"
+          },
+          {
+            "cite": {
+              "quote": "Install needed an electrician for sockets.",
+              "span": "EX-0107"
+            },
+            "review": "R-029"
+          },
+          {
+            "cite": {
+              "quote": "Battery dropped to 20% within the first year.",
+              "span": "EX-0109"
+            },
+            "review": "R-031"
+          },
+          {
+            "cite": {
+              "quote": "Battery lasted ten months, far from the claim.",
+              "span": "EX-0117"
+            },
+            "review": "R-039"
+          }
+        ],
+        "label": "inference",
+        "phrase": "13 of 40 reviews in this sample",
+        "theme": "battery_experience",
+        "value": "Deliver predictable battery life and install without new wiring."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Works council asked us to prove it does not see through walls.",
+              "span": "EX-0084"
+            },
+            "review": "R-006"
+          },
+          {
+            "cite": {
+              "quote": "Our works council wanted written proof that no image leaves the sensor.",
+              "span": "EX-0095"
+            },
+            "review": "R-017"
+          },
+          {
+            "cite": {
+              "quote": "Legal asked many questions about radar and privacy.",
+              "span": "EX-0102"
+            },
+            "review": "R-024"
+          }
+        ],
+        "label": "inference",
+        "phrase": "3 of 40 reviews in this sample",
+        "theme": "privacy_acceptance",
+        "value": "Give works councils and legal teams written proof of what sensors detect and what data leaves them."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Two units fell off the ceiling tile clips.",
+              "span": "EX-0105"
+            },
+            "review": "R-027"
+          },
+          {
+            "cite": {
+              "quote": "Sensor placement guide was unclear; two rooms needed remounting.",
+              "span": "EX-0114"
+            },
+            "review": "R-036"
+          }
+        ],
+        "label": "inference",
+        "phrase": "2 of 40 reviews in this sample",
+        "theme": "mounting_rework",
+        "value": "Provide secure mounts and clear placement instructions to avoid remounting."
+      }
+    ],
+    "sample": {
+      "duplicates": [
+        {
+          "duplicate_of": "R-009",
+          "evidence": [
+            {
+              "cite": {
+                "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+                "span": "EX-0119"
+              }
+            },
+            {
+              "cite": {
+                "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+                "span": "EX-0087"
+              }
+            }
+          ],
+          "review": "R-041"
+        },
+        {
+          "duplicate_of": "R-016",
+          "evidence": [
+            {
+              "cite": {
+                "quote": "Room shows empty while someone sits still at the desk.",
+                "span": "EX-0120"
+              }
+            },
+            {
+              "cite": {
+                "quote": "Room shows empty while someone sits still at the desk.",
+                "span": "EX-0094"
+              }
+            }
+          ],
+          "review": "R-042"
+        }
+      ],
+      "metadata": {
+        "dates": {
+          "evidence": [
+            {
+              "cite": {
+                "quote": "\"date\": \"2026-01-08\"",
+                "span": "EX-0085"
+              }
+            },
+            {
+              "cite": {
+                "quote": "\"date\": \"2026-10-15\"",
+                "span": "EX-0118"
+              }
+            }
+          ],
+          "label": "fact",
+          "value": "2026-01-08 to 2026-10-15"
+        },
+        "geographies": {
+          "cite": {
+            "quote": "\"geography\": \"DE\"",
+            "span": "EX-0076"
+          },
+          "label": "fact",
+          "value": [
+            "DE",
+            "NL",
+            "FR",
+            "UK",
+            "US",
+            "ES",
+            "IN"
+          ]
+        },
+        "sites_and_scales": [
+          {
+            "cite": {
+              "quote": "stars out of 5",
+              "span": "EX-0079"
+            },
+            "label": "fact",
+            "value": "reviewhub.example: stars out of 5"
+          },
+          {
+            "cite": {
+              "quote": "points out of 10",
+              "span": "EX-0081"
+            },
+            "label": "fact",
+            "value": "facilitiesforum.example: points out of 10"
+          }
+        ],
+        "synthetic": {
+          "cite": {
+            "quote": "Synthetic customer reviews, invented for testing. Not real customers.",
+            "span": "EX-0077"
+          },
+          "label": "fact",
+          "value": true
+        },
+        "text_field": "text"
+      },
+      "reviews": [
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-004",
+        "R-005",
+        "R-006",
+        "R-007",
+        "R-008",
+        "R-009",
+        "R-010",
+        "R-011",
+        "R-012",
+        "R-013",
+        "R-014",
+        "R-015",
+        "R-016",
+        "R-017",
+        "R-018",
+        "R-019",
+        "R-020",
+        "R-021",
+        "R-022",
+        "R-023",
+        "R-024",
+        "R-025",
+        "R-026",
+        "R-027",
+        "R-028",
+        "R-029",
+        "R-030",
+        "R-031",
+        "R-032",
+        "R-033",
+        "R-034",
+        "R-035",
+        "R-036",
+        "R-037",
+        "R-038",
+        "R-039",
+        "R-040",
+        "R-041",
+        "R-042"
+      ],
+      "rows": 42,
+      "unique": 40
+    }
+  },
+  "research.profile/corvane-group": {
+    "cells": {
+      "battery_and_cabling": [
+        {
+          "cite": {
+            "quote": "Battery thermal and PIR sensor.",
+            "span": "EX-0030"
+          },
+          "date": "2026-09-15",
+          "label": "fact",
+          "page": "https://corvane.example/product",
+          "value": "Battery thermal and PIR sensor."
+        },
+        {
+          "cite": {
+            "quote": "Battery life up to 3 years.",
+            "span": "EX-0030"
+          },
+          "date": "2026-09-15",
+          "label": "vendor_claim",
+          "page": "https://corvane.example/product",
+          "value": "Battery life up to 3 years."
+        },
+        {
+          "cite": {
+            "quote": "Battery life up to 3 years.",
+            "span": "EX-0072"
+          },
+          "date": "2026-04-02",
+          "label": "vendor_claim",
+          "page": "https://brightfield.example/product",
+          "value": "Battery life up to 3 years."
+        },
+        {
+          "unknown": {
+            "question": "What cabling is required?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "installer_effort": [
+        {
+          "unknown": {
+            "question": "What installation effort is required?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "privacy": [
+        {
+          "unknown": {
+            "question": "What privacy protections are specified?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "still_occupant_accuracy": [
+        {
+          "unknown": {
+            "question": "What is the stated still-occupant detection accuracy?",
+            "reason": "not_located"
+          }
+        }
+      ]
+    },
+    "conflicts": [
+      {
+        "basis": "one-off sensor price per unit",
+        "kind": "contradicts",
+        "values": [
+          {
+            "cite": {
+              "quote": "USD 199 per unit</td><td>one-off, launch offer",
+              "span": "EX-0028"
+            },
+            "date": "2026-09-15",
+            "label": "fact",
+            "page": "https://corvane.example/product",
+            "value": "USD 199 per unit"
+          },
+          {
+            "cite": {
+              "quote": "USD 229 per unit</td><td>one-off",
+              "span": "EX-0074"
+            },
+            "date": "2026-04-02",
+            "label": "fact",
+            "page": "https://brightfield.example/product",
+            "value": "USD 229 per unit"
+          }
+        ]
+      }
+    ],
+    "flags": [
+      {
+        "text": {
+          "cite": {
+            "quote": "Synthetic fixture page. Invented for testing; not a real company or offer.",
+            "span": "EX-0031"
+          },
+          "label": "fact",
+          "value": "Synthetic fixture page. Invented for testing; not a real company or offer."
+        }
+      }
+    ],
+    "key": "corvane-group",
+    "name": "Corvane Group",
+    "pages": [
+      {
+        "date": "2026-09-15",
+        "url": "https://corvane.example/product"
+      },
+      {
+        "date": "2026-04-02",
+        "url": "https://brightfield.example/product"
+      }
+    ],
+    "prices": [
+      {
+        "basis": "one-off, launch offer",
+        "cite": {
+          "quote": "USD 199 per unit</td><td>one-off, launch offer",
+          "span": "EX-0028"
+        },
+        "date": "2026-09-15",
+        "label": "fact",
+        "page": "https://corvane.example/product",
+        "value": "USD 199 per unit"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "USD 7 per sensor per month</td><td>billed annually",
+          "span": "EX-0029"
+        },
+        "date": "2026-09-15",
+        "label": "fact",
+        "page": "https://corvane.example/product",
+        "value": "USD 7 per sensor per month"
+      },
+      {
+        "basis": "one-off",
+        "cite": {
+          "quote": "USD 229 per unit</td><td>one-off",
+          "span": "EX-0074"
+        },
+        "date": "2026-04-02",
+        "label": "fact",
+        "page": "https://brightfield.example/product",
+        "value": "USD 229 per unit"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "USD 7 per sensor per month</td><td>billed annually",
+          "span": "EX-0075"
+        },
+        "date": "2026-04-02",
+        "label": "fact",
+        "page": "https://brightfield.example/product",
+        "value": "USD 7 per sensor per month"
+      }
+    ]
+  },
+  "research.scope": {
+    "asked": [],
+    "boundary": {
+      "in": "Commercially available battery-powered workplace room occupancy sensors serving Germany or the Netherlands. Compare current seller offerings and prices; analyze customer feedback separately. Product category from the request; battery and workplace focus inferred from the priorities note (EX-0010, EX-0012, EX-0014).",
+      "out": [
+        {
+          "cite": {
+            "quote": "Not a priority in H1 2026: care homes, retail footfall, and any product that needs mains power.",
+            "span": "EX-0018"
+          },
+          "label": "fact",
+          "value": "Care homes"
+        },
+        {
+          "cite": {
+            "quote": "Not a priority in H1 2026: care homes, retail footfall, and any product that needs mains power.",
+            "span": "EX-0018"
+          },
+          "label": "fact",
+          "value": "Retail footfall"
+        },
+        {
+          "cite": {
+            "quote": "Not a priority in H1 2026: care homes, retail footfall, and any product that needs mains power.",
+            "span": "EX-0018"
+          },
+          "label": "fact",
+          "value": "Products requiring mains power"
+        }
+      ]
+    },
+    "dimensions": [
+      {
+        "cite": {
+          "quote": "Accuracy with still occupants.",
+          "span": "EX-0010"
+        },
+        "id": "still_occupant_accuracy",
+        "name": "Accuracy with still occupants"
+      },
+      {
+        "cite": {
+          "quote": "Battery life of two years or more is the line buyers ask about first.",
+          "span": "EX-0012"
+        },
+        "id": "battery_and_cabling",
+        "name": "Battery life (including conditions and the two-year benchmark) and cable-free installation"
+      },
+      {
+        "cite": {
+          "quote": "No image may leave the device.",
+          "span": "EX-0014"
+        },
+        "id": "privacy",
+        "name": "Privacy: whether images leave the device and what is documented for works councils"
+      },
+      {
+        "cite": {
+          "quote": "Fewer site revisits after a bad mount.",
+          "span": "EX-0016"
+        },
+        "id": "installer_effort",
+        "name": "Installer time, mounting effort and repeat visits (secondary)"
+      }
+    ],
+    "geography": {
+      "basis": "Scope inference from input/priorities/business-priorities.md (EX-0014: \u201cWorks councils in Germany and the Netherlands ask for this in writing.\u201d)",
+      "value": "Germany and the Netherlands"
+    },
+    "plan": {
+      "kind": "comparison",
+      "outputs": [
+        "Seller and product shortlist with target-market availability",
+        "Price comparison with currency, price basis, and quote-only or unknown status where applicable",
+        "Side-by-side comparison on the four product dimensions",
+        "Customer feedback by theme, with deduplicated sample counts and synthetic inputs distinguished from real buyer evidence"
+      ]
+    },
+    "question": "Which suppliers sell battery-powered workplace room occupancy sensors to facilities teams in Germany and the Netherlands, what do they charge, and how do their products compare on still-occupant accuracy, battery life and cable-free installation, privacy, and installer effort?",
+    "segment": {
+      "basis": "Inference from input/priorities/business-priorities.md (EX-0010: \u201cFacilities buyers reject sensors that report a room empty while someone is in it.\u201d)",
+      "value": "Workplace facilities buyers selecting room occupancy sensors"
+    },
+    "themes": [
+      {
+        "cite": {
+          "quote": "the lights went off while I was sitting",
+          "span": "EX-0010"
+        },
+        "id": "false_vacancy",
+        "name": "False vacancy while sitting still and its effects"
+      },
+      {
+        "cite": {
+          "quote": "Our sales pitch is a 15 minute install with no electrician.",
+          "span": "EX-0012"
+        },
+        "id": "battery_experience",
+        "name": "Real-world battery life and ease of cable-free setup"
+      },
+      {
+        "cite": {
+          "quote": "Works councils in Germany and the Netherlands ask for this in writing.",
+          "span": "EX-0014"
+        },
+        "id": "privacy_acceptance",
+        "name": "Privacy concerns and works-council acceptance"
+      },
+      {
+        "cite": {
+          "quote": "Fewer site revisits after a bad mount.",
+          "span": "EX-0016"
+        },
+        "id": "mounting_rework",
+        "name": "Mounting difficulties and installer revisits"
+      }
+    ]
+  },
+  "research.tests": {
+    "tests": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Accuracy with still occupants.",
+              "span": "EX-0010"
+            }
+          }
+        ],
+        "label": "inference",
+        "method": "Compare sensor output against observer ground truth during seated reading and calls across mounting positions.",
+        "threshold": {
+          "status": "proposal",
+          "value": "Zero false vacancy events in 20 half-hour occupied trials."
+        }
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Battery life of two years or more is the line buyers ask about first.",
+              "span": "EX-0012"
+            }
+          }
+        ],
+        "label": "inference",
+        "method": "Log current draw under representative busy-office reporting, retries and temperature; estimate service life using usable battery capacity and audit power requirements.",
+        "threshold": {
+          "status": "proposal",
+          "value": "At least 24 months projected service life and no new power or network cabling at the sensor."
+        }
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "No image may leave the device.",
+              "span": "EX-0014"
+            }
+          }
+        ],
+        "label": "inference",
+        "method": "Inspect documented data flows and verify outbound payloads during setup, normal operation and diagnostics; request works-council documentation.",
+        "threshold": {
+          "status": "proposal",
+          "value": "Zero image payloads observed and written documentation covering all outbound data flows."
+        }
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Our sales pitch is a 15 minute install with no electrician.",
+              "span": "EX-0012"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Fewer site revisits after a bad mount.",
+              "span": "EX-0016"
+            }
+          }
+        ],
+        "label": "inference",
+        "method": "Time mounting and commissioning across ten representative rooms; record electrician involvement and mount-related revisits over 30 days.",
+        "threshold": {
+          "status": "proposal",
+          "value": "Median installation at most 15 minutes, no electrician and zero mount-related revisits."
+        }
+      }
+    ]
+  }
+}

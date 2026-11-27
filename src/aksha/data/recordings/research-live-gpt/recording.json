@@ -1,0 +1,71 @@
+{
+  "format": "aksha-recording/1",
+  "inputs": [
+    "contributors/records.csv",
+    "disclosures/2026-03-10-trade-show-demo.md",
+    "disclosures/consultant-email.eml.txt",
+    "disclosures/history.csv",
+    "notes/C1-self-calibration.md",
+    "notes/C2-sensor-placement.md",
+    "notes/C3-privacy-preserving-coordination.md",
+    "notes/C4-battery-saving-sampling.md",
+    "priorities/business-priorities.md",
+    "publications/SYN-PUB-0001.json",
+    "publications/SYN-PUB-0002.json",
+    "publications/SYN-PUB-0003.json",
+    "publications/SYN-PUB-0004.json",
+    "publications/SYN-PUB-0005.json",
+    "publications/SYN-PUB-0006.pdf.txt",
+    "publications/SYN-PUB-0007.json",
+    "publications/SYN-PUB-0008.json",
+    "publications/SYN-PUB-0009.json",
+    "publications/SYN-PUB-0010.json",
+    "reviews/reviews.json",
+    "templates/filing-information-worksheet.md",
+    "templates/invention-disclosure-form.md"
+  ],
+  "limits": {
+    "patent": {
+      "active_ms": 3600000,
+      "backoff": {
+        "base_ms": 2000,
+        "cap_ms": 60000,
+        "factor": 2
+      },
+      "max_retries": 6,
+      "model_timeout_ms": 255000
+    },
+    "research": {
+      "active_ms": 3600000,
+      "backoff": {
+        "base_ms": 2000,
+        "cap_ms": 60000,
+        "factor": 2
+      },
+      "max_retries": 6,
+      "model_timeout_ms": 255000
+    }
+  },
+  "mode": "live",
+  "modes": {
+    "patent": "live",
+    "research": "live"
+  },
+  "outcome": "partial",
+  "run": "R-0001",
+  "script": {
+    "agent": "research",
+    "answers": {},
+    "approve": false,
+    "owner": "local",
+    "text": "Research the competitors for our occupancy sensor."
+  },
+  "search": "world",
+  "started_at": "2026-11-27T23:00:59.703148+00:00",
+  "synthetic_notice": "A recording of one run: what the person gave, every model answer, every search and fetch. Replay it with aksha replay.",
+  "turn_factors": {
+    "patent": 3,
+    "research": 3
+  },
+  "waiting": []
+}

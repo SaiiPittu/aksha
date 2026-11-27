@@ -1301,6 +1301,14 @@
               "ref": "tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs"
             },
             {
+              "kind": "path",
+              "ref": "src/aksha/data/recordings/research-live-gpt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs"
+            },
+            {
               "kind": "test",
               "ref": "tests/integration/test_router.py::test_fake_mode_writes_the_same_bytes_twice"
             },
@@ -2011,6 +2019,10 @@
             {
               "kind": "path",
               "ref": "src/aksha/data/recordings/research-occupancy/recording.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/recordings/research-live-gpt/outputs.json"
             }
           ],
           "status": "met"
