@@ -155,3 +155,32 @@ jobs:
           for r in $RESULTS; do
             if [ "$r" != "success" ]; then echo "::error::a required job ended in $r"; exit 1; fi
           done
+
+  web:
+    # The web app: lint, the type-checked build and the unit tests, then the end-to-end tests
+    # through a real `aksha serve` in fake mode (web/e2e/global-setup.ts starts it from .venv).
+    name: Web app (lint, build, unit and end-to-end tests)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install the server for the end-to-end tests
+        working-directory: .
+        run: make venv PY=3.12
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test -- --run
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e

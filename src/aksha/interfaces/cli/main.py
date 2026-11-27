@@ -109,6 +109,8 @@ class Context:
         self.pending = PendingIds(pending)
         self.key = invocation_key(owner, argv)
         self.home = config.storage.sqlite_path.parent
+        self.token: str | None = None
+        """``AKSHA_TOKEN``: the API token sent to a server with accounts."""
 
     def say(self, text: str) -> None:
         """One line of output."""
@@ -133,7 +135,7 @@ class Context:
     def server(self) -> Client | None:
         """The running server's client, or None to run embedded."""
         url = find_server(self.config.server_url, self.config.server_file())
-        return None if url is None else Client(url, self.owner)
+        return None if url is None else Client(url, self.owner, self.token)
 
 
 # --- reporting -----------------------------------------------------------------------------
@@ -852,14 +854,31 @@ def cmd_serve(ctx: Context, args: argparse.Namespace) -> int:
     """Run the server: the runtime thread holds the writer lock; the CLI and web are clients."""
     try:
         from aksha.interfaces.http.serve import serve
+        from aksha.interfaces.http.web import WebDistMissing
     except ImportError as e:
         ctx.say(f"aksha serve needs the server extra: {install_hint('server')} ({e.name})")
         return wire.EXIT_ENVIRONMENT
-    return serve(ctx.config, args.host, args.port, say=ctx.say)
+    try:
+        return serve(ctx.config, args.host, args.port, say=ctx.say,
+                     trust_user_header=args.trust_user_header, web=args.web)  # fmt: skip
+    except WebDistMissing as e:
+        ctx.say(f"aksha serve --web: {e}")
+        return wire.EXIT_ENVIRONMENT
+
+
+def cmd_chat(ctx: Context, args: argparse.Namespace) -> int:
+    """The interactive terminal UI over the HTTP API (needs aksha-harness[tui])."""
+    try:
+        from aksha.interfaces.tui.command import run_chat
+    except ImportError as e:
+        ctx.say(f"aksha chat needs the tui extra: {install_hint('tui')} ({e.name})")
+        return wire.EXIT_ENVIRONMENT
+    return run_chat(ctx.config, ctx.owner, ctx.token, session=args.session, agent=args.agent,
+                    inputs=args.input or [], prompt=args.prompt, say=ctx.say)  # fmt: skip
 
 
 EXTRAS = {
-    "server": ("fastapi", "uvicorn"),
+    "server": ("fastapi", "uvicorn", "argon2"),
     "otel": ("opentelemetry.sdk", "opentelemetry.exporter.otlp.json.file"),
     "postgres": ("psycopg",),
     "ingest": ("pypdf", "docx", "pptx", "openpyxl", "PIL"),
@@ -997,7 +1016,25 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("serve", help="run the server (needs aksha-harness[server])")
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8765)
+    s.add_argument(
+        "--trust-user-header",
+        action="store_true",
+        help="trust X-Aksha-User instead of accounts (tests, a trusted proxy)",
+    )
+    s.add_argument(
+        "--web",
+        type=Path,
+        metavar="DIR",
+        help="also serve the built web app from DIR (default: AKSHA_WEB_DIST)",
+    )
     s.set_defaults(handler=cmd_serve)
+
+    s = sub.add_parser("chat", help="the interactive terminal UI (needs aksha-harness[tui])")
+    s.add_argument("prompt", nargs="?", help="a first message to send")
+    s.add_argument("--session", help="resume this session (default: a new one)")
+    s.add_argument("--agent", help="the agent new messages go to (default: routed)")
+    s.add_argument("--input", action="append", metavar="PATH", help="upload first (repeat)")
+    s.set_defaults(handler=cmd_chat)
 
     s = sub.add_parser("run", help="send a message; --agent starts that agent's run")
     s.add_argument("text")
@@ -1148,6 +1185,7 @@ def main(argv: Sequence[str] | None = None, *, out: TextIO | None = None,
         return wire.EXIT_ENVIRONMENT
     ctx = Context(config, args.user, stream, arguments)
     ctx.home = data_home(os.environ if env is None else env)
+    ctx.token = (os.environ if env is None else env).get("AKSHA_TOKEN") or None
     handler: Callable[[Context, argparse.Namespace], int] = args.handler
     try:
         return handler(ctx, args)

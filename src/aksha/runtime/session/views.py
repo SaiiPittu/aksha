@@ -11,12 +11,16 @@ Every value here is a projection of the owner's log (pattern P-2); nothing is st
 3. :func:`inspect_run`: the run inspector (ADR-P21 D10), a read over a read-only store
    that never boots: the run's start, its steps with their outcomes, its stop decisions,
    its interrupts and approvals, and how it ended.
+4. :func:`run_sessions` and :func:`session_summaries`: which sessions each run belongs to
+   (its own, or for a rebuild run every session of the runs in its ``for_runs``), and
+   every session of the owner with its first message, its runs and what it waits on.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Any, Literal
 
 from aksha.runtime.canonical import thaw
@@ -183,3 +187,84 @@ def inspect_run(view: LogView, run: str) -> Mapping[str, Any] | None:
         "waiting_on": [w.__dict__ for w in status.waiting_on],
         "ended": ended,
     }
+
+
+@dataclass(frozen=True)
+class SessionSummary:
+    """One session of the owner (module doc, item 4).
+
+    ``runs`` are its runs in start order, rebuild runs opened for them included; ``latest``
+    is the last of them. ``waiting_on`` is every open interrupt of those runs, after the
+    session's own route question. ``first_message`` is the text of its first
+    ``user.message``; ``started_at`` and ``last_at`` are the times of its first and last
+    event, and ``last_seq`` the last event's sequence number.
+    """
+
+    session: str
+    first_message: str | None
+    started_at: str
+    last_at: str
+    last_seq: int
+    runs: tuple[str, ...]
+    latest: RunStatus | None
+    waiting_on: tuple[Waiting, ...]
+
+
+def run_sessions(view: LogView) -> Mapping[str, frozenset[str]]:
+    """Each run to the sessions it belongs to (module doc, item 4).
+
+    A run opened in a session belongs to it; a rebuild run (``run.started`` with no
+    session) belongs to every session of a run in its ``for_runs``, so a rebuild of a
+    rebuild follows the chain. A run that belongs to no session maps to the empty set.
+    """
+    out: dict[str, frozenset[str]] = {}
+    for e in view.events:
+        if e.type != "run.started" or e.run is None:
+            continue
+        if e.session is not None:
+            out[e.run] = frozenset({e.session})
+        else:
+            for_runs = e.payload.get("for_runs") or ()
+            out[e.run] = frozenset(s for r in for_runs for s in out.get(str(r), ()))
+    return MappingProxyType(out)
+
+
+def session_summaries(view: LogView) -> tuple[SessionSummary, ...]:
+    """Every session of the owner that has a message or a run, by its first event."""
+    belongs = run_sessions(view)
+    statuses = {s.run: s for s in run_statuses(view)}
+    open_route: dict[str, list[Waiting]] = {}
+    raised = interrupts(view)
+    for w in _waiting(view).get(None, ()):
+        session = raised[w.interrupt_id].session
+        if session is not None:
+            open_route.setdefault(session, []).append(w)
+    first: dict[str, str | None] = {}
+    times: dict[str, list[str]] = {}
+    last_seq: dict[str, int] = {}
+    runs: dict[str, list[str]] = {}
+    for e in view.events:
+        if e.type == "user.message" and e.session is not None:
+            first.setdefault(e.session, str(e.payload.get("text", "")))
+        if e.type == "run.started" and e.run is not None:
+            for session in sorted(belongs.get(e.run, ())):
+                runs.setdefault(session, []).append(e.run)
+                first.setdefault(session, None)
+        owners = belongs.get(e.run, frozenset()) if e.run is not None else frozenset()
+        if e.session is not None:
+            owners = owners | {e.session}
+        for session in owners:
+            if session in first:
+                times.setdefault(session, [e.at, e.at])[1] = e.at
+                last_seq[session] = e.seq
+    out: list[SessionSummary] = []
+    for session, text in first.items():
+        mine = tuple(runs.get(session, ()))
+        latest = statuses.get(mine[-1]) if mine else None
+        waiting = tuple(open_route.get(session, ())) + tuple(
+            w for r in mine if r in statuses for w in statuses[r].waiting_on
+        )
+        started, last = times[session]
+        out.append(SessionSummary(session, text, started, last, last_seq[session], mine,
+                                  latest, waiting))  # fmt: skip
+    return tuple(out)

@@ -73,6 +73,23 @@ class KnownDocument:
 
 
 @dataclass(frozen=True)
+class StoredDocument:
+    """One ``document.stored`` fact: a version of a document, where it is served and when.
+
+    ``facts`` is the fact's whole payload (its detected type, size, origin and
+    representation); ``seq`` and ``at`` are the fact's position and time in the log.
+    """
+
+    doc_key: str
+    version: int
+    path: str
+    blob: str
+    seq: int
+    at: str
+    facts: Mapping[str, Any]
+
+
+@dataclass(frozen=True)
 class IngestedInput:
     """One path an upload writes: the bytes the workspace serves and the facts to record.
 

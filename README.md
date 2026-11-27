@@ -64,7 +64,7 @@ uv tool install git+https://github.com/SaiiPittu/aksha
 # or: pipx install "aksha-harness @ git+https://github.com/SaiiPittu/aksha"
 ```
 
-The distribution is `aksha-harness`; the command and the import are `aksha`. (`aksha` on PyPI is an unrelated project, so never `pip install aksha` or a bare `uvx aksha`.) Optional extras: `[server]` for `aksha serve`, `[otel]` for `aksha trace`, `[postgres]` for the PostgreSQL event store, `[ingest]` for PDF, Office and email parsing, `[live]` for live models through LiteLLM. `aksha doctor` prints the version, where state is kept and the install command for a missing server, trace, PostgreSQL or ingest extra.
+The distribution is `aksha-harness`; the command and the import are `aksha`. (`aksha` on PyPI is an unrelated project, so never `pip install aksha` or a bare `uvx aksha`.) Optional extras: `[server]` for `aksha serve`, `[otel]` for `aksha trace`, `[postgres]` for the PostgreSQL event store, `[ingest]` for PDF, Office and email parsing, `[live]` for live models through LiteLLM, `[tui]` for `aksha chat`, the terminal UI. `aksha doctor` prints the version, where state is kept and the install command for a missing server, trace, PostgreSQL or ingest extra.
 
 ### Run an agent on your own files
 
@@ -83,7 +83,20 @@ aksha show research.matrix    # one output as JSON, every value cited
 aksha verify                  # check the hash chain
 ```
 
+To do the same as a conversation in the terminal, `aksha chat --agent research --input my-inputs` (extra `[tui]`) opens a chat that streams each turn and its tool calls, shows questions and approvals in place of the message box, and starts a local server for itself when none runs.
+
 Upload the folder again after editing a file and only the work that depends on the edit reopens. The patent agent, approvals, corrections, headless runs and the exit codes are in the [quick start](docs/quickstart.md).
+
+### Web app
+
+The browser interface (chat, questions and approvals inline, artifacts, members and invites) is served by `aksha serve` itself:
+
+```sh
+cd web && npm ci && npm run build && cd ..
+aksha serve --web web/dist    # http://127.0.0.1:8765, needs the [server] extra
+```
+
+On your own machine it opens without signing in until you claim the workspace. Development with hot reload and the end-to-end tests: [web/README.md](web/README.md).
 
 ### Run the evals
 

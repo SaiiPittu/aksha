@@ -47,6 +47,16 @@ def citation_bound(
     return NewEvent("citation.bound", payload, run=run, instance=instance, step=step)
 
 
+def bound_citations(view: LogView, carrier: str) -> tuple[Mapping[str, Any], ...]:
+    """The ``citation.bound`` payloads of ``carrier`` (a version ref), in their order ``n``."""
+    found = [
+        e.payload
+        for e in view.events
+        if e.type == "citation.bound" and e.payload.get("carrier") == carrier
+    ]
+    return tuple(sorted(found, key=lambda p: int(p.get("n", 0))))
+
+
 def failed_steps(view: LogView) -> frozenset[str]:
     """Every step the log records as failed: an attempt failed or a result not ``ok``."""
     out: set[str] = set()
