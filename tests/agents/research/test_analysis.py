@@ -170,3 +170,18 @@ def test_themes_are_the_requests_own_terms() -> None:
 def test_slug_is_a_valid_instance_key() -> None:
     assert analysis.slug("Brightfield Analytics") == "brightfield-analytics"
     assert analysis.slug("A/B [x]") == "a-b-x"
+
+
+def test_a_rename_stated_elsewhere_merges_only_the_names_in_its_sentence() -> None:
+    from aksha.agents.research.fakes import Result, _statements
+
+    passage = "Glimmer and Dovetail both cut prices. Oldmark is now called Newmark."
+    data = {"record": "news", "version": "v1", "passages": [{"n": 0, "text": passage}]}
+    said = _statements(Result("R-1/x", "read", {}, data, None, ("EX-0001",)))
+    assert [s["text"] for s in said] == ["Oldmark is now called Newmark."]
+    pages = [
+        analysis.PageIdentity(n.lower(), "v1", "2026-01-01", n, n)
+        for n in ("Glimmer", "Dovetail", "Oldmark", "Newmark")
+    ]
+    merged = [c for c in analysis.resolve(pages, [said]) if len(c.pages) > 1]
+    assert [sorted(p.product for p in c.pages) for c in merged] == [["Newmark", "Oldmark"]]

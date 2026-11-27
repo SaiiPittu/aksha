@@ -971,17 +971,19 @@ def _statements(r: Result) -> list[dict[str, str]]:
     """A document's sentences that say two names are one company, each with its cite.
 
     A newsletter or a memo may be the only place a rename is stated; the statement is the
-    record's own, quoted and cited like a page's relationship sentence.
+    record's own, quoted and cited like a page's relationship sentence. Each statement is
+    the one sentence that says it, not its whole passage, so a third name elsewhere in the
+    passage is not merged in.
     """
     assert r.data is not None
     out = []
     for p in r.data["passages"]:
-        text = str(p["text"])
-        for m in re.finditer(r"[^.!?\n]+(?:[.!?]|$)", text):
-            if fakes_readers.RELATION.search(m.group(0)):
-                out.append({"text": text, "span": r.cites[p["n"]], "record": str(r.data["record"]),
+        for m in re.finditer(r"[^.!?\n]+(?:[.!?]|$)", str(p["text"])):
+            sentence = m.group(0).strip()
+            if fakes_readers.RELATION.search(sentence):
+                out.append({"text": sentence, "span": r.cites[p["n"]],
+                            "record": str(r.data["record"]),
                             "version": str(r.data["version"])})  # fmt: skip
-                break
     return out
 
 
