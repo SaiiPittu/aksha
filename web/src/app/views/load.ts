@@ -108,7 +108,8 @@ export function useLoadedView(view: ViewRef | undefined, version?: string): Load
   }
   if (binary) {
     const url = documentUrl(view.docKey!, vNum(version ?? view.version))
-    return { view: view.kind === "pdf" ? { ...view, kind: "web", url } : { ...view, url }, loading: false }
+    // An image reads `url` with <img>; a PDF's `url` is only fetched (PdfFileView), never framed.
+    return { view: { ...view, url }, loading: false }
   }
   if (isDoc) {
     if (doc.data) return { view: contentView({ ...view, version: version ?? view.version }, doc.data.text, doc.data.mediaType || view.mediaType), loading: false }

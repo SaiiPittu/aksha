@@ -162,8 +162,10 @@ def _split_citations(text: str) -> list[str]:
     return [p for p in parts if p]
 
 
-def item_renderable(item: Item, *, expanded: bool = False) -> RenderableType:
-    """Any transcript item as Rich text."""
+def item_renderable(
+    item: Item, *, expanded: bool = False, mine: str | None = None
+) -> RenderableType:
+    """Any transcript item as Rich text; ``mine`` is this client's own ``by`` ("you")."""
     if isinstance(item, UserMessage):
         text = Text.assemble(("you", "bold"))
         if item.agent:
@@ -176,7 +178,7 @@ def item_renderable(item: Item, *, expanded: bool = False) -> RenderableType:
     if isinstance(item, Question):
         return question_summary(item)
     if isinstance(item, Approval):
-        return approval_summary(item)
+        return approval_summary(item, mine)
     if isinstance(item, Outcome):
         word = {"complete": "complete"}.get(item.outcome, item.outcome)
         text = status_text(
@@ -225,8 +227,8 @@ def question_summary(q: Question) -> Text:
     return text
 
 
-def approval_summary(a: Approval) -> Text:
-    """An approval in the thread, with its decision."""
+def approval_summary(a: Approval, mine: str | None = None) -> Text:
+    """An approval in the thread, with its decision; ``mine`` (this client's ``by``) reads "you"."""
     glyph, colour, word = {
         "open": ("◆", AMBER, "waiting on you"),
         "granted": ("✓", GREEN, "approved"),
@@ -241,7 +243,7 @@ def approval_summary(a: Approval) -> Text:
         text.append(value)
     text.append(f"\n  {word}", style=colour)
     if a.by and a.state != "open":
-        text.append(f" by {a.by}", style=MUTED)
+        text.append(f" by {'you' if a.by == mine else a.by}", style=MUTED)
     if a.note:
         text.append(f": {a.note}", style=MUTED)
     return text

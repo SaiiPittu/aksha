@@ -278,8 +278,11 @@ def document_headers(path: str) -> dict[str, str]:
 
     An uploaded HTML or SVG file served inline from the app's own origin would run its
     script with the reader's cookie (stored XSS). Sent as an attachment with ``nosniff``
-    and a ``sandbox`` policy, it never renders as a page; the web app reads the bytes with
-    ``fetch`` and shows them as text, so nothing it does needs them inline.
+    and a ``sandbox`` policy, it never renders as a page, and nothing the web app does needs
+    it inline: it reads a text document with ``fetch`` and shows it as text, shows an image
+    with ``<img>`` (which ignores the disposition, and the policy does not apply to it), and
+    fetches a PDF's bytes into a ``Blob`` it types ``application/pdf`` itself, framing the
+    object URL for the browser's PDF viewer, never this URL.
     """
     name = path.rsplit("/", 1)[-1] or "document"
     return {

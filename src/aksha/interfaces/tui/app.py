@@ -63,16 +63,17 @@ UPLOAD_LIMIT_FILES = 500
 class ItemView(Static):
     """One transcript item; a click expands a long agent turn."""
 
-    def __init__(self, item: Item) -> None:
-        """Draw ``item``."""
+    def __init__(self, item: Item, mine: str | None = None) -> None:
+        """Draw ``item``; ``mine`` is this client's own ``by``, shown as "you"."""
         super().__init__(classes=f"item item-{item.kind}")
         self.item = item
+        self.mine = mine
         self.expanded = False
         self.redraw()
 
     def redraw(self) -> None:
         """Draw the item as it is now."""
-        self.update(item_renderable(self.item, expanded=self.expanded))
+        self.update(item_renderable(self.item, expanded=self.expanded, mine=self.mine))
         if isinstance(self.item, Question | Approval):
             self.set_class(self.item.state == "open", "waiting")
 
@@ -404,6 +405,7 @@ class ChatApp(App[int]):
         """A chat over ``api`` in ``session`` (a new one when None)."""
         super().__init__()
         self.api = api
+        self.mine: str | None = None  # this client's own `by`, read at mount
         self.session = session or wire.new_session_id()
         self.agent = agent
         self.server_note = server_note
@@ -444,6 +446,8 @@ class ChatApp(App[int]):
 
     def on_mount(self) -> None:
         """Start the stream; the first prompt goes once the replay has caught up."""
+        identity = getattr(self.api, "identity", None)
+        self.mine = identity() if callable(identity) else None
         self.refresh_chrome()
         self.query_one(Composer).focus()
         self.set_interval(DRAIN_S, self.drain)
@@ -518,7 +522,7 @@ class ChatApp(App[int]):
                 continue
             view = self.views.get(item_id)
             if view is None:
-                view = ItemView(item)
+                view = ItemView(item, self.mine)
                 self.views[item_id] = view
                 new.append(view)
             else:

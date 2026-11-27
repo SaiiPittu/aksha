@@ -668,6 +668,15 @@ class AccountStore:
         )
         return [float(r["at"]) for r in rows]
 
+    def failed_sign_ins_from(self, ip: str, since: float) -> list[float]:
+        """When sign-in failed from ``ip`` since ``since``, for any email, newest first."""
+        rows = self._all(
+            "SELECT at FROM audit WHERE action = 'sign_in_failed' AND ip = ? AND at > ? "
+            "ORDER BY at DESC",
+            (ip, since),
+        )
+        return [float(r["at"]) for r in rows]
+
     # --- session meta -----------------------------------------------------------------------
 
     def session_meta(self, tenant: str, session_id: str) -> SessionMeta | None:

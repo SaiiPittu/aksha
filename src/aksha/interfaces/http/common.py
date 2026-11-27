@@ -11,13 +11,20 @@ including on the routes that need no sign-in (``/auth/claim``, ``/auth/signup``)
 2. An unsafe request whose ``Origin`` header names another host than the request's
    ``Host`` is refused 403 ``cross_origin`` (:func:`cross_origin`). A reverse proxy in
    front of the server passes the browser's ``Host`` through.
+
+A third keeps a page on a rebound DNS name out (DNS rebinding: ``attacker.example``
+resolved to 127.0.0.1, so its requests are same-origin to the browser): any request whose
+``Host`` is not on the :class:`HostAllowList` is refused 400 ``host_not_allowed``, on
+every route, API and web app alike. Loopback names are always on it; ``aksha serve`` adds
+the address it binds (unless a wildcard) and ``AKSHA_ALLOWED_HOSTS`` (:func:`allowed_hosts`).
 """
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Annotated, Any
 from urllib.parse import urlsplit
@@ -109,6 +116,76 @@ def cross_origin(request: Request) -> bool:
         return True
     host = request.headers.get("host", "")
     return _authority(parts.netloc, parts.scheme) != _authority(host)
+
+
+def loopback_address(text: str | None) -> bool:
+    """Whether ``text`` is a loopback IP address (127.0.0.0/8, ``::1``)."""
+    if not text:
+        return False
+    try:
+        return ipaddress.ip_address(text).is_loopback
+    except ValueError:
+        return False
+
+
+def host_name(host: str | None) -> str | None:
+    """The name in a ``Host`` value, lower case, without its port, brackets or final dot.
+
+    None when there is none or it is malformed (an unclosed bracket, a port that is not a
+    number).
+    """
+    text = (host or "").strip().lower()
+    if not text:
+        return None
+    if text.startswith("["):
+        name, sep, rest = text[1:].partition("]")
+        if not sep or (rest and not (rest.startswith(":") and rest[1:].isdigit())):
+            return None
+    elif text.count(":") > 1:
+        name = text  # a bare IPv6 address
+    else:
+        name, sep, port = text.partition(":")
+        if sep and not port.isdigit():
+            return None
+    name = name.rstrip(".")
+    return name or None
+
+
+def is_loopback_name(name: str) -> bool:
+    """``localhost``, a ``*.localhost`` name or a loopback address: never a rebound name."""
+    return name == "localhost" or name.endswith(".localhost") or loopback_address(name)
+
+
+WILDCARD_BINDS = frozenset({"", "0.0.0.0", "::"})
+"""Bind addresses that name no host (every interface)."""
+
+
+@dataclass(frozen=True)
+class HostAllowList:
+    """The ``Host`` names this server answers to: loopback names, plus ``names``."""
+
+    names: frozenset[str] = frozenset()
+
+    @classmethod
+    def of(cls, names: Iterable[str]) -> HostAllowList:
+        """The allow-list of ``names`` (``Host``-shaped: a port, case and a final dot ignored)."""
+        return cls(frozenset(n for n in (host_name(x) for x in names) if n))
+
+    def allows(self, host: str | None) -> bool:
+        """Whether a request with this ``Host`` header is served (module doc, rule 3)."""
+        name = host_name(host)
+        return name is not None and (is_loopback_name(name) or name in self.names)
+
+
+def allowed_hosts(bind: str, env: Mapping[str, str]) -> HostAllowList:
+    """``aksha serve``'s allow-list: the bind address unless a wildcard, ``AKSHA_ALLOWED_HOSTS``.
+
+    ``AKSHA_ALLOWED_HOSTS`` is comma-separated: the names people reach the server by, such
+    as its public host name behind a proxy.
+    """
+    extra = [x for x in env.get("AKSHA_ALLOWED_HOSTS", "").split(",") if x.strip()]
+    bound = [] if bind.strip() in WILDCARD_BINDS else [bind]
+    return HostAllowList.of([*bound, *extra])
 
 
 def upload_max_bytes(env: Mapping[str, str]) -> int:

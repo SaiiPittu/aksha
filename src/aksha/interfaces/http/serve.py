@@ -12,6 +12,14 @@ in local mode for loopback clients. ``AKSHA_GUESTS=1`` turns on the guest sandbo
 ``AKSHA_UPLOAD_MAX_MB`` (default 50) caps an upload's body; a larger one is refused 413.
 ``--trust-user-header`` trusts ``X-Aksha-User`` instead, as before accounts existed.
 
+The server answers only to the ``Host`` names it knows, against DNS rebinding (a page on
+another name that resolves to this machine): loopback names (``localhost``, ``*.localhost``,
+``127.0.0.1``, ``::1``), the ``--host`` address when it is not a wildcard, and the names in
+``AKSHA_ALLOWED_HOSTS`` (comma-separated, for example the public host name behind a
+proxy). A request with any other ``Host`` is refused 400 ``host_not_allowed``, on the API
+and the web app alike. Bound to ``0.0.0.0`` or ``::`` with no ``AKSHA_ALLOWED_HOSTS``, it
+warns at start that only loopback names are accepted.
+
 ``--web DIR`` (or ``AKSHA_WEB_DIST``) also serves the built web app from that folder on the
 same port (``web.py``), so one process is the whole product: ``aksha serve --web web/dist``.
 """
@@ -35,7 +43,7 @@ from aksha.app import (
 from aksha.interfaces.http.accounts.service import Accounts
 from aksha.interfaces.http.accounts.store import AccountStore
 from aksha.interfaces.http.auth import AuthConfig, command_tenant, principal_by, read_tenant
-from aksha.interfaces.http.common import upload_max_bytes
+from aksha.interfaces.http.common import WILDCARD_BINDS, allowed_hosts, upload_max_bytes
 from aksha.interfaces.http.reads import reads_router
 from aksha.interfaces.http.server import create_app
 from aksha.interfaces.http.web import check_dist, mount_web
@@ -63,6 +71,26 @@ def web_dist(web: Path | None, env: Mapping[str, str]) -> Path | None:
         else (Path(env["AKSHA_WEB_DIST"]) if env.get("AKSHA_WEB_DIST") else None)
     )
     return check_dist(raw) if raw is not None else None
+
+
+def server_url(bind: str, port: int) -> str:
+    """The URL the server file names for CLI commands on this machine.
+
+    A wildcard bind is reached over loopback (its own address is no ``Host`` the allow-list
+    takes); an IPv6 address is bracketed.
+    """
+    host = {"": "127.0.0.1", "0.0.0.0": "127.0.0.1", "::": "::1"}.get(bind.strip(), bind)
+    return f"http://[{host}]:{port}" if ":" in host else f"http://{host}:{port}"
+
+
+def host_warning(bind: str, env: Mapping[str, str]) -> str | None:
+    """The start-up warning for a wildcard bind that names no host; None otherwise."""
+    if bind.strip() not in WILDCARD_BINDS or allowed_hosts(bind, env).names:
+        return None
+    return (f"warning: bound to {bind or 'every interface'} with no AKSHA_ALLOWED_HOSTS: "
+            "only loopback names (localhost, 127.0.0.1, ::1) are accepted, and a request "
+            "for any other host name is refused 400 host_not_allowed. To reach this server "
+            "by its name or address, set AKSHA_ALLOWED_HOSTS=<name>[,<name>...]")  # fmt: skip
 
 
 def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], None],
@@ -97,15 +125,18 @@ def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], N
         upload_max_bytes=cap,
     )
     app = create_app(runtime, lambda: open_reader(config), capability_record, auth=auth,
-                     extra_routers=(reads,), upload_max_bytes=cap)  # fmt: skip
+                     extra_routers=(reads,), upload_max_bytes=cap,
+                     allowed_hosts=allowed_hosts(host, environ))  # fmt: skip
     if dist is not None:
         mount_web(app, dist)
-    url = f"http://{host}:{port}"
+    url = server_url(host, port)
     server_file = config.server_file()
     server_file.parent.mkdir(parents=True, exist_ok=True)
     server_file.write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")
     say(f"serving {url}" + (" (trusting X-Aksha-User)" if trust_user_header else "")
         + (f", the web app from {dist}" if dist is not None else ""))  # fmt: skip
+    if (warning := host_warning(host, environ)) is not None:
+        say(warning)
     try:
         uvicorn.run(app, host=host, port=port, log_level="warning")
     finally:

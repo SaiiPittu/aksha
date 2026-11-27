@@ -25,7 +25,6 @@ or ``local``, so the event store records who acted; with the trusted header it i
 
 from __future__ import annotations
 
-import ipaddress
 import secrets
 from dataclasses import dataclass, field, replace
 from typing import Annotated
@@ -35,7 +34,7 @@ from fastapi import Depends, Request
 from aksha.interfaces.http.accounts.errors import AccountError
 from aksha.interfaces.http.accounts.service import LOCAL_TENANT, RANK, Accounts
 from aksha.interfaces.http.accounts.store import AuthSession, Member
-from aksha.interfaces.http.common import UNSAFE
+from aksha.interfaces.http.common import UNSAFE, is_loopback_name, loopback_address
 from aksha.interfaces.wire import WireInvalid
 from aksha.runtime.session.named import DEFAULT_BY, DecideCorrection, NamedCommand
 
@@ -151,21 +150,11 @@ def client_ip(request: Request) -> str | None:
     return None if request.client is None else request.client.host
 
 
-def _loopback_address(text: str | None) -> bool:
-    if not text:
-        return False
-    try:
-        return ipaddress.ip_address(text).is_loopback
-    except ValueError:
-        return False
-
-
 def is_local(request: Request) -> bool:
     """A loopback client that asked for a loopback host name (no rebound DNS name)."""
-    if not _loopback_address(client_ip(request)):
+    if not loopback_address(client_ip(request)):
         return False
-    host = (request.url.hostname or "").lower()
-    return host == "localhost" or host.endswith(".localhost") or _loopback_address(host)
+    return is_loopback_name((request.url.hostname or "").lower())
 
 
 def _same(given: str | None, expected: str | None) -> bool:

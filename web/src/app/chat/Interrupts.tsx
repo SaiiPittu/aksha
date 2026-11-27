@@ -9,6 +9,7 @@ import { StatusChip } from "@/app/shell/Status"
 import type { Interrupt, InterruptAction, Status } from "@/features/session/types"
 import { isApiError } from "@/api"
 import { AgentMark, Glyph, LeavesBadge, opensView, type OpenView } from "./bits"
+import { useNameOf, type NameOf } from "./deciders"
 
 /** How a card reports a click: resolves on an accepted receipt, rejects with the refusal. */
 export type OnAct = (action: InterruptAction) => Promise<void>
@@ -71,13 +72,14 @@ function Refusal({ code, message }: { code: string; message: string }) {
   )
 }
 
-function closedStates(i: Interrupt) {
+function closedStates(i: Interrupt, nameOf: NameOf) {
+  const who = nameOf(i.decidedBy)
   switch (i.state) {
     case "resolved": return <ClosedLine status="ok" id={i.id}><span className="text-muted-foreground">{i.title}</span>
       <span className="mx-1.5 text-muted-foreground">→</span><span className="font-medium">{i.answer}</span>
-      {i.decidedBy && <span className="text-muted-foreground"> · answered by {i.decidedBy}</span>}</ClosedLine>
+      {who && <span className="text-muted-foreground"> · answered by {who}</span>}</ClosedLine>
     case "resolved-elsewhere": return <ClosedLine status="ok" id={i.id}><span className="text-muted-foreground">{i.title}</span>
-      <span className="mx-1.5 text-muted-foreground">·</span>Answered on another device{i.decidedBy && ` by ${i.decidedBy}`}{i.answer && <>: <span className="font-medium">{i.answer}</span></>}</ClosedLine>
+      <span className="mx-1.5 text-muted-foreground">·</span>Answered on another device{who && ` by ${who}`}{i.answer && <>: <span className="font-medium">{i.answer}</span></>}</ClosedLine>
     case "voided": return <ClosedLine status="idle" id={i.id}><span className="text-muted-foreground line-through">{i.title}</span>
       <span className="text-muted-foreground"> · voided{i.detail ? `: ${i.detail}` : ", the run ended"}</span></ClosedLine>
     case "expired": return <ClosedLine status="idle" id={i.id}><span className="text-muted-foreground">{i.title} · expired without an answer</span></ClosedLine>
@@ -228,6 +230,7 @@ function ReviewCard({ i, onOpenView, onAct }: { i: Interrupt; onOpenView: OpenVi
 // ---- approval: the exact action, signed ----------------------------------
 function ApprovalCard({ i, onOpenView, onAct }: { i: Interrupt; onOpenView: OpenView; onAct?: OnAct }) {
   const a = i.action!
+  const who = useNameOf()(i.decidedBy)
   const act = useAct(i, onAct)
   const [rejecting, setRejecting] = useState(false)
   const [note, setNote] = useState("")
@@ -240,7 +243,7 @@ function ApprovalCard({ i, onOpenView, onAct }: { i: Interrupt; onOpenView: Open
     rejected: <StatusChip status="bad">Rejected</StatusChip>, "resolved-elsewhere": <StatusChip status="idle">Decided elsewhere</StatusChip>,
     voided: <StatusChip status="idle">Voided</StatusChip>, expired: <StatusChip status="idle">Expired</StatusChip>, resolved: <StatusChip status="ok">Done</StatusChip>,
   }[s]
-  const elsewhere = i.decidedBy?.includes("another device") ? `Decided by ${i.decidedBy}` : `Decided on another device by ${i.decidedBy ?? "someone else"}`
+  const elsewhere = who?.includes("another device") ? `Decided by ${who}` : `Decided on another device by ${who ?? "someone else"}`
 
   return (
     <Shell tone={tone} head={<>
@@ -267,11 +270,11 @@ function ApprovalCard({ i, onOpenView, onAct }: { i: Interrupt; onOpenView: Open
       </> : undefined
     }>
       {s === "granted" && <div className="flex items-center gap-2 text-[13px]"><Glyph status="ok" />
-        <span>Approved by {i.decidedBy ?? "you"} and executed exactly as shown{a.delivered ? `: ${a.delivered}` : ""}.</span></div>}
+        <span>Approved by {who ?? "you"} and executed exactly as shown{a.delivered ? `: ${a.delivered}` : ""}.</span></div>}
       {s === "resolved-elsewhere" && <div className="flex items-center gap-2 text-[13px]"><Glyph status="idle" />
         <span>{elsewhere}. This card is now read-only.</span></div>}
       {s === "voided" && <div className="text-[13px] text-muted-foreground">{i.detail ?? "This request no longer applies: the run ended before a decision."} Nothing was sent.</div>}
-      {s === "rejected" && <div className="text-[13px] text-muted-foreground">Rejected by {i.decidedBy ?? "you"}. Nothing was sent; the agent was told.</div>}
+      {s === "rejected" && <div className="text-[13px] text-muted-foreground">Rejected by {who ?? "you"}. Nothing was sent; the agent was told.</div>}
       {s === "refused" && act.refusal && <Refusal {...act.refusal} />}
 
       <div className={cn("space-y-3", !pending && "opacity-80")}>
@@ -322,8 +325,9 @@ export function InterruptCard({ i, onOpenView, onAct }: { i: Interrupt; onOpenVi
 }
 
 function InterruptBody({ i, onOpenView, onAct }: { i: Interrupt; onOpenView: OpenView; onAct?: OnAct }) {
+  const nameOf = useNameOf()
   if (i.kind === "approval") return <ApprovalCard i={i} onOpenView={onOpenView} onAct={onAct} />
-  const closed = closedStates(i)
+  const closed = closedStates(i, nameOf)
   if (closed) return closed
   if (i.kind === "budget") return <BudgetCard i={i} onAct={onAct} />
   if (i.kind === "review") return <ReviewCard i={i} onOpenView={onOpenView} onAct={onAct} />

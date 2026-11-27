@@ -83,6 +83,7 @@ from aksha.interfaces.http.common import (
     MB,
     UPLOAD_MAX_MB,
     AppContext,
+    HostAllowList,
     RequestRefused,
     cross_origin,
     error,
@@ -106,13 +107,17 @@ def create_app(
     auth: AuthConfig | None = None,
     extra_routers: Sequence[APIRouter] = (),
     upload_max_bytes: int = UPLOAD_MAX_MB * MB,
+    allowed_hosts: HostAllowList | None = None,
 ) -> FastAPI:
     """The HTTP app over ``runtime`` (writes) and ``open_reader`` (reads).
 
     ``auth`` defaults to trusting ``X-Aksha-User`` (the session API tests and
     ``aksha serve --trust-user-header``); ``aksha serve`` passes accounts with local mode.
-    ``upload_max_bytes`` caps ``POST /inputs`` (``AKSHA_UPLOAD_MAX_MB``).
+    ``upload_max_bytes`` caps ``POST /inputs`` (``AKSHA_UPLOAD_MAX_MB``). ``allowed_hosts``
+    names the ``Host`` values served besides loopback names (default: loopback names only);
+    any other is refused 400 ``host_not_allowed`` (``common`` module doc, rule 3).
     """
+    hosts = allowed_hosts if allowed_hosts is not None else HostAllowList()
     config = auth if auth is not None else AuthConfig(trust_user_header=True)
     config.check()
     app = FastAPI(title="Aksha session API", version="1")
@@ -136,7 +141,13 @@ def create_app(
 
     @app.middleware("http")
     async def same_origin(request: Request, call_next: Callable[[Request], Any]) -> Response:
-        """Refuse a cross-origin write (``common`` module doc, rule 2); never sniff a body."""
+        """Refuse an unknown ``Host`` and a cross-origin write; never sniff a body.
+
+        ``common`` module doc, rules 2 and 3.
+        """
+        if not hosts.allows(request.headers.get("host")):
+            return error(400, "host_not_allowed", "this server does not answer to that host "
+                         "name; add it to AKSHA_ALLOWED_HOSTS")  # fmt: skip
         if cross_origin(request):
             return error(403, "cross_origin", "a write must come from this server's own origin")
         response: Response = await call_next(request)

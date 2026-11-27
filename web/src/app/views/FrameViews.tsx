@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ArrowLeft, ArrowRight, ExternalLink, Lock, RotateCw, ShieldCheck, Sparkles, Square } from "lucide-react"
 import { WebPreview, WebPreviewBody, WebPreviewNavigation, WebPreviewNavigationButton, WebPreviewUrl } from "@/components/ai-elements/web-preview"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { requestBlob } from "@/api"
 import { withAgentCsp } from "./frameCsp"
 
 // Views that frame foreign content: a sandboxed live page, an allow-listed embed, and agent-generated HTML.
@@ -76,4 +77,34 @@ export function EmbedView({ provider = "Embed", url, title }: { provider?: strin
       </div>
     </div>
   )
+}
+
+/**
+ * A stored PDF document. The server sends every document as a sandboxed attachment, so its
+ * URL is never framed (a frame would download it, or stay blank). The bytes are fetched
+ * with the cookie into a Blob typed application/pdf and framed from an object URL, which
+ * the browser's PDF viewer renders; the URL is revoked when the view unmounts.
+ */
+export function PdfFileView({ url, title }: { url: string; title: string }) {
+  const [shown, setShown] = useState<{ url: string; src?: string; error?: string }>()
+  useEffect(() => {
+    const abort = new AbortController()
+    let src: string | undefined
+    requestBlob(url, "application/pdf", abort.signal).then(
+      (blob) => {
+        src = URL.createObjectURL(blob)
+        if (abort.signal.aborted) URL.revokeObjectURL(src)
+        else setShown({ url, src })
+      },
+      (e: unknown) => { if (!abort.signal.aborted) setShown({ url, error: (e as Error)?.message ?? String(e) }) },
+    )
+    return () => {
+      abort.abort()
+      if (src) URL.revokeObjectURL(src)
+    }
+  }, [url])
+  const current = shown?.url === url ? shown : undefined
+  if (current?.error) return <div role="alert" className="grid h-full place-items-center px-6 text-center text-[13px] text-status-bad">This PDF could not be loaded: {current.error}</div>
+  if (!current?.src) return <div className="grid h-full place-items-center text-[13px] text-muted-foreground">Loading the PDF…</div>
+  return <iframe title={title} src={current.src} className="size-full bg-background dark:scheme-dark" />
 }

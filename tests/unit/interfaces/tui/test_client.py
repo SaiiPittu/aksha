@@ -21,6 +21,8 @@ from aksha.interfaces.tui.client import (
     parse_sse,
     sessions_from_runs,
 )
+from aksha.interfaces.tui.reducer import Approval
+from aksha.interfaces.tui.render import approval_summary
 from tests.support.tui import FIXTURES, recorded, sse_text
 
 
@@ -273,3 +275,23 @@ def test_multipart_names_each_part_by_its_path() -> None:
     assert f"--{boundary}--".encode() in body
     assert b'filename="a/b.txt"' in body and b'name="command_id"' in body
     assert inputs_body({"x": b"y"}) == {"files": {"x": "y"}}
+
+
+def test_the_identity_is_the_by_the_server_records_for_this_client() -> None:
+    me = {"user": {"id": "u-1"}, "tenant": "u-1", "role": "owner"}
+    assert Api("http://x", "o", opener=Recorder(json.dumps(me).encode())).identity() == "user:u-1"
+    local = {"user": None, "tenant": "local", "role": "owner"}
+    assert Api("http://x", "o", opener=Recorder(json.dumps(local).encode())).identity() == "local"
+    refused = http_error(401, {"error": {"code": "unauthenticated", "message": "x"}})
+    assert Api("http://x", "o", opener=Recorder(refused)).identity() is None
+
+
+def test_a_decided_approval_says_you_for_this_client_and_the_raw_by_otherwise() -> None:
+    def shown(by: str, mine: str | None) -> str:
+        a = Approval("A-0001", "R-0001", "send_packet", [], [], "v1:x", state="granted", by=by)
+        return approval_summary(a, mine).plain
+
+    assert shown("user:u-1", "user:u-1").endswith("approved by you")
+    assert shown("local", "local").endswith("approved by you")
+    assert shown("user:u-2", "user:u-1").endswith("approved by user:u-2")
+    assert shown("user:u-1", None).endswith("approved by user:u-1")

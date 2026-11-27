@@ -96,7 +96,7 @@ cd web && npm ci && npm run build && cd ..
 aksha serve --web web/dist    # http://127.0.0.1:8765, needs the [server] extra
 ```
 
-On your own machine it opens without signing in until you claim the workspace. Development with hot reload and the end-to-end tests: [web/README.md](web/README.md).
+On your own machine it opens without signing in until you claim the workspace. The server answers only to the host names it knows, against DNS rebinding: loopback names, the `--host` address, and the comma-separated names in `AKSHA_ALLOWED_HOSTS`. To reach it by another name or address, for example `aksha serve --host 0.0.0.0` behind a proxy, set `AKSHA_ALLOWED_HOSTS=aksha.example.org`; any other `Host` is refused 400 `host_not_allowed`. Development with hot reload and the end-to-end tests: [web/README.md](web/README.md).
 
 ### Run the evals
 

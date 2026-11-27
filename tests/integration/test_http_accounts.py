@@ -17,13 +17,21 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from aksha.app import open_blob_store, open_reader, open_session, session_capabilities
+from aksha.app import (
+    DEFAULT_AGENTS,
+    open_blob_store,
+    open_reader,
+    open_session,
+    session_capabilities,
+)
 from aksha.interfaces.http.accounts.credentials import Passwords, digest
 from aksha.interfaces.http.accounts.service import Accounts
 from aksha.interfaces.http.accounts.store import AccountStore
 from aksha.interfaces.http.auth import COOKIE, AuthConfig, command_tenant, read_tenant
+from aksha.interfaces.http.common import HostAllowList
 from aksha.interfaces.http.reads import reads_router
 from aksha.interfaces.http.server import create_app
+from aksha.interfaces.http.web import mount_web
 from aksha.runtime.projections.view import load_view
 from aksha.runtime.session.worker import RuntimeThread
 from tests.support.session import SESSION, config
@@ -31,6 +39,8 @@ from tests.support.session import SESSION, config
 FAST = Passwords(time_cost=1, memory_cost=8, parallelism=1)
 PW = "a long password 1"
 REMOTE = ("203.0.113.7", 40000)
+PUBLIC = "aksha.example"
+"""The public host name the bench's server is configured with (``AKSHA_ALLOWED_HOSTS``)."""
 LOOPBACK = ("127.0.0.1", 40000)
 DAY = 86_400.0
 
@@ -47,9 +57,9 @@ class Bench:
     """The app over a runtime thread and an accounts database, and the clients made for it."""
 
     def __init__(self, tmp: Path, *, upload_max_bytes: int = 50 * 1024 * 1024,
-                 **auth: Any) -> None:  # fmt: skip
+                 runtime: dict[str, Any] | None = None, **auth: Any) -> None:  # fmt: skip
         self.clock = Tick()
-        cfg = self.cfg = config(tmp)
+        cfg = self.cfg = config(tmp, **(runtime or {}))
         self.runtime = RuntimeThread(lambda: open_session(cfg))
         self.runtime.start()
         self.accounts = Accounts(AccountStore(tmp / "accounts.sqlite", clock=self.clock), FAST)
@@ -63,14 +73,14 @@ class Bench:
                              command_tenant_dep=command_tenant)  # fmt: skip
         self.app = create_app(self.runtime, lambda: open_reader(cfg), record, heartbeat_s=0.05,
                               auth=AuthConfig(accounts=self.accounts, **auth),
-                              extra_routers=(reads,),
-                              upload_max_bytes=upload_max_bytes)  # fmt: skip
+                              extra_routers=(reads,), upload_max_bytes=upload_max_bytes,
+                              allowed_hosts=HostAllowList.of([PUBLIC]))  # fmt: skip
         self.stack = ExitStack()
 
     def client(
         self, *, local: bool = False, ip: str | None = None, base_url: str | None = None
     ) -> TestClient:
-        default = "http://127.0.0.1:8765" if local else "http://aksha.example"
+        default = "http://127.0.0.1:8765" if local else f"http://{PUBLIC}"
         peer = LOOPBACK if local else ((ip, 40000) if ip else REMOTE)
         c = TestClient(self.app, base_url=base_url or default, client=peer)
         return self.stack.enter_context(c)
@@ -172,10 +182,45 @@ def test_local_mode_acts_as_the_local_owner_on_loopback_only(bench: Bench) -> No
 
 
 def test_local_mode_needs_a_loopback_host_name_too(bench: Bench) -> None:
-    """A page on another name that resolves to 127.0.0.1 is not the local person."""
-    rebound = bench.client(local=True, base_url="http://attacker.example:8765")
-    r = rebound.get("/api/v1/runs")
+    """Even an allowed name that resolves to 127.0.0.1 is not the local person."""
+    named = bench.client(local=True, base_url=f"http://{PUBLIC}:8765")
+    r = named.get("/api/v1/runs")
     assert r.status_code == 401 and r.json()["error"]["code"] == "setup_required"
+
+
+def test_a_host_name_the_server_does_not_know_is_refused_everywhere(
+    bench: Bench, tmp_path: Path
+) -> None:
+    """DNS rebinding: a page on ``attacker.example`` rebound to 127.0.0.1 is same-origin to
+    the browser, so the Origin rule passes it; the Host allow-list does not."""
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "dist" / "index.html").write_text("<!doctype html><title>Aksha</title>")
+    mount_web(bench.app, tmp_path / "dist")
+    rebound = bench.client(local=True, base_url="http://attacker.example:8765")
+    body = {"email": "x@example.org", "password": PW, "name": "X", "org_name": "X"}
+    for r in (
+        rebound.get("/api/v1/auth/status"),
+        rebound.get("/api/v1/runs"),
+        rebound.post(
+            "/api/v1/auth/signup", json=body, headers={"Origin": "http://attacker.example:8765"}
+        ),
+        rebound.get("/"),
+        rebound.get("/settings/members"),
+    ):
+        assert r.status_code == 400, r.text
+        assert r.json()["error"]["code"] == "host_not_allowed"
+    assert not bench.accounts.has_accounts()
+    for base in (
+        "http://127.0.0.1:8765",
+        "http://localhost:8765",
+        "http://[::1]:8765",
+        "http://app.localhost:5173",
+        f"http://{PUBLIC}",
+        f"https://{PUBLIC}:443",
+    ):
+        c = bench.client(local=True, base_url=base)
+        assert c.get("/api/v1/auth/status").status_code == 200, base
+        assert c.get("/").status_code == 200, base
 
 
 def test_a_local_mode_write_needs_the_csrf_token_or_the_cli_header(bench: Bench) -> None:
@@ -298,6 +343,23 @@ def test_five_failures_lock_the_email_from_that_address_for_fifteen_minutes(benc
     assert r.status_code == 429 and r.json()["error"]["code"] == "throttled"
     elsewhere = bench.client(ip="198.51.100.9")
     assert login(elsewhere, "owner@example.org").status_code == 200
+    bench.clock.t += 14 * 60
+    assert login(c, "owner@example.org").status_code == 429
+    bench.clock.t += 2 * 60
+    assert login(c, "owner@example.org").status_code == 200
+
+
+def test_twenty_failures_from_one_address_across_emails_lock_that_address(bench: Bench) -> None:
+    """Spraying many emails from one address: 20 failures in 15 minutes refuse the address."""
+    signup(bench)
+    c = bench.client()
+    for i in range(19):  # four per email stays under the per-email lock
+        assert login(c, f"guess{i // 4}@example.org", "the wrong password").status_code == 401
+    assert login(c, "owner@example.org").status_code == 200  # 19 failures: still open
+    assert login(c, "guess9@example.org", "the wrong password").status_code == 401  # the 20th
+    r = login(c, "owner@example.org")
+    assert r.status_code == 429 and r.json()["error"]["code"] == "too_many_attempts"
+    assert login(bench.client(ip="198.51.100.9"), "owner@example.org").status_code == 200
     bench.clock.t += 14 * 60
     assert login(c, "owner@example.org").status_code == 429
     bench.clock.t += 2 * 60
@@ -825,6 +887,64 @@ def test_an_accounts_command_is_recorded_as_its_user_and_another_by_is_refused(
     assert [p["by"] for p in bench.payloads(tenant, "run.stop_requested")] == [user]
 
 
+def propose(bench: Bench, c: TestClient, text: str) -> str:
+    """Upload ``notes/a.md`` and propose ``text`` for it as ``c``; the correction ID."""
+    assert c.post("/api/v1/inputs", json={"files": {"notes/a.md": "# A\n"}}).status_code == 200
+    r = c.post(
+        "/api/v1/commands",
+        json={
+            "command": "ProposeCorrection",
+            "args": {
+                "target": "input/notes/a.md",
+                "value": text,
+                "evidence": ["the reviewer's note"],
+            },
+        },
+    )
+    assert r.status_code == 200, r.text
+    tenant = c.get("/api/v1/auth/me").json()["tenant"]
+    return str(bench.payloads(tenant, "correction.proposed")[-1]["correction"])
+
+
+@pytest.mark.parametrize(("role", "approver"), [("member", "person"), ("admin", "data-steward")])
+def test_deciding_a_correction_audits_the_deciding_user_beside_the_role(
+    tmp_path: Path, role: str, approver: str
+) -> None:
+    """B19: ``by`` stays the role, so the audit row is the only record of who decided."""
+    bench = Bench(tmp_path, runtime={"agent_paths": (DEFAULT_AGENTS,), "approver": approver})
+    try:
+        owner = signup(bench)
+        decider, decider_id = join(bench, owner, "decider@example.org", role)
+        org_id = owner.get("/api/v1/auth/me").json()["org"]["id"]
+        correction = propose(bench, decider, "# A, corrected\n")
+        r = decider.post("/api/v1/commands", json={"command": "DecideCorrection", "args": {
+            "correction_id": correction, "approve": True}, "by": approver})  # fmt: skip
+        assert r.status_code == 200, r.text
+        (row,) = bench.audit("decide_correction")
+        assert (row.actor_id, row.org_id, row.target) == (decider_id, org_id, correction)
+        assert dict(row.detail) == {"as": approver, "approve": True}
+        tenant = decider.get("/api/v1/auth/me").json()["tenant"]
+        (decided,) = bench.payloads(tenant, "correction.decided")
+        assert decided["by"] == approver  # the event keeps the role; the audit names the user
+    finally:
+        bench.close()
+
+
+def test_a_correction_decision_refused_at_the_bind_writes_no_audit_row(tmp_path: Path) -> None:
+    bench = Bench(tmp_path, runtime={"agent_paths": (DEFAULT_AGENTS,)})
+    try:
+        owner = signup(bench)
+        member, member_id = join(bench, owner, "m1@example.org", "member")
+        correction = propose(bench, member, "# A, corrected\n")
+        for by in ("legal", f"user:{member_id}", "local"):
+            r = member.post("/api/v1/commands", json={"command": "DecideCorrection", "args": {
+                "correction_id": correction, "approve": False}, "by": by})  # fmt: skip
+            assert r.status_code == 422 and r.json()["error"]["code"] == "by_not_allowed", by
+        assert bench.audit("decide_correction") == []
+    finally:
+        bench.close()
+
+
 def test_a_local_mode_command_is_recorded_as_local(bench: Bench) -> None:
     cli = bench.client(local=True)
     cli.headers["X-Aksha-User"] = "local"
@@ -841,7 +961,8 @@ def test_the_trusted_header_mode_keeps_the_bodys_by(tmp_path: Path) -> None:
     runtime = RuntimeThread(lambda: open_session(cfg))
     runtime.start()
     app = create_app(runtime, lambda: open_reader(cfg), dict,
-                     auth=AuthConfig(trust_user_header=True))  # fmt: skip
+                     auth=AuthConfig(trust_user_header=True),
+                     allowed_hosts=HostAllowList.of(["testserver"]))  # fmt: skip
     h = {"X-Aksha-User": "o7"}
     try:
         with TestClient(app) as c:
@@ -870,7 +991,8 @@ def test_the_trusted_header_mode_reports_itself(tmp_path: Path) -> None:
     runtime = RuntimeThread(lambda: open_session(cfg))
     runtime.start()
     app = create_app(runtime, lambda: open_reader(cfg), dict,
-                     auth=AuthConfig(trust_user_header=True))  # fmt: skip
+                     auth=AuthConfig(trust_user_header=True),
+                     allowed_hosts=HostAllowList.of(["testserver"]))  # fmt: skip
     try:
         with TestClient(app) as c:
             assert c.get("/api/v1/auth/status").json()["mode"] == "trusted"

@@ -143,6 +143,27 @@ test("re-uploading the change set rebuilds live in the same thread, through a re
   await page.emulateMedia({ colorScheme: "light" })
 })
 
+test("an uploaded PDF opens in the view panel from a blob: URL, and nothing is downloaded", async ({ page }) => {
+  // The server sends every document as a sandboxed attachment: the panel must fetch the
+  // bytes and frame an object URL, never the document URL (which would download it).
+  const downloads: string[] = []
+  page.on("download", (d) => downloads.push(d.suggestedFilename()))
+  await page.goto("/")
+  await page.getByTestId("attach-files-input").setInputFiles(path.join(import.meta.dirname, "files", "tiny.pdf"))
+  const chip = page.getByRole("list", { name: "Attachments" }).getByRole("listitem").filter({ hasText: "tiny.pdf" })
+  await expect(chip).toContainText("v1")
+  await page.goto("/files")
+  await page.getByRole("tab", { name: /Inputs/ }).click()
+  await page.getByRole("row").filter({ hasText: "tiny.pdf" }).click()
+  const panel = page.getByRole("complementary", { name: "View panel" })
+  const frame = panel.locator('iframe[title="tiny.pdf"]')
+  await expect(frame).toHaveAttribute("src", /^blob:/)
+  expect(await panel.locator("iframe[src*='/documents/']").count()).toBe(0)
+  await page.waitForTimeout(1500) // a framed attachment would have started its download by now
+  await shot(page, "12-pdf-panel")
+  expect(downloads).toEqual([])
+})
+
 const OWNER = { name: "Olive Owner", email: "owner@example.test", password: "e2e-only-Pass-2026!", org: "Example Lab" }
 const VIEWER = { name: "Vic Viewer", email: "viewer@example.test", password: "e2e-only-View-2026!" }
 

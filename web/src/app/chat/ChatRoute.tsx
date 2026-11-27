@@ -5,6 +5,7 @@ import { canCommand, useViewer } from "@/features/auth/principal"
 import { usePanelUrl, useSession } from "@/features/session"
 import type { AgentOption } from "./Composer"
 import { ChatScreenView } from "./ChatScreenView"
+import { DeciderNames } from "./deciders"
 
 /** The agents of the capability record (`agents[].name`, `purpose`), for the composer's picker. */
 function useAgents(): AgentOption[] {
@@ -27,5 +28,5 @@ export function ChatRoute() {
   const agents = useAgents()
   const readOnly = canCommand(viewer.role) ? undefined : "You have read-only access (Viewer), so you cannot send messages or answer."
   // A key per session resets per-session UI (composer draft, open cards) on navigation.
-  return <ChatScreenView key={sessionId ?? "new"} session={session} panel={panel} onPanelChange={setPanel} readOnly={readOnly} agents={agents} />
+  return <DeciderNames><ChatScreenView key={sessionId ?? "new"} session={session} panel={panel} onPanelChange={setPanel} readOnly={readOnly} agents={agents} /></DeciderNames>
 }

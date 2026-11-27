@@ -13,7 +13,9 @@ creation is limited per client address (five an hour), counted from the audit ro
 
 Throttling counts the ``sign_in_failed`` audit rows of an (email, address) pair: five within
 fifteen minutes refuse that pair with ``throttled`` for fifteen minutes after the fifth.
-No counter is stored; the audit rows are the facts it is derived from.
+Twenty within fifteen minutes from one address, whatever the emails, refuse that address
+with ``too_many_attempts`` the same way (one address trying many emails). No counter is
+stored; the audit rows are the facts it is derived from.
 """
 
 from __future__ import annotations
@@ -63,6 +65,8 @@ GUESTS_PER_HOUR = 5
 """Guests one client address may start in an hour."""
 THROTTLE_LIMIT = 5
 THROTTLE_WINDOW_S = 15 * 60.0
+ADDRESS_LIMIT = 20
+"""Failed sign-ins from one address, across emails, within the window that lock it."""
 TOUCH_EVERY_S = 60.0
 """A session's sliding expiry and a token's last use are written at most once a minute."""
 
@@ -160,11 +164,15 @@ class Accounts:
         """Whether five failures within 15 minutes, the last under 15 minutes ago, lock it."""
         now = self.now()
         times = self.store.failed_sign_ins(email, ip, now - 2 * THROTTLE_WINDOW_S)
-        for i in range(len(times) - THROTTLE_LIMIT + 1):
-            newest, oldest = times[i], times[i + THROTTLE_LIMIT - 1]
-            if now - newest < THROTTLE_WINDOW_S and newest - oldest <= THROTTLE_WINDOW_S:
-                return True
-        return False
+        return _locked(times, THROTTLE_LIMIT, now)
+
+    def address_throttled(self, ip: str | None) -> bool:
+        """Whether 20 failures from ``ip`` across all emails lock that address (module doc)."""
+        if ip is None:
+            return False
+        now = self.now()
+        times = self.store.failed_sign_ins_from(ip, now - 2 * THROTTLE_WINDOW_S)
+        return _locked(times, ADDRESS_LIMIT, now)
 
     def login(self, email: object, password: object, *, remember: bool,
               ip: str | None) -> SignedIn:  # fmt: skip
@@ -172,6 +180,12 @@ class Accounts:
         if not isinstance(email, str) or not isinstance(password, str):
             raise AccountError(422, "validation", "email and password are strings")
         key = email.strip().lower()
+        if self.address_throttled(ip):
+            raise AccountError(
+                429,
+                "too_many_attempts",
+                "too many failed sign-ins from this address; try again later",
+            )
         if self.throttled(key, ip):
             raise AccountError(429, "throttled", "too many failed sign-ins; try again later")
         user = self.store.user_by_email(key) if key else None
@@ -453,3 +467,12 @@ class Accounts:
         self.record("guest_saved", org_id=member.org_id, actor_id=member.user.id,
                     target=member.user.id, ip=ip)  # fmt: skip
         return self.start(self._member(member.user.id), remember=True)
+
+
+def _locked(times: list[float], limit: int, now: float) -> bool:
+    """Whether ``limit`` of ``times`` (newest first) fit one window, ending under a window ago."""
+    for i in range(len(times) - limit + 1):
+        newest, oldest = times[i], times[i + limit - 1]
+        if now - newest < THROTTLE_WINDOW_S and newest - oldest <= THROTTLE_WINDOW_S:
+            return True
+    return False

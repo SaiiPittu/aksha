@@ -6,7 +6,7 @@ import { CodeBlock, CodeBlockCopyButton, CodeBlockFilename, CodeBlockHeader, Cod
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { DiffView } from "./DiffView"
-import { EmbedView, HtmlView, WebView } from "./FrameViews"
+import { EmbedView, HtmlView, PdfFileView, WebView } from "./FrameViews"
 import { MarkdownView } from "./MarkdownView"
 import { PdfView } from "./PdfView"
 import { TableView } from "./TableView"
@@ -23,7 +23,9 @@ export function ViewRenderer({ view, wide }: { view: ViewRef; wide?: boolean }) 
 function render(v: ViewRef, wide?: boolean) {
   switch (v.kind) {
     case "markdown": return <MarkdownView markdown={v.markdown ?? ""} outline={wide} />
-    case "pdf": return <PdfView pages={v.pages ?? []} highlight={v.highlight} title={v.title} />
+    case "pdf": return v.url && !v.pages
+      ? <PdfFileView url={v.url} title={v.title} />
+      : <PdfView pages={v.pages ?? []} highlight={v.highlight} title={v.title} />
     case "text": return <TextView view={v} />
     case "json": return v.json !== undefined ? <JsonView value={v.json} /> : <Missing what="content yet" />
     case "table": return v.table ? <TableView {...v.table} /> : <Missing what="rows" />

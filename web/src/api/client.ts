@@ -109,6 +109,23 @@ export async function requestText(path: string, query?: Query): Promise<{ text: 
   return { text: await res.text(), mediaType: (res.headers.get("Content-Type") ?? "").split(";")[0].trim() }
 }
 
+/**
+ * A raw read of a full URL's bytes (the app's own document URL), with the cookie, as a Blob
+ * of `type`: the type is the app's choice, so the browser renders the bytes as that type
+ * whatever the server stored.
+ */
+export async function requestBlob(full: string, type: string, signal?: AbortSignal): Promise<Blob> {
+  let res: Response
+  try {
+    res = await fetch(full, { credentials: "include", headers: { Accept: "*/*" }, signal })
+  } catch (e) {
+    if ((e as Error)?.name === "AbortError") throw e
+    throw new ApiError(0, "network", "The server could not be reached.")
+  }
+  if (!res.ok) throw await errorFrom(res)
+  return new Blob([await res.arrayBuffer()], { type })
+}
+
 export interface UploadPart { file: Blob; path: string }
 
 /**

@@ -1,5 +1,5 @@
 // The API module: the only place URLs and wire shapes live.
-export { API_BASE, ApiError, Command, command, getCsrfToken, isApiError, newCommandId, request, requestText, setCsrfToken } from "./client"
+export { API_BASE, ApiError, Command, command, getCsrfToken, isApiError, newCommandId, request, requestBlob, requestText, setCsrfToken } from "./client"
 export type { UploadPart } from "./client"
 export * as endpoints from "./endpoints"
 export { inviteLink, sessionEventsUrl } from "./endpoints"

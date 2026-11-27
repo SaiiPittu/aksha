@@ -243,6 +243,20 @@ class Api:
         loaded: dict[str, Any] = json.loads(self.request("GET", path) or b"{}")
         return loaded
 
+    def identity(self) -> str | None:
+        """The ``by`` the server records for this client: ``user:<id>``, ``local``, or None.
+
+        None when the server cannot say (a trusted-header server, an older one, an error).
+        """
+        try:
+            me = self.get("/auth/me")
+        except (ApiError, OSError, ValueError):
+            return None
+        user = me.get("user")
+        if isinstance(user, Mapping) and user.get("id"):
+            return f"user:{user['id']}"
+        return "local" if me.get("tenant") == "local" else None
+
     def optional(self, path: str) -> dict[str, Any] | None:
         """A JSON read the server may not have (404 or 405 is None)."""
         try:

@@ -163,7 +163,7 @@ export function Composer({ onSend, onUpload, runOpen, disabledReason, draft, dro
           placeholder={askLane ? "Message the agent while it works…" : "Ask anything."}
           className="block max-h-48 min-h-[56px] w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[14px] leading-6 outline-none placeholder:text-muted-foreground" />
         <div className="flex items-center gap-1.5 px-2 pb-2">
-          <input ref={input} type="file" multiple hidden aria-hidden tabIndex={-1}
+          <input ref={input} type="file" multiple hidden aria-hidden tabIndex={-1} data-testid="attach-files-input"
             onChange={(e) => { attach(Array.from(e.target.files ?? [])); e.target.value = "" }} />
           <Tooltip>
             <TooltipTrigger asChild>
