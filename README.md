@@ -168,6 +168,7 @@ export AKSHA_LIVE_MODEL=gemini/gemini-4-neon  # LiteLLM's <provider>/<model> for
 | `AKSHA_LIVE_BASE_URL` | a local server, such as Ollama, passed as `api_base` |
 | `AKSHA_LIVE_SAMPLES` | ask each classification N times and use the votes (default 1) |
 | `AKSHA_LIVE_ACTIVE_MS` | a live run's active-time budget (at least an hour by default) |
+| `AKSHA_LIVE_TURN_FACTOR` | the multiplier on every Task's turn limit and the run's turn and tool-call budget in a live run (default 3) |
 | `AKSHA_LIVE_PROVIDER=chat-completions` | the standard-library adapter instead, for any chat-completions server, with `AKSHA_LIVE_BASE_URL` and `AKSHA_LIVE_API_KEY` |
 | `AKSHA_ALIAS_<ALIAS>=module:Class` | a native extraction or classification service for one alias |
 | `AKSHA_SEARCH=brave`, `AKSHA_BRAVE_API_KEY`, `AKSHA_NETWORK=on` | live web search, and page fetches under the `aksha.web` egress policy |

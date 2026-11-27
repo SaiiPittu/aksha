@@ -13,6 +13,8 @@ automatic starts    3 / 5 m  automatic starts recorded inside the window        
 timer starts        3 / 5 m  an agent's runs opened by a timer inside the window  used >= count
 ==================  =======  ==================================================  ==============
 
+A run's ``run.started{turn_factor}`` multiplies its turn limits (:func:`turn_factor`).
+
 "Bites" means the next turn, veto or resume would exceed the limit: the turn limit lets
 ten turns run and fails the eleventh, and the restart limit lets three resumes run and
 ends the run on the fourth (ADR-P02 D8: "above 3 the run stops").
@@ -112,6 +114,20 @@ def resumes_since_progress(view: LogView, run: str) -> int:
     return count
 
 
+def turn_factor(view: LogView, run: str) -> int:
+    """The multiplier ``run``'s turn limits run under: ``run.started{turn_factor}``, else 1.
+
+    Live mode records one (ADR-P14 amendment L1) because a real model needs more turns than
+    a scripted fake; a run that records none runs under its definition's own limits. Read
+    from the log, so a resumed run keeps the factor it started under.
+    """
+    for e in view.events:
+        if e.type == records.RUN_STARTED and e.run == run:
+            value = e.payload.get("turn_factor")
+            return value if isinstance(value, int) and value >= 1 else 1
+    return 1
+
+
 def limit_reached(
     view: LogView, run: str, instance: str | None, limits: Limits
 ) -> tuple[LimitHit, ...]:
@@ -123,8 +139,9 @@ def limit_reached(
     hits: list[LimitHit] = []
     if instance is not None:
         turns = turns_since_entry(view, run, instance)
-        if turns >= limits.turn_limit:
-            hits.append(LimitHit("turn_limit", turns, limits.turn_limit, instance))
+        allowed = limits.turn_limit * turn_factor(view, run)
+        if turns >= allowed:
+            hits.append(LimitHit("turn_limit", turns, allowed, instance))
         vetoes = vetoes_since_entry(view, run, instance)
         if vetoes >= limits.stop_veto_limit:
             hits.append(LimitHit("stop_veto_limit", vetoes, limits.stop_veto_limit, instance))

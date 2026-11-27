@@ -36,7 +36,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from aksha.runtime.budgets.limits import limit_reached, turns_since_entry, vetoes_since_entry
+from aksha.runtime.budgets.limits import (
+    limit_reached,
+    turn_factor,
+    turns_since_entry,
+    vetoes_since_entry,
+)
 from aksha.runtime.context.reentry import choose_reentry
 from aksha.runtime.context.types import effective_policy
 from aksha.runtime.finalization.state import finalizing
@@ -296,15 +301,16 @@ class TaskPolicy:
         return PASS
 
     def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
-        """The turn limit, then the stop-veto limit (the retry cap), on this instance."""
+        """The turn limit (times the run's recorded turn factor), then the stop-veto limit."""
         if proposed.resumes_turn:
             return None
         ref = self.instance
         task = view.tree.node(ref.task_path).task
         turns = turns_since_entry(view.log, ref.run, ref.instance)
-        if turns >= task.turn_limit:
-            reason = f"turn limit {task.turn_limit} reached"
-            counts = (("turns", turns), ("allowed", task.turn_limit))
+        allowed = task.turn_limit * turn_factor(view.log, ref.run)
+        if turns >= allowed:
+            reason = f"turn limit {allowed} reached"
+            counts = (("turns", turns), ("allowed", allowed))
             return Verdict("fail", reason, code="turn_limit", counts=counts)
         if c.kind == "finish" and c.instance == ref and proposed.code != PERSON_INPUT:
             vetoes = vetoes_since_entry(view.log, ref.run, ref.instance) + 1

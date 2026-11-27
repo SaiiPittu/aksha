@@ -28,8 +28,9 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    a kind's ``CitePolicy`` names cited or, where allowed, an explicit unknown, with the
    verifier's code (``unknown_span``, ``span_not_seen``, ``stale_source``,
    ``quote_not_verbatim``, ``quote_too_short``, ``form_not_allowed``,
-   ``ungrounded_value``, ...) and the pointer under ``/content``. No kind or extension can
-   switch it off; each verified citation commits a ``citation.bound``.
+   ``ungrounded_value``, ...) and the pointer under ``/content``, every failing field in
+   one refusal. No kind or extension can switch it off; each verified citation commits a
+   ``citation.bound``.
 6. Relations: never ``derived_from`` or ``supersedes`` (``provenance_relation_forbidden``),
    a declared kind (``relation_undeclared``), a declared label (``relation_label_invalid``),
    ends of the declared kinds that exist (``relation_end_invalid``), and evidence: at
@@ -512,14 +513,38 @@ class ArtifactStore:
             )  # fmt: skip
 
 
+GROUNDING_ERRORS_SHOWN = 20
+"""The most grounding errors one refusal spells out; the rest are counted, not listed."""
+
+
 def _grounded(results: Iterable[Verified | CiteError]) -> tuple[Verified, ...]:
-    """Check 5 (grounding): the verified citations, or ``SaveRefused`` for the first failure."""
+    """Check 5 (grounding): the verified citations, or one ``SaveRefused`` for every failure.
+
+    Like a schema refusal, every failing field is reported at once, each with the rule it
+    broke, so the model can fix them all in its next call. The code is the first failure's.
+    """
     out: list[Verified] = []
+    errors: list[CiteError] = []
     for result in results:
         if isinstance(result, CiteError):
-            raise SaveRefused(result.code, "/content" + result.pointer, result.message)
-        out.append(result)
-    return tuple(out)
+            errors.append(result)
+        else:
+            out.append(result)
+    if not errors:
+        return tuple(out)
+    first = errors[0]
+    if len(errors) == 1:
+        raise SaveRefused(first.code, "/content" + first.pointer, first.message)
+    paths = tuple("/content" + e.pointer for e in errors)
+    listed = "; ".join(
+        f"/content{e.pointer}: {e.code}: {e.message}" for e in errors[:GROUNDING_ERRORS_SHOWN]
+    )
+    more = len(errors) - GROUNDING_ERRORS_SHOWN
+    listed += f"; and {more} more" if more > 0 else ""
+    raise SaveRefused(
+        first.code, "/content",
+        f"{len(errors)} grounding errors, fix them all: {listed}", paths=paths,
+    )  # fmt: skip
 
 
 def _check_span_excerpt(excerpt: Excerpt, source: InputRef, ev: Evidence, at: str) -> None:

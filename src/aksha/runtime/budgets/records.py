@@ -37,6 +37,7 @@ from __future__ import annotations
 
 from aksha.runtime.events.envelope import Event
 
+RUN_STARTED = "run.started"
 STOP_DECIDED = "stop.decided"
 TASK_ENTERED = "task.entered"
 CHECK_RESET = "completion_check.reset"

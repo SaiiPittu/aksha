@@ -19,7 +19,8 @@ narrowing (plan mode) removes it like any other store tool.
 What the model is shown of ``save_artifact`` is made per Task (:func:`offered_for_task`):
 its description names each kind the Task writes, whether it takes a ``key``, which fields
 must cite their evidence, and the kind's content schema, so a model can fill the content
-right on its first call. The parameters schema stays the one the gate validates (ADR-P10
+right on its first call; where a kind cites, it also spells out how a cite is written
+(:func:`citation_contract`). The parameters schema stays the one the gate validates (ADR-P10
 D3); the store checks the content against the kind's schema.
 """
 
@@ -43,6 +44,8 @@ from aksha.runtime.artifacts.types import (
 )
 from aksha.runtime.canonical import thaw
 from aksha.runtime.events.catalogue import INPUT_REF_SCHEMA
+from aksha.runtime.grounding.types import MIN_QUOTE_CHARS, UNKNOWN_REASONS
+from aksha.runtime.grounding.verify import UNKNOWN_EXAMPLE
 from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl, ToolOutcome, ToolSpec, ToolView
 
 LOADER_ADDED_TOOLS: frozenset[str] = frozenset({"finish", "ask", "save_artifact"})
@@ -235,6 +238,58 @@ def _kind_line(name: str, kind: ArtifactKind) -> str:
     return "\n".join(lines)
 
 
+def citation_contract(kinds: Mapping[str, ArtifactKind]) -> tuple[str, ...]:
+    """How a cited field is written, for the cite forms and unknowns ``kinds`` allow (ADR-P13).
+
+    Generic: it names no kind or field, only the shapes the verifier accepts, the source of
+    span IDs, the verbatim and length rule, an explicit unknown, and one invented example.
+    """
+    policies = [c for k in kinds.values() for c in k.cites]
+    if not policies:
+        return ()
+    forms = {f for c in policies for f in c.forms}
+    lines = [
+        "How to cite: a field that cites its evidence is a JSON object that holds a `cite` "
+        "object, beside its other fields (such as `value`). The span ID and the quote go "
+        "inside `cite`, never beside the value."
+    ]
+    if "span" in forms:
+        lines.append(
+            '- A span cite is {"cite": {"span": "EX-0042", "quote": "..."}}. Span IDs '
+            "are the EX-#### IDs a tool result listed in `citation_spans` for the text it "
+            "showed you; cite only those. The quote is copied verbatim from that span's "
+            f"text, at least {MIN_QUOTE_CHARS} characters, or the whole span when it is "
+            "shorter."
+        )
+    if "statement" in forms:
+        lines.append(
+            '- A statement cite is {"cite": {"statement": "EX-0007"}}: the ID of a '
+            "person's answer."
+        )
+    if "artifact" in forms:
+        lines.append(
+            '- An artifact cite is {"cite": {"artifact": "<kind>/<key>@v1", "path": "/rows/0"}}'
+            ": a version you read (an unkeyed kind is <kind>@v1) and a JSON pointer into it."
+        )
+    if any(c.value_in_quote for c in policies):
+        lines.append("- Where a field's `value` must be in its quote, write it as the quote does.")
+    if any(c.may_be_unknown for c in policies):
+        lines.append(
+            "- A field marked 'or an explicit unknown' that no source settles holds only "
+            f"{UNKNOWN_EXAMPLE} (reason one of {', '.join(sorted(UNKNOWN_REASONS))}; "
+            "not_found also lists the reads it checked in `checked`, unverified names the "
+            "`failed_step`)."
+        )
+    if "span" in forms:
+        lines.append(
+            "- Example (invented): a result showed span EX-0042 with text "
+            "'Starter plan: 12 EUR per seat per month.' A cited price is then "
+            '{"value": "12 EUR per seat per month", "cite": {"span": "EX-0042", '
+            '"quote": "12 EUR per seat per month"}}.'
+        )
+    return tuple(lines)
+
+
 def save_description(kinds: Mapping[str, ArtifactKind]) -> str:
     """``save_artifact``'s description on a Task that writes ``kinds``, by full name."""
     if not kinds:
@@ -245,6 +300,7 @@ def save_description(kinds: Mapping[str, ArtifactKind]) -> str:
             "below and `content` as a JSON object that matches that kind's content schema; "
             "a refused save lists every field to fix. This Task writes:",
             *(_kind_line(n, kinds[n]) for n in sorted(kinds)),
+            *citation_contract(kinds),
         )
     )
 

@@ -22,6 +22,7 @@ from aksha.app import (
     LIVE_JITTER,
     LIVE_RETRIES,
     LIVE_TIMEOUT_MARGIN_MS,
+    LIVE_TURN_FACTOR,
     RuntimeConfig,
     bind_live,
     live_refusals,
@@ -113,7 +114,8 @@ def test_live_mode_sizes_the_active_time_and_the_model_timeout_offline_keeps_the
     assert live.run_fields()["budget"]["active_ms"] == LIVE_ACTIVE_MS  # recorded on the run
     assert live.agent.limits is not None
     assert live.agent.limits.model_timeout_ms == 240_000 + LIVE_TIMEOUT_MARGIN_MS
-    assert live.agent.limits.turn_limit == (loaded.agent.limits or live.agent.limits).turn_limit
+    # The turn and tool-call caps scale by the live turn factor (below); time does not.
+    assert live.agent.budget.model_turns == own.model_turns * LIVE_TURN_FACTOR
     chosen = session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_ACTIVE_MS": "7200000",
                                                     "AKSHA_LIVE_TIMEOUT_S": "600"})  # fmt: skip
     assert chosen.agent.budget is not None and chosen.agent.budget.active_ms == 7_200_000
@@ -155,6 +157,37 @@ def test_live_mode_makes_model_retries_patient_offline_keeps_the_fast_policy(
 def test_the_live_retry_settings_reach_the_live_environment() -> None:
     config = RuntimeConfig.from_env({"AKSHA_MODE": "live", **LIVE, "AKSHA_LIVE_RETRIES": "9"})
     assert config.live_env["AKSHA_LIVE_RETRIES"] == "9"
+
+
+def test_live_mode_scales_turn_and_tool_call_limits_and_records_the_factor(
+    lib: StubLiteLLM,
+) -> None:
+    loaded = research()
+    own = loaded.agent.budget
+    assert own is not None
+    fake = session_agent(loaded, "fake")
+    assert "turn_factor" not in fake.run_fields()  # offline runs keep their own limits
+    assert fake.run_fields()["budget"]["model_turns"] == own.model_turns
+    assert fake.tree == session_agent(loaded, "fake").tree
+    live = session_agent(loaded, "live", live_env=LIVE)
+    fields = live.run_fields()
+    assert fields["turn_factor"] == LIVE_TURN_FACTOR == 3
+    assert fields["budget"]["model_turns"] == own.model_turns * 3
+    assert fields["budget"]["tool_calls"] == own.tool_calls * 3
+    # Task turn limits stay declared; the stop policy multiplies them by the recorded factor.
+    assert live.tree == fake.tree
+    five = session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_TURN_FACTOR": "5"})
+    assert five.run_fields()["turn_factor"] == 5
+    one = session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_TURN_FACTOR": "1"})
+    assert "turn_factor" not in one.run_fields()
+    assert one.run_fields()["budget"]["model_turns"] == own.model_turns
+    for bad in ("0", "three", "-2"):
+        with pytest.raises(BindRefused):
+            session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_TURN_FACTOR": bad})
+    # A replay runs under the factor its recording ran under, whatever its own mode.
+    replayed = session_agent(loaded, "fake", turn_factor=3)
+    assert replayed.run_fields()["turn_factor"] == 3
+    assert replayed.run_fields()["budget"]["tool_calls"] == own.tool_calls * 3
 
 
 @pytest.mark.parametrize(("setting", "enabled"), [(None, False), ("off", False), ("on", True)])
