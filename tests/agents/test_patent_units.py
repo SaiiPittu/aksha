@@ -500,3 +500,17 @@ def test_the_agent_keeps_only_domain_tools_of_its_own() -> None:
     domain = {"search_publications", "fetch_publication", "list_templates", "read_template",
               "fill_form", "send_packet"}  # fmt: skip
     assert names == shared | domain
+
+
+def test_a_forms_counts_are_computed_from_its_fields_at_every_save() -> None:
+    """ADR-P04 K1: the form kind recomputes ``counts``, so a corrected field moves them too."""
+    (form,) = [k for k in AGENT.artifacts if k.name == "form"]
+    assert form.compute is rules.computed_form
+    fields = [{"field": "a", "status": "complete"}, {"field": "b", "status": "missing"},
+              {"field": "c", "status": "missing"}]  # fmt: skip
+    wrong = {"fields": fields, "counts": {"complete": 3, "missing": 0}}
+    assert rules.computed_form(wrong)["counts"] == {
+        "complete": 1,
+        "missing": 2,
+        "needs_counsel_confirmation": 0,
+    }

@@ -459,6 +459,7 @@ src/aksha/
 │   │   ├── reading.py                       the document kinds; decide, pick the schema, extract; passages as exact ranges
 │   │   ├── analysis.py                      entity resolution, price conflicts, term matching, review samples; pure
 │   │   ├── checks.py                        completion checks over a TaskView; pure
+│   │   ├── computed.py                      the counts its checks assert, computed at save (ADR-P04 K1); pure
 │   │   ├── fakes.py                         ResearchModel: the offline rule-based policy, a test double; reads the request's grammar
 │   │   ├── fakes_readers.py                 the fast-class fakes: the decide rules and each kind's schema, general rules
 │   │   ├── fakes_views.py                   how the offline model reads the shared tools' results with the agent's rules

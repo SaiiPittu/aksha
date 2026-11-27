@@ -56,7 +56,7 @@ from aksha.runtime.api import (
     kind_question,
 )
 
-from . import checks, portfolio
+from . import checks, portfolio, rules
 from .tools import build_tools
 from .world import COLLECTIONS, SOURCE_NAME, SourceWorld
 from .world import KINDS as DOC_KINDS
@@ -160,7 +160,12 @@ KINDS = (
     ArtifactKind("recommendation", _schema("candidate", "next_action", "why"), keyed=True),
     ArtifactKind("table", _schema("rows")),
     ArtifactKind("selection", _schema("selected", "based_on"), reviewable=True),
-    ArtifactKind("form", _schema("template", "candidate", "fields", "counts"), keyed=True),
+    ArtifactKind(
+        "form",
+        _schema("template", "candidate", "fields", "counts"),
+        keyed=True,
+        compute=rules.computed_form,
+    ),
     ArtifactKind("packet", PACKET, keyed=True, reviewable=True),
     ArtifactKind("handoff", _schema("candidate", "packet", "status"), keyed=True),
     *portfolio_kinds(),

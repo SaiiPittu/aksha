@@ -19,6 +19,7 @@ from aksha.runtime.artifacts.types import (
     RelationRequest,
     WriterId,
 )
+from aksha.runtime.canonical import thaw
 from tests.support.artifacts import COMPARE, GATHER, OTHER, OWNER, RUN, World, page
 
 
@@ -378,3 +379,37 @@ def test_a_plain_revision_in_the_same_run_still_refuses_the_older_read(world: Wo
     world.save("line", "n1", {"text": "second"})
     e = _refused("read_invalidated", world.save, "line", "n2", {"text": "uses n1"})
     assert "notes.line/n1@v2" in e.message
+
+
+def test_a_kinds_computed_fields_replace_the_requests_before_every_check(tmp_path: Path) -> None:
+    """ADR-P04 K1: what is stored, hashed and schema-checked is the computed content."""
+    from aksha.runtime.artifacts.store import ArtifactStore
+    from aksha.runtime.artifacts.types import ArtifactKind, SaveRequest
+
+    def counted(content: dict[str, Any]) -> dict[str, Any]:
+        content["count"] = len(content["items"])
+        return content
+
+    schema = {
+        "type": "object",
+        "properties": {"items": {"type": "array"}, "count": {"type": "integer"}},
+        "required": ["items", "count"],
+    }
+    kind = ArtifactKind("tally", schema, compute=counted)
+    world = World(tmp_path)
+    try:
+        store = ArtifactStore({"notes.tally": kind})
+        args: dict[str, Any] = {"writer": GATHER, "run": RUN, "instance": "gather",
+                                "step": "s", "writes": {"notes.tally"}}  # fmt: skip
+        view = world.view()
+        wrong = store.save(view, SaveRequest("tally", None, {"items": ["a", "b"], "count": 7}),
+                           **args).version  # fmt: skip
+        assert thaw(wrong.content) == {"items": ["a", "b"], "count": 2}
+        # A required field the code computes may be left out by the model.
+        left_out = store.save(view, SaveRequest("tally", None, {"items": ["a", "b"]}), **args)
+        assert left_out.version.content_hash == wrong.content_hash
+        # A function that cannot compute from a malformed content refuses the save.
+        e = _refused("schema", store.save, view, SaveRequest("tally", None, {"count": 1}), **args)
+        assert "computed fields" in e.message and "KeyError" in e.message
+    finally:
+        world.close()

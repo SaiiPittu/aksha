@@ -1,4 +1,10 @@
-"""Pure completion checks. Each reads only the Task view it is given."""
+"""Pure completion checks. Each reads only the Task view it is given.
+
+A message states what was found, what was expected and the change that passes. The counts
+a check could compare are computed by code: a form's ``counts`` by ``fill_form`` and again
+at every save (the kind's ``compute``), the next action by the rule table, the review by
+the portfolio extension; the model never counts.
+"""
 
 from __future__ import annotations
 
@@ -115,7 +121,10 @@ def recommendation_follows_rules(view: Any) -> CheckResult:
     cutoff = int(plan_of(view).get("priority_cutoff", rules.TOP_PRIORITIES))
     want, rule = rules.next_action(ext.content, cmp_.content, top_n=cutoff)
     got = rec.content.get("next_action")
-    return CheckResult(got == want, f"the rule table gives {want} ({rule}), not {got}")
+    return CheckResult(
+        got == want, f"the rule table gives next_action {want!r} ({rule}), but the saved "
+        f"recommendation says {got!r}: save it again with next_action {want!r}",
+    )  # fmt: skip
 
 
 def table_saved(view: Any) -> CheckResult:
@@ -127,7 +136,10 @@ def table_saved(view: Any) -> CheckResult:
     want = {k for k in view.all_latest("recommendation") if k is not None}
     missing = sorted(want - have)
     if missing:
-        return CheckResult(False, f"rows missing for {missing}", count=len(missing))
+        return CheckResult(
+            False, f"the table has no row for candidates {missing}: add one row per candidate "
+            f"with a recommendation ({sorted(want)})", count=len(missing),
+        )  # fmt: skip
     if not supervised(view, SPEC):
         return CheckResult(True)
     expected = review(view, SPEC)
