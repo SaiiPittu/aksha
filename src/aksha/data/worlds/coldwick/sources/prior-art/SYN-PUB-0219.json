@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0219",
+  "office": "SYN-Office-1",
+  "kind_code": "A1",
+  "title": "Wash cycle tracking housing with a removable cover",
+  "applicant": "Northdeck Logistics Systems",
+  "dates": {
+    "priority": "2023-03-02",
+    "filing": "2024-03-02",
+    "publication": "2024-09-19"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2023-0302",
+      "date": "2023-03-02"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0219",
+  "status_observations": [
+    {
+      "wording": "Pending",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-09-15"
+    }
+  ],
+  "abstract": "A plastic housing with a removable cover holds the electronics.",
+  "description": "The housing is moulded in two halves that clip together around a gasket.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A housing comprising two moulded halves and a gasket between them."
+    }
+  ]
+}

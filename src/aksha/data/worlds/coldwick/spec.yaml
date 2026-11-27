@@ -1,0 +1,17 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: coldwick
+synthetic: true
+notice: A portfolio world of twenty invention candidates for one venture, to measure the supervisor Task (ADR-P15 D7) on more items than the base worlds hold. Every name, number and document is invented.
+frozen_today: '2026-11-26'
+identifier_schemes:
+  candidate: CW-\d{2}
+  publication: SYN-PUB-02\d{2}
+  priority: SYN-PRI-YYYY-MMDD
+  person: SYN-P-\d{2}
+venture:
+  name: Coldwick
+  domain: coldwick.example
+  product: Coldwick cold-chain temperature logger and reusable shippers
+  segment: pharmacy and chilled-food logistics
+candidates: one design note each under rnd/, profiles in key.json (portfolio.candidates)
+planted_wrong_drop: CW-15

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator, Mapping
 from typing import Any
 
+from aksha.extensions.portfolio import review, supervised
 from aksha.runtime.api import CheckResult
 
 from . import rules
+from .portfolio import SPEC
 
 K = "patent."
 QUOTED = ("extraction", "prior_art", "comparison", "recommendation", "packet")
@@ -123,7 +126,25 @@ def table_saved(view: Any) -> CheckResult:
     have = {r["candidate"] for r in table.content.get("rows", [])}
     want = {k for k in view.all_latest("recommendation") if k is not None}
     missing = sorted(want - have)
-    return CheckResult(not missing, f"rows missing for {missing}", count=len(missing))
+    if missing:
+        return CheckResult(False, f"rows missing for {missing}", count=len(missing))
+    if not supervised(view, SPEC):
+        return CheckResult(True)
+    expected = review(view, SPEC)
+    got = table.content.get("review")
+    message = (
+        "the table's review must list the decisions, the drop list and the audit as "
+        f"recorded: {json.dumps(expected)}"
+    )
+    return CheckResult(_plain(got) == expected, message)
+
+
+def _plain(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [_plain(v) for v in value]
+    return value
 
 
 def selection_saved(view: Any) -> CheckResult:

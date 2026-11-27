@@ -394,6 +394,8 @@ def known_values(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check
     """Values the sources state plainly come back as values, not null, unknown or a flag."""
     bad = []
     facts = _known_facts(ctx, case)
+    if not facts:  # nothing stated to check: a key gap, never a pass on nothing
+        raise KeyRefMissing(message=f"{ctx.key.world}: no stated value to check")
     for fact in facts:
         if fact.kind == "price":
             if not any(

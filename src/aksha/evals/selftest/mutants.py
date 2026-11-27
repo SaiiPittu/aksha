@@ -477,6 +477,37 @@ def search_skipped(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
     return rec.edited(events=edit)
 
 
+def _artifact_shown(content: dict[str, Any]) -> None:
+    """The supervisor was shown a worker's artifact."""
+    content["rendered"] = ["extraction/CW-01@v1"]
+
+
+def _deep_for_all(content: dict[str, Any]) -> None:
+    """Deep work ran for every item, so the tiers saved nothing."""
+    items = int(content.get("items", 0))
+    deep = dict(content.get("model_turns", {}))
+    per = int(deep.get("deep", 0)) // max(1, int(content.get("deep_items", 1)))
+    deep["deep"] = per * items
+    content["model_turns"], content["deep_items"] = deep, items
+
+
+def _planted_kept_dropped(content: dict[str, Any]) -> None:
+    """The audit missed the planted drop: it is not counted a miss and stays dropped."""
+    audit = dict(content.get("audit", {}))
+    missed = list(audit.get("misses", ()))
+    audit["misses"], audit["miss_rate"] = [], None
+    content["audit"] = audit
+    content["admitted"] = [k for k in content.get("admitted", ()) if k not in missed]
+    content["dropped"] = [*content.get("dropped", ()),
+                          *({"key": k, "reason": "low score"} for k in missed)]  # fmt: skip
+
+
+def _goal_never_failed(content: dict[str, Any]) -> None:
+    """The supervisor's goal passed at every turn, so nothing shows it held the stop."""
+    for turn in content.get("turns", ()):
+        turn["goal_ok"] = True
+
+
 MUTANTS: Mapping[str, Mutant] = {
     m.name: m
     for m in (
@@ -506,6 +537,26 @@ MUTANTS: Mapping[str, Mutant] = {
             _edit_outputs("review_summary", _theme_plus_one),
         ),
         Mutant("family-edges-dropped", ("patent.families_are_edges",), family_edges_dropped),
+        Mutant(
+            "supervisor-saw-artifact",
+            ("portfolio.board_only",),
+            _edit_outputs("portfolio", _artifact_shown, "supervisor"),
+        ),
+        Mutant(
+            "deep-for-every-item",
+            ("portfolio.tiers_save_calls",),
+            _edit_outputs("portfolio", _deep_for_all, "cost"),
+        ),
+        Mutant(
+            "planted-drop-missed",
+            ("portfolio.audit_catches_planted_drop",),
+            _edit_outputs("portfolio", _planted_kept_dropped, "review"),
+        ),
+        Mutant(
+            "goal-never-failed",
+            ("portfolio.goal_holds",),
+            _edit_outputs("portfolio", _goal_never_failed, "goal"),
+        ),
         Mutant("edge-excerpt-dropped", ("citation.edge_excerpts",), edge_excerpt_dropped),
         Mutant(
             "matrix-cell-flipped", ("patent.matrix",), _edit_outputs("matrix", _flip_first_cell)

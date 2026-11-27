@@ -103,7 +103,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | F-23 | Cancellation: a durable stop request | Should | P18 | OPS-04 | Stub: the stop command and its honouring; the kill boundary for program-running tools is Later |
 | F-24 | Partial results and finalisation | Must | P24 | FND-03 | The "finalise" answer may be a stub |
 | F-25 | Steering and follow-up input in named lanes | Should | P27 | INV-02 | Stub: the refusal of a message with no lane, and the `amend` lane |
-| F-26 | Supervisor Task, work board and review by job | Later | P15, P16, P05 | OPS-01, OPS-02 | Nothing past the board should be built before fixtures of at least 20 to 40 items exist to measure it on |
+| F-26 | Supervisor Task, work board and review by job | Later | P15, P16, P05 | OPS-01, OPS-02 | Built on 27 Nov 2026 as a slice, Proposed (ADR-P15 S5, ADR-P16 S4): `extensions/portfolio/`, the patent agent above eight candidates, the 20-candidate `coldwick` world and the `portfolio` eval suite. Measured offline with the fake model: 138 model turns against about 196 for deep work on every candidate (29% fewer), the planted wrong drop caught by the audit (miss rate 1 of 3). Model-written admission inside code bounds (SA-14) and the per-tier budget (SA-16) await the maintainer; the scale path's instructions, criteria changes, incremental board and pivot ranking are not built |
 
 ## E. Interfaces and proof: how is an agent added, watched and tested?
 
@@ -142,7 +142,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | F-10 model routing by class | Extraction stays inside rule-based domain tools; the fake generation model runs the loop | 7 |
 | F-15 sandbox | The refusing backend; a program-running tool fails `sandbox_unavailable` | 5 |
 | F-23 cancellation | Ctrl-C is a crash, and the limitation is stated | 9 |
-| F-26 supervisor Task and board | Selection reads the recommendation table | 6 |
+| F-26 supervisor Task and board | Built as a Proposed slice (27 Nov 2026); at eight candidates or fewer selection reads the recommendation table as before | 6 |
 | F-29 OTLP export | `aksha inspect` shows the same facts locally | 10 |
 | F-33 headless mode | Runs are attended; approvals wait for a person | 5 |
 | F-34 web app | The CLI is the interface; the web app runs on its mock server | none |

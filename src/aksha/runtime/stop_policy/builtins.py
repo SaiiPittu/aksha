@@ -1,4 +1,4 @@
-"""The four opt-in stop policies (ADR-P16 D4): goal, plan, forced tool and todo reminder.
+"""The five opt-in stop policies (ADR-P16 D4): goal, plan, forced tool, todo reminder, recite.
 
 An agent opts into one with ``Goal(check)``, ``Plan(kind, accept)``, ``ForcedTool(tool,
 when)`` or ``TodoReminder(every)`` on a Task (or agent-wide); it never subclasses one.
@@ -18,6 +18,9 @@ forced tool     nothing                              PASS               while ``
                                                                         a ``tool_choice``
 todo reminder   nothing                              PASS               every N turns, the
                                                                         open todos
+recite          nothing                              PASS               every turn, a pure
+                                                                        projection, capped,
+                                                                        as data
 ==============  ===================================  =================  ==================
 
 Every check is the agent's pure function over a ``TaskView``, run through ``run_check``.
@@ -31,6 +34,7 @@ from aksha.runtime.budgets.limits import turns_used
 from aksha.runtime.stop_policy.types import (
     PASS,
     Prep,
+    Render,
     StopCandidate,
     StopPolicyOptIn,
     StopView,
@@ -192,8 +196,7 @@ class TodoReminderPolicy:
             own = evaluate_in(state, ref)
             return () if own.ok else (own.message or "finish the work",)
         out = []
-        for child in node.task.children:
-            cref = ref.child(child.id)
+        for cref in state.children(ref):
             if state.settled(cref):
                 continue
             evaluation = evaluate_in(state, cref)
@@ -218,7 +221,52 @@ class TodoReminderPolicy:
         return None
 
 
-BuiltinPolicy = GoalPolicy | PlanPolicy | ForcedToolPolicy | TodoReminderPolicy
+RECITE_CUT = "[recitation cut at {n} characters]"
+
+
+@dataclass(frozen=True)
+class RecitePolicy:
+    """Recitation: every turn, a pure projection of the log, capped, placed as data."""
+
+    instance: InstanceRef
+    render: Render
+    max_chars: int
+
+    @property
+    def ref(self) -> str:
+        """``recite:lead``."""
+        return f"recite:{self.instance.instance}"
+
+    def lines(self, view: StopView) -> tuple[str, ...]:
+        """The render's lines; a render that raises recites one line naming the error."""
+        try:
+            found = self.render(_view(view, self.instance))
+        except Exception as exc:  # a broken render never widens or crashes a turn
+            return (f"{self.ref} failed: {type(exc).__name__}",)
+        if isinstance(found, str):
+            return (found,)
+        return tuple(str(x) for x in found)
+
+    def prepare(self, view: StopView) -> Prep:
+        """The lines joined, cut at ``max_chars`` with a line saying so."""
+        text = "\n".join(self.lines(view))
+        if not text:
+            return Prep()
+        if len(text) > self.max_chars:
+            note = RECITE_CUT.format(n=self.max_chars)
+            text = text[: max(0, self.max_chars - len(note) - 1)] + "\n" + note
+        return Prep(data=(text,))
+
+    def judge(self, view: StopView, c: StopCandidate) -> Verdict:
+        """Never vetoes."""
+        return PASS
+
+    def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
+        """A recitation sets no limit."""
+        return None
+
+
+BuiltinPolicy = GoalPolicy | PlanPolicy | ForcedToolPolicy | TodoReminderPolicy | RecitePolicy
 
 
 def build(opt: StopPolicyOptIn, instance: InstanceRef) -> BuiltinPolicy:
@@ -230,4 +278,6 @@ def build(opt: StopPolicyOptIn, instance: InstanceRef) -> BuiltinPolicy:
         return PlanPolicy(instance, str(p["kind"]), p["accept"])  # type: ignore[arg-type]
     if opt.name == "forced_tool":
         return ForcedToolPolicy(instance, str(p["tool"]), p["when"])  # type: ignore[arg-type]
+    if opt.name == "recite":
+        return RecitePolicy(instance, p["render"], int(p["max_chars"]))  # type: ignore[arg-type,call-overload]
     return TodoReminderPolicy(instance, int(p["every"]))  # type: ignore[call-overload]

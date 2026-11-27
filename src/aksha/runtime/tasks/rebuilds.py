@@ -55,7 +55,7 @@ def rebuild_targets(view: LogView, tree: CompiledTree, run: str) -> tuple[Instan
             continue
         if rebuild_blocked(view, entry) is not None:
             continue
-        ref = InstanceRef(run, w.task_path, w.key)
+        ref = tree.ref(run, w.task_path, w.key)
         if ref not in out:
             out.append(ref)
     return tuple(out)

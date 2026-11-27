@@ -1,0 +1,21 @@
+event,date,invention,type,shown,audience,public,who,link,synthetic
+SYN-EV-01,2026-05-01,CW-01,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-01",SYN-P-02,not on file,true
+SYN-EV-02,2026-05-02,CW-02,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-02",SYN-P-03,not on file,true
+SYN-EV-03,2026-05-03,CW-03,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-03",SYN-P-04,not on file,true
+SYN-EV-04,2026-05-04,CW-04,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-04",SYN-P-01,not on file,true
+SYN-EV-05,2026-05-05,CW-05,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-05",SYN-P-02,not on file,true
+SYN-EV-06,2026-05-06,CW-06,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-06",SYN-P-03,not on file,true
+SYN-EV-07,2026-05-07,CW-07,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-07",SYN-P-04,not on file,true
+SYN-EV-08,2026-05-08,CW-08,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-08",SYN-P-01,not on file,true
+SYN-EV-09,2026-05-09,CW-09,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-09",SYN-P-02,not on file,true
+SYN-EV-10,2026-05-10,CW-10,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-10",SYN-P-03,not on file,true
+SYN-EV-11,2026-05-11,CW-11,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-11",SYN-P-04,not on file,true
+SYN-EV-12,2026-05-12,CW-12,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-12",SYN-P-01,not on file,true
+SYN-EV-13,2026-05-13,CW-13,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-13",SYN-P-02,not on file,true
+SYN-EV-14,2026-06-14,CW-14,blog post,"Full description of the solar lid charger for reusable shippers, with every step and setting","public, coldwick.example/blog",yes,SYN-P-03,not on file,true
+SYN-EV-15,2026-06-15,CW-15,trade fair stand,"Photo of the logger lid and a one-line summary","Cold Chain Days 2026, Antwerp, open floor, about 300 visitors",yes,SYN-P-04,not on file,true
+SYN-EV-16,2026-05-16,CW-16,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-16",SYN-P-01,not on file,true
+SYN-EV-17,2026-05-17,CW-17,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-17",SYN-P-02,not on file,true
+SYN-EV-18,2026-06-18,CW-18,trade fair stand,"Photo of the logger lid and a one-line summary","Cold Chain Days 2026, Antwerp, open floor, about 300 visitors",yes,SYN-P-03,not on file,true
+SYN-EV-19,2026-05-19,CW-19,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-19",SYN-P-04,not on file,true
+SYN-EV-20,2026-05-20,CW-20,customer demo,"Working demo for one prospect, no documents left behind","the operations team of one prospect","no, under NDA-SYN-2026-20",SYN-P-01,not on file,true

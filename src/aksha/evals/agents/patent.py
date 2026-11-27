@@ -41,12 +41,18 @@ import re
 from collections.abc import Iterable, Mapping
 from typing import Any
 
+from aksha.agents.patent.agent import tasks as patent_tasks
+from aksha.agents.patent.portfolio import SPEC as PORTFOLIO
 from aksha.evals.agents.runtime import EpisodeMailbox, EpisodeReader, RuntimeUnderTest
 from aksha.evals.episode import Episode
+from aksha.extensions.portfolio import goal, items, review, supervised
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.versions import current
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.session.views import Waiting
+from aksha.runtime.tasks.tree import compile_tree
+from aksha.runtime.tasks.types import InstanceRef
+from aksha.runtime.tasks.view import TaskView
 
 AGENT = "patent"
 SOURCE = "inputs"
@@ -153,6 +159,7 @@ class PatentUnderTest(RuntimeUnderTest):
             packet = content("packet", cand)
             if packet:
                 episode.save("packet", cand, packet)
+        _portfolio(view, episode)
 
     def _extraction(
         self, ep: Episode, reader: EpisodeReader, cand: str, ext: Mapping[str, Any]
@@ -283,3 +290,97 @@ def _number(value: Any) -> Any:
     if re.fullmatch(r"-?\d+", text):
         return int(text)
     return value  # a decimal stays as written: the store refuses floats
+
+
+def _tier(instance: str) -> str:
+    """Which part of the portfolio a model step's instance belongs to."""
+    head, _, rest = instance.partition("/")
+    if head == PORTFOLIO.supervisor:
+        return "supervisor"
+    if head.startswith(f"{PORTFOLIO.supervisor}["):
+        return "deep" if rest.startswith(f"{PORTFOLIO.deep.task}") else "triage"
+    return "other"
+
+
+def _instance_of(step: str) -> str:
+    parts = step.split("/")[1:]
+    out = []
+    for p in parts:
+        if re.fullmatch(r"t\d+", p):
+            break
+        out.append(p)
+    return "/".join(out)
+
+
+def _portfolio(view: LogView, episode: Episode) -> None:
+    """The supervisor's outputs, when its candidates ran under it (ADR-P15 D7 S5).
+
+    Counted from the runtime's own facts, as :func:`run_metrics` counts: ``review`` is
+    the kit's batched review; ``supervisor`` what the supervisor's model steps were shown
+    (``step.started{rendered, context_chars}``) and which tools it called; ``cost`` the
+    model turns by tier and the items each tier ran for; ``goal`` every evaluation of the
+    supervisor's completion check, the goal as it stood at each supervisor turn (what the
+    board's GOAL line told it), and where its DONE and the first selection Task fell.
+    """
+    run = next((e.run for e in view.events if e.type == "run.started"
+                and e.payload.get("cause") == "request" and e.run), None)  # fmt: skip
+    if run is None:
+        return
+    tree = compile_tree(AGENT, patent_tasks())
+    lead = InstanceRef(run, PORTFOLIO.supervisor)
+    tv = TaskView(view, tree, lead)
+    if not supervised(tv, PORTFOLIO):
+        return
+    episode.save("portfolio", "review", review(tv, PORTFOLIO))
+    turns = {"supervisor": 0, "triage": 0, "deep": 0, "other": 0}
+    keys: dict[str, set[str]] = {"triage": set(), "deep": set()}
+    rendered: list[str] = []
+    chars: list[int] = []
+    tools: dict[str, int] = {}
+    for e in view.events:
+        if e.run != run or not e.step:
+            continue
+        instance = _instance_of(e.step)
+        tier = _tier(instance)
+        p = e.payload
+        if e.type == "step.completed" and p.get("kind") == "model":
+            turns[tier] += 1
+            if tier in keys:
+                keys[tier].add(InstanceRef.parse(run, instance).key or "")
+        if tier != "supervisor":
+            continue
+        if e.type == "step.started" and p.get("kind") == "model":
+            rendered += [str(r.get("ref")) for r in p.get("rendered", ())]
+            chars.append(int(p.get("context_chars", 0)))
+        elif e.type == "step.completed" and p.get("kind") == "tool":
+            name = str(p.get("tool") or p.get("name"))
+            tools[name] = tools.get(name, 0) + 1
+    episode.save("portfolio", "supervisor", {
+        "turns": turns["supervisor"], "rendered": rendered, "tool_calls": tools,
+        "max_context_chars": max(chars, default=0),
+        "tools_offered": sorted(tree.node(PORTFOLIO.supervisor).task.tools),
+    })  # fmt: skip
+    episode.save("portfolio", "cost", {
+        "model_turns": turns, "items": len(items(tv, PORTFOLIO) or ()),
+        "triage_items": len(keys["triage"]), "deep_items": len(keys["deep"]),
+    })  # fmt: skip
+    check = goal(PORTFOLIO)
+    turns_read = []
+    for e in view.events:
+        if (e.type == "stop.decided" and e.run == run and e.instance == PORTFOLIO.supervisor
+                and e.payload.get("verdict") == "continue"):  # fmt: skip
+            seen = check(TaskView(view.upto(int(e.payload.get("seq_read", e.seq - 1))), tree, lead))
+            turns_read.append({"seq": e.seq, "reason": e.payload.get("reason"), "goal_ok": seen.ok,
+                               "goal": seen.message, "clears": seen.clears})  # fmt: skip
+    evaluations = [
+        {"seq": e.seq, "ok": bool(e.payload.get("ok")), "on": e.payload.get("on"),
+         "code": e.payload.get("code"), "message": str(e.payload.get("message", ""))}
+        for e in view.events
+        if e.type == "completion_check.evaluated" and e.run == run
+        and e.instance == PORTFOLIO.supervisor
+    ]  # fmt: skip
+    done = next((x["seq"] for x in evaluations if x["ok"]), None)
+    after = next((e.seq for e in view.events if e.type == "task.entered" and e.run == run
+                  and e.instance == "table"), None)  # fmt: skip
+    episode.save("portfolio", "goal", {"turns": turns_read, "evaluations": evaluations,
+                                       "done_seq": done, "table_entered_seq": after})  # fmt: skip

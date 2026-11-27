@@ -1,0 +1,8 @@
+# The supervisor Task over a portfolio of candidates (ADR-P15 D7 S5, feature F-26), run
+# through the Patent Agent's eval adapter on the twenty-candidate coldwick world. Above the
+# threshold of eight candidates the agent runs them under the supervisor: triage for all,
+# deep work for the admitted ones and an audit sample of the drops.
+[suite]
+name = "portfolio"
+description = "Patent Agent's supervisor over twenty candidates"
+k = 1

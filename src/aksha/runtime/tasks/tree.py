@@ -6,7 +6,9 @@ no check, a tree deeper than four, a ``needs`` naming no sibling, ...) run befor
 ``definitions/tree_checks.py``; ``compile_tree`` refuses again what the v1 scheduler cannot
 run, so a hand-built tree in a test meets the same rules:
 
-1. ``keyed_child_unsupported``: a Task with ``per=`` below the top level (v2 LC-8).
+1. ``keyed_child_unsupported``: a Task with ``per=`` below another keyed Task (v2 LC-8).
+   A keyed Task below an un-keyed parent is allowed, so a supervisor's workers fan out
+   per item (ADR-P15 D7 amendment); a path still holds at most one keyed Task.
 2. ``concurrency_unsupported``: a concurrency setting other than 1 (D5; deterministic
    replay needs one instance at a time, decision 8).
 3. ``leaf_without_check``: a leaf Task with ``done=None``.
@@ -24,7 +26,7 @@ from types import MappingProxyType
 from aksha.runtime.definitions.names import resolve_kind
 from aksha.runtime.tasks.checks import check_name
 from aksha.runtime.tasks.errors import TaskUnknown, TreeInvalid
-from aksha.runtime.tasks.types import KeySource, Read, Task
+from aksha.runtime.tasks.types import InstanceRef, KeySource, Read, Task
 
 MAX_CONCURRENCY = 1
 """The only concurrency setting v1 accepts; the pick order already returns a tuple."""
@@ -75,9 +77,20 @@ class CompiledTree:
         """A kind's full name as this agent wrote it: ``line`` is ``<agent>.line``."""
         return resolve_kind(name, self.agent)
 
+    def key_node(self, path: str) -> str:
+        """The keyed Task at or above ``path`` (its key binds the path), else the top one."""
+        found = self.node(path)
+        while found.task.per is None and found.parent is not None:
+            found = self.nodes[found.parent]
+        return found.path
+
     def key_source(self, path: str) -> KeySource | None:
-        """The key source of the top-level Task above ``path``; its children share its key."""
-        return self.node(self.node(path).top).task.per
+        """The key source of the keyed Task at or above ``path``; its children share its key."""
+        return self.node(self.key_node(path)).task.per
+
+    def ref(self, run: str, path: str, key: str | None) -> InstanceRef:
+        """The instance of ``path`` for ``key``, the key dropped when no Task above is keyed."""
+        return InstanceRef(run, path, key if self.key_source(path) is not None else None)
 
     def siblings(self, path: str) -> tuple[str, ...]:
         """The paths of the Tasks beside ``path`` (itself included), in declaration order."""
@@ -111,14 +124,21 @@ def compile_tree(
         message = f"concurrency {concurrency} is not built; v1 runs one instance at a time"
         problems.append(("concurrency_unsupported", "", message))
 
+    def keyed_above(parent: str | None) -> bool:
+        while parent is not None:
+            if nodes[parent].task.per is not None:
+                return True
+            parent = nodes[parent].parent
+        return False
+
     def add(task: Task, parent: str | None, depth: int) -> None:
         path = task.id if parent is None else f"{parent}/{task.id}"
         if path in nodes:
             problems.append(("duplicate_task", path, f"two sibling Tasks are named {task.id!r}"))
             return
         nodes[path] = TaskNode(path, task, depth, parent)
-        if task.per is not None and depth > 1:
-            message = "a keyed Task below the top level is not built (keyed_child_unsupported)"
+        if task.per is not None and keyed_above(parent):
+            message = "a keyed Task below a keyed Task is not built (keyed_child_unsupported)"
             problems.append(("keyed_child_unsupported", path, message))
         if task.done is None and not task.children:
             problems.append(("leaf_without_check", path, "a leaf Task needs a completion check"))

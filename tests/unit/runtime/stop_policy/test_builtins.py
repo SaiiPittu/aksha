@@ -187,3 +187,41 @@ def test_build_turns_each_opt_in_into_its_policy() -> None:
     assert isinstance(build(Plan("plan", always), r), PlanPolicy)
     assert isinstance(build(ForcedTool("t", always), r), ForcedToolPolicy)
     assert build(TodoReminder(every=4), r) == TodoReminderPolicy(r, 4)
+
+
+def _board(view: Any) -> tuple[str, ...]:
+    return ("WORK BOARD", *(f"row {i}" for i in range(50)))
+
+
+def _broken(view: Any) -> tuple[str, ...]:
+    raise RuntimeError("boom")
+
+
+def test_recite_places_its_lines_as_data_every_turn_capped_and_never_vetoes() -> None:
+    from aksha.runtime.stop_policy.types import Recite
+
+    tree, log = _fix(Recite(_board, max_chars=80)), _log()
+    decide(log, tree, StopCandidate(RUN, "next"))
+    prep = prep_for(view_of(log, tree), ref("fix"))
+    assert prep.brief == ()  # a recitation is never an instruction
+    (data,) = prep.data
+    assert data.startswith("WORK BOARD\nrow 0") and len(data) <= 80
+    assert data.endswith("[recitation cut at 80 characters]")
+    d = decide(log, tree, _finish(1))
+    assert ("recite:fix", "pass") in d.trail
+
+
+def test_a_recitation_that_raises_recites_the_error_and_the_turn_goes_on() -> None:
+    from aksha.runtime.stop_policy.types import Recite
+
+    tree, log = _fix(Recite(_broken)), _log()
+    decide(log, tree, StopCandidate(RUN, "next"))
+    assert prep_for(view_of(log, tree), ref("fix")).data == ("recite:fix failed: RuntimeError",)
+
+
+def test_the_context_puts_a_recitation_after_the_request_under_its_fence() -> None:
+    from aksha.runtime.context.assembly import RECITATION, recitation
+
+    text = recitation("WORK BOARD {}")
+    assert text.splitlines() == [RECITATION, "WORK BOARD {}"]
+    assert "no instructions" in RECITATION

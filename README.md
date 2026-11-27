@@ -37,22 +37,22 @@ uvx --from git+https://github.com/SaiiPittu/aksha aksha demo
 Two agents (research and patent) run on a synthetic world, one input set changes, only the dependent work is rebuilt, and a send to a mock mailbox survives a real `SIGKILL`. An excerpt from a run on 27 Nov 2026 (about a minute here; the timings depend on the machine):
 
 ```text
-1. Both agents run on the stillroom world (21.05 s)
-   research R-0001 complete: 11 outputs, 22 model calls
-   patent   R-0002 complete: 23 outputs, 43 model calls
-3. Invalidation reopens only what depends on the change (18.99 s)
-   strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed)
+1. Both agents run on the stillroom world (30.79 s)
+   research R-0001 complete: 11 outputs, 23 model calls
+   patent   R-0002 complete: 23 outputs, 54 model calls
+3. Invalidation reopens only what depends on the change (22.63 s)
+   strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed); C1~filing-information-worksheet: form (cites nothing, so read-keyed); C1~invention-disclosure-form: form (cites nothing, so read-keyed)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
    keyed on every read instead, the same change would reopen 27 outputs, not 14
    rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
    kept 13 patent outputs: ...
    kept 7 of 11 research outputs: ...
-   early cutoff: the 10 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
-4. SIGKILL mid-send, then recovery (7.02 s)
+   early cutoff: the 18 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
+4. SIGKILL mid-send, then recovery (6.24 s)
    at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times
    mailbox: 2 deliveries for 2 idempotency keys (patent.packet/C1@v1, patent.packet/C1@v2): each packet version exactly once
 5. Event store
-   hash chain verified: 1499 events, head sha256:e70bde41c57a27cf...
+   hash chain verified: 1833 events, head sha256:e108a47431ae7f12...
 ```
 
 The command exits 0 only when every check passes.
@@ -112,18 +112,18 @@ Counted from the code on main on 27 Nov 2026:
 | | |
 |---|---|
 | Primitives | 29 of the 30 in the [catalogue](docs/design/03-primitives.md) have code and tests; erasure (P30) is in review |
-| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.14 |
+| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.16 |
 | Session commands | 16 named commands behind one `dispatch`, with stored receipts so a retried command gets its first receipt back |
 | Event types | 62 in the core catalogue |
 | Command line | 23 subcommands, one server (`aksha serve`), fixed exit codes |
-| Tests | 3,244 collected (unit, contract, integration, architecture, agents), offline |
-| Evals | 12 suites over 10 fixture worlds |
+| Tests | 3,400 collected (unit, contract, integration, architecture, agents), offline |
+| Evals | 13 suites over 11 fixture worlds |
 
 The pieces around invalidation: a policy gate in code (deny by default, approvals bound to the exact action by signature), durable execution that resumes after a crash, a transactional outbox keyed by meaning so a retry never sends twice, model classes (extraction, classification, generation) with confidence thresholds, grounding that checks every quote at save, a correction loop (a person or an agent proposes a fix with evidence, the domain owner approves it, invalidation rebuilds what read the old value), cross-run reuse of outputs whose reads still hold, and tracing as a projection of the store. The tiers, ports and dependency rule are in the [architecture overview](docs/architecture/overview.md); the architecture tests in `tests/architecture/` enforce them.
 
 ## Results on the held-out worlds
 
-Six of the ten worlds were written without sight of the agent code, to test whether the offline agents generalise beyond the fixtures they were built on. Every suite run on a fresh clone of main on 27 Nov 2026, in fake model mode:
+Six of the eleven worlds were written without sight of the agent code, to test whether the offline agents generalise beyond the fixtures they were built on. Every suite run on a fresh clone of main on 27 Nov 2026, in fake model mode:
 
 | Suite | Agent | Written blind | Cases passed | Grader self-tests |
 |---|---|---|---|---|
@@ -139,6 +139,7 @@ Six of the ten worlds were written without sight of the agent code, to test whet
 | pulvane | patent | yes | 7 of 8 | pass |
 | quillmere | patent | yes | 3 of 7 | pass |
 | brackwen | patent | yes | 7 of 9 | pass |
+| portfolio | patent, under the supervisor Task | no | 1 of 1 | pass |
 
 On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 17 of 24 (3 of 23 before its reader and the graders were made general; `pulvane` gained a case). What still fails is the offline comparison, which counts a step's words where the worlds' authors judged paraphrases, and one threshold stated in other units; [limitations item 19](docs/limitations.md) lists each gap, and says why the three patent worlds no longer count as held out. They are left failing on purpose rather than fixed with a rule that fits one world. These are fake-model numbers, so they test the harness and the offline rules, not a model. Every suite's grader self-tests pass, and no suite had an invariant failure.
 

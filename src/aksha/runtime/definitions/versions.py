@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.15"
+API_VERSION = "2.16"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -81,6 +81,10 @@ record holding several kinds is decided section by section (ADR-P07 G4).
 2.15 (27 Nov 2026, ADR-P07 G6) added native file input: the trailing fields
 ``Message.files`` (no files by default; a message with none hashes as before) and
 ``ModelCapabilities.file_types`` and ``ModelCapabilities.max_inline_bytes`` (none).
+2.16 (27 Nov 2026, ADR-P16 S4) added ``Recite``, the recitation stop policy a supervisor
+reads its work board through, ``RECITATION`` (the fence line a model reads it under), the
+trailing field ``Prep.data`` behind it, and
+``TaskView.spent``, the turns and tool calls spent below an instance on one key.
 """
 
 Version = tuple[int, int]

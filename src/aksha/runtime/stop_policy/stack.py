@@ -73,6 +73,7 @@ def compose_prep(stack: tuple[StopPolicy, ...], view: StopView) -> Prep:
     tools: frozenset[str] | None = None
     narrowed_by: str | None = None
     choice: str | None = None
+    data: list[str] = []
     for policy in stack:
         try:
             prep = policy.prepare(view)
@@ -83,6 +84,7 @@ def compose_prep(stack: tuple[StopPolicy, ...], view: StopView) -> Prep:
                 narrowed_by=policy.ref,
             )
         brief.extend(prep.brief)
+        data.extend(prep.data)
         if prep.tools is not None:
             tools = prep.tools if tools is None else tools & prep.tools
             narrowed_by = prep.narrowed_by or policy.ref
@@ -90,7 +92,7 @@ def compose_prep(stack: tuple[StopPolicy, ...], view: StopView) -> Prep:
             choice = prep.tool_choice
     if choice is not None and tools is not None and choice not in tools:
         choice = None
-    return Prep(tuple(brief), tools, narrowed_by, choice)
+    return Prep(tuple(brief), tools, narrowed_by, choice, tuple(data))
 
 
 def prep_for(view: StopView, ref: InstanceRef) -> Prep:

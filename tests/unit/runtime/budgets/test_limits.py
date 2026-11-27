@@ -10,6 +10,7 @@ from aksha.runtime.budgets.limits import (
     automatic_starts,
     limit_reached,
     resumes_since_progress,
+    turns_since_entry,
     turns_used,
     vetoes_since_entry,
 )
@@ -59,6 +60,24 @@ def test_the_veto_count_starts_again_on_each_entry() -> None:
     log.entered()
     log.decided("continue", candidate="finish")
     assert vetoes_since_entry(log.view(), RUN, "a") == 1
+
+
+def test_the_turn_count_starts_again_on_a_rebuild_entry() -> None:
+    # A rebuild re-enters the instance: its turns so far belong to the version it replaces.
+    log = Log()
+    log.entered()
+    for turn in range(1, 5):
+        log.decided("continue", turn=turn)
+    log.entered()
+    for turn in range(5, 9):
+        log.decided("continue", turn=turn)
+    assert turns_used(log.view(), RUN, "a") == 8  # turn numbers still run over the life
+    assert turns_since_entry(log.view(), RUN, "a") == 4
+    assert limit_reached(log.view(), RUN, "a", Limits(turn_limit=6)) == ()
+    log.decided("continue", turn=9)
+    log.decided("continue", turn=10)
+    hit = LimitHit("turn_limit", 6, 6, "a")
+    assert limit_reached(log.view(), RUN, "a", Limits(turn_limit=6)) == (hit,)
 
 
 def test_restart_limit_from_log() -> None:

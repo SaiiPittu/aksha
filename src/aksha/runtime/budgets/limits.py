@@ -6,7 +6,7 @@ view (or the events of one) and derives the number, so a restart never resets it
 ==================  =======  ==================================================  ==============
 Limit               Default  Counted from                                        Bites when
 ==================  =======  ==================================================  ==============
-turn limit          10       turns authorised for the Task instance              used >= limit
+turn limit          10       turns authorised since the instance was entered     used >= limit
 stop-veto limit     3        vetoes since the instance was last entered          used >= limit
 restart limit       3        resume records since the run's last progress        used >= limit
 automatic starts    3 / 5 m  automatic starts recorded inside the window          used >= count
@@ -16,6 +16,12 @@ timer starts        3 / 5 m  an agent's runs opened by a timer inside the window
 "Bites" means the next turn, veto or resume would exceed the limit: the turn limit lets
 ten turns run and fails the eleventh, and the restart limit lets three resumes run and
 ends the run on the fourth (ADR-P02 D8: "above 3 the run stops").
+
+The turn limit, like the stop-veto limit, counts one entry's work: a rebuild re-entry
+(ADR-P05 D7) writes a new ``task.entered`` and starts the count again. Counted over the
+instance's whole life, a rebuild would inherit the turns of the version it replaces, and an
+instance whose limit is sized to one build could never be rebuilt. Turn numbers still run
+over the whole life (``turns_used``), so a step id is never reused.
 """
 
 from __future__ import annotations
@@ -60,6 +66,22 @@ def turns_used(view: LogView, run: str, instance: str) -> int:
     return len(turns)
 
 
+def turns_since_entry(view: LogView, run: str, instance: str) -> int:
+    """Model turns authorised for ``instance`` of ``run`` since its last ``task.entered``.
+
+    What the turn limit reads; a resumed turn adds none, as in ``turns_used``.
+    """
+    turns: set[tuple[str, ...]] = set()
+    for e in view.events:
+        if e.run != run or e.instance != instance:
+            continue
+        if e.type == records.TASK_ENTERED:
+            turns.clear()
+        elif key := records.charged_turn(e):
+            turns.add(key)
+    return len(turns)
+
+
 def vetoes_since_entry(view: LogView, run: str, instance: str) -> int:
     """Completion-check vetoes of ``instance`` since its last entry or reset (ADR-P15 D2).
 
@@ -100,7 +122,7 @@ def limit_reached(
     """
     hits: list[LimitHit] = []
     if instance is not None:
-        turns = turns_used(view, run, instance)
+        turns = turns_since_entry(view, run, instance)
         if turns >= limits.turn_limit:
             hits.append(LimitHit("turn_limit", turns, limits.turn_limit, instance))
         vetoes = vetoes_since_entry(view, run, instance)

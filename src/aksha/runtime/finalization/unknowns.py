@@ -34,7 +34,7 @@ RESERVE_SPENT = "reserve_spent"
 
 def _parent(state: RunState, ref: InstanceRef) -> InstanceRef | None:
     node = state.tree.node(ref.task_path)
-    return None if node.parent is None else InstanceRef(ref.run, node.parent, ref.key)
+    return None if node.parent is None else state.tree.ref(ref.run, node.parent, ref.key)
 
 
 def _under_voided(state: RunState, ref: InstanceRef) -> bool:

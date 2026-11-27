@@ -105,11 +105,13 @@ class _Pick:
                 seen.add(ref)
                 yield ref
 
-    def walk(self, paths: tuple[str, ...], key: str | None, keyed: bool) -> Iterator[InstanceRef]:
-        for path in paths:
-            refs = (InstanceRef(self.state.run, path, key),) if keyed else self.state.refs(path)
-            for ref in refs:
-                yield from self.consider(ref)
+    def walk(self, refs: tuple[InstanceRef, ...]) -> Iterator[InstanceRef]:
+        for ref in refs:
+            yield from self.consider(ref)
+
+    def roots(self) -> Iterator[InstanceRef]:
+        for path in self.state.tree.roots:
+            yield from self.walk(self.state.refs(path))
 
     def consider(self, ref: InstanceRef) -> Iterator[InstanceRef]:
         state = self.state
@@ -124,7 +126,7 @@ class _Pick:
         if node.is_leaf or status == "new":
             yield ref
             return
-        below = tuple(self.walk(node.children, ref.key, True))
+        below = tuple(self.walk(state.children(ref)))
         if is_supervisor(node.task):
             move = supervisor_step(state, ref, below)
             if move.move == "push":
@@ -134,7 +136,7 @@ class _Pick:
             return
         if below:
             yield from below
-        elif all(state.settled(ref.child(c.id)) for c in node.task.children):
+        elif all(state.settled(c) for c in state.children(ref)):
             yield ref
 
     def needs_met(self, ref: InstanceRef) -> bool:
@@ -177,13 +179,20 @@ class _Pick:
 
 
 def _same_source(a: KeySource | None, b: KeySource | None) -> bool:
-    return a is not None and b is not None and a == b
+    """Whether two key sources key the same items, so a ``needs`` binds key to key.
+
+    A key filter (``unless``) only narrows the keys one Task takes, so a filtered source
+    still keys the same items as its unfiltered sibling (a supervisor's deep tier needs
+    the same item's triage, not every item's).
+    """
+    if a is None or b is None:
+        return False
+    return (a.origin, a.name, a.path) == (b.origin, b.name, b.path)
 
 
 def runnable_below(state: RunState, ref: InstanceRef) -> tuple[InstanceRef, ...]:
     """The runnable instances under parent ``ref``, in pick order (what a supervisor reads)."""
-    node = state.tree.node(ref.task_path)
-    return tuple(_Pick(state).walk(node.children, ref.key, True))
+    return tuple(_Pick(state).walk(state.children(ref)))
 
 
 def runnable_in(state: RunState) -> tuple[InstanceRef, ...]:
@@ -196,7 +205,7 @@ def runnable_in(state: RunState) -> tuple[InstanceRef, ...]:
     pick = _Pick(state)
     if pick.rebuild_run:
         return tuple(dict.fromkeys(pick.rebuild_walk()))
-    walked = pick.walk(state.tree.roots, None, False)
+    walked = pick.roots()
     return tuple(dict.fromkeys((*pick.reentries(), *walked)))
 
 
@@ -354,8 +363,8 @@ def reentry(
     """
     if writer.agent != tree.agent:
         raise TaskUnknown(message=f"writer {writer.agent!r} is not agent {tree.agent!r}")
-    ref = InstanceRef(run, writer.task_path, writer.key)
-    tree.node(ref.task_path)
+    tree.node(writer.task_path)
+    ref = tree.ref(run, writer.task_path, writer.key)
     facts: list[NewEvent] = []
     if run_state(view, tree, run).status(ref) == "blocked":
         facts.append(reset_fact(ref, "rebuild"))

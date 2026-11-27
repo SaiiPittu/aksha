@@ -36,7 +36,10 @@ def test_every_gradeable_criterion_is_killed_by_a_mutant(
     # are key gaps here; tests/unit/evals/test_change_criteria.py kills each with a mutant.
     change = ["change.stale_set", "change.unchanged_set", "research.scope_change"]
     unkeyed = [c for c in REGISTRY if c.startswith("trap.") and c[5:] not in key(name).traps]
-    assert report.key_gaps == sorted(["precision.abstention_count", *change, *unkeyed])
+    # The portfolio checks read a portfolio world's key section, which these worlds lack;
+    # tests/unit/evals/test_portfolio_criteria.py kills each with a mutant.
+    portfolio = [c for c in REGISTRY if c.startswith("portfolio.")]
+    assert report.key_gaps == sorted(["precision.abstention_count", *change, *unkeyed, *portfolio])
     gaps = len(report.key_gaps)
     assert (killed, total) == (len(REGISTRY) - gaps, len(REGISTRY) - gaps)
 
@@ -131,3 +134,23 @@ def test_no_grader_names_a_field_one_world_extracted() -> None:
                  root / "agents" / "patent.py", root / "judge.py"]:  # fmt: skip
         text = path.read_text(encoding="utf-8")
         assert [w for w in first_world if w in text] == [], path.name
+
+
+def test_the_portfolio_world_self_tests_and_its_four_checks_are_killed(tmp_path: Path) -> None:
+    """The oracle builds the supervisor's outputs from the key; a mutant kills each check.
+
+    ``coldwick`` keys no stated value, so ``precision.known_values`` is a key gap there
+    rather than a pass on nothing, and the hedger is not asked to fail it.
+    """
+    report = self_test(
+        world("coldwick"), key("coldwick"), open_store=OPEN, out=tmp_path, registry=REGISTRY
+    )
+    assert [(c.bundle, c.problems) for c in report.checks if not c.ok] == []
+    assert "precision.known_values" in report.key_gaps
+    killed = {c for check in report.checks for c in check.killed}
+    assert {
+        "portfolio.board_only",
+        "portfolio.tiers_save_calls",
+        "portfolio.audit_catches_planted_drop",
+        "portfolio.goal_holds",
+    } <= killed

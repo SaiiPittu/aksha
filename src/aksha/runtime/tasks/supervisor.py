@@ -48,16 +48,27 @@ def _turn_seqs(state: RunState, ref: InstanceRef) -> list[int]:
     ]
 
 
+def is_below(ref: InstanceRef, instance: str) -> bool:
+    """Whether ``instance`` is a descendant of ``ref``: a child Task's instance under it.
+
+    A keyed child of an un-keyed parent carries its key on the top segment
+    (``lead[a]/work``), so the test reads the path and the key, not a string prefix.
+    """
+    below = InstanceRef.parse(ref.run, instance)
+    return below.task_path.startswith(f"{ref.task_path}/") and (
+        ref.key is None or below.key == ref.key
+    )
+
+
 def _progress_seq(state: RunState, ref: InstanceRef) -> int:
-    below = f"{ref.instance}/"
     last = 0
     for e in state.view.events:
         if e.run != ref.run:
             continue
         if e.type == STOP_DECIDED:
-            if any(instance.startswith(below) for instance, _ in popped(e)):
+            if any(is_below(ref, instance) for instance, _ in popped(e)):
                 last = e.seq
-        elif e.type == "artifact.saved" and (e.instance or "").startswith(below):
+        elif e.type == "artifact.saved" and e.instance and is_below(ref, e.instance):
             last = e.seq
     return last
 

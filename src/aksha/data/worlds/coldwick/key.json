@@ -1,0 +1,309 @@
+{
+  "world": "coldwick",
+  "synthetic": true,
+  "agents_never_read": "This file is the answer key. It sits outside sources/, which is the only folder a tool may read.",
+  "frozen_today": "2026-11-26",
+  "counts": {
+    "candidates": 20,
+    "publications": 20
+  },
+  "portfolio": {
+    "request": "Assess the twenty invention candidates; the top 8 business priorities count as top.",
+    "threshold": 8,
+    "candidates": {
+      "CW-01": {
+        "title": "lid-opening grace window for excursion alarms",
+        "status": "built",
+        "priority_rank": 1,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 4,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-02": {
+        "title": "gel pack ageing from the melt plateau",
+        "status": "pilot",
+        "priority_rank": 2,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 4,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-03": {
+        "title": "courier custody handover by badge tap",
+        "status": "built",
+        "priority_rank": 4,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 4,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-04": {
+        "title": "route ranking from forecast ambient heat",
+        "status": "built",
+        "priority_rank": 5,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": true,
+        "triage_score": 4,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-05": {
+        "title": "pharmacy fridge door seal check from compressor restarts",
+        "status": "pilot",
+        "priority_rank": 6,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 4,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-06": {
+        "title": "battery-free logging tag powered by the reader field",
+        "status": "prototype",
+        "priority_rank": 3,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 3,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-07": {
+        "title": "probe drift check against an ice slurry at the depot",
+        "status": "built",
+        "priority_rank": 7,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 4,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-08": {
+        "title": "hottest pallet slot from corner sensors",
+        "status": "built",
+        "priority_rank": 10,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 3,
+        "next_action": "deprioritize_for_now",
+        "worth_deep_work": false
+      },
+      "CW-09": {
+        "title": "insurance claim bundle from a shipment record",
+        "status": "idea",
+        "priority_rank": 9,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 1,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-10": {
+        "title": "compressor duty cycle anomaly score for reefer units",
+        "status": "prototype",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 1,
+        "next_action": "deprioritize_for_now",
+        "worth_deep_work": false
+      },
+      "CW-11": {
+        "title": "dry ice sublimation estimate from box weight",
+        "status": "built",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": true,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 1,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-12": {
+        "title": "drone handover cooler with a docking latch",
+        "status": "idea",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-13": {
+        "title": "shelf-life countdown on an e-ink label",
+        "status": "built",
+        "priority_rank": 12,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": true,
+        "triage_score": 3,
+        "next_action": "deprioritize_for_now",
+        "worth_deep_work": false
+      },
+      "CW-14": {
+        "title": "solar lid charger for reusable shippers",
+        "status": "prototype",
+        "priority_rank": 11,
+        "public_disclosure": "yes_full",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-15": {
+        "title": "condensation-aware humidity alarm for opened cartons",
+        "status": "built",
+        "priority_rank": 8,
+        "public_disclosure": "yes_partial",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 2,
+        "next_action": "prioritize_counsel_review",
+        "worth_deep_work": true
+      },
+      "CW-16": {
+        "title": "hash chain of readings for audit",
+        "status": "idea",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-17": {
+        "title": "shock and vibration log for fragile biologics",
+        "status": "prototype",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": true,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      },
+      "CW-18": {
+        "title": "night setback for pharmacy fridges",
+        "status": "pilot",
+        "priority_rank": null,
+        "public_disclosure": "yes_partial",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "deprioritize_for_now",
+        "worth_deep_work": false
+      },
+      "CW-19": {
+        "title": "wash cycle tracking for reusable boxes",
+        "status": "prototype",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 1,
+        "next_action": "deprioritize_for_now",
+        "worth_deep_work": false
+      },
+      "CW-20": {
+        "title": "cabin pressure compensation for air freight probes",
+        "status": "idea",
+        "priority_rank": null,
+        "public_disclosure": "no",
+        "missing_document": false,
+        "prior_art_discloses_every_step": false,
+        "triage_score": 0,
+        "next_action": "collect_more_evidence",
+        "worth_deep_work": false
+      }
+    },
+    "should_admit": [
+      "CW-01",
+      "CW-02",
+      "CW-03",
+      "CW-05",
+      "CW-07",
+      "CW-15"
+    ],
+    "should_drop": [
+      "CW-04",
+      "CW-06",
+      "CW-08",
+      "CW-09",
+      "CW-10",
+      "CW-11",
+      "CW-12",
+      "CW-13",
+      "CW-14",
+      "CW-16",
+      "CW-17",
+      "CW-18",
+      "CW-19",
+      "CW-20"
+    ],
+    "planted_wrong_drop": "CW-15",
+    "planted_why": "Built, a top-eight priority and an element no publication shows, so the rule table puts it first; but a public trade-fair photo costs it two points of triage score, so a cut on the score drops it.",
+    "expected": {
+      "deep_effort": 6,
+      "deep_budget": 60,
+      "audit_sample": 3,
+      "audit_seed": 0,
+      "admitted_first_round": [
+        "CW-01",
+        "CW-02",
+        "CW-03",
+        "CW-04",
+        "CW-05",
+        "CW-07",
+        "CW-06"
+      ],
+      "dropped_first_round": [
+        "CW-08",
+        "CW-13",
+        "CW-15",
+        "CW-09",
+        "CW-10",
+        "CW-11",
+        "CW-19",
+        "CW-12",
+        "CW-14",
+        "CW-16",
+        "CW-17",
+        "CW-18",
+        "CW-20"
+      ],
+      "audit_sample_keys": [
+        "CW-15",
+        "CW-14",
+        "CW-10"
+      ],
+      "admitted_after_audit": [
+        "CW-01",
+        "CW-02",
+        "CW-03",
+        "CW-04",
+        "CW-05",
+        "CW-06",
+        "CW-07",
+        "CW-15"
+      ],
+      "miss_rate": 0.33
+    },
+    "note": "The audit is a seeded sample of three of the thirteen drops. The planted wrong drop sits on a sampled key on purpose: a wrong drop outside the sample would not be caught, which is the limit of a sample and why the miss rate is reported."
+  }
+}
