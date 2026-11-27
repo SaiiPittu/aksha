@@ -13,7 +13,9 @@ made through the durable step executor:
 3. The model step ``tNN`` through the Task's generation alias, its ``args_hash`` the
    context hash (ADR-P07): a resumed turn returns the recorded reply, and a rebuilt
    context that hashes differently raises ``StepMismatch``, which ends the turn ``fault``
-   with ``step_mismatch`` (the run's fault, never a silently different request).
+   with ``step_mismatch`` (the run's fault, never a silently different request). Its
+   policy (``model_policy``) is the agent's ``Limits``: the timeout, the retries and the
+   backoff, with its waiting bounded by what is left of the run's active time (P14 B2).
 4. Each call position, in listed order (``calls.run_calls``), unless the reply is
    malformed, which runs none of its calls.
 5. The turn end, rebuilt from the recorded step events by ``recorded_turn_end``: the
@@ -24,13 +26,14 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from aksha.runtime.budgets.meter import meter
 from aksha.runtime.context.assembly import GENERATE
 from aksha.runtime.context.prepare import prepare_context
 from aksha.runtime.context.turns import as_of
 from aksha.runtime.context.types import ContextOverLimit
 from aksha.runtime.execution.errors import StepMismatch
 from aksha.runtime.execution.ports import DurableStepExecutor
-from aksha.runtime.execution.types import StepId
+from aksha.runtime.execution.types import StepId, StepPolicy
 from aksha.runtime.loop.calls import run_calls
 from aksha.runtime.loop.classify import is_malformed, overflow_end, recorded_turn_end
 from aksha.runtime.loop.types import STEP_MISMATCH, LoopSetup, TurnEnd
@@ -56,6 +59,24 @@ def stop_view(setup: LoopSetup, run: str, log: LogView | None = None) -> StopVie
     )  # fmt: skip
 
 
+def model_policy(setup: LoopSetup, view: LogView, run: str) -> StepPolicy:
+    """The model step's policy: the agent's timeout, retries and backoff (module doc, 3).
+
+    Waiting is bounded by the run's active time left in ``view`` (None when the run's
+    budget does not cap it), so a long provider outage ends the step, not the budget.
+    """
+    limits = setup.limits
+    return replace(
+        MODEL_STEP_POLICY,
+        timeout_ms=limits.model_timeout_ms,
+        max_retries=limits.max_retries,
+        backoff=limits.backoff,
+        jitter=limits.jitter,
+        jitter_source=limits.jitter_source,
+        wait_cap_ms=meter(view, run).remaining("active_ms"),
+    )
+
+
 def run_turn(
     setup: LoopSetup, executor: DurableStepExecutor, ref: InstanceRef, turn: int
 ) -> TurnEnd:
@@ -67,14 +88,14 @@ def run_turn(
     kinds = setup.artifacts.kinds if setup.artifacts is not None else setup.kinds
     writable = {n: kinds[n] for n in (setup.tree.kind(w) for w in task.writes) if n in kinds}
     tools = offered_for_task(setup.registry.offered(task, prep.tools), writable)
-    model_policy = replace(MODEL_STEP_POLICY, timeout_ms=setup.limits.model_timeout_ms)
+    step_policy = model_policy(setup, before, ref.run)
     try:
         prepared = prepare_context(
             setup.store, setup.owner, executor, setup.table, setup.tree, ref, turn=turn,
             inputs=setup.inputs(ref), prep=replace(prep, tools=None), policy=setup.policy(),
             tools=tools, kinds=setup.kinds, alias=GENERATE, blobs=setup.blobs,
             approve_summary=lambda log: summary_refusal(stop_view(setup, ref.run, log), ref),
-            model_policy=model_policy,
+            model_policy=step_policy,
         )  # fmt: skip
         context = prepared.context
         if isinstance(context, ContextOverLimit):
@@ -82,7 +103,7 @@ def run_turn(
         facts = context.facts
         out = generation_step(
             executor, step, setup.table, context.request,
-            started=context.started_fields(), facts=lambda _: facts, policy=model_policy,
+            started=context.started_fields(), facts=lambda _: facts, policy=step_policy,
         )  # fmt: skip
         if out.result is not None and not is_malformed(out.result):
             run_calls(setup, executor, ref, turn, out.result.tool_calls, narrowing_of(prep))

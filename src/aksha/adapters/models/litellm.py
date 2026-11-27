@@ -60,7 +60,10 @@ error class, the HTTP status, the provider and a short message with anything key
 removed). A rate limit (429), a 5xx, a timeout and a lost connection are
 ``TransientModelError``; a context-window refusal is ``ContextOverflow``; 401 and 403 are
 ``live_unauthorised``; a content-policy block is ``live_blocked``; any other refusal is
-``live_refused``; LiteLLM not installed is ``live_config_missing``.
+``live_refused``; LiteLLM not installed is ``live_config_missing``. A transient error
+carries how long the provider asked to wait, when it said (``retry_after_ms``: the
+``Retry-After`` or ``retry-after-ms`` header LiteLLM keeps on its exception, else a
+Gemini answer's ``retryDelay``), and the model step waits at least that (ADR-P07 G7).
 
 **Native file input is off by default** (the maintainer's decision): every file goes
 through intake's parsers and the decide-then-extract path, so one general model exercises
@@ -79,7 +82,9 @@ import json
 import os
 import re
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from decimal import Decimal
+from email.utils import parsedate_to_datetime
 from typing import Any, ClassVar, Literal
 
 from aksha.adapters.models.live import (
@@ -392,6 +397,64 @@ def short_message(error: BaseException, environ: Mapping[str, str] | None = None
     return text[:200]
 
 
+_RETRY_DELAY = re.compile(r'"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"')
+"""A Gemini answer's ``RetryInfo``: ``"retryDelay": "30s"`` in the error body."""
+
+
+def _header(headers: object, name: str) -> str | None:
+    """``name`` in ``headers`` (a mapping or an httpx ``Headers``), case aside, or None."""
+    items = getattr(headers, "items", None)
+    if not callable(items):
+        return None
+    try:
+        for key, value in items():
+            if isinstance(key, str) and key.lower() == name and isinstance(value, str):
+                return value.strip()
+    except Exception:  # a header object we cannot read says nothing
+        return None
+    return None
+
+
+def retry_after_ms(error: BaseException, now: datetime | None = None) -> int | None:
+    """How long the provider asked to wait before the next attempt, in ms, or None.
+
+    Read from the response headers LiteLLM keeps on its exception
+    (``litellm_response_headers``, else ``response.headers``): ``retry-after-ms``, else
+    ``retry-after`` in seconds or as an HTTP date; else a Gemini body's ``retryDelay``.
+    A value that does not parse, or is not positive, is no answer.
+    """
+    sources = (getattr(error, "litellm_response_headers", None),
+               getattr(getattr(error, "response", None), "headers", None))  # fmt: skip
+    for headers in sources:
+        raw = _header(headers, "retry-after-ms")
+        if raw is not None:
+            try:
+                ms = float(raw)
+            except ValueError:
+                ms = 0.0
+            if ms > 0:
+                return int(ms)
+        raw = _header(headers, "retry-after")
+        if raw is None:
+            continue
+        try:
+            seconds = float(raw)
+        except ValueError:
+            try:
+                when = parsedate_to_datetime(raw)
+            except (TypeError, ValueError):
+                continue
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=UTC)
+            seconds = (when - (now or datetime.now(UTC))).total_seconds()
+        if seconds > 0:
+            return int(seconds * 1000)
+    found = _RETRY_DELAY.search(f"{getattr(error, 'message', '')} {error}")
+    if found and float(found.group(1)) > 0:
+        return int(float(found.group(1)) * 1000)
+    return None
+
+
 def failure(error: BaseException, environ: Mapping[str, str] | None = None) -> Exception:
     """The Aksha model error for a LiteLLM exception (module doc, errors), with its detail."""
     kind = type(error).__name__
@@ -410,7 +473,9 @@ def failure(error: BaseException, environ: Mapping[str, str] | None = None) -> E
     if kind in _UNAUTHORISED_TYPES or status in (401, 403):
         return PermanentModelError(LIVE_UNAUTHORISED, said, detail=detail)
     if kind in _TRANSIENT_TYPES or status in (408, 429) or (status or 0) >= 500:
-        return TransientModelError(message=said, detail=detail)
+        return TransientModelError(
+            message=said, detail=detail, retry_after_ms=retry_after_ms(error)
+        )
     if kind == "ContentPolicyViolationError":
         return PermanentModelError(LIVE_BLOCKED, said, detail=detail)
     return PermanentModelError(LIVE_REFUSED, said, detail=detail)

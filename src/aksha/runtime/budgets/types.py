@@ -7,8 +7,8 @@ reducer over the event store (``meter.py``, ``limits.py``).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field, fields
 from typing import Literal
 
 Dimension = Literal["model_turns", "tool_calls", "active_ms", "tokens", "cost_micro_usd"]
@@ -29,7 +29,10 @@ LimitName = Literal["turn_limit", "stop_veto_limit", "restart_limit"]
 
 @dataclass(frozen=True)
 class Backoff:
-    """Retry delays: ``base_ms`` times ``factor`` per attempt, capped. No jitter, for replay."""
+    """Retry delays: ``base_ms`` times ``factor`` per attempt, capped. No jitter, for replay.
+
+    A live model step adds its jitter through ``Limits.jitter`` (ADR-P14 B2).
+    """
 
     base_ms: int = 500
     factor: int = 2
@@ -95,7 +98,15 @@ class Budget:
 
 @dataclass(frozen=True)
 class Limits:
-    """Turn, veto, restart, retry and timeout limits, each counted from the event store."""
+    """Turn, veto, restart, retry and timeout limits, each counted from the event store.
+
+    ``max_retries``, ``backoff`` and ``jitter`` are the generation model step's retries
+    (ADR-P14 amendment B2): by default two retries from 500 ms with no jitter, so a fake
+    run sleeps the same delays every time; live mode raises them. ``jitter`` is the share
+    of each delay drawn at random (0 to 1: with 0.25 a 4 s delay is 3 to 4 s), from
+    ``jitter_source`` (a draw in [0, 1)): the runtime reads no ambient randomness
+    (ADR-P02 D3), so the composition root injects it, and jitter without one is refused.
+    """
 
     turn_limit: int = 10
     stop_veto_limit: int = 3
@@ -105,6 +116,15 @@ class Limits:
     tool_timeout_ms: int = 10_000
     model_timeout_ms: int = 60_000
     backoff: Backoff = Backoff()
+    jitter: float = 0.0
+    jitter_source: Callable[[], float] | None = field(default=None, compare=False)
+
+    def __post_init__(self) -> None:
+        """Refuse a jitter outside 0 to 1, or one with no random source to draw from."""
+        if not 0.0 <= self.jitter <= 1.0:
+            raise ValueError("jitter is a share of the delay, from 0 to 1")
+        if self.jitter > 0 and self.jitter_source is None:
+            raise ValueError("a jittered backoff needs its random source (jitter_source)")
 
 
 @dataclass(frozen=True)

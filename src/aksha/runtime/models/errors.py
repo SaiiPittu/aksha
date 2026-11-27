@@ -1,7 +1,7 @@
 """Refusals of the model interface (ADR-P07), each with a stable code.
 
-What an adapter raises: ``TransientModelError`` (``model_transient``, retried twice with
-backoff on the injected clock, then ``model_unavailable``), ``PermanentModelError``
+What an adapter raises: ``TransientModelError`` (``model_transient``, retried by the model
+step with backoff on the injected clock, then ``model_unavailable``), ``PermanentModelError``
 (``model_permanent``, or a more specific code such as ``script_exhausted``,
 ``replay_missing`` or ``replay_mismatch``) and ``ContextOverflow`` (``context_overflow``).
 What the binder raises: ``BindRefused`` (``bind_refused``), listing every
@@ -58,9 +58,25 @@ class _ModelError(AkshaError):
 
 
 class TransientModelError(_ModelError):
-    """A failure worth retrying: a timeout, a rate limit, a server error."""
+    """A failure worth retrying: a timeout, a rate limit, a server error.
+
+    ``retry_after_ms`` is how long the provider asked to wait (its ``Retry-After``), when
+    it said; the model step's backoff is at least that.
+    """
 
     default_code = "model_transient"
+
+    def __init__(
+        self,
+        code: str | None = None,
+        message: str = "",
+        *,
+        detail: Mapping[str, object] | None = None,
+        retry_after_ms: int | None = None,
+    ) -> None:
+        """As :class:`_ModelError`, plus ``retry_after_ms``."""
+        super().__init__(code, message, detail=detail)
+        self.retry_after_ms = retry_after_ms if retry_after_ms and retry_after_ms > 0 else None
 
 
 class PermanentModelError(_ModelError):

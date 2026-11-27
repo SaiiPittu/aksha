@@ -45,7 +45,9 @@ class TransientStepError(AkshaError):
     """Raised by a step's work for a failure worth retrying; ``code`` is matched to ``retry_on``.
 
     ``detail`` is what the failure was, for ``step.failed{error}`` (a provider's error type,
-    status and short message); it never carries a key or a request body.
+    status and short message); it never carries a key or a request body. ``retry_after_ms``
+    is how long the failure asked to wait before the next attempt (a provider's
+    ``Retry-After``); the backoff is at least that (``StepPolicy.delay_ms``).
     """
 
     default_code = "transient"
@@ -56,7 +58,9 @@ class TransientStepError(AkshaError):
         message: str = "",
         *,
         detail: Mapping[str, str | int] | None = None,
+        retry_after_ms: int | None = None,
     ) -> None:
-        """As :class:`AkshaError`, plus the failure's ``detail``."""
+        """As :class:`AkshaError`, plus the failure's ``detail`` and ``retry_after_ms``."""
         super().__init__(code, message)
         self.detail = dict(detail) if detail else None
+        self.retry_after_ms = retry_after_ms if retry_after_ms and retry_after_ms > 0 else None

@@ -15,8 +15,10 @@ writes the same bytes:
    is used up (or empty: a question no candidate was asked is ``not_asked``), the
    alias's ``on_exhausted`` says what follows (``unknown`` with a
    question for a machine-only artifact, ``review`` for a reviewed one, or ``fail``).
-3. A ``TransientModelError`` is retried twice with backoff on the injected clock; then
-   the step ends ``model_transient`` and the call is ``model_unavailable``. A permanent
+3. A ``TransientModelError`` is retried with backoff on the injected clock (twice from
+   500 ms by default; the agent loop passes ``Limits.max_retries`` and ``Limits.backoff``,
+   which live mode raises, ADR-P14 B2), waiting at least the provider's ``Retry-After``;
+   then the step ends ``model_transient`` and the call is ``model_unavailable``. A permanent
    error ends the step with its own code; in a cascade the next candidate is tried. What
    the provider said (an adapter's ``detail``: error type, status, short message) is
    recorded on each ``step.failed{error}`` and on an error ``step.completed{error}``.
@@ -76,7 +78,9 @@ def _call(work: Callable[[], StepOutput]) -> StepOutput:
     try:
         return work()
     except TransientModelError as e:
-        raise TransientStepError(MODEL_TRANSIENT, e.message, detail=e.detail) from e
+        raise TransientStepError(
+            MODEL_TRANSIENT, e.message, detail=e.detail, retry_after_ms=e.retry_after_ms
+        ) from e
     except (ContextOverflow, PermanentModelError) as e:
         return StepOutput(outcome="error", code=e.code, error=e.detail)
 

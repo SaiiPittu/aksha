@@ -18,6 +18,9 @@ import pytest
 
 from aksha.app import (
     LIVE_ACTIVE_MS,
+    LIVE_BACKOFF,
+    LIVE_JITTER,
+    LIVE_RETRIES,
     LIVE_TIMEOUT_MARGIN_MS,
     RuntimeConfig,
     bind_live,
@@ -26,6 +29,7 @@ from aksha.app import (
     native_file_input,
     session_agent,
 )
+from aksha.runtime.budgets.types import Backoff, Limits
 from aksha.runtime.definitions.loader import LoadedDefinition
 from aksha.runtime.models.errors import BindRefused
 from aksha.runtime.storage.errors import StoreError
@@ -117,6 +121,40 @@ def test_live_mode_sizes_the_active_time_and_the_model_timeout_offline_keeps_the
     assert chosen.agent.limits.model_timeout_ms == 600_000 + LIVE_TIMEOUT_MARGIN_MS
     with pytest.raises(BindRefused):
         session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_ACTIVE_MS": "an hour"})
+
+
+def test_live_mode_makes_model_retries_patient_offline_keeps_the_fast_policy(
+    lib: StubLiteLLM,
+) -> None:
+    loaded = research()
+    fake = session_agent(loaded, "fake")
+    own = fake.agent.limits or Limits()
+    assert (own.max_retries, own.backoff) == (2, Backoff())  # 500 ms doubling to 4 s, no jitter
+    live = session_agent(loaded, "live", live_env=LIVE)
+    assert live.agent.limits is not None
+    assert live.agent.limits.max_retries == LIVE_RETRIES == 6
+    assert live.agent.limits.backoff == LIVE_BACKOFF
+    assert (LIVE_BACKOFF.base_ms, LIVE_BACKOFF.cap_ms) == (2_000, 60_000)
+    assert live.agent.limits.jitter == LIVE_JITTER > 0
+    assert live.agent.limits.jitter_source is not None
+    assert own.jitter == 0 and own.jitter_source is None
+    env = {**LIVE, "AKSHA_LIVE_RETRIES": "10", "AKSHA_LIVE_BACKOFF_MS": "1000",
+           "AKSHA_LIVE_BACKOFF_CAP_MS": "30000"}  # fmt: skip
+    chosen = session_agent(loaded, "live", live_env=env)
+    assert chosen.agent.limits is not None and chosen.agent.limits.max_retries == 10
+    assert (chosen.agent.limits.backoff.base_ms, chosen.agent.limits.backoff.cap_ms) == (
+        1_000, 30_000,
+    )  # fmt: skip
+    none = session_agent(loaded, "live", live_env={**LIVE, "AKSHA_LIVE_RETRIES": "0"})
+    assert none.agent.limits is not None and none.agent.limits.max_retries == 0
+    for name in ("AKSHA_LIVE_RETRIES", "AKSHA_LIVE_BACKOFF_MS", "AKSHA_LIVE_BACKOFF_CAP_MS"):
+        with pytest.raises(BindRefused, match=name):
+            session_agent(loaded, "live", live_env={**LIVE, name: "-1"})
+
+
+def test_the_live_retry_settings_reach_the_live_environment() -> None:
+    config = RuntimeConfig.from_env({"AKSHA_MODE": "live", **LIVE, "AKSHA_LIVE_RETRIES": "9"})
+    assert config.live_env["AKSHA_LIVE_RETRIES"] == "9"
 
 
 @pytest.mark.parametrize(("setting", "enabled"), [(None, False), ("off", False), ("on", True)])

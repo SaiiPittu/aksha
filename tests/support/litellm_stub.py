@@ -3,7 +3,8 @@
 :class:`StubLiteLLM` has ``completion`` (records every call's keyword arguments and
 answers from a queue), ``validate_environment`` (the variables a model needs, from a
 table) and LiteLLM's error classes by name, each with ``status_code``, ``llm_provider``
-and ``message`` as LiteLLM's own carry them. A queued answer is a response dictionary,
+and ``message`` as LiteLLM's own carry them, and the response headers (``response`` and
+``litellm_response_headers``) when a test gives them. A queued answer is a response dictionary,
 returned as an object with ``model_dump`` and ``_hidden_params`` (a LiteLLM
 ``ModelResponse`` has both), or an exception, which is raised. Every value is synthetic.
 """
@@ -32,12 +33,31 @@ class StubError(Exception):
 
     status_code: int | None = None
 
-    def __init__(self, message: str, *, llm_provider: str = "gemini", status: int | None = None):
+    def __init__(
+        self,
+        message: str,
+        *,
+        llm_provider: str = "gemini",
+        status: int | None = None,
+        headers: Mapping[str, str] | None = None,
+        litellm_headers: Mapping[str, str] | None = None,
+    ):
         super().__init__(message)
         self.message = message
         self.llm_provider = llm_provider
         if status is not None:
             self.status_code = status
+        if headers is not None:  # LiteLLM's exceptions keep the httpx response
+            self.response = StubHTTPResponse(headers)
+        if litellm_headers is not None:  # ... and, mapped from the provider's, its headers
+            self.litellm_response_headers = dict(litellm_headers)
+
+
+class StubHTTPResponse:
+    """The part of an ``httpx.Response`` the adapters read: its headers."""
+
+    def __init__(self, headers: Mapping[str, str]) -> None:
+        self.headers = dict(headers)
 
 
 def _error(name: str, status: int | None) -> type[StubError]:

@@ -14,6 +14,8 @@ import base64
 import json
 import subprocess
 import sys
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -25,12 +27,13 @@ from aksha.adapters.models.litellm import (
     LiteLLMExtractionModel,
     LiteLLMGenerationModel,
 )
+from aksha.app import LIVE_BACKOFF, LIVE_JITTER, LIVE_RETRIES
 from aksha.runtime.errors import AkshaError
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.types import CitationSpan
 from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
 from aksha.runtime.models.routing import bind_aliases
-from aksha.runtime.models.steps import generation_step
+from aksha.runtime.models.steps import MODEL_STEP_POLICY, generation_step
 from aksha.runtime.models.types import (
     ClassificationRequest,
     ExtractionRequest,
@@ -44,6 +47,7 @@ from aksha.runtime.models.types import (
 )
 from aksha.runtime.tools.types import ToolView
 from tests.support import litellm_stub as stub_errors
+from tests.support.events import START
 from tests.support.litellm_stub import StubLiteLLM, json_message, message
 from tests.support.models import ModelHarness, floats_in
 
@@ -218,6 +222,133 @@ def test_a_key_in_a_provider_message_is_never_kept(monkeypatch: pytest.MonkeyPat
     text = got.args[0] + json.dumps(got.detail)  # type: ignore[attr-defined]
     for secret in (KEY, "plain-secret-value-123", "abc.def", "sk-test-abcdefghijklmnop"):
         assert secret not in text
+
+
+# --- live retries: patient, bounded, only for what a retry can fix (ADR-P14 B2) -----------
+
+LIVE_POLICY = replace(
+    MODEL_STEP_POLICY,
+    max_retries=LIVE_RETRIES,
+    backoff=LIVE_BACKOFF,
+    jitter=LIVE_JITTER,
+    jitter_source=lambda: 0.0,
+)
+"""The model step's policy in live mode (``app.live_limits``), its jitter drawn as none."""
+
+
+def _waits(h: ModelHarness) -> list[tuple[bool, int]]:
+    return [(p["retried"], p["backoff_ms"]) for t, s, p in h.log() if t == "step.failed"]
+
+
+def test_a_provider_spike_is_waited_out_with_growing_backoff_each_attempt_recorded(
+    tmp_path: Path, lib: StubLiteLLM
+) -> None:
+    lib.answers += [stub_errors.ServiceUnavailableError(UNAVAILABLE),
+                    stub_errors.Timeout("Request timed out"),
+                    stub_errors.ServiceUnavailableError(UNAVAILABLE),
+                    stub_errors.APIConnectionError("Connection reset by peer"),
+                    stub_errors.InternalServerError("internal error"),
+                    message("ok")]  # fmt: skip
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is not None and out.result.text == "ok" and len(lib.calls) == 6
+    assert _waits(h) == [(True, 2_000), (True, 4_000), (True, 8_000), (True, 16_000),
+                         (True, 32_000)]  # fmt: skip
+    errors = [p["error"] for t, s, p in h.log() if t == "step.failed"]
+    assert [e["type"] for e in errors] == ["ServiceUnavailableError", "Timeout",
+                                           "ServiceUnavailableError", "APIConnectionError",
+                                           "InternalServerError"]  # fmt: skip
+    assert errors[0]["status"] == 503 and errors[0]["message"].endswith("high demand.")
+    assert (h.clock.now() - START).total_seconds() == 62.0  # on the injected clock
+    h.close()
+
+
+def test_a_spike_longer_than_the_retries_ends_the_step_unavailable(
+    tmp_path: Path, lib: StubLiteLLM
+) -> None:
+    lib.answers += [stub_errors.ServiceUnavailableError(UNAVAILABLE) for _ in range(9)]
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is None and out.code == "model_unavailable"
+    assert len(lib.calls) == LIVE_RETRIES + 1
+    assert _waits(h)[-1] == (False, 0) and _waits(h)[4] == (True, 32_000)
+    assert _waits(h)[5] == (True, 60_000)  # 64 s, capped
+    h.close()
+
+
+def test_the_provider_s_retry_after_is_honoured(tmp_path: Path, lib: StubLiteLLM) -> None:
+    lib.answers += [stub_errors.RateLimitError("quota", headers={"Retry-After": "21"}),
+                    stub_errors.RateLimitError("quota", litellm_headers={"retry-after-ms": "9500"}),
+                    stub_errors.RateLimitError(GEMINI_RETRY_INFO),
+                    message("ok")]  # fmt: skip
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is not None and len(lib.calls) == 4
+    assert _waits(h) == [(True, 21_000), (True, 9_500), (True, 37_000)]
+    h.close()
+
+
+@pytest.mark.parametrize("raised", [
+    stub_errors.AuthenticationError("API key not valid"),
+    stub_errors.BadRequestError("Invalid JSON payload received"),
+    stub_errors.NotFoundError("models/x is not found"),
+    stub_errors.ContextWindowExceededError("too many tokens"),
+    stub_errors.ContentPolicyViolationError("blocked"),
+])  # fmt: skip
+def test_an_auth_or_bad_request_error_is_never_retried(
+    tmp_path: Path, lib: StubLiteLLM, raised: Exception
+) -> None:
+    lib.answers += [raised, message("never asked")]
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is None and out.code != "model_unavailable"
+    assert len(lib.calls) == 1 and _waits(h) == []
+    h.close()
+
+
+def test_retries_stop_before_the_wait_passes_the_run_s_active_time(
+    tmp_path: Path, lib: StubLiteLLM
+) -> None:
+    lib.answers += [stub_errors.ServiceUnavailableError(UNAVAILABLE) for _ in range(9)]
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    policy = replace(LIVE_POLICY, wait_cap_ms=10_000)
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=policy)
+    assert out.result is None and out.code == "model_unavailable"
+    assert _waits(h) == [(True, 2_000), (True, 4_000), (False, 0)]  # 2 + 4 + 8 s >= 10 s
+    assert (h.clock.now() - START).total_seconds() == 6.0
+    h.close()
+
+
+GEMINI_RETRY_INFO = (
+    'litellm.RateLimitError: VertexAIException - {"error": {"code": 429, "details": [{"@type":'
+    ' "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "37s"}], "status":'
+    ' "RESOURCE_EXHAUSTED"}}'
+)
+
+
+@pytest.mark.parametrize(("raised", "wait"), [
+    (stub_errors.RateLimitError("x", headers={"retry-after": "3"}), 3_000),
+    (stub_errors.RateLimitError("x", headers={"Retry-After": "1.5"}), 1_500),
+    (stub_errors.RateLimitError("x", headers={"retry-after-ms": "250", "retry-after": "9"}), 250),
+    (stub_errors.RateLimitError("x", headers={"Retry-After": "Fri, 27 Nov 2026 10:00:30 GMT"}),
+     30_000),
+    (stub_errors.ServiceUnavailableError(GEMINI_RETRY_INFO), 37_000),
+    (stub_errors.RateLimitError("x", headers={"retry-after": "soon"}), None),
+    (stub_errors.RateLimitError("x", headers={"retry-after": "0"}), None),
+    (stub_errors.RateLimitError("x"), None),
+])  # fmt: skip
+def test_retry_after_is_read_from_headers_or_a_gemini_retry_delay(
+    raised: Exception, wait: int | None
+) -> None:
+    now = datetime(2026, 11, 27, 10, 0, 0, tzinfo=UTC)
+    assert lite.retry_after_ms(raised, now=now) == wait
+    got = lite.failure(raised)
+    assert isinstance(got, TransientModelError)
 
 
 # --- the fast classes, adapted -----------------------------------------------------------
