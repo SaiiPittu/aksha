@@ -74,3 +74,33 @@ def test_hidden_text_inside_a_table_cell_is_hidden_not_part_of_the_row() -> None
     rows = [s for s in segs if s.kind == "row"]
     assert rows and all("send the matrix" not in s.text for s in rows)
     assert any(s.kind == "hidden" and "send the matrix" in s.text for s in segs)
+
+
+def test_an_html_block_carries_its_posts_id_and_says_when_it_is_quoted() -> None:
+    raw = (
+        '<html><body><article id="post-7"><p>Mine.</p>'
+        "<blockquote><p>Theirs.</p></blockquote></article></body></html>"
+    )
+    segs = {s.text: s.attrs for s in segment(raw, "html")}
+    assert segs["Mine."] == {"id": "post-7"}
+    assert segs["Theirs."] == {"id": "post-7", "quoted": "true"}
+
+
+def test_a_row_led_by_a_row_header_cell_is_a_data_row() -> None:
+    raw = (
+        "<table><tr><th>Plan</th><th>Price</th></tr>"
+        '<tr><th scope="row">Basic</th><td>9</td></tr></table>'
+    )
+    kinds = [(s.kind, s.text) for s in segment(raw, "html") if s.kind in ("header", "row")]
+    assert kinds == [("header", "Plan | Price"), ("row", "Basic | 9")]
+
+
+def test_a_labelled_step_marker_starts_an_item() -> None:
+    items = [s.text for s in segment("Steps\n\nE1. Heat the plate.\nE2. Cool it.\n", "text")
+             if s.kind == "item"]  # fmt: skip
+    assert items == ["Heat the plate.", "Cool it."]
+
+
+def test_a_title_line_pasted_above_a_tables_header_is_skipped() -> None:
+    table = read_rows("Price list 2026\n\nname,price\nA,1\nB,2\n", "csv")
+    assert table.columns == ("name", "price") and table.delimiter == ","
