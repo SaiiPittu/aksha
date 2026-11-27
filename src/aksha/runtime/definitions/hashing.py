@@ -6,6 +6,10 @@ version and file hashes, the tool registry's canonical hash (ADR-P10 D4) and
 ``API_VERSION``. File hashes are used, never only version
 strings, because a version string can stay the same while the code changes. A run never
 resumes under a different hash.
+
+A module imported from outside the folders is pinned by its installed distribution's name
+and version, or as absent, and the pins enter the hash; one the hash cannot cover is
+refused by the loader (``imports.py``, ADR-P20 B10).
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aksha.runtime.canonical import sha256_hex
+from aksha.runtime.definitions.imports import ImportPin, external_imports, pin_imports
 from aksha.runtime.definitions.versions import API_VERSION
 
 if TYPE_CHECKING:
@@ -38,6 +43,12 @@ def file_hashes(folder: Path) -> FileHashes:
             continue
         out.append((rel.as_posix(), hashlib.sha256(path.read_bytes()).hexdigest()))
     return tuple(out)
+
+
+def import_pins(folder: Path) -> tuple[ImportPin, ...]:
+    """The pins of what ``folder``'s sources import from outside it (refusals dropped)."""
+    pins, _ = pin_imports(external_imports(folder), folder)
+    return pins
 
 
 def tree_hash(hashes: FileHashes) -> str:
@@ -66,16 +77,20 @@ def definition_hash(
     ``invalidation_keys`` (ADR-P05 M2) is hashed only when it is not the default ``reads``,
     so a definition written before the setting keeps its hash.
     """
-    material = {
+
+    def extension(e: LoadedExtension) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "name": e.ext.name,
+            "version": e.ext.version,
+            "files": [list(p) for p in e.file_hashes],
+        }
+        if e.imports:  # added only when there are some, so earlier hashes stay equal
+            entry["imports"] = [list(p) for p in e.imports]
+        return entry
+
+    material: dict[str, Any] = {
         "agent": [list(pair) for pair in file_hashes(folder)],
-        "extensions": [
-            {
-                "name": e.ext.name,
-                "version": e.ext.version,
-                "files": [list(p) for p in e.file_hashes],
-            }
-            for e in sorted(extensions, key=lambda e: e.ext.name)
-        ],
+        "extensions": [extension(e) for e in sorted(extensions, key=lambda e: e.ext.name)],
         "tools": tools_hash,
         "context": context_hash,
         "api_version": api_version,
@@ -84,6 +99,9 @@ def definition_hash(
         material["invalidation"] = invalidation
     if invalidation_keys is not None and invalidation_keys != "reads":
         material["invalidation_keys"] = invalidation_keys
+    pins = import_pins(folder)
+    if pins:
+        material["imports"] = [list(p) for p in pins]
     return "sha256:" + sha256_hex(material)
 
 

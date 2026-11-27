@@ -119,7 +119,7 @@ The genesis store ID is the one sanctioned random value, and it lives in the ada
 - One pure function, `check(GateInput) -> Allow | Refuse`, for every tool call from every path. It reads no clock, store or network.
 - Deny by default; any exception inside `check` is `Refuse("gate_error")`. No mode, flag, environment variable or sub-agent setting skips it.
 - The layer order is fixed: 0 budget, 1 registered, 2 agent list and run ceiling, 3 Task list, 4 stop-policy narrowing, 5 schema, 6 argument rules, 7 route by effect class. Refusal codes are the ADR's.
-- `GateInput` holds nothing the model can write: no tool result, document, memory text, artifact content or model free text.
+- `GateInput` holds the proposed call's name and arguments (which the model writes, and which the gate checks against declared policy) and nothing else the model can write: no tool result, document, memory text, artifact content or model free text.
 - Narrowing only removes. Argument rules use the closed matcher set (`path_under`, `path_not_under`, `enum`, `id_in_source`, `max_length`); no lambdas.
 - A model never allows.
 - The gate never appends. An allow becomes the tool step's `step.started`; a refusal becomes one `step.completed{outcome: refused, code, layer}`.

@@ -76,7 +76,8 @@ class DurableStepExecutor(Protocol):
         3. ``at_most_once``: ``step.dispatched`` commits alone before the body; a step
            found dispatched and unfinished is closed ``interrupted`` and never run again.
            ``reconcile`` is refused: an effect goes through :meth:`effect_step`.
-        4. Attempts are counted from ``step.failed`` and ``attempt.discarded``.
+        4. Attempts are counted from ``step.failed`` and ``attempt.discarded``; an attempt a
+           crash interrupted is recorded ``step.failed{interrupted}`` when the step resumes.
         5. Only the live attempt's value, on the calling thread, becomes ``step.completed``.
         """
         ...

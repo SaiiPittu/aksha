@@ -21,13 +21,13 @@ Caption: read left to right for why a requirement exists, and right to left for 
 | Group | IDs | Count | Must | Should | Later |
 |---|---|---|---|---|---|
 | Agent definition and loading | FR-01 to FR-04 | 4 | 4 | 0 | 0 |
-| Durable state | FR-05 to FR-17 | 13 | 12 | 1 | 0 |
+| Durable state | FR-05 to FR-17 | 13 | 13 | 0 | 0 |
 | Thinking | FR-18 to FR-21 | 4 | 1 | 3 | 0 |
 | Acting safely | FR-22 to FR-25, FR-48 | 5 | 4 | 0 | 1 |
 | Control | FR-26 to FR-35 | 10 | 7 | 2 | 1 (and part of FR-28) |
 | Interfaces, deployment and proof | FR-36 to FR-42, FR-47 | 8 | 5 | 3 | 0 |
 | Example agents and fixtures | FR-43 to FR-46 | 4 | 4 | 0 | 0 |
-| Functional total | FR-01 to FR-48 | 48 | 37 | 9 | 2 (and part of FR-28) |
+| Functional total | FR-01 to FR-48 | 48 | 38 | 8 | 2 (and part of FR-28) |
 | Non-functional | NFR-01 to NFR-21 | 21 | 15 | 5 | 1 |
 
 ---
@@ -49,11 +49,11 @@ Caption: read left to right for why a requirement exists, and right to left for 
 |---|---|---|---|---|---|
 | FR-05 | The event store is append-only (triggers refuse update and delete), has one writer behind a single-writer lock, commits named groups of events in one transaction, enforces deduplication keys as unique indexes, and names the owner on every read | OPS-07, OPS-08 | F-01 | P01 | Must |
 | FR-06 | Each event carries `prev_hash` and `hash` (SHA-256 over its canonical record), starting from a genesis hash derived from a random store ID. `aksha verify` reports the first break, and with anchors it reports a rewritten tail as `anchor_mismatch` | OPS-07 | F-01, F-35 | P01 | Must |
-| FR-07 | Every interpretation (Task status, next action, stop-policy stack, invalidation, pending items, the work board) is a projection computed by a pure reducer over the event store; none is stored as a fact | OPS-01, FND-05 | F-01 | P01 | Must |
+| FR-07 | Every interpretation (Task status, next action, stop-policy stack, invalidation, pending items) is a projection computed by a pure reducer over the event store; none is stored as a fact. The work board (F-26, Later) is held to the same rule when it is built | OPS-01, FND-05 | F-01 | P01 | Must |
 | FR-08 | Recovery on startup runs one fixed sequence: take the lock, reconcile landed outbox entries, re-execute recorded queries per owner, reconcile the rest, close dispatched at-most-once steps as outcome unknown, classify each open run, open rebuild runs. Step IDs are deterministic, time comes from an injected clock, and a recorded step returns its recorded result | REV-03, DEV-03 | F-02 | P02 | Must |
 | FR-09 | A run resumed 3 times with no progress in between ends `failed`, reason `restart_limit`; the count is a projection | OPS-03 | F-02, F-17 | P02, P14 | Must |
 | FR-10 | Every external effect is an outbox entry, committed with its idempotency key before the call. After a crash, a reconcile step asks the system of record by key, and an at-most-once step with no answer is recorded as outcome unknown, never re-sent blindly | REV-03, CNS-02, OPS-05 | F-03 | P03 | Must |
-| FR-11 | Every command carries a command ID and gets an idempotent receipt, so a retried command is recorded once | REV-04, OPS-04, OPS-08 | F-03, F-27 | P03, P19 | Should |
+| FR-11 | Every command carries a command ID and gets an idempotent receipt, so a retried command is recorded once | REV-04, OPS-04, OPS-08 | F-03, F-27 | P03, P19 | Must |
 | FR-12 | Artifact versions are typed by a schema the agent declares, immutable and content-hashed. A save that fails its schema is refused; saving identical content returns the existing version | FND-02, CNS-02 | F-04 | P04 | Must |
 | FR-13 | Every artifact version records its reads (fixture records, user statements, other artifact versions and recorded queries with their result-set hash) as its lineage. A corrected user statement records a `supersedes` provenance link that no agent can write | FND-05, CNS-02, INV-02 | F-04 | P04 | Must |
 | FR-14 | Typed relations are declared beside the schemas with the kinds they may connect. A relation between undeclared kinds is refused at load; a relation saved without an excerpt is refused at save | FND-02, DEV-02 | F-04 | P04 | Must |
@@ -75,7 +75,7 @@ Caption: read left to right for why a requirement exists, and right to left for 
 | ID | Requirement | Stories | Features | Primitives | Priority |
 |---|---|---|---|---|---|
 | FR-22 | Every tool is declared data with its schema, one effect class and its step semantics (at-least-once, reconcile or at-most-once). The schema the model sees is the schema the gate checks | DEV-01, DEV-02 | F-13 | P10 | Must |
-| FR-23 | The policy gate denies by default, is one checker in code, and takes nothing the model wrote as an input to its decision. Recipients come only from configured records. Every refusal is recorded and returned to the model as data | FND-06, DEV-01, REV-01 | F-14 | P11 | Must |
+| FR-23 | The policy gate denies by default and is one checker in code. It checks the proposed call's name and arguments, which the model writes, against declared policy; model output can never grant a permission, and tool results, documents, memory text and artifact content are never inputs to the gate. Recipients come only from configured records. Every refusal is recorded and returned to the model as data | FND-06, DEV-01, REV-01 | F-14 | P11 | Must |
 | FR-24 | A program-running tool passes the gate first, then runs in a sandbox whose policy is the intersection of run, agent, Task and tool; the workspace is built fresh from artifact versions; outputs return as artifacts with recorded reads; symlinks out are rejected; network access is off; with no backend strong enough the call fails `sandbox_unavailable` with no fallback | DEV-08, OPS-05 | F-15 | P12 | Later (the refusing backend is Must) |
 | FR-25 | Each agent declares budgets of tool calls, model turns and active seconds, with a runtime default for an agent that declares none; each Task instance has a turn limit (10 by default); each tool call has a timeout (10 s) and bounded retries (2). Every count is a projection, and hitting a budget raises a budget interrupt with all saved work kept | OPS-03 | F-17 | P14 | Must |
 | FR-48 | Tool results, fetched documents and memory text enter the model context as data. Text in them aimed at the agent is flagged and can change no permission, approval, recipient, budget or stop-policy configuration | FND-06 | F-14, F-16 | P11, P13 | Must |
@@ -135,7 +135,7 @@ Each NFR has a measurable check. The checks with fake models prove the runtime's
 | NFR-08 | Owner isolation | One owner's data is invisible to another | Two owners on the same fixtures: every cross-owner list and read returns "not found" (never "forbidden"): 100% | OPS-08 | F-01, F-27 | Must |
 | NFR-09 | Pluggability | Agents are separate from the runtime | The third-agent test leaves the runtime package hash unchanged; a static scan of runtime source against a list of agent names and domain nouns finds 0 whole-word matches | DEV-01 | F-28, F-40 | Must |
 | NFR-10 | Stop ownership | Every stop decision has one owner and one record | Across the suite, every stop candidate has exactly one stop decision, no run or turn ends without one, and recomputing each from the event store gives the recorded verdict in 100% of cases | DEV-05, OPS-04 | F-21 | Must |
-| NFR-11 | Derivation agreement | Views never disagree with the event store | A property test cuts each scenario's event store at 50 random points; live views (Task status, next action, stack, invalidation, pending items, board) equal a full rebuild in 100% of cuts | OPS-01, FND-05 | F-01 | Must |
+| NFR-11 | Derivation agreement | Views never disagree with the event store | A property test cuts the event store of each scenario that is Must in the first milestone (every scenario except 5 and 6, which depend on Later primitives) at 50 random points; the live views that are Must (Task status, next action, stack, invalidation, pending items) equal a full rebuild in 100% of cuts. Scenarios 5 and 6 and the work board (F-26) join the check when they are built | OPS-01, FND-05 | F-01 | Must |
 | NFR-12 | Tamper evidence | An altered record is detected | `aksha verify` passes on every untouched test store; editing one event is reported at that sequence; re-hashing a tail is reported against an anchor: 100% detected | OPS-07 | F-01, F-35 | Must |
 | NFR-13 | Hold invariant | Human state beats every automatic start | `inv.no_auto_start_while_held` drives each kind of automatic start against held work: 0 starts | OPS-04, REV-03 | F-21, F-23 | Must |
 | NFR-14 | Developer errors at load | An agent developer never debugs a half-run | 100% of the loader's malformed-module fixtures fail before the first event, with module, Task and field in the message | DEV-02 | F-28 | Must |

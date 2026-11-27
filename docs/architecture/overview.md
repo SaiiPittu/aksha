@@ -62,7 +62,7 @@ Caption: facts go in through one writer; every view, the trace included, is rebu
 
 ## Ports and adapters
 
-The domain is `src/aksha/runtime/`, one package per primitive. Every dependency on the outside world is a `typing.Protocol` in that package's `ports.py`, and backends are adapters in `src/aksha/adapters/`. `src/aksha/app.py` is the composition root, the one place that picks adapters. The runtime never imports an adapter, agents and extensions import only `aksha.runtime.api`, and `tests/architecture/` enforces both rules.
+The domain is `src/aksha/runtime/`, one package per primitive. Every dependency on the outside world is a `typing.Protocol` in that package's `ports.py`, and backends are adapters in `src/aksha/adapters/`. `src/aksha/app.py` is the composition root, the one place that picks adapters. The runtime never imports an adapter, agents and extensions import only `aksha.runtime.api` (an agent also the extensions it names), and `tests/architecture/` enforces both rules.
 
 ```mermaid
 flowchart TB

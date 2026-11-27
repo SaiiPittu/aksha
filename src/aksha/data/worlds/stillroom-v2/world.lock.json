@@ -1,6 +1,6 @@
 {
   "files": {
-    "key.json": "sha256:d596dced3d3c8f196786d5a26a46ed4a6eed132a4d364d691c71eecf886bd31f",
+    "key.json": "sha256:c992e21e890904a1ca04ddd89c7abc87bfe9762536ff6d40009fe301b46c6fa5",
     "manifest.json": "sha256:c6f2dfbc226212011091474cf6ce61ee34a8aae2c2207f80903b7064a5b90760",
     "sources/contributors/records.csv": "sha256:d720f4cd057738bf92b6d626eb4d0a470cd41d8c53ff63b957cd33f4f59d913b",
     "sources/disclosures/2026-03-10-trade-show-demo.md": "sha256:a6079a067dd65111e71d923ae344234d8f318e4599560ea1a836b73a4ef49741",

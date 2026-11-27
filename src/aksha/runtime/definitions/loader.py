@@ -32,6 +32,7 @@ from aksha.runtime.definitions.contributions import (
 )
 from aksha.runtime.definitions.errors import LoadError, LoadRefusal, Refusals
 from aksha.runtime.definitions.hashing import FileHashes, definition_hash, file_hashes
+from aksha.runtime.definitions.imports import ImportPin, external_imports, pin_imports
 from aksha.runtime.definitions.modules import SourceFinding, import_value, scan_sources
 from aksha.runtime.definitions.names import qualify
 from aksha.runtime.definitions.tree_checks import walk_tasks
@@ -63,6 +64,8 @@ class LoadedExtension:
     relations: Mapping[str, RelationKind] = field(default_factory=dict)
     projections: Mapping[str, Projection] = field(default_factory=dict)
     event_types: tuple[EventTypeSpec, ...] = ()
+    imports: tuple[ImportPin, ...] = ()
+    """What the extension imports from outside its folder, pinned (ADR-P20 B10)."""
 
 
 @dataclass(frozen=True)
@@ -270,7 +273,7 @@ def _find(name: str, search: Sequence[Path]) -> Path | None:
 def _scan(folder: Path, findings: Iterable[SourceFinding]) -> list[LoadRefusal]:
     """Source findings as refusals, each naming the file it is in."""
     field_of = {"import_outside_api": "imports", "stop_policy_class": "classes",
-                "network_import": "imports"}  # fmt: skip
+                "network_import": "imports", "import_unpinned": "imports"}  # fmt: skip
     refusals: list[LoadRefusal] = []
     for s in findings:
         out = Refusals(f"{folder.name}/{s.file}")
@@ -284,6 +287,8 @@ def _load_extension(
 ) -> tuple[LoadedExtension | None, list[LoadRefusal]]:
     out = Refusals(f"{name}/__init__.py")
     out.items += _scan(folder, scan_sources(folder))  # an extension imports no other extension
+    pins, unpinned = pin_imports(external_imports(folder), folder)
+    out.items += _scan(folder, unpinned)
     try:
         value = import_value(folder, f"_aksha_extension_{name}", None, "EXTENSION")
     except Exception as exc:  # any error in the extension's own code is a refusal
@@ -313,6 +318,7 @@ def _load_extension(
         relations=MappingProxyType({qualify(name, r.name): r for r in value.relations}),
         projections=MappingProxyType({qualify(name, p.name): p for p in value.projections}),
         event_types=tuple(value.event_types),
+        imports=pins,
     ), out.items
 
 
@@ -328,6 +334,8 @@ def _import_agent(folder: Path, module: str) -> tuple[Agent | None, list[LoadRef
     named = set(value.extensions) if isinstance(value, Agent) else set()
     kept = [f for f in findings if f.named_extension() not in named]
     out.items += _scan(folder, kept)
+    _, unpinned = pin_imports(external_imports(folder), folder)
+    out.items += _scan(folder, unpinned)
     if not isinstance(value, Agent):
         out.add("AGENT", "no_agent_value", "agent.py must define AGENT = Agent(...)")
         return None, out.items

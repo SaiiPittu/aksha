@@ -117,6 +117,29 @@ def test_reviews_are_one_passage_per_row_over_the_text_value() -> None:
     assert (table.roles["text"], table.roles["rating"]) == ("text", "rating")
 
 
+def test_each_review_text_is_found_inside_its_own_json_row_whatever_the_key_order() -> None:
+    # Key order in a JSON object is not fixed: here `text` comes before `review_id` in every
+    # row, so a search forward from each ID would pick up the next row's text (or none for
+    # the last row) and attribute the passage, its offsets and its themes to the wrong review.
+    rows = [
+        ("Battery lasted two weeks.", "SYN-R-1", "4"),
+        ("The app keeps losing the hub.", "SYN-R-2", "2"),
+        ("Setup took five minutes.", "SYN-R-3", "5"),
+    ]
+    body = ", ".join(f'{{"text": "{t}", "rating": "{r}", "review_id": "{i}"}}' for t, i, r in rows)
+    raw = '{"note": "synthetic", "reviews": [' + body + "]}"
+    found = ReturnedText("inputs", "input/reviews/out-of-order.json", "v1", raw)
+    table = reading.read_table(models_for(AGENT_DIR, ADAPTERS, "read_table"), found, "json",
+                               "inputs")  # fmt: skip
+    assert len(table.passages) == 3
+    for passage, (text, review_id, _) in zip(table.passages, rows, strict=True):
+        assert passage.text == text and raw[passage.start : passage.end] == text
+        row_at = raw.index(f'"text": "{text}"')
+        row_end = raw.index("}", row_at)
+        assert row_at < passage.start < passage.end < row_end  # inside its own object
+        assert passage.fields["columns"]["review_id"] == review_id
+
+
 def test_a_csv_with_quoted_commas_is_read_with_exact_offsets() -> None:
     raw, table = _table("tilldew", "exports/farmer-reviews.csv")
     assert len(table.passages) == 24

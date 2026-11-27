@@ -114,6 +114,10 @@ Caption: every arrow points inward; the runtime core imports nothing from the tw
 3. The research and patent agents declare `invalidation="rebuild"`; `make demo` and every eval suite run as before.
 4. `RecordReader` gains `serves(source) -> bool` (extension API 2.10), so the edit-time check can tell a source it cannot read from a record that does not exist yet. Agents and extensions call the reader and do not implement it; the readers the composition root wires (folder sources, the inputs workspace, the eval episode reader) implement it. The loader refuses two differently named versioned sources, across an agent and its extensions and across loaded agents, that declare the same collection (`collection_served_twice`, field `sources`), because a recorded read names a record by its ID alone.
 
+### Amendment from the design review: imports from outside the folder (27 Nov 2026, Proposed)
+
+1. B10, the definition hash covers or refuses every import from outside the folder (D7). D7's hash covered the agent folder (except `tests/`), each named extension's files and `API_VERSION`, and B2's source scan refused `aksha` imports other than `aksha.runtime.api` and the named extensions. A module from elsewhere on `sys.path` (a helper package beside the agent, a `PYTHONPATH` folder) was in neither: an edit to it changed behaviour with the hash unchanged, so a run could resume under changed code, which is what D7 forbids. `run.started` records the runtime commit and a dirty flag, but recovery compares only the definition hash. The choice: pin what can be pinned, refuse what cannot. The loader reads every absolute import in the agent's and each extension's sources without running them (`runtime/definitions/imports.py`), counting a dynamic import by literal name (`importlib.import_module("x")`, `__import__("x")`) as an import of `x`, as B2's scan does; a dynamic import by a computed name is not seen, as in B2, and sorts each top-level module into one of four. (a) The standard library, `__future__` and `aksha`: nothing to pin (B2 limits `aksha`, and the runtime commit is on `run.started`). (b) A module of an installed distribution: pinned as `name==version` of every distribution that owns it, and the pins enter the definition hash (an agent's in the top-level material, an extension's in its own entry), so installing, upgrading or removing a dependency is a new definition. (c) A module that is not installed (an optional parser imported inside `try`): pinned as `absent`, so installing it later is a new definition. (d) Anything else is refused `import_unpinned` (field `imports`), naming the file and module: a module on `sys.path` that no installed distribution owns, or one from an editable install, whose version does not follow its code. Such a helper belongs in the agent folder, where its files are hashed, or in a package installed by version. Hashing the helper's files instead was rejected: the loader cannot tell which files of a package an import reaches without running it, and a helper hashed today could import another tomorrow. Pins are added to the hash material only when there are some, so a definition that imports nothing outside the standard library and `aksha` keeps the hash it had. The cost: a definition's hash now differs between two machines with different versions of a dependency it imports, which is the point, since their behaviour can differ too.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |
@@ -129,15 +133,16 @@ Caption: every arrow points inward; the runtime core imports nothing from the tw
 ## Interface
 
 ```python
-# aksha/runtime/api.py (proposal; design only). The only runtime module outside code imports.
-API_VERSION = "1.0"
+# aksha/runtime/api.py. The only runtime module outside code imports. The version is the one
+# built as of 27 Nov 2026 (B5 gives the numbering; each minor added trailing fields or names).
+API_VERSION = "2.11"
 
 @dataclass(frozen=True)
-class Projection:                               # a read view built by a reducer (PR-01)
+class Projection:                               # a read view built by a reducer (PR-01; B6)
     name: str                                   # namespaced by the loader: "supervisor.board"
-    event_types: frozenset[str]                 # the only events the reducer is given
-    initial: object
-    reducer: Callable[[object, "Event"], object]   # pure; the loader runs it twice to check
+    reducer: "Reducer"                          # ADR-P01's Reducer: carries `reads` and `initial`; pure
+    @property
+    def event_types(self) -> frozenset[str]: ...   # the reducer's `reads`: the only events it is given
 
 @dataclass(frozen=True)
 class Extension:
@@ -155,6 +160,7 @@ class Extension:
     systems: tuple["SystemOfRecordSpec", ...] = ()            # S2: system-of-record adapters (ADR-P03)
     environments: tuple["EnvironmentSpec", ...] = ()          # ADR-P28
     egress: tuple["EgressPolicy", ...] = ()                   # ADR-P26
+    event_types: tuple["EventTypeSpec", ...] = ()             # B4: the extension's own event types (ADR-P01 B4)
 
 @dataclass(frozen=True)
 class Agent:                                    # 05d section 2.2, renamed and extended (S1)
@@ -194,6 +200,7 @@ class LoadError(Exception):
 class LoadedExtension:
     ext: Extension
     file_hashes: tuple[tuple[str, str], ...]    # (relative path, sha256)
+    imports: tuple[tuple[str, str], ...] = ()   # B10: (module, "dist==version" or "absent")
 
 @dataclass(frozen=True)
 class LoadedDefinition:

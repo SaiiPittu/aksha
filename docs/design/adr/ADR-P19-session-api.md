@@ -112,6 +112,13 @@ Built on 26 Nov 2026 in `src/aksha/runtime/session/`, `src/aksha/interfaces/` an
 1. G1, `UploadInputs(files)` joins the closed union of named commands: `files` maps relative paths to UTF-8 text, written to the owner's input workspace and recorded as one source change (ADR-P05 G1); a path that is not clean or text that is not UTF-8 is refused `upload_refused` with a stored receipt, before anything is written. It is in the capability record only when a loaded agent declares the inputs source. Over HTTP it is `POST /inputs` (body `{"files": {...}}`) or `POST /commands`.
 2. G2, the command line: `aksha run --input PATH` (repeatable: a folder, at its relative paths, or files, under their names) uploads before the message is sent; `aksha upload PATH...` uploads alone, then drives and reports the rebuild runs the change opened. Hidden files are skipped; a file that is not UTF-8 text is reported skipped (extract a PDF's text first). `aksha show [KIND[/KEY]]` is a read command: it lists the owner's latest outputs, or prints one output's content as JSON with its `freshness` from the invalidation view, so a person reads what the agents saved without a server; a version an input change invalidated, or one waiting on such a version, is listed with `(stale: invalidated)` or `(stale: dirty)` until its rebuild saves a new one.
 
+### Amendments from the design review (27 Nov 2026, Proposed)
+
+Design decisions for parts that are designed but not built as described, recorded before they are built.
+
+1. R1, `Steer.lane` is required (S2, ADR-P27 D1). D1 says the lane is explicit, but the declaration gave `lane` the default `"steer"`, so a scope change sent without a lane would steer the running instance instead of going through `amend`, which is the mistake `lane_required` exists to prevent. `lane` has no default in the interface above or in ADR-P27's: a `Steer` without one does not construct, and a wire request without one is refused `lane_required` with a stored receipt, as a bare `SendMessage` to an open run is. Each interface asks the person, as S2 says; a command-line or HTTP default is an interface choice that must be shown to the person, never filled in by the runtime. The built `Steer` and `aksha steer --lane` still default to `steer`; removing the default is a breaking change to the extension API (a major bump under ADR-P20 D2) and is made when this amendment is built.
+2. R2, an unknown event type refetches (D5). D5 said an unknown item advances the cursor and invalidates nothing. That holds for an unknown stream item type (a new kind of item beside `EventItem`, `Resync` and the rest), which carries no state. It does not hold for an `EventItem` whose `event_type` the client does not recognise: a newer runtime's event can change a view the client shows, and a client that only advanced its cursor would leave that view stale with no signal. A client that receives an `EventItem` with an unrecognised `event_type` therefore refetches every view of the item's run (every view of the session when `run` is None) before it moves its cursor past the item, exactly as it does for the events it knows; several unknown events in one replay cost one refetch at the `Synchronized` marker. Because clients never build views from payloads (FR-IF-11), this needs no schema knowledge and no new item type, and an older client stays correct against a newer runtime at the cost of extra reads. Unknown stream item types stay as D5 says.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |
@@ -157,6 +164,8 @@ class SendMessage(CommandBase): session_id: str; text: str; agent: str | None = 
 @dataclass(frozen=True)
 class AnswerInterrupt(CommandBase):     # input, choice and route interrupts only (IE-10; route: S3)
     interrupt_id: str; text: str | None = None; keys: tuple[str, ...] = (); amend: bool = False
+    answers: Mapping[str, str] = {}      # ADR-P17 S2: one answer per question, keyed by question ID;
+                                        # `text` stays for a single-question interrupt
     agent: str | None = None            # route only: one of the agents the interrupt listed (ADR-P23)
 @dataclass(frozen=True)
 class Approve(CommandBase): approval_id: str; shown_signature: str
@@ -181,7 +190,7 @@ class Finalize(CommandBase): run_id: str                               # S4, ADR
 @dataclass(frozen=True)
 class Steer(CommandBase):                                              # S2, ADR-P27
     run_id: str; text: str; instance: str | None = None
-    lane: Literal["steer", "follow_up", "amend"] = "steer"
+    lane: Literal["steer", "follow_up", "amend"]                      # required, no default (R1, Proposed: the built code still defaults to "steer")
 
 Command = (OpenSession | SendMessage | AnswerInterrupt | Approve | Reject | EditAction | Handoff
            | AcceptReview | RejectReview | GrantBudget | ApplySourceChange | Stop
@@ -215,6 +224,8 @@ def cli_pending_command_id(invocation: str) -> str: ...  # the CLI's local pendi
 class EventItem:
     seq: int; event_type: str; run: str | None; step: str | None; at: str
     payload: Mapping[str, object]       # source text and citation-span text left out (v2 contract 4)
+    # R2: an event_type the client does not recognise refetches the views of its run (every
+    # session view when run is None) before the cursor moves past it
 @dataclass(frozen=True)
 class Resync: seq: int                  # refetch every view, then cursor = seq
 @dataclass(frozen=True)

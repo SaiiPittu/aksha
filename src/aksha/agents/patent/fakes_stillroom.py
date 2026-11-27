@@ -131,7 +131,13 @@ LEXICON: Mapping[str, Mapping[str, Any]] = {
             "B1": (
                 "PIR wakes the thermopile for a 60 s window at 1 Hz",
                 ["When the PIR fires"],
-                [["passive infrared"], ["wakes"], ["window"]],
+                [
+                    ["passive infrared"],
+                    ["wakes"],
+                    ["window"],
+                    ["60 s", "60 second", "sixty second"],
+                    ["1 Hz", "once per second", "once a second"],
+                ],
             ),
             "B2": (
                 "fall back to 10 s sampling then PIR-only",
@@ -144,6 +150,7 @@ LEXICON: Mapping[str, Mapping[str, Any]] = {
                 [
                     ["only when the occupant count changes", "only when an occupant count changes"],
                     ["heartbeat"],
+                    ["15 min", "15-minute", "fifteen minute", "every 15 minutes"],
                 ],
             ),
             "B4": (

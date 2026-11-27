@@ -102,6 +102,7 @@ src/aksha/
 │   │   ├── contributions.py                 contribution names, event type checks, full-name merge
 │   │   ├── loader.py                        discover, load_extensions, load_agents
 │   │   ├── hashing.py                       definition_hash, run_started_fields, resume_refusal
+│   │   ├── imports.py                       imports from outside the folder: pinned or import_unpinned
 │   │   └── surface.py                       api_surface, required_bump, for the snapshot test
 │   ├── tools/                               P10 tool registry and schemas
 │   │   ├── __init__.py                      every tool is declared data

@@ -398,3 +398,86 @@ def test_bad_tool_use_overrides_are_refused(
     with pytest.raises(LoadError) as err:
         load_agents([plugins.toy], [plugins.extensions])
     assert _refusal_codes(err) == [code]
+
+
+def test_a_helper_module_from_outside_the_agent_folder_is_refused(
+    plugins: Plugins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ADR-P20 B10: a module on sys.path that no installed distribution owns is outside every
+    # file the definition hash covers, so an edit to it would let a run resume under changed
+    # behaviour with the hash unchanged. The loader refuses it.
+    helpers = tmp_path / "helpers"
+    helpers.mkdir()
+    (helpers / "syn_helper.py").write_text("def tone(text: str) -> str:\n    return text\n")
+    monkeypatch.syspath_prepend(str(helpers))
+    (plugins.toy / "checks.py").write_text(
+        (plugins.toy / "checks.py").read_text(encoding="utf-8") + "\nimport syn_helper\n"
+    )
+    with pytest.raises(LoadError) as err:
+        load_agents([plugins.toy], [plugins.extensions])
+    (refusal,) = err.value.refusals
+    assert (refusal.code, refusal.module) == ("import_unpinned", "toy/checks.py")
+    assert "syn_helper" in refusal.message
+
+
+@pytest.mark.parametrize(
+    "call", ['importlib.import_module("syn_helper")', '__import__("syn_helper")']
+)
+def test_a_literal_dynamic_import_from_outside_the_agent_folder_is_refused(
+    plugins: Plugins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call: str
+) -> None:
+    # ADR-P20 B10 covers a dynamic import by literal name as it covers an import statement:
+    # otherwise the helper could change with the definition hash unchanged.
+    helpers = tmp_path / "helpers"
+    helpers.mkdir()
+    (helpers / "syn_helper.py").write_text("def tone(text: str) -> str:\n    return text\n")
+    monkeypatch.syspath_prepend(str(helpers))
+    (plugins.toy / "checks.py").write_text(
+        (plugins.toy / "checks.py").read_text(encoding="utf-8")
+        + f"\nimport importlib\n\ndef _helper() -> object:\n    return {call}\n"
+    )
+    with pytest.raises(LoadError) as err:
+        load_agents([plugins.toy], [plugins.extensions])
+    (refusal,) = err.value.refusals
+    assert (refusal.code, refusal.module) == ("import_unpinned", "toy/checks.py")
+    assert "syn_helper" in refusal.message
+
+
+def test_a_literal_dynamic_import_of_an_installed_module_is_pinned(plugins: Plugins) -> None:
+    from aksha.runtime.definitions.hashing import import_pins
+
+    checks = plugins.toy / "checks.py"
+    extra = '\nimport importlib\n\nJS = importlib.import_module("jsonschema.validators")\n'
+    checks.write_text(checks.read_text(encoding="utf-8") + extra)
+    pinned = f"jsonschema=={_version('jsonschema')}"
+    assert dict(import_pins(plugins.toy)) == {"jsonschema": pinned}
+
+
+def test_an_installed_or_absent_import_is_pinned_into_the_definition_hash(
+    plugins: Plugins,
+) -> None:
+    # An installed distribution is pinned by name and version, and a module that is not
+    # installed as absent, so installing or upgrading either is a new definition.
+    from aksha.runtime.definitions.hashing import import_pins
+
+    base = load_agents([plugins.toy], [plugins.extensions])[0].definition_hash
+    checks = plugins.toy / "checks.py"
+    source = checks.read_text(encoding="utf-8")
+    checks.write_text(source + "\nimport jsonschema\nimport json\n")
+    pins = dict(import_pins(plugins.toy))
+    assert pins == {"jsonschema": f"jsonschema=={_version('jsonschema')}"}  # json: stdlib
+    pinned = load_agents([plugins.toy], [plugins.extensions])[0].definition_hash
+    assert pinned != base
+    checks.write_text(source + "\ntry:\n    import syn_not_installed_anywhere\n"
+                      "except ImportError:\n    pass\n")  # fmt: skip
+    assert dict(import_pins(plugins.toy)) == {"syn_not_installed_anywhere": "absent"}
+    assert load_agents([plugins.toy], [plugins.extensions])[0].definition_hash not in (
+        base,
+        pinned,
+    )
+
+
+def _version(dist: str) -> str:
+    import importlib.metadata
+
+    return importlib.metadata.version(dist)

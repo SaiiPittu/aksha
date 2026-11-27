@@ -65,7 +65,7 @@ Caption: agents reach the runtime through the loader, people through the session
 |---|---|---|---|---|---|
 | F-01 | Hash-chained event store with projections | Must | P01 | OPS-01, OPS-07, FND-05 | Partly built; PostgreSQL in production and SQLite locally behind one port (decision 17) |
 | F-02 | Durable execution and recovery on startup | Must | P02 | DEV-03, OPS-03, REV-03 | Deterministic step IDs, injected clock, step semantics, restart limit |
-| F-03 | Transactional outbox and idempotency keys | Must | P03 | REV-03, CNS-02, OPS-05 | Command deduplication by command ID is Should |
+| F-03 | Transactional outbox and idempotency keys | Must | P03 | REV-03, CNS-02, OPS-05, REV-04 | Command deduplication by command ID is Must too (FR-11, FR-36), and is built |
 | F-04 | Artifact store with lineage and typed relations | Must | P04 | FND-02, INV-01, CNS-02 | Path-scoped reads for the coding agent are Later |
 | F-05 | Invalidation with early cutoff and diff review | Must | P05 | FND-05, REV-05, CNS-02, INV-02 | Rebase mode is Later |
 | F-06 | External record state | Should | P29 | CNS-02 | Stub: the agent tracks the outside record's revision |

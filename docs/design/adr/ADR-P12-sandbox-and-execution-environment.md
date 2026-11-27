@@ -47,7 +47,7 @@ The coding agent adds a fourth problem v2 did not solve. ADR-022's lean (SB-7) i
 
 1. S1, an execution environment image. With a fresh `/work` per exec, an allowlisted read-only root and the network off, `import fastapi` fails: nothing gives the box the project's dependencies. That is a missing primitive, designed in ADR-P28. `SandboxNeeds` gains `environment: str | None`, the name of an `EnvironmentSpec`, mounted read-only at `/env`.
 2. S2, nested tree manifests. `TreeManifest` is a flat path-to-hash map. For a 5,000-file repository the coding review estimates about 550 KB per version and about 220 MB over 400 versions, against about 13 KB and about 5 MB for nested tree objects per folder, as Git stores them (all estimates). The manifest becomes nested: a version points at a root tree object, and a one-file edit writes only the tree objects on its path.
-3. S3, `protected` is a default an agent may clear for its own tool. `.git` stays read-only under a writable path by default; an agent that runs git inside the box may clear it for that one exec tool, and the loader records the choice in the permission matrix.
+3. S3, protected paths are declared per tool, with no runtime default (superseded in part by ADR-P11 B6 and A12 below). The core names no folder: `SandboxPolicy.protected` defaults to `()`. An agent declares the paths an exec tool must never write in that tool's `SandboxNeeds.policy.protected` (the `ToolSpec.sandbox` of the tool), and a sandbox extension may declare them in the policy it contributes; protected paths add up across layers (A5), so no narrower layer can clear one a wider layer set. An agent that runs git inside the box protects `.git` on every exec tool except the one that commits. Recording the choice in the permission matrix is later work.
 4. S4, the workspace tree kind is the sandbox extension's, not the core's, matching ADR-P04 D10 and S5.
 
 ### Amendment of 26 Nov 2026: the sandbox is tier 3 (decision 29)
@@ -94,6 +94,12 @@ Built on 26 Nov 2026: the port, the `refuse` backend, selection, the effective p
 7. B7, the record (decision 9, A10). An exec record adds `session` and, from the backend, `workspace`: the backend, the folder or sandbox ID, whether this exec created it, its origin (empty, folder, or git with repository, branch and base commit), and the checkpoint commit when one was made. No new event types.
 8. B8, accepted risk (decision 37). A crash, a reboot or a kill loses what a program left only in the box's temporary space, and an expired E2B sandbox loses its files. The session folder and a git workspace's checkpoints survive. The workspace's content is not in the event store: the record names the workspace and hashes the outputs, so a replay does not rebuild the workspace and a rerun after a crash starts from whatever the folder holds, not from a recorded tree. Per-step tree snapshots (decision 5), which would close this, are the next step when the milestone allows.
 
+### Amendments from the design review (27 Nov 2026, Proposed)
+
+Design decisions for a part that is designed but not built, recorded before it is built.
+
+1. R1, nested tree manifests (S2). S2 replaced the flat path-to-hash map with nested tree objects but left the interface flat. The nested form is defined in the interface below: a `TreeObject` is one folder, a sorted tuple of `TreeEntry(name, kind, ref, mode)` with unique single-segment names, where `kind` is `blob` (a file, `ref` its content hash, `mode` `file` or `exec`) or `tree` (a subfolder, `ref` the hash of the child `TreeObject`). A `TreeObject` is stored as an ordinary blob of its canonical JSON bytes (ADR-P01's canonical form), so its ref is a content hash like any other and the blob store needs nothing new. A tree version is named by its root: `NestedTreeManifest.root` is the ref of the root `TreeObject`, and that ref is the tree artifact's content hash, so two equal trees have one ref whatever wrote them. A one-file edit writes the new blob and the `TreeObject` of every folder on its path, and reuses every other ref. An empty folder is not stored (a tree has files). The backend still receives a flat path-to-blob map, which `entries(read)` builds by walking from the root; the exec record's tree hashes (A10) become root refs. A version saved under the flat manifest stays readable: its record names the flat form, and the first nested save of the same tree writes its root with lineage to it.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |
@@ -114,7 +120,9 @@ Strength = Literal["none", "os-jail", "container", "vm"]       # ordered
 @dataclass(frozen=True)
 class SandboxPolicy:
     writable: tuple[str, ...] = ("out", "tmp")                  # relative to /work
-    protected: tuple[str, ...] = (".git",)                      # read-only even under a writable path
+    protected: tuple[str, ...] = ()                             # read-only even under a writable path; no runtime
+                                                                # default (ADR-P11 B6): an exec tool declares its own
+                                                                # in SandboxNeeds.policy, and protected paths add up
     host_read: tuple[str, ...] = ()                             # must be empty in v1 (decision 3)
     network: Literal["none", "allowlist"] = "none"              # every shipped backend refuses "allowlist"
     limits: "Limits" = ...                                      # wall_ms, cpu_s, memory_mb, max_processes, ...
@@ -160,9 +168,26 @@ def select_backend(choice: Literal["auto", "refuse", "bwrap", "docker"],
 
 # Workspace tree: an artifact kind the sandbox extension declares (S4, ADR-P04 S5); the core keeps blobs.
 @dataclass(frozen=True)
-class TreeManifest:
+class TreeManifest:                                             # built: flat (A7); R1 below is the nested design
     entries: Mapping[str, str]                                  # path -> content hash of the blob
     def digest(self) -> str: ...
+
+# R1 (Proposed, not built): nested tree objects, one per folder, as Git stores them.
+@dataclass(frozen=True)
+class TreeEntry:
+    name: str                                                   # one path segment: no "/", not "." or ".."
+    kind: Literal["blob", "tree"]
+    ref: str                                                    # "sha256:<hex>" of the blob or of the child tree object
+    mode: Literal["file", "exec"] = "file"                      # blobs only
+
+@dataclass(frozen=True)
+class TreeObject:                                               # stored as a blob; its ref is the hash of its canonical bytes
+    entries: tuple[TreeEntry, ...]                              # sorted by name, names unique
+
+@dataclass(frozen=True)
+class NestedTreeManifest:
+    root: str                                                   # ref of the root TreeObject; the tree version's identity
+    def entries(self, read: "BlobReader") -> Mapping[str, str]: ...   # flattened path -> blob ref, for the backend
 ```
 
 Events it writes: probe results and the chosen backend on `run.started`; the exec record on `step.completed`; the new tree version as an ordinary `artifact.saved` with lineage to the old tree. No new event types.

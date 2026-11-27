@@ -299,13 +299,21 @@ SpanLevel = Literal["run", "task", "turn", "model_call", "tool_call",
                     "stop_evaluation", "interrupt", "effect"]
 
 @dataclass(frozen=True)
-class MappingRow:                                     # one row per event type; the table is data
-    event_type: str                                   # "stop.decided"
+class MappingAction:                                  # one thing an event does to the trace
     produces: Literal["span_open", "span_close", "span_event", "attribute"]
     level: SpanLevel | None
     name: str                                         # template, "aksha.stop_policy.evaluate {task_path}"
     operation: str | None                             # gen_ai.operation.name, or None
     convention: Literal["otel-genai/0.1.0", "aksha", "custom-operation"]
+    when: str | None = None                           # a condition on the event, e.g. "first step of its turn"
+
+@dataclass(frozen=True)
+class MappingRow:                                     # one row per event type; the table is data
+    event_type: str                                   # "stop.decided"
+    actions: tuple[MappingAction, ...]                # applied in order; several per event type: the
+                                                      # first step.started of a turn opens the turn span,
+                                                      # then the model or tool span under it (as built in
+                                                      # extensions/otel/trace.py)
 
 MAPPING: tuple[MappingRow, ...]
 KNOWN_KEYS: frozenset[str]                            # loaded from semconv_otel_genai_0_1_0.json

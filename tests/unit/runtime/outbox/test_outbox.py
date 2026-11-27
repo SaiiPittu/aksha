@@ -54,6 +54,24 @@ def test_enqueue_of_a_key_already_enqueued_returns_the_entry_and_no_event(
     assert again.entry.seq == 1
 
 
+def test_a_key_reused_with_a_different_request_is_refused_and_writes_nothing(
+    store: EventStore,
+) -> None:
+    # ADR-P03 B2: a change outside the key fields is not the same effect. Returning the first
+    # entry would hand the caller the first request's receipt for a request it did not send.
+    first = enqueue(load_view(store, "o"), "send", ARGS, SEND)
+    assert first.event is not None
+    store.append("o", facts.ENQUEUE, (first.event,))
+    changed = {**ARGS, "subject": "a different cover note"}
+    assert idempotency_key("send", "o", changed, SEND) == first.entry.key  # same key
+    with pytest.raises(OutboxRefused) as e:
+        enqueue(load_view(store, "o"), "send", changed, SEND)
+    assert e.value.code == "key_reused_with_different_request"
+    assert first.entry.key in e.value.message
+    (entry,) = entries(load_view(store, "o")).values()
+    assert entry.request == ARGS  # the first entry stands, unchanged
+
+
 def test_a_second_enqueued_event_for_one_key_is_refused_by_the_store(store: EventStore) -> None:
     out = enqueue(load_view(store, "o"), "send", ARGS, SEND)
     assert out.event is not None

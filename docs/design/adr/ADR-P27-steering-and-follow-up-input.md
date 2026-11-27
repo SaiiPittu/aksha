@@ -45,6 +45,10 @@ For the product requirements' agents a run lasts seconds; for a coding session i
 7. B7, statements in lineage. The context records the person's current answers it shows as `statement` lineage inputs (`read.recorded{via: context}`), so a version saved after reading an answer depends on it. The invalidation view reads a statement input as `moved` once a later span supersedes its span, unless the same version also read the replacement. This builds the "superseded statements" row ADR-P05 left open.
 8. B8, an ended run. `Steer` to an ended run is refused `run_ended`, and so is `AnswerInterrupt(amend=True)` on an interrupt of an ended run, because nothing would rebuild; the interface sends a new message, which D6 routes. The CLI's `lane_required` refusal prints the three `aksha steer` forms (D1's one question).
 
+### Amendments from the design review (27 Nov 2026, Proposed)
+
+1. R1, the lane has no default (D1). The interface gave `Steer.lane` the default `"steer"`, which contradicts D1 and option C's rejection of a default lane: a scope change sent without a lane would steer the running instance instead of reaching `amend`, and invalidation would never reopen the answered scope. `lane` is required here and in ADR-P19's declaration (ADR-P19 R1); a request without one is refused `lane_required`. The built command still defaults to `steer` until this amendment is built, because removing the default is a major extension API change.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
@@ -63,7 +67,7 @@ class Steer(CommandBase):
     run_id: str
     text: str
     instance: str | None = None                   # None: The run's active instance
-    lane: Literal["steer", "follow_up", "amend"] = "steer"
+    lane: Literal["steer", "follow_up", "amend"]  # required, no default (D1; R1, Proposed: built code defaults to "steer")
 
 # aksha/runtime/inputs.py (proposal; design only)
 @dataclass(frozen=True)

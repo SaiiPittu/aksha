@@ -90,10 +90,14 @@ cd "$WORKDIR/tree" && make venv >/dev/null && make check
 git diff --diff-filter=D --name-only "origin/$BASE..$HEAD_OID" -- 'tests/**'
 # Assertion count per changed test file, before and after
 for f in $(git diff --name-only "origin/$BASE..$HEAD_OID" -- 'tests/**/*.py'); do
-  before=$(git show "origin/$BASE:$f" 2>/dev/null | grep -cE '^\s*assert |pytest\.raises\(' || echo 0)
-  after=$(git show "$HEAD_OID:$f" 2>/dev/null | grep -cE '^\s*assert |pytest\.raises\(' || echo 0)
+  before=$(git show "origin/$BASE:$f" 2>/dev/null | grep -cE '^\s*assert |pytest\.raises\(' || true)
+  before=${before:-0}
+  after=$(git show "$HEAD_OID:$f" 2>/dev/null | grep -cE '^\s*assert |pytest\.raises\(' || true)
+  after=${after:-0}
   [ "$after" -lt "$before" ] && echo "DROP $f: $before -> $after"
 done
+# grep -c prints 0 and exits 1 when nothing matches, so `|| echo 0` would make the value two
+# lines; `|| true` keeps the single 0, and the default covers a file missing on one side.
 # Newly skipped or expected-to-fail tests
 git diff "origin/$BASE..$HEAD_OID" -- 'tests/**' | grep -nE '^\+.*(pytest\.mark\.(skip|skipif|xfail)|pytest\.skip\(|pytest\.importorskip\()'
 ```
@@ -123,13 +127,24 @@ fi
 The checks that need no list:
 
 ```bash
-# Patent-looking numbers in fixtures or docs that are not SYN- prefixed
-grep -nE '^\+.*\b(US|EP|WO|JP|CN|KR|DE|GB)[ -]?[0-9]{4,}' "$WORKDIR/diff.patch" | grep -v 'SYN-'
-# Absolute home paths, email addresses and anything shaped like a key
-grep -nE '^\+.*(/home/[a-z]|/Users/[A-Za-z]|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16})' "$WORKDIR/diff.patch"
-# New fixture files that do not say they are synthetic
+PATENT='\b(US|EP|WO|JP|CN|KR|DE|GB)[ -]?[0-9]{4,}'
+SECRET='(/home/[a-z]|/Users/[A-Za-z]|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[a-z]{2,}|sk-[A-Za-z0-9]{16,}|AKIA[0-9A-Z]{16})'
+# Patent-looking numbers in fixtures or docs that are not SYN- prefixed: added lines of the
+# diff, then every line of the commit messages and the PR description (no + prefix there)
+grep -nE "^\+.*$PATENT" "$WORKDIR/diff.patch" | grep -v 'SYN-'
+grep -nE "$PATENT" "$WORKDIR/messages.txt" | grep -v 'SYN-'
+# Absolute home paths, email addresses and anything shaped like a key, in both places
+grep -nE "^\+.*$SECRET" "$WORKDIR/diff.patch"
+grep -nE "$SECRET" "$WORKDIR/messages.txt" | grep -v 'Co-Authored-By:.*noreply@'
+# New fixture files that do not say they are synthetic, in the file or in the manifest.json
+# of the world the file belongs to (src/aksha/data/worlds/<world>/manifest.json)
 for f in $(git diff --diff-filter=A --name-only "origin/$BASE..$HEAD_OID" -- 'src/aksha/data/**'); do
-  git show "$HEAD_OID:$f" | grep -qi 'synthetic' || echo "UNLABELLED $f"
+  git show "$HEAD_OID:$f" | grep -qi 'synthetic' && continue
+  world=$(printf '%s\n' "$f" | sed -nE 's#^(src/aksha/data/worlds/[^/]+)/.*#\1#p')
+  if [ -n "$world" ] && git show "$HEAD_OID:$world/manifest.json" 2>/dev/null | grep -qi 'synthetic'; then
+    continue
+  fi
+  echo "UNLABELLED $f"
 done
 ```
 
@@ -179,12 +194,12 @@ Re-read the whole `review.json`. Every finding still holds, none repeats another
 The ten rules, with their mechanical checks and examples, are in [references/invariants.md](references/invariants.md). In one line each:
 
 1. **The ADR decision is implemented exactly**, or the ADR is amended in the same PR.
-2. **The dependency rule holds.** The runtime imports no adapter, agent, extension, interface or `aksha.app`; agents and extensions import only `aksha.runtime.api`; every `Protocol` lives in a `ports.py`.
+2. **The dependency rule holds.** The runtime imports no adapter, agent, extension, interface or `aksha.app`; agents and extensions import only `aksha.runtime.api`, and an agent also the extensions it names; every `Protocol` lives in a `ports.py`.
 3. **Store facts, derive interpretations.** No stored status, counter, flag or remaining budget; every such value is a projection built by a pure reducer.
 4. **One writer and an intact hash chain.** Only the `EventStore` adapter writes; no update or delete; the canonical bytes and the chain stay stable.
 5. **Idempotency and step semantics.** Every effect goes through the outbox under a key built from meaning; every command carries a command ID; every tool declares `at_least_once`, `reconcile` or `at_most_once` correctly.
 6. **Deterministic runtime.** No wall clock, sleep, random or `uuid4` in the runtime; time comes from the `Clock` port and IDs from the `IdSource`.
-7. **The policy gate denies by default.** It is pure, fails closed, runs its layers in the fixed order, takes nothing the model can write, and in headless mode only asks become allows while every deny still holds.
+7. **The policy gate denies by default.** It is pure, fails closed, runs its layers in the fixed order, checks the proposed call's name and arguments but takes no other model-written text (tool results, documents, memory, artifact content), and in headless mode only asks become allows while every deny still holds.
 8. **No agent-specific code in the runtime.** No agent, fixture world or tool name appears in `src/aksha/runtime/`; a new runtime abstraction is needed by all three agents (the rule of three).
 9. **Tests fail when the guarantee breaks.** Each guarantee has a test that breaks if the code is wrong, and a new guard is shown failing on a planted violation before it is trusted.
 10. **The public-repository rules hold.** No private names, no external product named as a source, synthetic fixtures labelled synthetic with `SYN-` identifiers.
