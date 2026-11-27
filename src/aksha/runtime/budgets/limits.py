@@ -35,7 +35,9 @@ ATTEMPT_TYPES = frozenset({"step.failed", "attempt.discarded"})
 def next_attempt(events: Iterable[Event], step_id: str) -> int:
     """One more than the highest attempt ``events`` record for ``step_id`` (from 1). Pure.
 
-    An attempt that crashed unrecorded left no fact, so it runs again under its own number.
+    An attempt a crash interrupted left no fact until its step resumes; the executor then
+    records it as ``step.failed{interrupted}`` before the next attempt (ADR-P14 B1), so it
+    counts and the next attempt takes the number after it.
     """
     numbers = [
         int(e.payload["attempt"]) for e in events if e.step == step_id and e.type in ATTEMPT_TYPES

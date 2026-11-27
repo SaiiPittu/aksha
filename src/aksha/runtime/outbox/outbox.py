@@ -4,9 +4,10 @@
 ``pending_outbox`` read it. ``enqueue`` builds an entry and its ``outbox.enqueued`` event
 for the caller to append in its own transaction (the command that decided the effect, or the
 step intent of an effectful tool call), after re-checking authority. An entry for a key
-already enqueued is returned as it stands, with no event: the effect it means is already
-decided, and a rebuild run's equal request reaches the first entry and its receipt instead
-of a second effect.
+already enqueued is returned as it stands, with no event, when the request is the same: the
+effect it means is already decided, and a rebuild run's equal request reaches the first entry
+and its receipt instead of a second effect. A different request under that key is refused
+(``key_reused_with_different_request``, ADR-P03 B2).
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from aksha.runtime.canonical import freeze
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.outbox import facts
-from aksha.runtime.outbox.errors import OutboxRefused
+from aksha.runtime.outbox.errors import KEY_REUSED, OutboxRefused
 from aksha.runtime.outbox.keys import (
     Resolve,
     artifact_sources,
@@ -146,12 +147,23 @@ def enqueue(
     A tool that declares ``record_fields`` also records which outside record the request
     revises and the artifact versions among its key values (ADR-P29 D1).
 
+    An entry already enqueued under the key is returned only for the same request (equal
+    ``request_hash``); a different request under a reused key is refused with
+    ``key_reused_with_different_request`` (ADR-P03 B2), so a caller never receives the first
+    request's receipt for a request it did not send.
+
     Raises ``KeyFieldMissing`` when a key or record field is absent and :class:`OutboxRefused` with
     the authority's code when it no longer covers the entry. Pure: nothing is appended.
     """
     key = idempotency_key(tool, view.owner, args, spec, resolve=resolve)
     existing = entries(view).get(key)
     if existing is not None:
+        if existing.request_hash != request_hash(args):
+            raise OutboxRefused(
+                KEY_REUSED,
+                f"{tool}: key {key} is already enqueued for a different request "
+                f"({existing.request_hash})",
+            )
         return Enqueued(existing, None)
     record = record_values(args, spec) if spec.record_fields else None
     entry = OutboxEntry(

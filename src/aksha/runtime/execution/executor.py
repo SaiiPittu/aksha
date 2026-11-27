@@ -32,7 +32,10 @@ ID, so a restarted process returns recorded results instead of running steps aga
    artifact rows it carries, in one transaction (U2).
 7. Each attempt's active time is recorded as ``duration_ms`` on its ``step.failed`` or
    ``step.completed``, read on the injected clock; a timed-out attempt records its timeout.
-   Budget accounting sums them with the backoffs (ADR-P14 D2).
+   Budget accounting sums them with the backoffs (ADR-P14 D2). An ``at_least_once``
+   attempt a crash interrupted is recorded when its step resumes, as
+   ``step.failed{interrupted}``: it counts toward ``max_retries`` and is charged from its
+   start to the resume, capped at its timeout (ADR-P14 B1).
 8. A person's stop (ADR-P18 D5): a new step of a run with a pending stop request never
    starts; it is recorded ``step.completed{outcome: skipped, code: run_stopped}`` alone, so
    the turn ends at once and the next stop candidate ends the run. A dangling step of such
@@ -67,7 +70,7 @@ import queue
 import threading
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from aksha.runtime.artifacts.blobs import inflate, offload_events
@@ -104,6 +107,8 @@ from aksha.runtime.storage.ports import EventStore
 STEP_EXCEPTION = "step_exception"
 """The code of a step whose work raised an ordinary exception: a bug, never retried."""
 
+INTERRUPTED = "interrupted"
+"""The code of an attempt a crash interrupted, recorded when its step resumes (ADR-P14 B1)."""
 TIMEOUT = "timeout"
 """The code of an attempt whose deadline passed."""
 
@@ -199,6 +204,12 @@ class StepExecutor:
             self._append(facts.STEP_INTENT, intent)
         attempt = self._next_attempt(step_id)
         if started is not None:
+            if policy.semantics == "at_least_once":
+                attempt, ended = self._charge_interrupted(
+                    step_id, kind, name, policy, attempt, started, stopped
+                )
+                if ended is not None:
+                    return ended
             closed = self._finish_dangling(step_id, kind, name, policy, attempt, stopped)
             if closed is not None:
                 return closed
@@ -343,6 +354,62 @@ class StepExecutor:
             count += 1
 
     # --- the steps of :meth:`step` -----------------------------------------------------
+
+    def _charge_interrupted(
+        self,
+        step_id: StepId,
+        kind: StepKind,
+        name: str,
+        policy: StepPolicy,
+        attempt: int,
+        started: Event,
+        stopped: bool,
+    ) -> tuple[int, StepResult | None]:
+        """Record the attempt a crash interrupted, so it counts and its time is charged.
+
+        A dangling ``at_least_once`` step's last record is its ``step.started`` or a
+        ``step.failed{retried}``; in both cases the executor went straight on to an attempt
+        (``attempt``), and a crash before that attempt's outcome left no fact of it. It is
+        recorded now as ``step.failed{interrupted}`` (ADR-P14 B1): it counts toward
+        ``max_retries`` like any other attempt, so a crash loop runs at most
+        ``max_retries + 1`` attempts, and its active time is charged conservatively as the
+        time from its start to now on the injected clock, capped at the step's timeout
+        (an attempt is abandoned at its deadline). With no retry left the step ends
+        ``error{interrupted}``. A last failure that was not retried means no attempt was in
+        flight: the step ends with that failure's code, as it would have before the crash.
+
+        Returns the next attempt's number and None, or the ended step's result.
+        """
+        sid = str(step_id)
+        failures = [
+            e
+            for e in self._store.read(
+                self._owner, run=step_id.run, types=frozenset({"step.failed"})
+            )
+            if e.step == sid
+        ]
+        last = max(failures, key=lambda e: int(e.payload["attempt"]), default=None)
+        if last is not None and last.payload.get("retried") is not True:
+            n = int(last.payload["attempt"])
+            event = facts.step_completed(step_id, kind, name, "error", attempts=n,
+                                         code=str(last.payload["code"]), duration_ms=0)  # fmt: skip
+            (stored,) = self._append(facts.STEP_RESULT, event)
+            return n, self._recorded(step_id, stored, replayed=False)
+        since = datetime.fromisoformat((last or started).at)
+        if last is not None:
+            since += timedelta(milliseconds=int(last.payload.get("backoff_ms", 0)))
+        elapsed = max(0, round((self._clock.now() - since) / timedelta(milliseconds=1)))
+        charged = min(policy.timeout_ms, elapsed)
+        retried = not stopped and attempt <= policy.max_retries
+        failed = facts.step_failed(step_id, attempt, INTERRUPTED, retried=retried, backoff_ms=0,
+                                   duration_ms=charged)  # fmt: skip
+        self._append(facts.ATTEMPT_FAILED, failed)
+        if not retried and not stopped:
+            event = facts.step_completed(step_id, kind, name, "error", attempts=attempt,
+                                         code=INTERRUPTED, duration_ms=0)  # fmt: skip
+            (stored,) = self._append(facts.STEP_RESULT, event)
+            return attempt, self._recorded(step_id, stored, replayed=False)
+        return attempt + 1, None
 
     def _finish_dangling(
         self,

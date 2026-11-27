@@ -191,7 +191,42 @@ def test_attempt_count_survives_restart(w: World) -> None:
     again = script.raises("g", *(TransientStepError() for _ in range(5)))
     result = w.steps().step(sid, "tool", "fetch", HASH, again, StepPolicy())
     assert (result.outcome, result.attempts) == ("error", 3)  # max_retries=2: three in all
-    assert script.calls == ["f", "f", "g", "g"]
+    # The crashed attempt 2 counts (ADR-P14 B1): the resume runs attempt 3 only.
+    assert script.calls == ["f", "f", "g"]
+    failed = [(e.payload["attempt"], e.payload["code"])
+              for e in w.store.read("o", run=RUN) if e.type == "step.failed"]  # fmt: skip
+    assert failed == [(1, "transient"), (2, "interrupted"), (3, "transient")]
+
+
+def test_a_crash_loop_runs_no_more_than_max_retries_plus_one_attempts(w: World) -> None:
+    # ADR-P14 B1: an attempt a crash interrupts is counted from the step's own records when
+    # it resumes, so a body that kills the process every time runs three times, not forever,
+    # and each interrupted attempt is charged active time, capped at the step's timeout.
+    w.start()
+    sid = StepId(RUN, "gather", turn=1, call=1)
+    policy = StepPolicy(timeout_ms=30_000)  # max_retries=2
+    runs = 0
+
+    def dies(deadline: Deadline) -> StepOutput:
+        nonlocal runs
+        runs += 1
+        w.clock.advance(5 if runs == 1 else 120)  # 5 s, then past the timeout
+        raise Crash(f"the body kills the process, attempt {runs}")
+
+    for _ in range(3):
+        with pytest.raises(Crash):
+            w.steps().step(sid, "tool", "fetch", HASH, dies, policy)
+        w.restart()
+    result = w.steps().step(sid, "tool", "fetch", HASH, dies, policy)
+    assert runs == 3
+    assert (result.outcome, result.code, result.attempts) == ("error", "interrupted", 3)
+    failed = [(e.payload["attempt"], e.payload["retried"], e.payload["duration_ms"])
+              for e in w.store.read("o", run=RUN) if e.type == "step.failed"]  # fmt: skip
+    assert failed == [(1, True, 5_000), (2, True, 30_000), (3, False, 30_000)]
+    w.restart()
+    assert meter(load_view(w.store, "o"), RUN).used["active_ms"] == 65_000
+    again = w.steps().step(sid, "tool", "fetch", HASH, dies, policy)
+    assert again.replayed and runs == 3  # the recorded error is returned, nothing runs
 
 
 class Looping:

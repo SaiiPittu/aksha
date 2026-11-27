@@ -1,7 +1,9 @@
 """Refusals of the outbox (ADR-P03), each with a stable code.
 
 ``OutboxRefused``: authority does not cover the entry; its code is the reason
-(``approval_required``, ``hash_mismatch``, ``target_invalidated``). ``KeyFieldMissing``
+(``approval_required``, ``hash_mismatch``, ``target_invalidated``), or
+``key_reused_with_different_request`` when a key already enqueued arrives with a different
+full request (ADR-P03 B2). ``KeyFieldMissing``
 (``key_field_missing``): a declared key field is absent from the arguments.
 ``SystemUnknown`` (``system_unknown``): an entry names a system no adapter is registered
 for. ``TransientEffectError`` (``transient`` by default): what a system of record raises
@@ -11,6 +13,9 @@ for a failure worth retrying.
 from __future__ import annotations
 
 from aksha.runtime.errors import AkshaError
+
+KEY_REUSED = "key_reused_with_different_request"
+"""An idempotency key already enqueued, reached by a request whose full hash differs."""
 
 
 class OutboxRefused(AkshaError):
