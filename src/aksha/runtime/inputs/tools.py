@@ -457,7 +457,7 @@ def _view(
     starts = _line_starts(text)
     total = len(starts)
     if args.get("where") is not None:
-        return _where_view(found, fmt, segs, starts, args, extra)
+        return _where_view(found, fmt, segs, starts, args, reading, extra)
     lo, hi = 1, total
     section = args.get("section")
     parts = sections_of(segs, fmt)
@@ -543,12 +543,16 @@ def _where_view(
     segs: Sequence[Segment],
     starts: Sequence[int],
     args: Mapping[str, Any],
+    reading: InputReading,
     extra: Mapping[str, Any] | None,
 ) -> ToolOutcome:
     """The header and the rows of a CSV table whose ``column`` holds one of ``values``.
 
     The read is the record part those rows are (``where_part``), at that part's version, so
-    a change to another row moves nothing this read fed (ADR-P05 D6).
+    a change to another row moves nothing this read fed (ADR-P05 D6). The rows shown are
+    held to the window's caps like any window (``line_chars``, ``page_chars``); rows past
+    the cap are not shown and the result says to narrow ``values``. The read stays the
+    whole part, so a change to a row not shown still reopens what this read fed.
     """
     where = args["where"]
     column, values = str(where["column"]), [str(v) for v in where["values"]]
@@ -586,11 +590,27 @@ def _where_view(
             for n in range(_line_of(starts, a), _line_of(starts, max(b - 1, a)) + 1)
         }
     )
-    lines = []
+    lines: list[list[Any]] = []
+    notes: list[str] = []
+    used = 0
+    shown_end = 0
     for n in numbers:
         s = starts[n - 1]
         e = starts[n] - 1 if n < len(starts) else len(text)
-        lines.append([n, text[s:e]])
+        line = text[s:e]
+        if len(line) > reading.line_chars:
+            notes.append(f"line {n} is cut at {reading.line_chars} of {len(line)} characters")
+            line = line[: reading.line_chars]
+        if lines and used + len(line) > reading.page_chars:
+            notes.append(
+                f"showing {len(lines)} of {len(numbers)} lines; narrow values to read the rest"
+            )
+            break
+        lines.append([n, line])
+        used += len(line) + 1
+        shown_end = e
+    chosen = [c for c in chosen if c.start < max(shown_end, 1)]
+    shown_rows = sum(1 for r in kept if r.start < max(shown_end, 1))
     units = units_of(text, fmt, chosen, cells=bool(args.get("cells", False)))
     data: dict[str, Any] = {
         **(extra or {}),
@@ -599,12 +619,15 @@ def _where_view(
         "format": fmt,
         "total_lines": len(starts),
         "where": {"column": column, "values": values},
-        "rows": len(kept),
+        "rows": shown_rows,
+        "matched_rows": len(kept),
         "lines": lines,
         "start": starts[numbers[0] - 1] if numbers else 0,
         "units": [_unit_json(n, u, starts, text) for n, u in enumerate(units)],
         "cite": "cite unit n by the n-th ID of citation_spans, quoting its words exactly",
     }
+    if notes:
+        data["truncated"] = "; ".join(notes)
     drafts = tuple(
         SpanDraft(found.source, found.record_id, found.version, u.start, u.end) for u in units
     )

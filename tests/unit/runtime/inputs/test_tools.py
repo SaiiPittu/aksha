@@ -291,3 +291,24 @@ def test_a_window_is_cut_to_fit_the_agent_result_cap() -> None:
     assert isinstance(got, Ok)
     assert len(json.dumps(got.data)) + 24 * len(got.spans) <= 4_000
     assert got.data["next_offset"] > 1 and "continue" in got.data["truncated"]
+
+
+def test_a_where_read_is_held_to_the_window_and_result_caps() -> None:
+    rows = "".join(f"r{n},A,{'y' * 80}\n" for n in range(400))
+    source = Source({"input/big.csv": "id,owner,what\n" + rows})
+    capped = InputReading(
+        "inputs", "input", page_lines=2_000, page_chars=50_000, result_chars=4_000
+    )
+    got = _call(
+        "read_document",
+        source,
+        {"ref": "input/big.csv", "where": {"column": "owner", "values": ["A"]}},
+        reading=capped,
+    )
+    assert isinstance(got, Ok)
+    assert len(json.dumps(got.data)) + 24 * len(got.spans) <= 4_000
+    assert "narrow" in got.data["truncated"] and got.data["rows"] < 400
+    last = got.data["lines"][-1][0]
+    assert all(row[3] <= last for row in got.data["units"])  # no unit past the window
+    (read,) = got.reads
+    assert read.id == "input/big.csv#where:owner=A"  # the part is still the read
