@@ -375,9 +375,19 @@ class PatentFake(RuleGenerationModel):
         unread = list(listed[-1][1].get("unread", []))
         if unread and not ctx.called("read_document"):  # the fast readers left these: read them
             return _reply(*(_call("read_document", i, path=p) for i, p in enumerate(unread, 1)))
-        templates = ctx.ok("list_templates")[-1][1]["templates"] if ctx.ok("list_templates") else []
+        forms = ctx.ok("list_templates")[-1][1] if ctx.ok("list_templates") else {}
+        templates = forms.get("templates", [])
         plan = plan_of(ctx.request, [r["candidate"] for r in rows], templates)
+        listed_count = len(rows)
         rows = [r for r in rows if r["candidate"] in plan["candidates"]]
+        # What the portfolio covers rests on the two listings, not on each file read to
+        # make them: each count names its listing as its scope (ADR-P13 M1), so a change
+        # elsewhere in an input is noticed, and a new candidate or form reopens it.
+        coverage = [_coverage("every invention candidate the inputs hold", listed_count,
+                              listed[-1][1].get("query"))]  # fmt: skip
+        if forms:
+            coverage.append(_coverage("every blank form the inputs hold", len(templates),
+                                      forms.get("query")))  # fmt: skip
         content = {
             "plan": plan,
             "candidates": [r["candidate"] for r in rows],
@@ -388,6 +398,7 @@ class PatentFake(RuleGenerationModel):
                 {"file": a["path"], "holds": "read; no invention recognised in it"}
                 for a, _ in ctx.ok("read_document")
             ],
+            "coverage": [c for c in coverage if c is not None],
         }
         return _reply(
             _call("save_artifact", 1, kind="portfolio", content=content),
@@ -627,6 +638,13 @@ class PatentFake(RuleGenerationModel):
 
 
 # --- what the model writes, as pure functions over what it read --------------------------
+
+
+def _coverage(statement: str, count: int, query: Any) -> dict[str, Any] | None:
+    """A coverage claim scoped to the listing that counted it; None without its query ID."""
+    if not isinstance(query, str) or not query:
+        return None
+    return {"coverage": {"statement": statement, "count": count, "scope": {"query": query}}}
 
 
 def _q(file: str, quote: str, **extra: Any) -> dict[str, Any]:

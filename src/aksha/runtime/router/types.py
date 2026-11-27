@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from aksha.runtime.invalidation.keying import InvalidationKeys
 from aksha.runtime.invalidation.modes import InvalidationMode
 from aksha.runtime.models.types import ConfidenceThresholds
 
@@ -39,6 +40,7 @@ class RoutableAgent:
     ``fresh`` record ``fresh``, the default. ``invalidation`` is the agent's invalidation
     mode (decision 38), recorded on the ``run.started`` the route opens when given; a run
     that records none reads as ``rebuild``, so a loaded agent always passes its mode.
+    ``invalidation_keys`` is the agent's keying (ADR-P05 M2), recorded the same way.
     """
 
     name: str
@@ -46,6 +48,7 @@ class RoutableAgent:
     definition_hash: str | None = None
     reentry: Literal["fresh", "resume"] | None = None
     invalidation: InvalidationMode | None = None
+    invalidation_keys: InvalidationKeys | None = None
 
     def __post_init__(self) -> None:
         """Refuse an unknown re-entry setting."""

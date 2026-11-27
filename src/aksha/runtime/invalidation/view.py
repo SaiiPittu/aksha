@@ -47,6 +47,12 @@ unsettled, else ``current_by_cutoff`` if any is equivalent, else ``current``.
    in the rebuild plan, never a reason to refuse an effect, open a diff review or revoke
    an approval. Its reads stay on the version as provenance (ADR-P04).
 
+7. Citation keying (amendment M2, :mod:`invalidation.keying`). For a version whose run
+   keys on citations, a record or query read that moved or is gone is ``weak`` unless
+   the version's evidence rests on it: a cited span whose text changed, a scoped claim's
+   search or record, an unknown's checked record, a definition. A weak read does not
+   invalidate; a version whose only changes are weak stays ``current`` and is noticed.
+
 Amendment from the build: the ADR's "one pass in save order" holds for every read of an
 earlier version, but rule 2 also looks at the newer version of a slot, which is saved
 later. The view therefore evaluates versions in save order with memoised recursion,
@@ -66,6 +72,7 @@ from aksha.runtime.artifacts.types import ArtifactRef, ArtifactVersion, InputRef
 from aksha.runtime.artifacts.versions import all_versions, unaccepted_revisions
 from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.grounding.types import STATEMENT_SOURCE
+from aksha.runtime.invalidation.keying import Keyed
 from aksha.runtime.invalidation.modes import (
     UNRECORDED_MODE,
     InvalidationMode,
@@ -140,7 +147,12 @@ class InvalidationView:
             current_by_cutoff=self.refs("current_by_cutoff"),
             waiting=waiting,
             blocked=blocked,
+            noticed=self.noticed(),
         )
+
+    def noticed(self) -> tuple[str, ...]:
+        """The latest versions that are not stale and carry a weak read (amendment M2)."""
+        return tuple(str(v.ref) for v in self.latest() if not v.stale and v.weak_reads())
 
 
 def runs_for(view: LogView) -> Mapping[str, frozenset[str]]:
@@ -204,21 +216,32 @@ def invalidation_view(
     *,
     withdrawn: Iterable[WriterId] = (),
     blobs: BlobStore | None = None,
+    keyed: bool = True,
 ) -> InvalidationView:
     """The invalidation view of ``view`` (module doc). Pure.
+
+    ``keyed=False`` evaluates every run as read-keyed, ignoring rule 7: what the same log
+    would reopen without citation keying, for a comparison (the demo prints it).
 
     The withdrawn writers (S3) are read from the log's ``task.withdrawn`` facts
     (:func:`withdrawn_writers`); ``withdrawn`` adds more, for a caller that knows of a
     withdrawal not yet committed. Their versions read as ``gone``.
     """
     every = withdrawn_writers(view) | frozenset(withdrawn)
-    return _Walk(view, every, blobs).run()
+    return _Walk(view, every, blobs, keyed=keyed).run()
 
 
 class _Walk:
     """One evaluation of the view: memoised states over the versions in save order."""
 
-    def __init__(self, view: LogView, withdrawn: frozenset[WriterId], blobs: BlobStore | None):
+    def __init__(
+        self,
+        view: LogView,
+        withdrawn: frozenset[WriterId],
+        blobs: BlobStore | None,
+        *,
+        keyed: bool = True,
+    ):
         self.view = view
         self.withdrawn = withdrawn
         self.all = all_versions(view, blobs=blobs)
@@ -228,6 +251,7 @@ class _Walk:
         self.statements = superseded_statements(view)
         self.lines = runs_for(view)
         self.modes = run_modes(view)
+        self.keyed = Keyed.of(view, span_index(view)) if keyed else None
         slots: dict[tuple[str, str | None], list[ArtifactVersion]] = {}
         for v in sorted(self.all, key=lambda v: v.ref.version):
             if str(v.ref) not in self.unaccepted:
@@ -323,6 +347,9 @@ class _Walk:
         waits: list[tuple[str, ...]] = []
         for read in v.reads:
             status, waits_on = self.read_state(v, read)
+            moved = status.state in ("moved", "gone") and status.now != EXPIRED
+            if moved and self.keyed is not None and self.keyed.strength(v, read) == "weak":
+                status = ReadStatus(read, "weak", status.now)
             statuses.append(status)
             if waits_on is not None:
                 waits.append(self.evaluate(self.by_ref[waits_on])[2])

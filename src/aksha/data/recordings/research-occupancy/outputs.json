@@ -203,6 +203,17 @@
     },
     "pages_found": 6,
     "resolved": 5,
+    "searched": [
+      {
+        "coverage": {
+          "count": 0,
+          "scope": {
+            "query": "research.search?{\"formats\":[\"html\",\"markdown\",\"text\",\"email\"],\"terms\":[\"spreadsheet\",\"manual count\",\"by hand\",\"walk-round\",\"clipboard\",\"paper log\"]}"
+          },
+          "statement": "inputs that mention one of: spreadsheet, manual count, by hand, walk-round, clipboard, paper log"
+        }
+      }
+    ],
     "searches": [
       {
         "hits": [],

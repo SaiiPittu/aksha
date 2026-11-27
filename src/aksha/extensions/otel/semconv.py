@@ -161,6 +161,8 @@ EVENT_MAP: Mapping[str, tuple[Role, str]] = {
     "run.stop_requested": ("span_event", EV_STOP_REQUESTED),
     "source.changed": ("span_event", "aksha.source.changed"),
     "query.reexecuted": ("span_event", "aksha.query.reexecuted"),
+    "excerpts.rechecked": ("span_event", "aksha.excerpts.rechecked"),
+    "evidence.noticed": ("span_event", "aksha.evidence.noticed"),
     "approval.revoked": ("span_event", "aksha.approval.revoked"),
     "approval.granted": ("span_event", "aksha.approval.granted"),
     "approval.rejected": ("span_event", "aksha.approval.rejected"),

@@ -263,6 +263,11 @@ def _record_ref(data: Mapping[str, Any]) -> dict[str, str]:
     return {"kind": "record", "id": str(data["record"]), "version": str(data["version"])}
 
 
+def _query_id(read: str) -> str:
+    """``query:<id>@<hash>``, as a search's data names it, to the query's ID."""
+    return read.removeprefix("query:").rpartition("@")[0]
+
+
 def _unknown(
     question: str, reason: str, *, checked: Sequence[str] = (), failed_step: str | None = None
 ) -> dict[str, Any]:
@@ -866,6 +871,19 @@ def _discover(seen: Seen) -> GenerationResult:
             }
             for r in searches
         ],
+        # What each search found is a count over its hit set: the search is the scope it
+        # rests on, so a new input that matches it reopens this output (ADR-P13 M1).
+        "searched": [
+            {
+                "coverage": {
+                    "statement": "inputs that mention one of: " + ", ".join(r.args["terms"]),
+                    "count": len((r.data or {}).get("hits", [])),
+                    "scope": {"query": _query_id(str(r.data["query"]))},
+                }
+            }
+            for r in searches
+            if r.data
+        ],
         "manual_alternatives": _unknown(
             "Which manual ways (counts by hand, spreadsheets, paper logs) do buyers use today, and what do they cost?",  # noqa: E501
             "not_found",
@@ -1110,6 +1128,11 @@ def _voice(seen: Seen) -> GenerationResult:
     region = scope[1]["geography"].get("normalised") if scope else None
     countries = members(region)
     by_id = {r["fields"]["id"]: r for r in rows}
+    # A theme's count is a count over the whole sample: the exports read in full are the
+    # scope it rests on, so a changed review reopens it, cited or not (ADR-P13 M1).
+    sample_reads = sorted(
+        {f"record:{r.data['record']}@{r.data['version']}" for r in reads if r.data}
+    )
     needs = []
     for t in themes:
         theme = str(t["id"])
@@ -1125,6 +1148,16 @@ def _voice(seen: Seen) -> GenerationResult:
                 "count": len(hits),
                 "of": len(sample.unique),
                 "in_scope_geography": {"geography": region, "count": len(in_scope)},
+                "covers": {
+                    "coverage": {
+                        "statement": f"reviews in the sample that speak to {t['name']}",
+                        "count": len(hits),
+                        "of": len(sample.unique),
+                        "scope": {"records": sample_reads},
+                    }
+                }
+                if sample_reads
+                else None,
                 "first": dates[0] if dates else None,
                 "last": dates[-1] if dates else None,
                 "geographies": analysis.tally(hits, "geography"),

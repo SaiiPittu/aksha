@@ -101,7 +101,8 @@ def with_context_policy(loaded: LoadedDefinition, policy: ContextPolicy) -> Load
     new_hash = definition_hash(loaded.folder, loaded.extensions, API_VERSION,
                              tools_hash=loaded.registry.canonical_hash(),
                              context_hash=policy_hash(policy),
-                             invalidation=agent.invalidation)  # fmt: skip
+                             invalidation=agent.invalidation,
+                             invalidation_keys=agent.invalidation_keys)  # fmt: skip
     return replace(loaded, agent=agent, definition_hash=new_hash)
 
 
@@ -385,6 +386,7 @@ def _definition(
             tools_hash=registry.canonical_hash(),
             context_hash=policy_hash(agent.context_policy),
             invalidation=agent.invalidation,
+            invalidation_keys=agent.invalidation_keys,
         ),
         file_hashes=file_hashes(folder),
     )

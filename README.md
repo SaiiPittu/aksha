@@ -17,17 +17,20 @@ No API key, and no network after the install: every model is an offline fake.
 uvx --from git+https://github.com/SaiiPittu/aksha aksha demo
 ```
 
-Two agents run, their input changes, only the dependent work is rebuilt, and a send survives a real `SIGKILL`. An excerpt of the output from a run on 26 Nov 2026:
+Two agents run, their input changes, only the dependent work is rebuilt, and a send survives a real `SIGKILL`. An excerpt of the output from a run on 27 Nov 2026:
 
 ```text
 1. Both agents run on the stillroom world (10.9 s)
    research R-0001 complete: 11 outputs, 21 model calls
    patent   R-0002 complete: 23 outputs, 42 model calls
 2. The input changes to stillroom-v2's change set (0.25 s)
-3. Invalidation reopens only what depends on the change (6.94 s)
-   rebuilt 10: C1: comparison, disclosure, extraction, handoff, packet, prior_art, recommendation, worksheet; selection, table
+3. Invalidation reopens only what depends on the change (24.04 s)
+   strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed)
+   weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
+   keyed on every read instead, the same change would reopen 27 outputs, not 14
+   rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
    kept 13 patent outputs: C2: ...; C3: ...; C4: ...; portfolio
-   kept all 11 research outputs: nothing they read moved
+   kept 7 of 11 research outputs: ...
 4. SIGKILL mid-send, then recovery (2.99 s)
    at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times
    mailbox: 2 deliveries for 2 idempotency keys (patent.packet/C1@v1, patent.packet/C1@v2): each packet version exactly once
@@ -93,7 +96,7 @@ aksha replay runs/first
 - **A policy gate in code:** deny by default, approvals bound to the exact action by signature, headless runs that never ask. [Interfaces](docs/interfaces.md)
 - **Model classes:** extraction, classification and generation as separate contracts, thresholds with an abstention band, cascades that never cross a class. [Rationale](docs/design/rationale.md)
 - **Grounding:** a cited value must quote a span a tool actually returned, checked at save; a value not found is an explicit unknown. [Primitives](docs/design/03-primitives.md)
-- **Invalidation:** when an input changes, only the work that read it is rebuilt, and a human-reviewed output gets a diff review. [Quick start](docs/quickstart.md)
+- **Invalidation:** when an input changes, only the work that depends on it is rebuilt, and a human-reviewed output gets a diff review. An agent can key it on citations: a version reopens when a span it cites changes, a search its absence claim is scoped to finds something new, or the schema its values were extracted under changes; a change elsewhere in what it read is a notice and a low-priority recheck, not a rebuild. [ADR-P05](docs/design/adr/ADR-P05-invalidation.md)
 - **One session API** behind a command line and an HTTP server, with fixed exit codes and a capability record. [Interfaces](docs/interfaces.md)
 - **Evals:** worlds as environments, ordered graders, pass^k, invariance runs, and grader self-tests. [Evals](docs/evals/README.md)
 

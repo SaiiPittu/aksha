@@ -35,9 +35,11 @@ from aksha.runtime.api import (
     ToolUse,
     VersionedSourceSpec,
     artifact_keys,
+    kind_question,
 )
 
 from . import checks, tools
+from .reading import KINDS as DOC_KINDS
 
 OBJECT: dict[str, Any] = {"type": "object"}
 LIST: dict[str, Any] = {"type": "array"}
@@ -153,7 +155,15 @@ def _fast(name: str, model_class: Literal["extraction", "classification"], *fiel
 
 
 MODEL_ALIASES = (
-    _fast("doc_kind", "classification"),
+    # The kinds and their meanings, declared, so a decided kind records the definition it
+    # was decided under and reopens when a kind's meaning changes (ADR-P05 M2).
+    ModelAlias(
+        "doc_kind",
+        "classification",
+        allow_adapted=True,
+        on_exhausted="unknown",
+        questions=(kind_question(DOC_KINDS),),
+    ),
     _fast(
         "page_facts",
         "extraction",
@@ -267,6 +277,9 @@ AGENT = Agent(
     instructions="prompts/instructions.md",
     # Its sources move under it, and its findings must follow (decision 38).
     invalidation="rebuild",
+    # A finding rests on the spans it cites: a change elsewhere in a page it read is
+    # noticed, not rebuilt (ADR-P05 M2).
+    invalidation_keys="citations",
     reads=(*(f"record:{c}" for c in tools.COLLECTIONS), WEB_PAGE),
     artifacts=(SCOPE, COMPETITORS, PROFILE, NEEDS, MATRIX, FINDINGS, TESTS),
     relations=(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from typing import Any
 
 from .story import BY, Report
 
@@ -19,6 +20,21 @@ def _slots(refs: Iterable[str]) -> str:
     if "-" in by_key:
         parts.append(", ".join(by_key["-"]))
     return "; ".join(parts)
+
+
+def _why(strong: Iterable[dict[str, Any]]) -> str:
+    """``C1: extraction (cites nothing, so read-keyed); ...`` for the strong reopenings."""
+    parts = []
+    for s in strong:
+        slot = s["version"].split("@", 1)[0]
+        kind, _, key = slot.partition("/")
+        name = f"{key}: {kind.split('.', 1)[1]}" if key else kind.split(".", 1)[1]
+        parts.append(f"{name} ({', '.join(s['why'])})")
+    return "; ".join(parts) or "none"
+
+
+def _weak(change: dict[str, Any]) -> str:
+    return ", ".join(w["version"].split("@", 1)[0] for w in change["weak"])
 
 
 def render(report: Report, work: str) -> str:
@@ -48,6 +64,7 @@ def render(report: Report, work: str) -> str:
         f"2. The input changes to stillroom-v2's change set ({acts['change']} s)",
         f"   added {', '.join(c['added'])} (a new publication family)",
         f"   edited {', '.join(c['edited'])} (the outside suggestion, now dated earlier)",
+        f"   edited {c['uncited']} (one review no output cites; the demo's own edit)",
         f"   one command recorded {len(c['records_moved'])} moved records and re-ran "
         f"{c['queries_rerun']} recorded searches and listings: {c['queries_changed']} found "
         "new hits",
@@ -55,10 +72,19 @@ def render(report: Report, work: str) -> str:
         f"3. Invalidation reopens only what depends on the change ({acts['rebuild']} s)",
         f"   reached {len(c['invalidated'])} invalidated + {len(c['dirty'])} downstream: "
         f"{_slots(c['invalidated'] + c['dirty'])}",
+        f"   strong, reopened: {_why(c['strong'])}",
+        f"   weak, noticed and not rebuilt: {_weak(c)} read "
+        f"{c['uncited'].rsplit('/', 1)[-1]} outside what it rests on; "
+        f"{c['rechecks_open']} low-priority recheck item(s)",
+        f"   keyed on every read instead, the same change would reopen {c['read_keyed']} "
+        f"outputs, not {len(c['invalidated']) + len(c['dirty'])}",
+        f"   spans rechecked against the new text: {c['spans_rechecked']['kept']} kept, "
+        f"{c['spans_rechecked']['changed']} changed, {c['spans_rechecked']['gone']} gone",
         f"   rebuilt {len(report.rebuilt)}: {_slots(report.rebuilt)}",
         f"   kept {len(kept_patent)} patent outputs: "
         f"{_slots(report.first['patent'][s] for s in kept_patent)}",
-        f"   kept all {len(kept_research)} research outputs: nothing they read moved",
+        f"   kept {len(kept_research)} of {len(report.first['research'])} research outputs: "
+        f"{_slots(report.first['research'][s] for s in kept_research)}",
         f"   early cutoff: the {c['queries_rerun'] - c['queries_changed']} queries that "
         f"found the same hits stopped the cascade; "
         f"{len(report.cutoff)} rebuilt version came out equal",
@@ -68,8 +94,9 @@ def render(report: Report, work: str) -> str:
         f"   scripted: approved the fresh request {fresh_approval['approval']} for "
         f"{fresh_approval['targets'][0]}",
         "   rebuild runs: "
-        + ", ".join(f"{r} ({runs[r]['model_calls']} model calls)" for r in rebuilds)
-        + "; the research agent opened none",
+        + ", ".join(
+            f"{r} {runs[r]['agent']} ({runs[r]['model_calls']} model calls)" for r in rebuilds
+        ),
         "",
         f"4. SIGKILL mid-send, then recovery ({acts['kill and recover']} s)",
         f"   a child process sent {fresh_approval['targets'][0]}; the mailbox stored it, "

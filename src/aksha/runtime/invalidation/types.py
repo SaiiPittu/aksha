@@ -22,8 +22,10 @@ from aksha.runtime.artifacts.types import ArtifactRef, InputRef, WriterId
 Freshness = Literal["current", "invalidated", "dirty", "current_by_cutoff"]
 """A version's state in the invalidation view (D4)."""
 
-ReadState = Literal["same", "equivalent", "moved", "unsettled", "gone"]
-"""One read's state (D4): unchanged, rebuilt equal, changed, waiting on a rebuild, or gone."""
+ReadState = Literal["same", "equivalent", "moved", "unsettled", "gone", "weak"]
+"""One read's state (D4): unchanged, rebuilt equal, changed, waiting on a rebuild, or gone;
+or, for a citation-keyed version (amendment M2), ``weak``: it moved, but nothing the
+version's claims rest on did, so it is noticed and never invalidates."""
 
 RebuildMode = Literal["regenerate", "propose", "copy_choice", "rebase"]
 """How a writer rebuilds an invalidated version (D7; ``rebase`` is S5 and not built)."""
@@ -103,6 +105,10 @@ class VersionState:
         """The reads that moved or are gone: why the version is invalidated."""
         return tuple(r for r in self.reads if r.state in ("moved", "gone"))
 
+    def weak_reads(self) -> tuple[ReadStatus, ...]:
+        """The reads that moved outside the version's evidence (amendment M2): noticed only."""
+        return tuple(r for r in self.reads if r.state == "weak")
+
 
 @dataclass(frozen=True)
 class ChangeSummary:
@@ -120,6 +126,8 @@ class ChangeSummary:
     current_by_cutoff: tuple[str, ...] = ()
     waiting: tuple[str, ...] = ()
     blocked: tuple[str, ...] = ()
+    noticed: tuple[str, ...] = ()
+    """Amendment M2: current versions with a weak read, noticed and not reopened."""
 
 
 @dataclass(frozen=True)

@@ -85,6 +85,7 @@ from aksha.runtime.invalidation.commands import (
     check_sources,
     reject_review,
 )
+from aksha.runtime.invalidation.definitions import DefinitionSource
 from aksha.runtime.invalidation.ports import InputWorkspace, QueryRunner, VersionedSource
 from aksha.runtime.invalidation.rebuild import open_rebuild_runs
 from aksha.runtime.loop.drive import drive, drive_pass, drive_rebuilds
@@ -206,7 +207,7 @@ class SessionAgent:
     def routable(self) -> RoutableAgent:
         """The agent as the router and a request run's ``run.started`` see it (decision 36)."""
         return RoutableAgent(self.name, self.agent.purpose, self.definition_hash, self.reentry,
-                             self.agent.invalidation)  # fmt: skip
+                             self.agent.invalidation, self.agent.invalidation_keys)  # fmt: skip
 
     def run_fields(self) -> dict[str, Any]:
         """What ``run.started`` records for this agent beyond its name and cause."""
@@ -378,12 +379,22 @@ class Session:
         before an owner's first command in this process. Returns the sources that moved.
         """
         self._inputs_checked.add(owner)
-        if self.inputs is None:
-            return ()
-        return check_sources(store, owner, (self.inputs,), run_query=self.run_query)
+        held = (*(() if self.inputs is None else (self.inputs,)), self._definitions())
+        return check_sources(store, owner, held, run_query=self.run_query)
+
+    def _definitions(self) -> VersionedSource:
+        """The loaded agents' alias definitions as a source (ADR-P05 M2).
+
+        A changed schema reopens the values extracted under the old one, and a changed
+        definition hash the values a tool's own schema produced.
+        """
+        loaded = self.agents.values()
+        codes = {a.agent.name: a.definition_hash for a in loaded if a.definition_hash}
+        return DefinitionSource.of((a.agent for a in loaded), codes)
 
     def _versioned(self) -> tuple[VersionedSource, ...]:
-        return (*self.sources, *(() if self.inputs is None else (self.inputs,)))
+        inputs = () if self.inputs is None else (self.inputs,)
+        return (*self.sources, *inputs, self._definitions())
 
     def _upload(self, command: n.UploadInputs) -> CommandReceipt:
         """Write the files, then record what moved as one source change (ADR-P05 D6).

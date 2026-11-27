@@ -112,6 +112,8 @@ RUN_STARTED = EventTypeSpec(
             # Decision 38: how much of invalidation the run's agent opted into; a run
             # that records none predates the setting and reads as "rebuild".
             "invalidation": {"enum": ["off", "edit_guard", "notify", "rebuild"]},
+            # ADR-P05 M2: what the run's versions are keyed on; none recorded reads "reads".
+            "invalidation_keys": {"enum": ["reads", "citations"]},
             # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
             # class, native), with its hash; never a configuration value or a key.
             "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},
@@ -972,6 +974,46 @@ QUERY_REEXECUTED = EventTypeSpec(
     writer="invalidation",
     boundaries=frozenset({"U8"}),
 )
+# ADR-P05 M2, citation keying (``invalidation/keying.py``): in the source change's
+# transaction, each span minted over a moved record against the record's new text, and a
+# notice for each version whose evidence may have moved without reopening it.
+EXCERPTS_RECHECKED = EventTypeSpec(
+    name="excerpts.rechecked",
+    schema={
+        "type": "object",
+        "properties": {
+            "source_version": {"type": "integer", "minimum": 1},
+            "spans": {
+                "type": "object",
+                "propertyNames": {"pattern": "^EX-[0-9]{4,}$"},
+                "additionalProperties": {"enum": ["kept", "changed", "gone"]},
+            },
+        },
+        "required": ["source_version", "spans"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+)
+EVIDENCE_NOTICED = EventTypeSpec(
+    name="evidence.noticed",
+    schema={
+        "type": "object",
+        "properties": {
+            "version": _REF_TEXT,
+            "strength": {"enum": ["strong", "weak"]},
+            "reads": {"type": "array", "items": INPUT_REF_SCHEMA, "minItems": 1},
+            "source_version": {"type": "integer", "minimum": 1},
+            "notice": {"type": "string", "minLength": 1},
+            "recheck": {"enum": ["low", "high"]},
+        },
+        "required": ["version", "strength", "reads", "source_version", "notice", "recheck"],
+        "additionalProperties": False,
+    },
+    writer="invalidation",
+    boundaries=frozenset({"U8"}),
+    dedup_key="notice:{version}#{source_version}",
+)
 APPROVAL_REVOKED = EventTypeSpec(
     name="approval.revoked",
     schema={
@@ -1725,6 +1767,8 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     INTERRUPT_VOIDED,
     SOURCE_CHANGED,
     QUERY_REEXECUTED,
+    EXCERPTS_RECHECKED,
+    EVIDENCE_NOTICED,
     APPROVAL_REVOKED,
     INTERRUPT_RAISED,
     INTERRUPT_RESOLVED,

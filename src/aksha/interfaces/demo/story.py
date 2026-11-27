@@ -25,9 +25,11 @@ from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ids import LogIdSource
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.recovery import recover_on_startup, resume_owner
+from aksha.runtime.grounding.spans import span_index
 from aksha.runtime.interrupts.commands import answer, approve
 from aksha.runtime.interrupts.reducers import approvals, open_interrupts
 from aksha.runtime.invalidation.commands import accept_review, apply_source_change
+from aksha.runtime.invalidation.keying import EXCERPTS_RECHECKED, Keyed, notices, recheck_items
 from aksha.runtime.invalidation.reviews import open_reviews
 from aksha.runtime.invalidation.view import invalidation_view
 from aksha.runtime.loop.drive import LoopDriver, drive, drive_rebuilds
@@ -121,6 +123,7 @@ def _start(rt: DemoRuntime, agent: str) -> str:
         "cause": "request",
         "definition_hash": setup.definition_hash,
         "invalidation": setup.agent.invalidation,
+        "invalidation_keys": setup.agent.invalidation_keys,
         "budget": {"model_turns": budget.model_turns, "tool_calls": budget.tool_calls,
                    "active_ms": budget.active_ms},
     }  # fmt: skip
@@ -231,14 +234,35 @@ def act_2_change(rt: DemoRuntime, sources: Path, report: Report) -> None:
     (moved,) = [e.payload for e in view.events if e.type == "source.changed"]
     queries = [e.payload for e in view.events if e.type == "query.reexecuted"]
     iv = invalidation_view(view)
+    keyed = Keyed.of(view, span_index(view))
+    strong = []
+    for ref in iv.refs("invalidated"):
+        found = version(view, ArtifactRef.parse(ref), blobs=rt.research.blobs)
+        assert found is not None
+        why = sorted({keyed.why(found, r.input) for r in iv.state(ref).changed_reads()})
+        strong.append({"version": ref, "why": why})
+    checks = [c for e in view.events if e.type == EXCERPTS_RECHECKED
+              for c in e.payload["spans"].values()]  # fmt: skip
+    weak = [
+        {"version": n.version, "reads": sorted(r.id for r in n.reads)}
+        for n in notices(view)
+        if n.strength == "weak"
+    ]
+    read_keyed = invalidation_view(view, keyed=False)
     report.change = {
         "added": list(change.added),
         "edited": [rel for rel, _, _ in change.edited],
+        "uncited": change.uncited[0],
         "records_moved": sorted(moved["records"]),
         "queries_rerun": len(queries),
         "queries_changed": sum(1 for q in queries if q["changed"]),
         "invalidated": list(iv.refs("invalidated")),
         "dirty": list(iv.refs("dirty")),
+        "strong": strong,
+        "weak": weak,
+        "rechecks_open": len(recheck_items(view)),
+        "read_keyed": len(read_keyed.refs("invalidated")) + len(read_keyed.refs("dirty")),
+        "spans_rechecked": {s: checks.count(s) for s in ("kept", "changed", "gone")},
     }
 
 
