@@ -22,12 +22,18 @@ warns at start that only loopback names are accepted.
 
 ``--web DIR`` (or ``AKSHA_WEB_DIST``) also serves the built web app from that folder on the
 same port (``web.py``), so one process is the whole product: ``aksha serve --web web/dist``.
+
+The listening socket is bound before anything else starts, so a taken port fails at once
+with :class:`PortInUse` (``aksha serve`` reports it in one line and exits 8), and the
+``serving`` line, like the server file, names a URL only once the server holds it.
 """
 
 from __future__ import annotations
 
+import errno
 import json
 import os
+import socket
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
@@ -50,6 +56,43 @@ from aksha.interfaces.http.web import check_dist, mount_web
 from aksha.runtime.session.worker import RuntimeThread
 
 ACCOUNTS_FILE = "accounts.sqlite"
+
+
+class CannotListen(Exception):
+    """``aksha serve`` could not bind its address and port; the message says why."""
+
+
+class PortInUse(CannotListen):
+    """Another process already listens on the address and port ``aksha serve`` was given."""
+
+    def __init__(self, host: str, port: int) -> None:
+        """Name the taken ``port`` on ``host`` and the way out."""
+        super().__init__(f"port {port} on {host} is already in use; choose another with --port N")
+        self.host = host
+        self.port = port
+
+
+def bind_socket(host: str, port: int) -> socket.socket:
+    """The listening socket for ``host:port``, bound now.
+
+    Raises :class:`PortInUse` when the port is taken and :class:`CannotListen` for any other
+    bind failure (a privileged port, an address this machine does not have).
+
+    The same socket uvicorn would open (IPv6 for an address with a colon, ``SO_REUSEADDR``,
+    which on Linux reuses a port in TIME_WAIT but never one another process listens on).
+    """
+    family = socket.AF_INET6 if ":" in host else socket.AF_INET
+    sock = socket.socket(family, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        sock.bind((host, port))
+    except OSError as e:
+        sock.close()
+        if e.errno == errno.EADDRINUSE:
+            raise PortInUse(host, port) from e
+        raise CannotListen(f"cannot listen on {host}:{port}: {e.strerror or e}") from e
+    sock.set_inheritable(True)
+    return sock
 
 
 def auth_config(config: RuntimeConfig, env: Mapping[str, str], *,
@@ -102,6 +145,18 @@ def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], N
     """
     environ = os.environ if env is None else env
     dist = web_dist(web, environ)
+    sock = bind_socket(host, port)
+    try:
+        return _serve_on(sock, config, host, port, say=say, trust_user_header=trust_user_header,
+                         dist=dist, environ=environ)  # fmt: skip
+    finally:
+        sock.close()
+
+
+def _serve_on(sock: socket.socket, config: RuntimeConfig, host: str, port: int, *,
+              say: Callable[[str], None], trust_user_header: bool, dist: Path | None,
+              environ: Mapping[str, str]) -> int:  # fmt: skip
+    """Serve on the bound ``sock`` until interrupted."""
     auth = auth_config(config, environ, trust_user_header=trust_user_header)
     runtime = RuntimeThread(lambda: open_session(config))
     runtime.start()
@@ -138,7 +193,9 @@ def serve(config: RuntimeConfig, host: str, port: int, *, say: Callable[[str], N
     if (warning := host_warning(host, environ)) is not None:
         say(warning)
     try:
-        uvicorn.run(app, host=host, port=port, log_level="warning")
+        uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning")).run(
+            sockets=[sock]
+        )
     finally:
         app.state.closing.set()
         runtime.stop()

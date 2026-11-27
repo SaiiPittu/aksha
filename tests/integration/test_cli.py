@@ -229,6 +229,22 @@ def test_usage_errors_exit_two(tmp_path: Path) -> None:
     assert raised.value.code == wire.EXIT_USAGE
 
 
+def test_serve_on_a_taken_port_says_so_in_one_line_and_exits_eight(tmp_path: Path) -> None:
+    import socket
+
+    with socket.socket() as taken:
+        taken.bind(("127.0.0.1", 0))
+        taken.listen()
+        port = int(taken.getsockname()[1])
+        code, out = aksha(tmp_path, "serve", "--port", str(port))
+    assert code == wire.EXIT_ENVIRONMENT
+    assert out.splitlines() == [
+        f"aksha serve: port {port} on 127.0.0.1 is already in use; choose another with --port N"
+    ]
+    assert "serving" not in out  # the URL is printed only once the socket is bound
+    assert not (tmp_path / "var" / "aksha.server.json").exists()
+
+
 @pytest.fixture
 def server(tmp_path: Path) -> Iterator[str]:
     port = _free_port()
