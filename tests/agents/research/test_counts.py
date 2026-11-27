@@ -140,3 +140,82 @@ def test_the_needs_counts_follow_from_the_unique_reviews_and_each_needs_evidence
     assert computed.competitors({"companies": "x"}) == {"companies": "x"}
     counted = computed.competitors({"companies": [{"pages": [1, 2]}, {"pages": [3]}, {}]})
     assert (counted["resolved"], counted["pages_found"]) == (3, 3)
+
+
+class LabellingModel(ResearchModel):
+    """The rule-based policy saving the needs as a live model did: no counts, theme labels.
+
+    Its needs save leaves out ``unique``, ``rows`` and every phrase, zeroes each count, lists the
+    reviews it read in ``sample.reviews`` instead, and names each need's theme by the
+    scope theme's name in capitals, not its ID.
+    """
+
+    def generate(self, request: GenerationRequest) -> GenerationResult:
+        """The policy's calls, with the needs save reshaped."""
+        result = super().generate(request)
+        calls = tuple(self._reshape(c) for c in result.tool_calls)
+        return replace(result, tool_calls=calls)
+
+    def _reshape(self, call: ToolCall) -> ToolCall:
+        if call.name != "save_artifact":
+            return call
+        args: dict[str, Any] = thaw(call.arguments)
+        if str(args["kind"]).rsplit(".", 1)[-1] != "needs":
+            return call
+        content = args["content"]
+        sample = content["sample"]
+        rows = sample.pop("rows")
+        sample.pop("unique")
+        ids = {str(d["review"]) for d in sample["duplicates"]}
+        ids |= {str(d["duplicate_of"]) for d in sample["duplicates"]}
+        ids |= {str(e["review"]) for n in content["needs"] for e in n["evidence"]}
+        listed = sorted(ids) + [f"uncited-{i}" for i in range(rows - len(ids))]
+        sample["reviews"] = listed + listed[:3]  # a review listed twice is counted once
+        for need in content["needs"]:
+            need.pop("phrase", None)
+            need["count"] = need["of"] = 0  # the policy's report reads them: kept, wrong
+            need["theme"] = LABELS[need["theme"]].upper()
+        return replace(call, arguments=args)
+
+
+LABELS: dict[str, str] = {}
+"""Each scope theme's name by its ID, filled from a clean run before the shaped one."""
+
+
+def test_a_live_shaped_needs_save_passes_voice_first_time(tmp_path: Path) -> None:
+    clean = _run(tmp_path / "clean", ResearchModel())
+    LABELS.update({str(t["id"]): str(t["name"]) for t in clean.content("scope")["themes"]})
+    shaped = _run(tmp_path / "shaped", LabellingModel())
+    assert _vetoes(shaped) == []
+    assert shaped.latest("needs").ref.version == 1  # type: ignore[union-attr]
+    got, want = thaw(shaped.content("needs")), thaw(clean.content("needs"))
+    assert {k: got["sample"][k] for k in ("rows", "unique")} == {
+        k: want["sample"][k] for k in ("rows", "unique")
+    }
+    # Each need's theme is the scope theme's ID again, and its phrase the computed one.
+    assert [n["theme"] for n in got["needs"]] == [n["theme"] for n in want["needs"]]
+    assert [n["phrase"] for n in got["needs"]] == [n["phrase"] for n in want["needs"]]
+    for kind in ("matrix", "findings", "tests"):
+        assert thaw(shaped.content(kind)) == thaw(clean.content(kind)), kind
+    clean.close()
+    shaped.close()
+
+
+def test_a_needs_theme_resolves_to_the_scope_theme_it_names() -> None:
+    resolve = computed.theme_resolver(
+        {"themes": [{"id": "false_vacancy", "name": "False vacancy (EX-0010)"}]}
+    )
+    assert resolve("false_vacancy") == "false_vacancy"
+    assert resolve("  FALSE   vacancy (ex-0010) ") == "false_vacancy"
+    assert resolve("battery") is None
+    # The theme named as theme_id or id is the need's theme.
+    out = computed.needs({"sample": {"reviews": ["a", "b", {"review": "c"}], "duplicates": [{}]},
+                          "needs": [{"id": "false_vacancy", "evidence": [{}]}]})  # fmt: skip
+    assert out["sample"]["rows"] == 3 and out["sample"]["unique"] == 2
+    assert out["needs"][0]["theme"] == "false_vacancy"
+    assert out["needs"][0]["phrase"] == "1 of 2 reviews in this sample"
+    # Given the scope, a theme named by its label is written as the scope theme's ID.
+    scope = {"themes": [{"id": "false_vacancy", "name": "False vacancy"}]}
+    named = computed.needs({"needs": [{"theme": "FALSE VACANCY"}, {"theme": "other"}]},
+                           {"scope": scope})  # fmt: skip
+    assert [n["theme"] for n in named["needs"]] == ["false_vacancy", "other"]

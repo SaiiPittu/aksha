@@ -61,7 +61,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from collections.abc import Collection, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from types import MappingProxyType
 from typing import Any, Literal
 
@@ -259,7 +259,10 @@ class ArtifactStore:
             raise SaveRefused("key_required", "/key", f"{kind_name} is keyed")
         if not kind.keyed and request.key is not None:
             raise SaveRefused("key_not_allowed", "/key", f"{kind_name} is not keyed")
-        content = computed(kind, request.content)
+        content = computed(
+            kind, request.content,
+            lambda n: self.current(view, _resolve_name(n, writer.agent), None),
+        )  # fmt: skip
         hashed = _content_hash(content)
         reads = frozenset(_lineage.recorded_reads(view, run, instance)) | frozenset(pending_reads)
         for i, primary in enumerate(request.primary_inputs):
@@ -635,17 +638,29 @@ def _hidden_from(view: LogView, run: str, writer: WriterId, prior: ArtifactVersi
     return str(prior.ref) in hidden_for(view, run, writer)
 
 
-def computed(kind: ArtifactKind, content: Mapping[str, Any]) -> Mapping[str, Any]:
+def computed(
+    kind: ArtifactKind,
+    content: Mapping[str, Any],
+    latest: Callable[[str], ArtifactVersion | None] | None = None,
+) -> Mapping[str, Any]:
     """Check 2's first step: ``content`` with the kind's computed fields written over it.
 
-    The function gets a plain copy, so it may change it in place. One that raises, or
-    returns no object, refuses the save ``schema`` with the reason, as a malformed content
-    would be.
+    The function gets a plain copy, so it may change it in place. A kind with
+    ``compute_reads`` also gets each named kind's current content, found by ``latest``
+    (a name as the kind declares it, to its current version). One that raises, or returns
+    no object, refuses the save ``schema`` with the reason, as a malformed content would be.
     """
     if kind.compute is None:
         return content
     try:
-        out = kind.compute(thaw(content))
+        if kind.compute_reads:
+            reads = {}
+            for name in kind.compute_reads:
+                found = None if latest is None else latest(name)
+                reads[name] = None if found is None else thaw(found.content)
+            out = kind.compute(thaw(content), reads)  # type: ignore[call-arg]
+        else:
+            out = kind.compute(thaw(content))
     except Exception as e:  # an agent's function: its failure is the save's refusal
         raise SaveRefused(
             "schema", "/content", f"{kind.name}: its computed fields could not be derived "

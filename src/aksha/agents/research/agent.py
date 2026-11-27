@@ -143,12 +143,44 @@ PROFILE = ArtifactKind(
 )
 NEEDS = ArtifactKind(
     "needs",
-    _obj("sample", "needs", sample=OBJECT, needs=LIST),
+    _obj(
+        "sample",
+        "needs",
+        sample={
+            "type": "object",
+            "properties": {
+                "reviews": {
+                    "type": "array",
+                    "description": "the ID of every review row read, cross-posted copies "
+                    "included; rows and unique are computed from it and duplicates at save",
+                },
+                "duplicates": LIST,
+                "rows": {"type": "integer", "description": "computed at save: leave it out"},
+                "unique": {"type": "integer", "description": "computed at save: leave it out"},
+            },
+        },
+        needs={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "theme": {
+                        "type": "string",
+                        "description": "the ID of the scope theme this need is for, as the "
+                        "scope's themes list it: one need per scope theme",
+                    },
+                    "phrase": {"type": "string", "description": "computed at save: leave it out"},
+                },
+                "required": ["theme"],
+            },
+        },
+    ),
     cites=(
         CitePolicy("/needs/*/evidence/*", forms=SPAN),
         CitePolicy("/sample/duplicates/*/evidence/*", forms=SPAN),
     ),
     compute=computed.needs,
+    compute_reads=("scope",),
 )
 MATRIX = ArtifactKind(
     "matrix",
