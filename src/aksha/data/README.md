@@ -40,6 +40,9 @@ src/aksha/data/
     research-occupancy/   one recorded fake run (aksha replay runs it again offline; see its README)
     tilldew/              a world in another domain and layout, to prove the agents general
     cindral/              a third domain whose inputs also have other shapes, to prove them structure-agnostic
+    vantlow/              a held-out research-only world (log management), written blind to the agent code
+    pulvane/              a held-out medical-device world for the patent agent, authored without reading the agent
+    quillmere/            a held-out patent world, written without reading the agent code
 ```
 
 ## The base world, `stillroom`
@@ -108,6 +111,24 @@ Tilldew proves the agents do not depend on stillroom's names, but it keeps still
 
 Its traps: a company under a new owner across PDF text and HTML; an unknown price and a conflict between a brochure and a spreadsheet; a vendor claim against its own pilot figure; a hidden instruction to automated readers; two cross-posted reviews; the venture's own public demo of one invention; a document named on a slide that is not in the world; two status wordings in one publication; a missing rationale and an undated disclosure. It has no outside-contributor trap, and other counts: two candidates, four companies (one known only from the spreadsheet), three publications in two families, 18 review rows.
 
+## The held-out world, `pulvane`
+
+Pulvane makes a finger-worn ring whose optical pulse sensor and accelerometer flag pulse patterns suggestive of an irregular heart rhythm. It is a patent-side world only (no competitor pages, no reviews), written by an author who read the world and suite formats but not the agent code or its offline models, so its suite (`src/aksha/data/suites/pulvane/`, 7 cases) tests that nothing specific to the earlier worlds leaked into the agent or the harness. Its inputs take shapes no other world uses: a WebVTT meeting transcript with voice tags and a spoken recap of the settings, an automatic call transcript with a US-style date, a plain-text slide export whose speaker notes carry facts the slides do not, a YAML contributor export, a key-value sharing register with one empty date, the venture's own device summary as a regulator published it, OKRs in Markdown, a numbered attorney questionnaire, and five publications in three families inside one search-export JSON. Three candidates (`ENG-104`, `ENG-117`, `ENG-123`), one recommended for each next action.
+
+Its traps: an outside clinician who proposes an element out loud in the design meeting, with no agreement and a hospital IP policy, whom the contributor export credits with no design input; the venture's own disclosure arriving through a regulator's public database; a bench data file named only in speaker notes; a granted member that is In force on its front page and Lapsed in the register; a missing rationale raised as an open point in the transcript; an undated register block; and a current cap that differs between a slide and its speaker notes (no deterministic check). The self-tests (`aksha eval selftest`) assume a research side and stop on this world; run its suite with `--no-selftest`.
+## The held-out patent world, `quillmere`
+Quillmere Soil Systems makes a capacitance soil-moisture probe whose firmware finds each site's field capacity on its own, from the plateau the soil reaches as it drains after a wetting. The world was written blind: its author read only the world format, the key and suite formats and the loader, never the agent code or its offline models, so nothing in it is tailored to what the agents already handle. It is patent-only (`src/aksha/data/suites/quillmere/`, 7 cases) and in-distribution for that task family: review candidates against prior art, recommend a next action, prepare the strongest for counsel.
+| What | quillmere |
+|---|---|
+| Candidates | five: two in a bound lab notebook transcribed to plain text (dated page headers, lettered steps, a dated margin note, an empty witness line), three in an idea-tracker XML export (`<step>` and `<comment>` elements) |
+| Contributors | a YAML roster with nested `worked_on` lists and no person IDs |
+| Agreements | a Word export of a university research agreement with numbered clauses |
+| Disclosures | JSON Lines with a header row, plus a conference poster as PDF text |
+| Priorities | lines of a board update in plain text |
+| Form | counsel's HTML questionnaire (`label` and `input` pairs, a disabled counsel-only fieldset) |
+| Publications | four in three families: two XML documents, a PDF-text grant with INID codes, a Markdown file with front matter |
+Its traps: two candidates whose steps are each found, but split across two families (one is business priority 2 and its author calls it the strongest; the other the venture already described in public release notes); a university adviser labelled "not an inventor" who suggested the key step, under a joint-ownership clause and a filing-notice duty, beside a contractor with no IP clause; the university group's public poster showing the key step four months before the notebook's first entry; a step added later in the notebook margin, in an unwitnessed entry; and the same threshold written in other units in the poster. Two trap IDs reuse a registered check (`T-CONSULT`, `T-GRACE`) for a new kind of situation; `T-OBVIOUS-4`, `T-OBVIOUS-5`, `T-NOTEBOOK` and `T-UNITS` have no trap check yet, so their cases grade through the matrix, next-action, extraction and citation criteria.
+
 ## How the keys are used
 
 Agents and their tools never read `spec.yaml`, `manifest.json` or `key.json`. Only `sources/` is a tool root; the runtime's path guard keeps everything else out of reach, and a test should assert that no tool path resolves to a key. Tests and evals read the key and compare it with what the agents saved:
@@ -127,3 +148,7 @@ The key records values, not judgements about the law. Where a trap touches inven
 3. Update `manifest.json` with each new file's path, collection, URL and publish date.
 4. Write `key.json`: counts, facts with quote and position anchors computed from the files as written, the expected matrix and recommendations, and the traps. Check that every anchor's `exact` text appears at its position.
 5. For a variant, keep the base's real dates and numbers except the inputs you mean to change, list those under `changes_from_base`, and give the expected stale and unchanged sets under `expected_after_change`.
+
+## The held-out research world, `vantlow`
+
+Vantlow, a developer-tools startup, is shortlisting a hosted log-management product. The world was written from the world format alone, without reading the research agent's code or its offline models, so a failure here points at something the agent learned from the other worlds' tasks rather than at the world. Prices are metered (per GB ingested with included quotas, per TB ingested, per million log lines), a vendor's own query benchmark sits beside an independent one, and the reviews are forum posts in three saved HTML threads. Its traps are of other kinds: a rebrand rather than an acquisition, a price conflict across that rebrand, a vendor benchmark against an independent benchmark in another file, a hidden aside between forum posts, cross-posts across threads, a billing unit that does not convert to bytes, a free quota with no paid price, and a reply that quotes another post (`src/aksha/data/suites/vantlow/`, 9 cases). Its author-side truth is `worlds/vantlow/spec.yaml`.

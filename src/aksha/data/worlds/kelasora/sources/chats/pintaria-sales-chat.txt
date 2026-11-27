@@ -1,0 +1,9 @@
+SYNTHETIC FIXTURE - a chat export. Invented for testing the agents; not real people, messages or offers.
+Chat export: Dewi (Pintaria sales) and Ratna Wulandari (Kelasora).
+
+[12/10/26 14:02:11] Dewi (Pintaria sales): Selamat siang Bu Ratna. Untuk lembaga baru, harga Pintaria Kelas reguler mulai November jadi Rp 52.000 per siswa per bulan, minimal 20 siswa.
+[12/10/26 14:03:40] Ratna Wulandari: Di website masih tertulis Rp 45.000, ya?
+[12/10/26 14:05:02] Dewi (Pintaria sales): Betul Bu, website belum diperbarui.
+[12/10/26 14:06:15] Ratna Wulandari: Baik, terima kasih. Saya catat dulu.
+
+End of export - SYNTHETIC FIXTURE

@@ -1,0 +1,9 @@
+# The research agent on the kelasora world: an edtech venture comparing tutoring platforms
+# for after-school tutoring centres in Indonesia, written from the world format alone by an
+# author who did not read the agent code. Sources mix Bahasa Indonesia and English; prices
+# come in two currencies, per student and per tutor seat; one competitor renamed itself
+# mid-year and only a newsletter says so. No agent module names anything in it.
+[suite]
+name = "kelasora"
+description = "Research agent on an edtech world authored blind to the agent code"
+k = 1

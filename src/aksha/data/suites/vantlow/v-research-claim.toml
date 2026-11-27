@@ -1,0 +1,10 @@
+id = "v-research-claim"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CLAIM"
+category = "capability"
+agents = ["research"]
+worlds = ["vantlow"]
+opening = "How fast do the hosted log tools answer queries, for seed-stage developer-tools startups in North America? Compare query speed (query speed, latency, fast*, slow*)."
+expect = ["facts.VF-08", "facts.VF-09", "traps.T-CLAIM"]
+criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]

@@ -1,0 +1,10 @@
+id = "v-research-price"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-PRICE"
+category = "capability"
+agents = ["research"]
+worlds = ["vantlow"]
+opening = "What does each hosted log-management product charge for seed-stage developer-tools startups in North America?"
+expect = ["facts.VF-03", "facts.VF-04", "traps.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE"]

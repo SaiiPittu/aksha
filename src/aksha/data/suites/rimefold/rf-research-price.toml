@@ -1,0 +1,10 @@
+id = "rf-research-price"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-PRICE"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "What does each temperature-monitoring vendor charge, for regional cold-chain delivery fleets in Canada?"
+expect = ["facts.RF-01", "facts.RF-02", "facts.RF-08", "traps.T-PRICE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "precision.known_values", "citation.exists", "citation.edge_excerpts", "trap.T-PRICE"]

@@ -1,0 +1,56 @@
+# SYNTHETIC FIXTURE. Invented for testing the agents; not real people.
+synthetic: true
+exported: 2026-11-18
+kept_by: Lena Halvorsen
+people:
+  - id: SYN-P-41
+    name: Lena Halvorsen
+    org: Pulvane
+    title: founder and CEO
+    agreement: founder agreement, IP assigned to Pulvane
+    credited:
+      - idea: ENG-104
+        part: Set the goal of fewer false rhythm notices; chaired the design sync
+        when: 2026-01-14
+  - id: SYN-P-42
+    name: Rafael Domingo
+    org: Pulvane
+    title: firmware lead
+    agreement: employment contract, IP assigned to Pulvane
+    credited:
+      - idea: ENG-104
+        part: Proposed the motion gate and built steps one to three in firmware 2.3
+        when: 2026-01-14
+      - idea: ENG-117
+        part: Wrote the LED stepping firmware for the bench rings
+        when: 2026-06-09
+  - id: SYN-P-43
+    name: Yuki Tanabe
+    org: Pulvane
+    title: signal-processing engineer
+    agreement: employment contract, IP assigned to Pulvane
+    credited:
+      - idea: ENG-104
+        part: Chose the irregularity cut-off and the three-of-five rule
+        when: 2026-01-14
+      - idea: ENG-123
+        part: Proposed the personal night-time baseline
+        when: 2026-04-22
+  - id: SYN-P-44
+    name: Nikhil Barua
+    org: Pulvane
+    title: optics engineer
+    agreement: employment contract, IP assigned to Pulvane
+    credited:
+      - idea: ENG-117
+        part: Proposed perfusion-triggered LED stepping and the infrared fallback
+        when: 2026-06-09
+  - id: SYN-P-45
+    name: Dr. Ines Marwood
+    org: Wrenfield District Hospital
+    title: honorary clinical advisor
+    agreement: none signed with Pulvane; the hospital's IP policy may apply
+    credited:
+      - idea: ENG-104
+        part: Clinical review of notice wording; no design input
+        when: 2026-01-14

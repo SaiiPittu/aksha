@@ -25,6 +25,8 @@ Kind                   Schema alias          What it extracts
                                              columns are named by ``table_roles``
 ``market_report``      ``report_facts``      the companies it names, its figures, its
                                              claims, when it was published
+``conversation``       ``conversation_facts`` each price a message quotes, and when it was
+                                             sent (``prices``, ``published``)
 ``internal_note``      none                  read by the Task's general model
 =====================  ====================  ===============================================
 
@@ -95,6 +97,12 @@ KINDS = (
         "market_report",
         "a third party's report, article or analysis about a market that names several companies",
         "report_facts",
+    ),
+    DocumentKind(
+        "conversation",
+        "a chat export, a call log or a message thread between people, each message with "
+        "its sender and time, such as a seller's representative quoting a price",
+        "conversation_facts",
     ),
     DocumentKind(
         "internal_note",
@@ -260,8 +268,19 @@ def read_page(
             header = list(read_rows(raw, fmt).columns)
         except ValueError:
             header = []
+    above: tuple[int, str] | None = None  # the last row's seller: its column and its name
     for s in segs:
         r = (s.start, s.end)
+        if s.kind == "meta" and fmt == "json" and s.attrs.get("value_start"):
+            # A feed's own fields outside its records (its tagline, its notes) are what
+            # the record says: each is a passage over its value.
+            vs, ve = int(s.attrs["value_start"]), int(s.attrs["value_end"])
+            hero = HERO_CLASS.search(s.attrs.get("key", "").replace("_", " "))
+            claimed = any(_overlaps((vs, ve), a) for a in claims)
+            passages.append(Passage("claim" if hero or claimed else "text", vs, ve, raw[vs:ve],
+                                    s.section, instruction_like=any(
+                                        _overlaps((vs, ve), a) for a in addressed)))  # fmt: skip
+            continue
         if s.kind in ("meta", "data", "title", "footer"):
             continue
         if s.kind == "heading":
@@ -277,6 +296,16 @@ def read_page(
         inside = [p for p in prices if r[0] <= p[0] and p[1] <= r[1]]
         seller = next((raw[x:y] for x, y in sellers if r[0] <= x and y <= r[1]), None)
         product = next((raw[x:y] for x, y in products if r[0] <= x and y <= r[1]), None)
+        if s.kind == "row" and s.cells:
+            at_cell = next((i for i, c in enumerate(s.cells) for x, y in sellers
+                            if r[0] <= x and y <= r[1] and c[1] <= x and y <= c[2]),
+                           None)  # fmt: skip
+            if seller is not None and at_cell is not None:
+                above = (at_cell, seller)
+            elif seller is None and above is not None and above[0] < len(s.cells):
+                cell = s.cells[above[0]]
+                if not cell[0].strip():
+                    seller = above[1]  # a blank cell under the seller column: filled down
         who = {k: v for k, v in (("seller", seller), ("product", product)) if v}
         if s.kind == "row" and s.cells:
             values = [c[0] for c in s.cells]
@@ -476,14 +505,22 @@ def read_table(
     within = section_of(found, fmt, section)
     if within is None:
         raise ValueError(f"no section {section}")
-    segs = [s for s in within if s.kind not in ("meta", "heading", "title", "data")]
+    # A page's footer, its hidden text and the words a post quotes from another are not
+    # anyone's voice here: a quote is counted where it was first said.
+    left_out = ("meta", "heading", "title", "data", "footer", "hidden")
+    segs = [s for s in within if s.kind not in left_out and s.attrs.get("quoted") != "true"]
     shown = drafts(found, segs, source)
     reading = read_document(models, DECIDE, KINDS, found, shown, "", kind="customer_reviews")
     items = reading.ranges.get("items", ())
     page_items = list(items)[offset : None if limit is None else offset + limit]
+    owners: dict[str, int] = {}
     passages = []
     for n, (s, e) in enumerate(page_items, start=offset):
-        fields = {"id": f"item-{n + 1}", "columns": {}}
+        owner = next((g.attrs.get("id", "") for g in segs if g.start <= s and e <= g.end), "")
+        if owner:  # the post an item sits in names it; a second item in one post is its part
+            owners[owner] = owners.get(owner, 0) + 1
+            owner = owner if owners[owner] == 1 else f"{owner}#{owners[owner]}"
+        fields = {"id": owner or f"item-{n + 1}", "columns": {}}
         if themes:
             fields["themes"] = themes_of(models, visible(raw[s:e]), themes)
         passages.append(Passage("review", s, e, raw[s:e], fields=fields))

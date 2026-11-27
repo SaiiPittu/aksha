@@ -1,0 +1,65 @@
+# SYNTHETIC. Author-side spec for a synthetic test world; not read by any tool.
+world: vantlow
+synthetic: true
+notice: >-
+  Author-side truth for a held-out research-only world, written without reading the research
+  agent's code or its offline models, to test that nothing from the other worlds' tasks leaked
+  into the agent definition or the harness runtime. Another domain (log management bought by a
+  developer-tools startup), other file shapes, other counts and other kinds of trap. No tool
+  reads this file, and no agent module names anything in it.
+frozen_today: '2026-11-26'
+agents: [research]
+date_convention: ISO 8601 in front matter, meta tags and time elements; prose dates as people write them (18 Aug 2026, 1 September 2026)
+identifier_schemes:
+  forum_post: SYN-FP-\d{2}
+  thread: three-digit thread number in the canonical URL
+shape_note: >-
+  Prices are metered: per GB ingested with an included monthly quota, per TB ingested, and
+  per million log lines (a unit that does not convert to bytes without an assumption). Seller
+  inputs are an HTML plan table with th scope rows, an HTML page whose prices sit in span
+  cards beside a JSON-LD SoftwareApplication, a saved Markdown copy of an old docs page with
+  front matter, a JSON price list from a public API, and an HTML page with only a free quota.
+  Two benchmarks: the vendor's own white paper as hard-wrapped PDF text with page footers,
+  and an independent Markdown report with a results table. Reviews are not a review export
+  at all but forum posts: three saved HTML thread pages, article elements with a post ID,
+  an author handle and a tool tag, no rating, one post quoting another in a blockquote, and
+  a hidden aside between posts. One venture note in plain text with indented sections.
+venture:
+  name: Vantlow
+  domain: vantlow.example
+  product: hosted CI runners for software teams
+  role_in_world: buyer; the platform team is shortlisting a hosted log-management product
+  segment: seed-stage developer-tools startups
+  geography: North America
+  volume: about 600 GB and 1.4 billion log lines a month (team/what-we-need.txt)
+competitors:
+  K1: {company: Siltgrove Inc., product: Siltgrove Logs, pages: [pricing/siltgrove-pricing.html], documents: [benchmarks/siltgrove-query-benchmark-2026.pdf.txt], prices: {Team: 249 USD per month incl. 300 GB, overage: 1 USD per GB ingested, Hobby: free 50 GB per month}}
+  K2: {company: Ferrowind Labs Inc., product: Ferrowind, former_name: Brackpond, pages: [pricing/ferrowind-plans.html, pricing/brackpond-plans-saved.md], relationship: 'rebrand on 2026-07-01: same company, no acquirer', prices: {'2026-09-01': 250 USD per TB ingested, '2025-04-10': 300 USD per TB ingested}}
+  K3: {company: Quarnel Systems Ltd, product: Quarnel Logs, pages: [pricing/quarnel-price-list.json], prices: {Starter: 2 USD per million log lines, Growth: 1.60 USD per million log lines above 500 million}}
+  K4: {company: Emberwick Cloud Inc., product: Emberwick, pages: [pricing/emberwick.html], prices: {paid: unknown, free: 5 GB per day}}
+not_competitors:
+  - Open Ingest Bench (oib.example), the volunteer publisher of the independent benchmark
+  - Builder Shed (forum.buildershed.example), the forum
+benchmarks:
+  vendor: {file: benchmarks/siltgrove-query-benchmark-2026.pdf.txt, claim: up to 12x faster than Ferrowind, conditions: '10 GB, caches on, best of five, queries written by the vendor'}
+  independent: {file: benchmarks/open-ingest-bench-2026.md, finding: median query 2.1x faster than Ferrowind, conditions: '500 GB, caches off, median of three cold runs, 120 queries from public incident write-ups'}
+reviews:
+  files: [threads/t418-which-log-tool.html, threads/t433-ingest-bills.html, threads/t451-how-long-do-you-keep-logs.html]
+  rows: 20
+  unique: 18
+  cross_posted: {SYN-FP-12: SYN-FP-02, SYN-FP-17: SYN-FP-04}
+  quoted_reply: {SYN-FP-14: 'quotes SYN-FP-10 in a blockquote; its own words name no theme'}
+  themes_by_request_terms:
+    ingest cost: {terms: [price*, cost*, bill*, expensive, cheap*, overage*], unique_posts: [SYN-FP-02, SYN-FP-03, SYN-FP-08, SYN-FP-09, SYN-FP-10, SYN-FP-13], count: 6}
+    query speed: {terms: [slow*, fast*, latency, query speed], unique_posts: [SYN-FP-01, SYN-FP-06, SYN-FP-07, SYN-FP-18], count: 4}
+    retention: {terms: [retention, retain*, days of logs], unique_posts: [SYN-FP-04, SYN-FP-15, SYN-FP-16, SYN-FP-19, SYN-FP-20], count: 5}
+  counting_note: the counts hold under both whole-word-prefix and plain-substring matching of the terms, over each post's own words; with the quoted text included, ingest cost reads 7
+traps:
+- T-DUP - a rebrand (not an acquisition) across an HTML page and a saved Markdown docs page; the rename notice sits in a page banner (K2)
+- T-PRICE - a price conflict across the rebrand and two years, both in per-TB units (K2)
+- T-CLAIM - a vendor benchmark claim in one file against an independent benchmark's measured figure in another (K1)
+- T-INJECT - a hidden aside between forum posts, not on a seller page
+- T-REVIEWDUP - two cross-posts across thread files, one with a lead-in sentence before the same text
+- T-UNIT - a price per million log lines beside a tempting bytes-per-line figure (K3)
+- T-FREETIER - a free quota with no paid price; the quota is not a price (K4)
+- T-QUOTED - a reply that quotes another post; quoted words must not count for the reply

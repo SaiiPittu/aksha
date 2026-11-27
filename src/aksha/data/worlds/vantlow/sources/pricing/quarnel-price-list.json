@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "_comment": "SYNTHETIC FIXTURE. Invented for testing; not a real company or offer.",
+  "vendor": "Quarnel Systems Ltd",
+  "product": "Quarnel Logs",
+  "source": "https://api.quarnel.example/v1/public/price-list",
+  "retrieved": "2026-10-02",
+  "currency": "USD",
+  "billing_note": "Billing counts log lines, not bytes.",
+  "plans": [
+    {
+      "name": "Starter",
+      "price": "$2 per million log lines",
+      "included": "first 20 million log lines each month",
+      "retention_days": 14
+    },
+    {
+      "name": "Growth",
+      "price": "$1.60 per million log lines above 500 million",
+      "included": null,
+      "retention_days": 30
+    }
+  ],
+  "faq": [
+    {
+      "q": "How big is a log line?",
+      "a": "Lines vary; our customers' median line is about 400 bytes, but you are billed per line whatever its size."
+    }
+  ]
+}

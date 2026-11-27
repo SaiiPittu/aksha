@@ -1,0 +1,44 @@
+{
+  "world": "rimefold",
+  "synthetic": true,
+  "frozen_today": "2026-11-27",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. The agents read sources/ as uploaded inputs; folder names and file extensions mean nothing to them.",
+  "records": [
+    {
+      "path": "datasheets/glacivo-trackpoint-datasheet.pdf.txt",
+      "folder": "datasheets",
+      "synthetic": true
+    },
+    {
+      "path": "datasheets/pellisar-u8-datasheet.pdf.txt",
+      "folder": "datasheets",
+      "synthetic": true
+    },
+    {
+      "path": "exports/review-hub-export.json",
+      "folder": "exports",
+      "synthetic": true
+    },
+    {
+      "path": "memo/vendor-landscape-memo.pdf.txt",
+      "folder": "memo",
+      "synthetic": true
+    },
+    {
+      "path": "notes/what-we-need.md",
+      "folder": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "pricelists/coldhaven-safetemp-price-list.pdf.txt",
+      "folder": "pricelists",
+      "synthetic": true
+    },
+    {
+      "path": "sheets/vendor-shortlist.csv",
+      "folder": "sheets",
+      "synthetic": true
+    }
+  ]
+}

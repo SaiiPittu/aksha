@@ -1,0 +1,29 @@
+SYNTHETIC FIXTURE - text extracted from a PDF datasheet. Invented for testing; not a real company, product or price.
+
+Pellisar Sensors Ltd
+PELLISAR U8 - SINGLE-USE USB TEMPERATURE LOGGER
+Product datasheet, March 2026
+
+The U8 is a single-use logger for one shipment. Press and hold the
+button to start; plug the logger into any USB port at the end of the
+trip to open a PDF report with the full trace, the alarm summary and the
+minimum, maximum and mean kinetic temperature. No software or account is
+needed.
+
+Specifications
+  Measuring range ............ -30 °C to +70 °C
+  Accuracy ................... ±0.5 °C (-20 °C to +40 °C)
+  Recording interval ......... 1 to 120 minutes, set at the factory
+  Memory ..................... 16,000 readings
+  Run time ................... up to 90 days
+  Battery .................... sealed lithium, not replaceable
+  Indicators ................. green OK light, red alarm light
+
+Ordering
+  Price: CAD 14 per logger, list, any quantity.
+  Lead time: two weeks.
+
+Pellisar Sensors Ltd, Mississauga, Ontario (synthetic address)
+www.pellisar.example
+
+SYNTHETIC FIXTURE - end of datasheet

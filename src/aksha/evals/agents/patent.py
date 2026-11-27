@@ -195,7 +195,7 @@ class PatentUnderTest(RuntimeUnderTest):
         ep.save("extraction", cand, {"fields": fields})
         events = [
             {
-                "id": d.get("event_id"),
+                "id": d.get("disclosure_id"),
                 "date": d.get("date"),
                 "public": d.get("public") == "yes",
                 "own": bool(d.get("own_disclosure")),

@@ -1,0 +1,10 @@
+id = "v-research-dup"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DUP"
+category = "capability"
+agents = ["research"]
+worlds = ["vantlow"]
+opening = "Who sells hosted log management for seed-stage developer-tools startups in North America?"
+expect = ["facts.VF-07", "traps.T-DUP"]
+criteria = ["research.competitor_count", "research.duplicates_are_edges", "citation.edge_excerpts", "trap.T-DUP"]

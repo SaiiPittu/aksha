@@ -1,0 +1,10 @@
+id = "rf-research-filldown"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-FILLDOWN"
+category = "capability"
+agents = ["research"]
+worlds = ["rimefold"]
+opening = "List every price in the vendor shortlist for temperature monitoring, for regional cold-chain delivery fleets in Canada, with the vendor each price belongs to."
+expect = ["facts.RF-06", "facts.RF-07", "traps.T-FILLDOWN"]
+criteria = ["research.prices", "precision.known_values", "citation.exists", "citation.overlaps_key"]

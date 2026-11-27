@@ -1,0 +1,24 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication export. Invented for testing; not a real patent, applicant or office.",
+  "pub_no": "SYN-PUB-0304",
+  "pub_kind": "B1",
+  "authority": "SYN-Office-1",
+  "title": "Grasp selection from a depth image",
+  "parties": {"proprietor": "Tessaline Logistics Systems"},
+  "priority": [{"no": "SYN-PRI-2022-0517", "date": "2022-05-17"}],
+  "events": {"filed": "2023-05-17", "granted": "2024-09-17"},
+  "status_line": "In force",
+  "summary": "Candidate grasps on a depth image are ranked by the planarity of the surface patch under each fingertip and by the distance from the grasp to the centroid of the segmented object.",
+  "claims": [
+    {"n": 1, "parent": null, "text": "A method of selecting a grasp, comprising ranking candidate grasps on a depth image by the planarity of the surface patch under each fingertip and by the distance from the grasp to the centroid of the segmented object."},
+    {"n": 2, "parent": 1, "text": "The method of claim 1, wherein the planarity is the residual of a plane fitted to the patch."}
+  ],
+  "legal_events": [
+    {"date": "2024-09-17", "code": "GRNT", "text": "Grant published"},
+    {"date": "2025-06-10", "code": "OPPO", "text": "Opposition filed by a third party"},
+    {"date": "2026-07-08", "code": "DECN", "text": "Revoked after opposition; appeal period running"}
+  ],
+  "legal_note": "Register events are copied as the office prints them. Nothing here is a legal conclusion.",
+  "web": "https://patents.synthetic.example/SYN-PUB-0304"
+}

@@ -1,0 +1,27 @@
+SYNTHETIC FIXTURE - text extracted from a PDF poster. Invented for testing; not a real poster.
+
+SYN Regional Soil and Water Symposium 2025, Poster session B, 10 September 2025
+Open to all registered delegates; the poster PDF was posted on the symposium site.
+
+Where the soil stops draining: reading field capacity off a probe's own dry-down curve
+
+L. Moreau-Adeyemi, O. Ferreira-Kwan
+Soil Physics Group, Vantry University of Agriculture
+Probes kindly lent by Quillmere Soil Systems (quillmere.example)
+
+Background
+Field capacity is usually measured from a lab sample. We ask whether an installed
+capacitance probe can find it on its own.
+
+Method
+After a wetting event we followed the volumetric water content as the profile drained. We took field capacity as the value where the drainage rate first stayed below 0.004 m3/m3 per hour for 6 h.
+Twelve plots, four soil textures, autumn 2024.
+
+Results
+The plateau value was within 0.015 m3/m3 of the lab field capacity on 10 of 12 plots.
+The two misses were clay plots that cracked during the dry spell.
+
+Outlook
+A probe could use the plateau to correct its own calibration in the field.
+
+-- page footer: SYNTHETIC FIXTURE --

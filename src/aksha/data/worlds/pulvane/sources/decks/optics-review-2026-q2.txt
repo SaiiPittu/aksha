@@ -1,0 +1,48 @@
+SYNTHETIC FIXTURE: plain-text export of a slide deck. Invented for testing the agents; not a real company, person or product.
+Pulvane optics review, Q2 2026
+==============================
+
+--- page 1 ---
+ENG-117: Perfusion-adaptive LED drive
+Nikhil Barua, optics engineer, and Rafael Domingo, firmware lead
+Pulvane | 9 June 2026
+[speaker notes]
+(none)
+
+--- page 2 ---
+Why this matters
+- On cold fingers and small fingers the green pulse signal gets weak and the ring misses beats
+- On darker skin the green channel loses more light, so the same LED current gives a weaker pulse
+- A missed beat looks like an irregular interval, so a weak signal produces false rhythm notices
+[speaker notes]
+This is the main source of the false notices we still see after the motion gate.
+
+--- page 3 ---
+Method
+a) Measure the perfusion index on the green channel every 10 seconds.
+b) If the perfusion index stays below 0.4% for 3 readings in a row, raise the green LED current in 1 mA steps up to the current cap.
+c) If the signal quality index is still below 0.6 at the cap, switch beat detection to the infrared channel.
+[speaker notes]
+Step c is what makes it work on the hardest fingers; the infrared channel is noisier but it does not fade the same way.
+
+--- page 4 ---
+Settings
+Measurement interval    | 10 s
+Perfusion trigger       | below 0.4% for 3 readings
+LED step                | 1 mA
+Current cap             | 8 mA
+Signal quality floor    | 0.6
+[speaker notes]
+After the skin-temperature test on 2 June we agreed to cap the current at 6 mA, not 8; this page was not updated.
+
+--- page 5 ---
+Status
+Prototype firmware on two bench rings. Beats are counted against a chest-strap reference.
+[speaker notes]
+The full bench sweep across skin tones is in skin-tone-bench-v3.csv.
+
+--- page 6 ---
+Ruled out
+- A fixed high LED current for everyone: drains the battery in under a day and warms the skin.
+[speaker notes]
+(none)

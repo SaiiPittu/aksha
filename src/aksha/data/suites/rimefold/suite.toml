@@ -1,0 +1,11 @@
+# The research agent on the rimefold world: a cold-chain logistics venture comparing
+# temperature-monitoring vendors, a fourth domain whose inputs have other shapes again: one
+# long PDF-extracted market memo describing the vendors section by section, PDF datasheets
+# and a price list, a semicolon-separated sheet pasted from a spreadsheet with fill-down
+# blanks, and a review export nested by product listing. The world was written from the
+# world format alone, without reading the agent modules or their offline models, as a check
+# that nothing specific to the earlier worlds leaked into the agent or the runtime.
+[suite]
+name = "rimefold"
+description = "Research agent on a world written without sight of its code"
+k = 1

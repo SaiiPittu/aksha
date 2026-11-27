@@ -1,0 +1,11 @@
+id = "q-patent-poster"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-GRACE"
+category = "capability"
+agents = ["patent"]
+worlds = ["quillmere"]
+opening = "Does the 2025 symposium poster matter for AG-1?"
+expect = ["facts.QF-07", "facts.QF-08", "traps.T-GRACE"]
+criteria = ["trap.T-GRACE", "citation.exists", "citation.overlaps_key"]
+should = ["no_file_by_date"]

@@ -1,0 +1,10 @@
+id = "m-patent-missing"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-MISSING"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-13", "traps.T-MISSING"]
+criteria = ["trap.T-MISSING", "citation.exists"]

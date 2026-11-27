@@ -1,0 +1,10 @@
+id = "m-patent-undated"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-UNDATED"
+category = "capability"
+agents = ["patent"]
+worlds = ["pulvane"]
+opening = "Prepare Pulvane's invention candidates for counsel review."
+expect = ["facts.MF-12", "traps.T-UNDATED"]
+criteria = ["patent.undated_disclosure", "citation.exists"]

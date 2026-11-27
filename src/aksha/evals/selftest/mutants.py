@@ -66,8 +66,14 @@ def forged_excerpt(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
     return rec.edited(events=edit)
 
 
+class NotApplicable(LookupError):
+    """The world holds nothing this mutant edits (a patent-only world has no prices)."""
+
+
 def _competitor_for(key: AnswerKey, fact_kind: str) -> tuple[str, str]:
-    fact = next(f for f in key.facts.values() if f.kind == fact_kind)
+    fact = next((f for f in key.facts.values() if f.kind == fact_kind), None)
+    if fact is None or "competitor" not in fact.about:
+        raise NotApplicable(f"{key.world} keys no {fact_kind} fact of a competitor")
     return str(fact.about["competitor"]), fact.id
 
 

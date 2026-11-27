@@ -1,0 +1,130 @@
+{
+  "synthetic": true,
+  "notice": "SYNTHETIC FIXTURE. A prior-art search export invented for testing; every record is made up and none is a real patent or application.",
+  "export": {
+    "tool": "SYN-Search",
+    "run_on": "2026-10-30",
+    "query": "wearable optical pulse irregular rhythm motion gating confirmation night baseline LED drive",
+    "hit_count": 5
+  },
+  "hits": [
+    {
+      "rank": 1,
+      "record": {
+        "ids": {"pub": "SYN-PUB-0301", "kind": "A1", "office": "SYN-Office-4"},
+        "applicant": "Orrinth Medical (synthetic)",
+        "title": "Motion-gated rhythm classification for a wearable optical pulse sensor",
+        "timeline": [
+          {"event": "priority", "date": "2019-09-27", "ref": "SYN-PRI-2019-0927"},
+          {"event": "filed", "date": "2020-09-25"},
+          {"event": "published", "date": "2021-04-01"}
+        ],
+        "link": "https://register.synthetic.example/SYN-PUB-0301",
+        "text": {
+          "abstract": "A wearable optical pulse sensor discards a pulse window when accelerometer motion during the window exceeds a motion limit, and classifies an accepted window as irregular when the variability of its beat-to-beat intervals exceeds a threshold. A notice is raised for each irregular window. When the pulse amplitude is low, the sensor may raise the brightness of its light source.",
+          "claims": [
+            "1. A method comprising: rejecting a pulse window from a wearable optical sensor when accelerometer motion during the window exceeds a motion limit; and classifying an accepted window as irregular when the variability of its beat-to-beat intervals exceeds a threshold.",
+            "2. The method of claim 1, comprising raising a notice for each irregular window."
+          ]
+        },
+        "legal": [
+          {"as_of": "2026-10-01", "source": "SYN-Office-4 register", "says": "Application published"}
+        ]
+      }
+    },
+    {
+      "rank": 2,
+      "record": {
+        "ids": {"pub": "SYN-PUB-0302", "kind": "B1", "office": "SYN-Office-4"},
+        "applicant": "Orrinth Medical (synthetic)",
+        "title": "Motion-gated rhythm classification for a wrist-worn optical pulse sensor",
+        "timeline": [
+          {"event": "priority", "date": "2019-09-27", "ref": "SYN-PRI-2019-0927"},
+          {"event": "filed", "date": "2020-09-25"},
+          {"event": "granted", "date": "2023-02-14"}
+        ],
+        "link": "https://register.synthetic.example/SYN-PUB-0302",
+        "text": {
+          "abstract": "A wrist-worn optical pulse sensor rejects a pulse window when accelerometer motion exceeds 0.1 g and classifies an accepted window as irregular from the variability of its beat-to-beat intervals.",
+          "claims": [
+            "1. A wrist-worn device comprising an optical pulse sensor and an accelerometer, configured to reject a pulse window when accelerometer motion during the window exceeds 0.1 g, and to classify an accepted window as irregular when the variability of its beat-to-beat intervals exceeds a threshold."
+          ]
+        },
+        "legal": [
+          {"as_of": "2023-02-14", "source": "front page", "says": "In force"},
+          {"as_of": "2026-10-01", "source": "SYN-Office-4 register", "says": "Lapsed - renewal fee not paid by 2026-03-31"}
+        ]
+      }
+    },
+    {
+      "rank": 3,
+      "record": {
+        "ids": {"pub": "SYN-PUB-0303", "kind": "A1", "office": "SYN-Office-5"},
+        "applicant": "Vestry Biosignals (synthetic)",
+        "title": "Confirming an irregular pulse notice with an electrocardiogram",
+        "timeline": [
+          {"event": "priority", "date": "2021-06-14", "ref": "SYN-PRI-2021-0614"},
+          {"event": "filed", "date": "2022-06-13"},
+          {"event": "published", "date": "2022-12-22"}
+        ],
+        "link": "https://register.synthetic.example/SYN-PUB-0303",
+        "text": {
+          "abstract": "When a watch reports two or more irregular-rhythm episodes within 48 hours, it displays a notice and prompts the user to record an electrocardiogram by touching the crown electrode. The notice is marked confirmed only when the electrocardiogram also shows an irregular rhythm.",
+          "claims": [
+            "1. A method comprising: when two or more irregular-rhythm episodes are reported within 48 hours, prompting the user of a watch to record an electrocardiogram; and marking a notice confirmed only when the electrocardiogram shows an irregular rhythm."
+          ]
+        },
+        "legal": [
+          {"as_of": "2026-09-15", "source": "SYN-Office-5 register", "says": "Application published; examination requested"}
+        ]
+      }
+    },
+    {
+      "rank": 4,
+      "record": {
+        "ids": {"pub": "SYN-PUB-0304", "kind": "A1", "office": "SYN-Office-4"},
+        "applicant": "Quillon Health (synthetic)",
+        "title": "Night-time pulse sampling and a personal rhythm baseline",
+        "timeline": [
+          {"event": "priority", "date": "2020-11-02", "ref": "SYN-PRI-2020-1102"},
+          {"event": "filed", "date": "2021-11-01"},
+          {"event": "published", "date": "2022-05-12"}
+        ],
+        "link": "https://register.synthetic.example/SYN-PUB-0304",
+        "text": {
+          "abstract": "A wearable detects sleep as a period with no movement and a heart rate near its nightly minimum. During sleep it samples a pulse window at fixed intervals and builds a baseline of the wearer's rhythm irregularity over a number of nights.",
+          "claims": [
+            "1. A method comprising: detecting sleep from the absence of movement and a heart rate near its nightly minimum; sampling a pulse window at fixed intervals during sleep; and building a baseline of the wearer's rhythm irregularity over a plurality of nights."
+          ]
+        },
+        "legal": [
+          {"as_of": "2026-10-01", "source": "SYN-Office-4 register", "says": "Application published"}
+        ]
+      }
+    },
+    {
+      "rank": 5,
+      "record": {
+        "ids": {"pub": "SYN-PUB-0305", "kind": "A1", "office": "SYN-Office-4"},
+        "applicant": "Quillon Health (synthetic)",
+        "title": "Flagging a night that departs from a personal rhythm baseline",
+        "relation": "continuation of SYN-PUB-0304",
+        "timeline": [
+          {"event": "priority", "date": "2020-11-02", "ref": "SYN-PRI-2020-1102"},
+          {"event": "filed", "date": "2022-10-28"},
+          {"event": "published", "date": "2023-05-04"}
+        ],
+        "link": "https://register.synthetic.example/SYN-PUB-0305",
+        "text": {
+          "abstract": "Building on a baseline of the wearer's night-time rhythm irregularity, a wearable flags a night whose irregularity exceeds the baseline by more than a set number of standard deviations.",
+          "claims": [
+            "1. A method comprising: building a baseline of a wearer's night-time rhythm irregularity over a plurality of nights; and flagging a night whose irregularity exceeds the baseline by more than a set number of standard deviations."
+          ]
+        },
+        "legal": [
+          {"as_of": "2026-10-01", "source": "SYN-Office-4 register", "says": "Application published"}
+        ]
+      }
+    }
+  ]
+}

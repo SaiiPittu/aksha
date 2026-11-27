@@ -1,0 +1,17 @@
+{
+  "files": {
+    "key.json": "sha256:62f90e2e241b9f51fb554305deafdc734553e2315f471ccbcf30c68f23c9c9b3",
+    "manifest.json": "sha256:7f487146c4f4a6ba4b0a3c287095af73358f2f9b4da90a3319397b2783b4c695",
+    "sources/decks/optics-review-2026-q2.txt": "sha256:e9913e3f1f66aca46b289ae39085e418c882b47c93ad53d804690eb844fdb38e",
+    "sources/disclosures/sharing-register.txt": "sha256:d43949930d2eb938b10f70c67f909c3336f9152be941ef14b2ae1b5799b65d4b",
+    "sources/forms/attorney-questionnaire.md": "sha256:9620175ea50f7fcb74f3efd5e16fd12008de91a847611b881f0cce13b179c827",
+    "sources/people/contributors.yaml": "sha256:87372cb91dff0edaaf59f051ad053f68e160480ed6960627a86d5388401ede2b",
+    "sources/planning/okrs-2026-h2.md": "sha256:64eaafd894607c39e935d208004ea2c627e93261d07b281a18f6eb5fe24d2daa",
+    "sources/prior-art/search-export-2026-10-30.json": "sha256:55286f299eb01ecb3a0916e379966aca61989a2921d93e2b7ce56d625588a259",
+    "sources/regulatory/SYN-REG-0042-device-summary.txt": "sha256:9e996e60a1435e8bcdd6a73ae75b17dfd2602947e517fc62aade0395c1d00b57",
+    "sources/transcripts/2026-01-14-rhythm-design-sync.vtt": "sha256:1ae0e04fabe38d0ca6dfaeeebefb8fccb52df74ef1b22d7972be901df1a2c5cd",
+    "sources/transcripts/2026-04-22-night-baseline-call.txt": "sha256:873446a8d32ddd7c57becdb21f6f46efa679858176cc2bed462127294b345f38",
+    "spec.yaml": "sha256:289f5b9fa004b2b470d46e8cfce75037ebcc03dc5d49ba7d095f22fda3e5fa45"
+  },
+  "world": "pulvane"
+}

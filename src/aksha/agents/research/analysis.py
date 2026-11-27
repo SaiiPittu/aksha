@@ -4,13 +4,14 @@ None of them knows a market. Each is a rule a careful analyst applies to any inp
 
 1. Entity resolution (:func:`resolve`): pages are merged into one company only when one
    page's own text names another page's product or company in a relationship sentence
-   ("is the new name for", "joined", "acquired", "now part of"). Names that merely look
-   alike are never merged. The canonical name is the company of the earliest-published
-   page; every other company and product name is an alias, and the sentence is the merge's
-   evidence. Companies come in the order their first page was discovered (the order of the
-   pages given), never by name, so a renamed world is worked through in the same order;
-   the key leads with that position (``c01-...``) because the runtime fans out by sorted
-   key.
+   ("is the new name for", "joined", "acquired", "now part of", "is a trading name of"),
+   or when another record (a newsletter, a memo) states that two pages' names are one
+   company. Names that merely look alike are never merged. The canonical name is the
+   company of the earliest-published page; every other company and product name is an
+   alias, and the sentence is the merge's evidence. Companies come in the order their
+   first page was discovered (the order of the pages given), never by name, so a renamed
+   world is worked through in the same order; the key leads with that position
+   (``c01-...``) because the runtime fans out by sorted key.
 2. Prices (:func:`price_conflict`): when each of two or more pages of one company states
    exactly one price on the same basis (``per unit``, ``per order``) and those prices
    differ, that is a conflict, kept open with each page and date, never averaged or picked.
@@ -18,8 +19,10 @@ None of them knows a market. Each is a rule a careful analyst applies to any inp
 3. Terms (:func:`term_hits`): a theme or a comparison dimension is matched by the terms the
    request gives it. A term matches as a whole word or phrase, case folded; ``batter*`` is
    a prefix; ``not battery powered`` excludes the text it covers from the other terms.
-4. Reviews (:func:`review_sample`): a row whose product and normalised text repeat an
-   earlier row is a cross-posted duplicate, counted once. A theme's size is reported as
+4. Reviews (:func:`review_sample`): a row whose normalised text repeats an earlier row
+   (its own product's name masked, so a copy under another listing or after a rename
+   still matches), or ends with an earlier row's text after a lead-in ("Cross-posting
+   from ...:"), is a cross-posted duplicate, counted once. A theme's size is reported as
    "N of M reviews in this sample", with its dates, geographies and products, never as a
    share of a market.
 5. Claim labels (:func:`claim_label`): marketing copy ("up to", "claimed", a hero line)
@@ -49,7 +52,7 @@ def _decimal(text: str) -> bool:
 
 _RELATION_WORDS = re.compile(
     r"\b(is the new name for|joined|acquired|was acquired by|merged with|now part of|renamed|"
-    r"is now|rebranded as|formerly)\b",
+    r"is now|rebranded as|formerly|trading name of|trades as|now called)\b",
     re.I,
 )
 
@@ -90,8 +93,15 @@ class Company:
     merges: tuple[tuple[PageIdentity, PageIdentity, Mapping[str, Any]], ...] = ()
 
 
-def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
-    """Group ``pages`` into companies by relationship sentences only (module doc, rule 1)."""
+def resolve(
+    pages: Sequence[PageIdentity], statements: Sequence[Sequence[Mapping[str, Any]]] = ()
+) -> tuple[Company, ...]:
+    """Group ``pages`` into companies by relationship sentences only (module doc, rule 1).
+
+    ``statements`` are other records' relationship sentences (a newsletter announcing a
+    rename), each ``{"text", "span", "record", "version"}``: one that names two pages'
+    names merges those pages, with the statement as the evidence.
+    """
     parent = {p.page: p.page for p in pages}
 
     def find(r: tuple[str, int | None]) -> tuple[str, int | None]:
@@ -115,6 +125,17 @@ def resolve(pages: Sequence[PageIdentity]) -> tuple[Company, ...]:
                 if a != b:
                     parent[b] = a
                     merges.append((page, other, rel))
+    for said in statements:
+        for rel in said:
+            text = str(rel["text"])
+            if not _RELATION_WORDS.search(text):
+                continue
+            hits = [q for q in pages if any(n and n in text for n in (q.product, q.brand))]
+            for other in hits[1:]:
+                a, b = find(hits[0].page), find(other.page)
+                if a != b:
+                    parent[b] = a
+                    merges.append((hits[0], other, rel))  # the quote is in rel["record"]
     groups: dict[tuple[str, int | None], list[PageIdentity]] = {}
     for p in pages:
         groups.setdefault(find(p.page), []).append(p)
@@ -204,6 +225,27 @@ def _norm(text: str) -> str:
     return " ".join(text.lower().split())
 
 
+REPOST_MIN = 40
+"""How long a text must be before a longer text ending in it is read as its repost."""
+COPY_MIN_WORDS = 5
+"""How many words the same text needs under another product before it is read as a copy.
+
+Two customers of two products may both write "Works well."; that is two reviews."""
+
+
+def _signature(row: Mapping[str, Any]) -> str:
+    """A review's words for finding copies: folded, its own product's name masked.
+
+    A copy is the same words wherever it was posted: on another site, under another
+    listing of the same product, or after a rename that changed the product's name in it.
+    """
+    text = _norm(str(row["text"]))
+    product = _norm(str(row["fields"].get("product", "")))
+    if len(product) >= 3:
+        text = text.replace(product, "\u2063")
+    return text
+
+
 @dataclass(frozen=True)
 class ReviewSample:
     """The review rows read as a sample: unique rows, duplicates and each theme's rows."""
@@ -226,14 +268,19 @@ def review_sample(
     Each row has ``fields`` (``id``, and ``date`` and ``product`` when the export has
     them) and ``text``; ``themes`` maps each theme to its terms.
     """
-    seen: dict[tuple[str, str], Mapping[str, Any]] = {}
+    seen: dict[str, Mapping[str, Any]] = {}
     unique: list[Mapping[str, Any]] = []
     dups: list[tuple[str, str]] = []
     ordered = sorted(rows, key=lambda r: (str(r["fields"].get("date", "")), str(r["fields"]["id"])))
     for r in ordered:
-        sig = (str(r["fields"].get("product", "")), _norm(str(r["text"])))
-        if sig in seen:
-            dups.append((str(r["fields"]["id"]), str(seen[sig]["fields"]["id"])))
+        sig = _signature(r)
+        if len(sig.split()) < COPY_MIN_WORDS:  # a short common phrase: a copy only per product
+            sig = f"{_norm(str(r['fields'].get('product', '')))}\x00{sig}"
+        earlier = seen.get(sig) or next(
+            (o for k, o in seen.items() if len(k) >= REPOST_MIN and sig.endswith(" " + k)), None
+        )
+        if earlier is not None:
+            dups.append((str(r["fields"]["id"]), str(earlier["fields"]["id"])))
             continue
         seen[sig] = r
         unique.append(r)

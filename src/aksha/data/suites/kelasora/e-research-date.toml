@@ -1,0 +1,10 @@
+id = "e-research-date"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-DATE"
+category = "capability"
+agents = ["research"]
+worlds = ["kelasora"]
+opening = "Has any platform changed its price for tutoring centres in Indonesia, and since when?"
+expect = ["facts.EF-01", "facts.EF-02", "traps.T-DATE"]
+criteria = ["research.prices", "research.conflicts_are_edges", "citation.exists", "citation.edge_excerpts"]

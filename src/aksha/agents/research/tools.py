@@ -60,8 +60,8 @@ SNIPPET_CHARS = 160
 PAGE_ROWS = 200
 """Rows ``read_table`` returns at most per call; ``total`` and ``next_offset`` say the rest."""
 ALIASES = frozenset(
-    {"doc_kind", "page_facts", "price_table", "report_facts", "feedback_items", "table_roles",
-     "theme_match"}
+    {"doc_kind", "page_facts", "price_table", "report_facts", "conversation_facts",
+     "feedback_items", "table_roles", "theme_match"}
 )  # fmt: skip
 """The fast-class aliases the read tools ask (``reading.py``)."""
 

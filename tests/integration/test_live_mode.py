@@ -32,8 +32,8 @@ CINDRAL = data.world_path("cindral") / "sources"
 CASE = (data.suites() / "cindral" / "h-research-happy.toml").read_text("utf-8")
 PROMPT = re.search(r'^opening = "(.*)"$', CASE, re.M).group(1)  # type: ignore[union-attr]
 KEY = "sk-local-test-only"
-FAST = ("doc_kind", "page_facts", "price_table", "report_facts", "feedback_items",
-        "table_roles", "theme_match")  # fmt: skip
+FAST = ("doc_kind", "page_facts", "price_table", "report_facts", "conversation_facts",
+        "feedback_items", "table_roles", "theme_match")  # fmt: skip
 
 
 @pytest.fixture

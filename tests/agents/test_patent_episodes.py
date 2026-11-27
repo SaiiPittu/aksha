@@ -145,7 +145,7 @@ def test_recommendations_equal_the_key_for_all_four(sent: PatentRig) -> None:
 
 def test_grace_period_fact_is_dates_and_days_only(sent: PatentRig) -> None:
     ext = sent.content("extraction", "C1")
-    (demo,) = [d for d in ext["disclosures"] if d["event_id"] == "DISC-01"]
+    (demo,) = [d for d in ext["disclosures"] if d["disclosure_id"] == "DISC-01"]
     assert (demo["date"], demo["elapsed_days"], demo["as_of"]) == ("2026-03-10", 261, "2026-11-26")
     assert (date(2026, 11, 26) - date(2026, 3, 10)).days == 261
     assert demo["own_disclosure"] and demo["public"] == "yes"
@@ -156,7 +156,7 @@ def test_grace_period_fact_is_dates_and_days_only(sent: PatentRig) -> None:
             p["id"].startswith("SYN-PUB-") for p in sent.content("prior_art", c)["publications"]
         )
     c4 = sent.content("extraction", "C4")
-    (undated,) = [d for d in c4["disclosures"] if d["event_id"] == "DISC-04"]
+    (undated,) = [d for d in c4["disclosures"] if d["disclosure_id"] == "DISC-04"]
     assert undated["date"] is None and undated["status"] == "needs_counsel_confirmation"
 
 

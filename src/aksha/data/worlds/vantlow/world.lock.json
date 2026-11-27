@@ -1,0 +1,19 @@
+{
+  "files": {
+    "key.json": "sha256:06702c2687999cfa1fb720aa31343b2de49cb5ccfdce41c2e0e3d2296e60086e",
+    "manifest.json": "sha256:f99b1b7288c0344d18c8526a3bbe5af2dfdf69259e99d38fc27aa9dab4f01f8d",
+    "sources/benchmarks/open-ingest-bench-2026.md": "sha256:572c7d6586ff4b3f635118ecf890faf9966802fe8b4e5098663838aeb5992b03",
+    "sources/benchmarks/siltgrove-query-benchmark-2026.pdf.txt": "sha256:a5bfdafe0e0256134d3fb4ea75b18b233ba62b1e135ed7f317e399d54ee780d6",
+    "sources/pricing/brackpond-plans-saved.md": "sha256:8ece26b693ce4661f120d84ca3a2efea0275157d68ee35931bfd9ef5f719c47a",
+    "sources/pricing/emberwick.html": "sha256:c0a36a3f4528ae75cc250fc0f42070e7233b65962dfafa7b31621e5a97900f03",
+    "sources/pricing/ferrowind-plans.html": "sha256:a0d365dfd47bdc6c8d150206512d852cc697355896690f69df0118239f1aead6",
+    "sources/pricing/quarnel-price-list.json": "sha256:0696c49851bd9877447e17eb57d7dc261c1f74963b963dcc299c8ecb8b3ba1a5",
+    "sources/pricing/siltgrove-pricing.html": "sha256:2121be55e721cbaf5eea7bf7d69cececf83153d0fb0374c92dff7d09ca785c31",
+    "sources/team/what-we-need.txt": "sha256:29f2e44a8a30a045b14a4d4a9a1d3d4b71a53492bf210e3861f229b968b01732",
+    "sources/threads/t418-which-log-tool.html": "sha256:9e1c1e209acd555a6af1750ebdd56b2e030160a06f5497b54e06741f4a78b733",
+    "sources/threads/t433-ingest-bills.html": "sha256:86601a0b449e8e032d812c828ccdb9ce99fae615dfdbc219dd6002334dac3911",
+    "sources/threads/t451-how-long-do-you-keep-logs.html": "sha256:ea66a6a269abaaed42be1fbcb48623b58f9e176950e5fb327f4fb8302add6364",
+    "spec.yaml": "sha256:c4d152a5c8b64d1bbe55947ae9cc0ccad8bfda5d7a2936f65ecde8731d846b40"
+  },
+  "world": "vantlow"
+}

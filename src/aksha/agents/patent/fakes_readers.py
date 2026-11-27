@@ -46,7 +46,7 @@ HEADINGS: dict[str, tuple[str, ...]] = {
                   "how we do it", "steps", "process", "proposal",
                   "procedure", "detailed description", "description of the invention",
                   "embodiment", "approach", "the idea", "solution", "algorithm", "design",
-                  "technique", "proposed method"),
+                  "technique", "proposed method", "sequence", "operation", "how it runs"),
     "parameters": ("parameters", "settings", "values", "constants", "configuration",
                    "key numbers", "tuning", "numbers"),
     "alternatives": ("alternatives", "options", "considered", "rejected", "what we tried",
@@ -62,7 +62,7 @@ _MD = re.compile(r"^\s*(#{1,6})\s+(.*?)\s*#*\s*$")
 _BOLD = re.compile(r"^\s*(?:\*\*|__)(.{2,80}?)(?:\*\*|__)\s*:?\s*$")
 _SLIDE = re.compile(r"^\s*(?:slide|page)\s+\d+\s*[:.\u2013\u2014-]\s*(.+?)\s*$", re.I)
 _COLON = re.compile(r"^\s*([A-Z][^.!?:|]{1,60}):\s*$")
-_ITEM = re.compile(r"^\s*([-*+•▪◦]|\d{1,3}[.)]|[a-z][.)]|\(\w{1,3}\))\s+")
+_ITEM = re.compile(r"^\s*([-*+•▪◦]|\d{1,3}[.)]|[A-Z]{1,2}\d{1,2}[.)]|[a-z][.)]|\(\w{1,3}\))\s+")
 _KV = re.compile(r"^\s*([A-Za-z][A-Za-z _-]{0,30}):[ \t]*(.+?)\s*$")
 
 
@@ -692,10 +692,10 @@ ROLE_WORDS: dict[str, tuple[str, ...]] = {
     "candidate": ("candidate", "invention", "project", "idea", "innovation", "disclosure for"),
     "contributed": ("contributed", "contribution", "contributions", "what they did", "work",
                     "did", "part"),
-    "agreement_ref": ("agreement", "agreements", "ip", "terms", "contract", "assignment"),
+    "agreement": ("agreement", "agreements", "ip", "terms", "contract", "assignment"),
     "source": ("source", "link", "file", "evidence", "record", "document", "doc", "where"),
     "event_type": ("type", "kind", "channel", "format", "venue", "occasion"),
-    "what_was_shown": ("shown", "what", "summary", "description", "content", "material",
+    "content_shown": ("shown", "what", "summary", "description", "content", "material",
                        "disclosed", "showed"),
     "audience": ("audience", "attendees", "seen by", "recipients", "who saw"),
     "public": ("public", "is public", "publicly"),
@@ -719,7 +719,7 @@ def guess_role(name: str, values: Sequence[str]) -> str:
     ids = bool(vals) and all(_ID_VALUE.match(v) for v in vals)
     if "id" in words or ids:
         if {"event", "disclosure", "ev"} & set(words):
-            return "event_id"
+            return "disclosure_id"
         if {"person", "contributor", "inventor", "people", "member"} & set(words):
             return "person_id"
         if {"candidate", "invention", "project"} & set(words):
@@ -727,7 +727,7 @@ def guess_role(name: str, values: Sequence[str]) -> str:
         if {"record", "row", "line"} & set(words) or words == ["id"]:
             return "record_id"
         if ids and {"event"} & set(words):
-            return "event_id"
+            return "disclosure_id"
     if {"person", "contributor", "inventor", "member"} & set(words) and not ids:
         return "name"
     if (words and words[-1] == "name") or joined in ("name", "full name", "person name"):
@@ -847,7 +847,7 @@ PUBLICATION = re.compile(r"\(1[19]\)|\(2[12]\)|\(5[147]\)|\bpublication (?:numbe
                          r"\bkind code\b", re.I)  # fmt: skip
 MECHANISM = re.compile(r"\b(" + "|".join(re.escape(w) for w in HEADINGS["mechanism"]) + r")\b",
                        re.I)  # fmt: skip
-STEPS = re.compile(r"(?:^|\s)(?:\d{1,2}[.)]|step \d+[:.]?)\s+[A-Z]")
+STEPS = re.compile(r"(?:^|\s)(?:\d{1,2}[.)]|[A-Z]{1,2}\d{1,2}[.)]|step \d+[:.]?)\s+[A-Z]")
 
 
 def _preview(state: str) -> dict[str, Any]:
@@ -886,7 +886,7 @@ def decide_record(state: str, options: Sequence[str]) -> tuple[str, Decimal]:
         roles = {guess_role(c, v) for c, v in cols.items()}
         if ({"person_id", "name"} & roles) and "contributed" in roles:
             return "contributor_record", SURE
-        if "date" in roles and "what_was_shown" in roles:
+        if "date" in roles and "content_shown" in roles:
             return "disclosure_record", SURE
         if "rank" in roles and re.search(r"\b(goal|priorit|objective|aim|focus)", " ".join(cols),
                                          re.I):  # fmt: skip

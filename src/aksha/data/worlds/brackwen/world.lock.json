@@ -1,0 +1,23 @@
+{
+  "files": {
+    "key.json": "sha256:8e4437392db19bff5b9ac4c351d0be5e26f6a35c50c1d93f79d60fd217e2ceb8",
+    "manifest.json": "sha256:d6784fac14765e70ac9144041ba5f135fb30ac3569ce8996c5552a870f6b5efb",
+    "sources/counsel/ip-intake-form.md": "sha256:e3fb53ec133c4b169f897f70cb8defcc9c2f054e77ef1a5132e06dcb76fec54a",
+    "sources/design/brk-101-lockable-wrist.md": "sha256:cd380c1651d2f22aaa02c7a02566df88b2794971b0ca046279f9f6e6cd02d4c3",
+    "sources/design/grasp-ranking-memo.txt": "sha256:f3a72a56612e60be7275a22797d531a866266238977924b1308d8be2c98ca049",
+    "sources/design/tracker-export-slip.json": "sha256:b1c12fc08f777bed3a200fab9fcc2ea2499d8dde8aa6223d5e1231a60588f8af",
+    "sources/design/whiteboard-2026-08-11.md": "sha256:e8a382305a4d67043b1db214e558a83dfbc9776d82251792989a0b39fdbafff0",
+    "sources/mail/wrist-breakaway-thread.eml.txt": "sha256:e406bcb66486d3ba10512f2ac29a0a846e475584a356ec77d5825e1f01795179",
+    "sources/media/pickwen-demo-video.txt": "sha256:1e615340387e7f37226368af83da308d0a2ad98e649baae5b0a5aa39b7f4e59b",
+    "sources/ops/disclosure-register.json": "sha256:fab324e2fbc4fa1ddbbd58d411d162e09dbcb2da5d66d40cee4bb4e3bdfcfc57",
+    "sources/prior-art-search/SYN-PUB-0303.json": "sha256:b9a6be2f69c508808743df7e49cd30153352cf7afd60459053e0760bb7cec4a7",
+    "sources/prior-art-search/SYN-PUB-0304.json": "sha256:8f0a2a4fff8ba6e009972a5c4342f16beb224bd8c0bb89422cd805ab37e074de",
+    "sources/prior-art-search/SYN-PUB-0305.pdf.txt": "sha256:7c7d46d0bf51dc92f246bfd5d74f1e369544df141e621008b62c018551df7cf6",
+    "sources/prior-art-search/SYN-PUB-0306.html": "sha256:a9af37a4f0cfee4c9ecc3513faf6aea9a9a61c46729d71130faa6eb495db348d",
+    "sources/prior-art-search/search-report-2026-10.md": "sha256:e395ca5c6a242daf6b03f34233c7323f3187d9b46cdf8197ff5583538ec8016b",
+    "sources/strategy/okrs-2026-h2.md": "sha256:57cf69da408b8b620ecec9a7209fc4624909c7ada4c3b630b3c24fcfdd50af38",
+    "sources/team/credits.yaml": "sha256:7f0e540d1ce4409b959f573cc45fbbb7cd0fc9195bab468a22ed8f6cad26783b",
+    "spec.yaml": "sha256:d4f6b297946ec960451a58d4e12670fe722eb88a0cb3a3d54e85aa2b6fedb8b8"
+  },
+  "world": "brackwen"
+}

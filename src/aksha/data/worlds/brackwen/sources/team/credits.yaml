@@ -1,0 +1,51 @@
+# SYNTHETIC FIXTURE. Invented for testing the agents; not a real company, person or record.
+synthetic: true
+kind: idea credits, kept by the founder
+updated: '2026-10-02'
+people:
+  - name: Ravi Anand
+    org: Brackwen Robotics
+    title: mechanical lead
+    paperwork: employment contract with IP assignment
+    credits:
+      - idea: BRK-101
+        did: Conceived the lockable wrist and wrote design note SYN-BW-DN-101
+        on: '2026-02-19'
+  - name: Lena Brandt
+    org: Brackwen Robotics
+    title: controls engineer
+    paperwork: employment contract with IP assignment
+    credits:
+      - idea: BRK-101
+        did: Wrote the clutch controller and the sensor re-zero step
+        on: '2026-03-02'
+      - idea: BRK-103
+        did: Proposed and prototyped the pad-microphone slip detector
+        on: '2026-05-02'
+  - name: Oskar Lindqvist
+    org: Brackwen Robotics
+    title: perception engineer
+    paperwork: employment contract with IP assignment
+    credits:
+      - idea: BRK-102
+        did: Designed the grasp ranking heuristic
+        on: '2026-01-27'
+      - idea: BRK-104
+        did: Drew the sweep map on the whiteboard
+        on: '2026-08-11'
+  - name: Ines Valcourt
+    org: Lintmoor Mechatronics
+    title: outside contractor
+    paperwork: contractor services agreement SYN-CSA-2026-02, effective 2026-02-16 (copy not on file)
+    credits:
+      - idea: BRK-101
+        did: Built the breakaway test jig
+        on: '2026-03-10'
+  - name: Dana Velasquez
+    org: Brackwen Robotics
+    title: founder and CEO
+    paperwork: founder IP assignment
+    credits:
+      - idea: BRK-104
+        did: Ran the whiteboard session
+        on: '2026-08-11'

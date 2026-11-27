@@ -56,6 +56,9 @@ ANSWERS: Mapping[str, Mapping[str, str]] = {
     "stillroom-v2": {"segment": "offices", "geography": "EU"},
     "tilldew": {"segment": "smallholder vegetable farmers", "geography": "India"},
     "cindral": {"segment": "independent physiotherapy clinics", "geography": "UK"},
+    "rimefold": {"segment": "regional cold-chain delivery fleets", "geography": "Canada"},
+    "kelasora": {"segment": "after-school tutoring centres", "geography": "Indonesia"},
+    "vantlow": {"segment": "seed-stage developer-tools startups", "geography": "North America"},
 }
 """The scripted user's answers to the agent's scope questions, per world, by question ID."""
 
@@ -179,6 +182,7 @@ class ResearchUnderTest(RuntimeUnderTest):
                 "pages": [_file(p.get("record")) for p in company.get("pages", ())],
                 "prices": prices,
                 "claims": claims,
+                "price_notes": [{"citation": c} for c in notes],
             },
             [*own, *(c for _, c in merge)],
         )

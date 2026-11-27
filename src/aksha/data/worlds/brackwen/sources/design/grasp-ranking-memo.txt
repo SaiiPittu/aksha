@@ -1,0 +1,34 @@
+SYNTHETIC FIXTURE - plain-text engineering memo. Invented for testing; not a real company, person or document.
+
+BRACKWEN ROBOTICS - PERCEPTION MEMO
+Ref.....: BRK-102
+From....: Oskar Lindqvist (perception)
+Date....: 01/27/2026  (US format, as the memo template prints it)
+Status..: running on both picking cells since March
+
+SUBJECT: HOW WE PICK WHERE TO GRAB
+
+Every pick starts from one depth image of the tote. We sample about 400 candidate grasps
+over the visible items and rank them. The ranking is a heuristic, not a learned model,
+because we need to explain a bad pick to a customer.
+
+  G1  Flatness. Fit a plane to the 12 mm square patch under each fingertip; keep the
+      grasp only if the fit error is under 1.5 mm.
+  G2  Balance. Score the grasp by its distance to the item's estimated centre of mass,
+      the centre of the segmented item's depth points; closer scores higher.
+  G3  Clearance. Sweep both fingers down to grasp depth in the depth image; drop the grasp
+      if either finger comes within 8 mm of a neighbouring item.
+  G4  Fallback. Weight G1 and G2 into one score from 0 to 1; if no grasp scores above
+      0.35, switch to the suction cup for that item instead of the fingers.
+
+WHAT WE TRIED FIRST
+  Picking the highest point in the tote. Gave the best clearance and the worst balance:
+  long items were grabbed at one end and rotated out of the fingers.
+
+NUMBERS
+  Patch size ............ 12 mm
+  Fit error limit ....... 1.5 mm
+  Finger clearance ...... 8 mm
+  Suction switch below .. 0.35
+
+-- page 1 of 1 -- SYNTHETIC FIXTURE --

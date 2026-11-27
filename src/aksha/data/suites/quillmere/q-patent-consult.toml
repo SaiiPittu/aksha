@@ -1,0 +1,11 @@
+id = "q-patent-consult"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CONSULT"
+category = "capability"
+agents = ["patent"]
+worlds = ["quillmere"]
+opening = "Who contributed to AG-1, and who owns it?"
+expect = ["facts.QF-09", "facts.QF-10", "facts.QF-11", "facts.QF-12", "facts.QF-13", "traps.T-CONSULT"]
+criteria = ["trap.T-CONSULT", "citation.exists", "citation.overlaps_key"]
+judge = ["judge.counsel_question_specific"]

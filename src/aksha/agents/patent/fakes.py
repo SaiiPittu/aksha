@@ -136,7 +136,8 @@ def derived_lexicon(note: Mapping[str, Any]) -> dict[str, Any]:
     for step in note["mechanism_steps"]:
         groups = [[w] for w in content_words(step["text"])]
         if groups:
-            elements[f"S{step['n']}"] = (step["text"], [step["text"][:40]], groups)
+            label = str(step.get("label") or f"S{step['n']}")
+            elements[label] = (step["text"], [step["text"][:40]], groups)
     title_words = content_words(str(note["title"]).split(":")[-1], 4)
     return {"search": [title_words] if title_words else [["claim"]], "elements": elements}
 
@@ -784,7 +785,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                         "role",
                         "contributed",
                         "date",
-                        "agreement_ref",
+                        "agreement",
                     )
                 },
                 "elements": hit,
@@ -792,7 +793,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             }
         )
         refs = [d for d in r["agreement_documents"] if d.get("ref")]
-        when = find_dates(str(r["agreement_ref"]), "dmy")
+        when = find_dates(str(r["agreement"]), "dmy")
         if refs and when:
             found = any(d["found"] for d in refs)
             agreements.append(
@@ -801,7 +802,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                     "effective": when[-1][0],
                     "person_id": r["person_id"],
                     "document": "found" if found else "referenced_not_found",
-                    **_q(contrib["file"], r["agreement_ref"]),
+                    **_q(contrib["file"], r["agreement"]),
                 }
             )
     disclosures, outside = [], []
@@ -813,33 +814,33 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             OUTSIDE.search(roles.get(p, "")) for p in by
         )
         row = {
-            "event_id": r["event_id"],
+            "disclosure_id": r["disclosure_id"],
             "date": r["date"],
             "elapsed_days": r.get("elapsed_days"),
             "as_of": history.get("as_of"),
             "event_type": r["event_type"],
             "public": r["public"],
             "own_disclosure": not outsider,
-            "describes_fully": bool(FULL.search(r["what_was_shown"])),
-            **_q(r.get("file") or history["file"], r["what_was_shown"]),
+            "describes_fully": bool(FULL.search(r["content_shown"])),
+            **_q(r.get("file") or history["file"], r["content_shown"]),
             "row": _q(r.get("file") or history["file"], r["row_start"]),
         }
         if r["date"] is None:
             row["status"] = "needs_counsel_confirmation"
             row["counsel_question"] = (
-                f"{r['event_id']}: when was it sent, and to how many "
+                f"{r['disclosure_id']}: when was it sent, and to how many "
                 "people? The record has no date."
             )
         elif r["public"] not in ("yes", "no"):
             row["status"] = "needs_counsel_confirmation"
             row["counsel_question"] = (
-                f"{r['event_id']} on {r['date']}, {r.get('elapsed_days')} days before today: "
+                f"{r['disclosure_id']} on {r['date']}, {r.get('elapsed_days')} days before today: "
                 "who could see it? The record does not say whether it was public."
             )
         elif r["public"] == "yes":
             row["status"] = "needs_counsel_confirmation"
             row["counsel_question"] = (
-                f"{r['event_id']} was public {r.get('elapsed_days')} days "
+                f"{r['disclosure_id']} was public {r.get('elapsed_days')} days "
                 "before today. Does any grace period apply?"
             )
         else:
@@ -1148,12 +1149,12 @@ def recommendation(c: str, ext: tuple[str, Any], cmp_: tuple[str, Any]) -> dict[
     for d in ext[1]["disclosures"]:
         if d["public"] == "yes":
             risks.append(
-                f"own public disclosure {d['event_id']} on {d['date']} ({d['event_type']})"
+                f"own public disclosure {d['disclosure_id']} on {d['date']} ({d['event_type']})"
             )
         elif d["date"] is None:
-            risks.append(f"undated disclosure {d['event_id']} ({d['event_type']})")
+            risks.append(f"undated disclosure {d['disclosure_id']} ({d['event_type']})")
         elif d["public"] != "no":
-            risks.append(f"disclosure {d['event_id']} on {d['date']}: the record does not say "
+            risks.append(f"disclosure {d['disclosure_id']} on {d['date']}: the record does not say "
                          "whether it was public")  # fmt: skip
     for o in ext[1]["outside_contributions"]:
         extra = (
@@ -1221,13 +1222,16 @@ def disclosure_fields(
     outside += [
         {"person_id": r["person_id"], "role": r["role"]}
         for r in ext["contributors"]
-        if OUTSIDE.search(str(r["agreement_ref"]))
+        if OUTSIDE.search(str(r["agreement"]))
     ]
     questions = [q["question"] for q in ext["counsel_questions"]]
     gaps = [g["gap"]["question"] for g in ext["missing_details"]]
     params = [{k: p[k] for k in ("name", "value", "unit", "status")} for p in ext["parameters"]]
     public = [
-        {k: d[k] for k in ("event_id", "date", "elapsed_days", "event_type", "public", "status")}
+        {
+            k: d[k]
+            for k in ("disclosure_id", "date", "elapsed_days", "event_type", "public", "status")
+        }
         for d in ext["disclosures"]
         if d["own_disclosure"]
     ]
@@ -1340,7 +1344,7 @@ def worksheet_fields(
         ),
         _field(
             "ownership_and_assignments",
-            [r["agreement_ref"] for r in ext["contributors"]],
+            [r["agreement"] for r in ext["contributors"]],
             "needs_counsel_confirmation",
             counsel_question=q,
         ),
@@ -1352,7 +1356,7 @@ def worksheet_fields(
         ),
         _field(
             "earlier_public_disclosures",
-            [d["event_id"] for d in ext["disclosures"] if d["public"] != "no"],
+            [d["disclosure_id"] for d in ext["disclosures"] if d["public"] != "no"],
             "needs_counsel_confirmation",
             counsel_question=q,
         ),

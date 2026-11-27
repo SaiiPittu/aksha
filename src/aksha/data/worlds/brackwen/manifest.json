@@ -1,0 +1,86 @@
+{
+  "world": "brackwen",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths and publish dates. No answers (no family IDs, no candidate links). The agents read sources/ as uploaded inputs; folder names mean nothing to them.",
+  "records": [
+    {
+      "path": "counsel/ip-intake-form.md",
+      "folder": "counsel",
+      "synthetic": true
+    },
+    {
+      "path": "design/brk-101-lockable-wrist.md",
+      "folder": "design",
+      "synthetic": true
+    },
+    {
+      "path": "design/grasp-ranking-memo.txt",
+      "folder": "design",
+      "synthetic": true
+    },
+    {
+      "path": "design/tracker-export-slip.json",
+      "folder": "design",
+      "synthetic": true
+    },
+    {
+      "path": "design/whiteboard-2026-08-11.md",
+      "folder": "design",
+      "synthetic": true
+    },
+    {
+      "path": "mail/wrist-breakaway-thread.eml.txt",
+      "folder": "mail",
+      "synthetic": true
+    },
+    {
+      "path": "media/pickwen-demo-video.txt",
+      "folder": "media",
+      "synthetic": true,
+      "published": "2026-04-14"
+    },
+    {
+      "path": "ops/disclosure-register.json",
+      "folder": "ops",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art-search/SYN-PUB-0303.json",
+      "folder": "prior-art-search",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art-search/SYN-PUB-0304.json",
+      "folder": "prior-art-search",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art-search/SYN-PUB-0305.pdf.txt",
+      "folder": "prior-art-search",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art-search/SYN-PUB-0306.html",
+      "folder": "prior-art-search",
+      "synthetic": true,
+      "published": "2024-08-22"
+    },
+    {
+      "path": "prior-art-search/search-report-2026-10.md",
+      "folder": "prior-art-search",
+      "synthetic": true
+    },
+    {
+      "path": "strategy/okrs-2026-h2.md",
+      "folder": "strategy",
+      "synthetic": true
+    },
+    {
+      "path": "team/credits.yaml",
+      "folder": "team",
+      "synthetic": true
+    }
+  ]
+}

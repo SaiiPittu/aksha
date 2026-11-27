@@ -1,0 +1,13 @@
+SYNTHETIC FIXTURE. Automatic call transcript invented for testing the agents; not a real company, person, product or call.
+Call: night-time baseline idea (ENG-123)
+Date: 04/22/2026
+Speaker 1 = Yuki Tanabe (Pulvane); Speaker 2 = Lena Halvorsen (Pulvane)
+
+[00:00:07] Speaker 2: Go on then, tell me the night-time idea properly so it's written down somewhere.
+[00:00:15] Speaker 1: Daytime checks compare everyone to the same cut-off. At night we can learn what is normal for one person.
+[00:00:41] Speaker 1: While the wearer is asleep, which we take as no motion for 20 minutes and heart rate within 10% of that night's minimum, we sample a 60-second window every 15 minutes.
+[00:01:20] Speaker 1: Over 14 nights we build a personal baseline of irregularity for that wearer.
+[00:01:52] Speaker 1: Then we flag a night whose irregularity is more than 3 standard deviations above the personal baseline.
+[00:02:30] Speaker 2: Is any of it built?
+[00:02:33] Speaker 1: No. It's on the whiteboard from the hack day. Nothing is in firmware yet.
+[00:02:51] Speaker 2: Fine. Let's look at it again once the rhythm notice ships.

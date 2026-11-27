@@ -1,0 +1,10 @@
+id = "w-patent-status"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-STATUS"
+category = "capability"
+agents = ["patent"]
+worlds = ["brackwen"]
+opening = "Here is everything we have on the four Brackwen picking-cell ideas, plus the prior-art search counsel ran. Go through each idea against the prior art, tell me what we should do next with each one, and get the strongest one ready for our patent attorney."
+expect = ["facts.BF-19", "traps.T-STATUS"]
+criteria = ["trap.T-STATUS", "citation.exists"]

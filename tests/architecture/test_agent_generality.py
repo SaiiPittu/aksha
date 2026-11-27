@@ -3,9 +3,11 @@
 The research and patent agents work on whatever a person uploads, so their logic (the
 definition, tools, readers, rules, checks and prompts) must not carry any value of the
 synthetic worlds they are tested on: no venture, person, company, product, candidate ID,
-file name, folder or theme of ``stillroom``, ``stillroom-v2``, ``tilldew`` or ``cindral``. Only the
-offline models (``fakes.py``, ``fakes_*.py``) may know a fixture, and no other module
-imports them. Each guard fails on a planted value.
+file name, folder or theme of any world under ``src/aksha/data/worlds`` (``stillroom``,
+``stillroom-v2``, ``tilldew``, ``cindral``, ``rimefold``, ``kelasora``, ``vantlow``,
+``pulvane``, ``quillmere``, ``brackwen``). Only the offline models (``fakes.py``,
+``fakes_*.py``) may know a fixture, and no other module imports them. Each guard fails on a
+planted value.
 """
 
 from __future__ import annotations
@@ -29,6 +31,17 @@ FIXTURE_TERMS = (
     "Wei Lin", "Imran Sethi", "Kofi Mensah", "Northgate", "Eastvale",
     "Cindral", "Nimbo", "Haldane", "PhysioGraph", "Corlew", "Tidewell", "Kestrel",
     "Priya Natarajan", "Tomasz Wilk", "Grace Obi",
+    "Rimefold", "Glacivo", "TrackPoint", "Pellisar", "Coldhaven", "SafeTemp", "Frostmark",
+    "Varrow", "Tundrel", "Ines Okafor",
+    "Kelasora", "Pintaria", "TutorGrid", "Gridwise", "Ruang Bimbel", "Belajarin", "Akara",
+    "Ratna Wulandari",
+    "Vantlow", "Siltgrove", "Ferrowind", "Brackpond", "Quarnel", "Emberwick", "Builder Shed",
+    "Open Ingest Bench", "SYN-FP",
+    "Pulvane", "Orrinth", "Vestry", "Quillon", "Wrenfield", "Ines Marwood", "Lena Halvorsen",
+    "Rafael Domingo", "Yuki Tanabe", "Nikhil Barua",
+    "Quillmere", "Vantry", "Ferreira-Kwan", "Achterberg", "Osei-Darko", "Lindqvist",
+    "Ferrolark", "Marrowby", "Tessaline",
+    "Brackwen", "Pickwen", "Lintmoor",
     # candidate, element and family identifiers
     "C1", "C2", "C3", "C4", "TD-1", "TD-2", "TD-3", "F1", "F3", "P-05", "SYN-P-03",
     "SYN-PUB", "SYN-PRI", "SYN-Office", "CA-2025-11",
@@ -37,6 +50,12 @@ FIXTURE_TERMS = (
     "business-priorities", "invention-disclosure-form", "filing-information-worksheet",
     "consultant-email", "placement-trial-02", "tariff-analysis", "INV-7", "INV-9",
     "price-comparison", "travel-times-2026", "feedback-export", "counsel-intake",
+    "vendor-landscape-memo", "vendor-shortlist", "review-hub-export", "SYN-RV", "SYN-CAL",
+    "ulasan-platform", "tutorgrid-plans", "pintaria-sales-chat", "edtech-weekly",
+    "ENG-104", "ENG-117", "ENG-123", "skin-tone-bench", "sharing-register",
+    "attorney-questionnaire", "SYN-REG",
+    "AG-1", "AG-4", "SYN-RA-2025-03", "dry-down-runs", "notebook-QP3", "ideas-export",
+    "BRK-10", "tote-geometry-survey",
     # the stillroom market's own words
     "thermopile", "occupancy", "stillness", "door contact", "works council",
 )  # fmt: skip

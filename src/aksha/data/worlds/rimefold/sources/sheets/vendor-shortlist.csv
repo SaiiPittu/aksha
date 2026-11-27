@@ -1,0 +1,11 @@
+Vendor shortlist (pasted from the ops sheet) - SYNTHETIC FIXTURE, invented for testing
+;;;;;
+Vendor;Product;Quoted price;Minimum order;Connectivity;Comment
+Glacivo Inc;Glacivo TrackPoint;CAD 19 per tracker per month;10 trackers;LTE-M;re-quoted on a 12-month term
+;Glacivo TrackPoint mount kit;CAD 35 per kit;1 per van;-;magnetic mount
+Tundrel Systems;Tundrel Halo Tag;USD 6 per tag per month;25 tags;BLE;one tag per tote
+;Tundrel Halo Gateway;USD 90 per gateway per year;1 per van;LTE;relays the tags
+Pellisar Sensors Ltd;Pellisar U8;see datasheet;;USB;single use
+Coldhaven Supply;SafeTemp U8;see price list;1 pack;USB;single use, sold in packs
+Frostmark Telematics;Frostmark Reefer Link;on request;;LTE;fitted to the reefer unit
+Varrow Labs;Varrow Gateway;see memo;;LTE;self-hosted server needed

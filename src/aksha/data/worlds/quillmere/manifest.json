@@ -1,0 +1,69 @@
+{
+  "world": "quillmere",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. The agents read sources/ as uploaded inputs; folder names and file extensions mean nothing to them.",
+  "records": [
+    {
+      "path": "agreements/vantry-research-agreement.docx.txt",
+      "folder": "agreements",
+      "synthetic": true
+    },
+    {
+      "path": "board/update-2026-10.txt",
+      "folder": "board",
+      "synthetic": true
+    },
+    {
+      "path": "forms/disclosure-questionnaire.html",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "lab/notebook-QP3-vol2.txt",
+      "folder": "lab",
+      "synthetic": true
+    },
+    {
+      "path": "literature/SYN-PUB-0301.xml",
+      "folder": "literature",
+      "synthetic": true
+    },
+    {
+      "path": "literature/SYN-PUB-0302.pdf.txt",
+      "folder": "literature",
+      "synthetic": true
+    },
+    {
+      "path": "literature/SYN-PUB-0303.md",
+      "folder": "literature",
+      "synthetic": true
+    },
+    {
+      "path": "literature/SYN-PUB-0304.xml",
+      "folder": "literature",
+      "synthetic": true
+    },
+    {
+      "path": "ops/outreach-log.jsonl",
+      "folder": "ops",
+      "synthetic": true
+    },
+    {
+      "path": "talks/agronomy-symposium-2025-poster.pdf.txt",
+      "folder": "talks",
+      "synthetic": true
+    },
+    {
+      "path": "team/roster.yaml",
+      "folder": "team",
+      "synthetic": true
+    },
+    {
+      "path": "tracker/ideas-export.xml",
+      "folder": "tracker",
+      "synthetic": true
+    }
+  ]
+}

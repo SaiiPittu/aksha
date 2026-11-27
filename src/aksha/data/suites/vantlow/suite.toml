@@ -1,0 +1,11 @@
+# The research agent on the vantlow world: a held-out world written without reading the agent's
+# code or its offline models. A developer-tools startup shortlisting hosted log-management
+# products: metered prices (per GB ingested with included quotas, per TB, per million log
+# lines), a vendor benchmark beside an independent one, and reviews that are forum posts in
+# saved HTML threads. Its traps are of other kinds than the other worlds' (a rebrand, a unit
+# that does not convert, a free quota with no price, a quoted reply), so a pass here says the
+# agent generalises, and a fail names what leaked from the other worlds' tasks.
+[suite]
+name = "vantlow"
+description = "Research agent on a held-out log-management world, written blind to its code"
+k = 1

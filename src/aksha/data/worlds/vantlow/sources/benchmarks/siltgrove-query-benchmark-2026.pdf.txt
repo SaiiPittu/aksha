@@ -1,0 +1,37 @@
+SYNTHETIC FIXTURE. Invented for testing; not a real company, benchmark or result.
+
+Siltgrove Logs
+Query Performance Benchmark 2026
+A Siltgrove engineering white paper, June 2026
+
+1. Summary
+
+Siltgrove returns query results up to 12x faster than Ferrowind.
+
+We ran 40 search queries against a 10 GB sample of web
+server logs on each product, from a single client in the
+same region, and report the best of five runs per query.
+
+                                   Page 1 of 3
+               Synthetic fixture. Siltgrove Inc., siltgrove.example
+
+2. Method
+
+Dataset: 10 GB of synthetic access logs, 31 million lines.
+Queries: 40 searches written by the Siltgrove team, mixing
+term lookups, regular expressions and group-by counts.
+Runs: five per query; the fastest run is reported.
+Caching: result caches were left on for both products.
+
+                                   Page 2 of 3
+               Synthetic fixture. Siltgrove Inc., siltgrove.example
+
+3. Results
+
+The largest gap was on a cached term lookup, where
+Siltgrove answered in 40 ms and Ferrowind in 480 ms.
+Across all 40 queries the median gap was smaller; see the
+appendix tables, available on request from sales.
+
+                                   Page 3 of 3
+               Synthetic fixture. Siltgrove Inc., siltgrove.example

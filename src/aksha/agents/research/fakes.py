@@ -79,6 +79,13 @@ GEOGRAPHIES: Mapping[str, str] = {
     "brazil": "BR",
     "australia": "AU",
     "japan": "JP",
+    "indonesia": "ID",
+    "philippines": "PH",
+    "singapore": "SG",
+    "mexico": "MX",
+    "north america": "NA",
+    "latin america": "LATAM",
+    "southeast asia": "SEA",
     "global": "global",
     "worldwide": "global",
 }
@@ -87,7 +94,12 @@ EU = frozenset({"AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE"
                 "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES",
                 "SE"})  # fmt: skip
 """The 27 member states of the European Union, by ISO 3166 code."""
-REGION_MEMBERS: Mapping[str, frozenset[str]] = {"EU": EU}
+REGION_MEMBERS: Mapping[str, frozenset[str]] = {
+    "EU": EU,
+    "NA": frozenset({"US", "CA", "MX"}),
+    "LATAM": frozenset({"MX", "BR", "AR", "CL", "CO", "PE"}),
+    "SEA": frozenset({"ID", "MY", "PH", "SG", "TH", "VN"}),
+}
 COUNTRIES: Mapping[str, str] = {
     "austria": "AT", "belgium": "BE", "bulgaria": "BG", "croatia": "HR", "cyprus": "CY",
     "czechia": "CZ", "czech republic": "CZ", "denmark": "DK", "estonia": "EE",
@@ -112,8 +124,9 @@ def country_code(value: object) -> str:
 
 
 COMPARISON = re.compile(
-    r"\b(compar\w*|compet\w*|who sells|sellers?|vendors?|suppliers?|alternatives?|pric\w*|charge|"
-    r"market|rivals?)\b",
+    r"\b(compar\w*|compet\w*|who sells|sells?|sellers?|vendors?|suppliers?|alternatives?|pric\w*|"
+    r"charge|market|rivals?|which (?:companies|platforms|tools|products|providers)|free plans?|"
+    r"paid plans?|cost)\b",
     re.I,
 )
 """Words that make a request a market comparison; any other request is a synthesis."""
@@ -125,7 +138,17 @@ ASK_GEOGRAPHY = (
 AMENDMENT = "scope amendment"
 """How a note line that amends the scope starts (case folded); its geography words win."""
 BOUNDARY_IN = "products that do the job the question names, and the manual ways buyers use today"
-PRICE_SECTION = re.compile(r"\b(pric\w*|plans?|costs?|fees?)\b", re.I)
+PRICE_SECTION = re.compile(
+    r"\b(pric\w*|plans?|costs?|fees?|harga|biaya|tarif\w*|precios?|preis\w*|"
+    r"prix|prezz\w*)\b",
+    re.I,
+)
+PRICE_NOTE = re.compile(
+    r"\b(pric\w*|costs?|fees?|charges?|charged|bill(?:ed|ing)|invoic\w*|quotes?|harga|biaya|"
+    r"tarif\w*|precios?|preis\w*|prix|prezz\w*)\b",
+    re.I,
+)
+"""Words of a sentence about how a seller charges (in the languages sellers often write in)."""
 _ARTIFACT = re.compile(r"^\[artifact ([^,\]]+), (full|summary)\]\n(.*)$", re.S)
 _UNKNOWN = re.compile(r"^\[unknown (\S+): (\w+)(?:, blocked by (.+?))?(?:, failed steps (.+?))?\]$")
 _ANSWER = re.compile(
@@ -778,7 +801,7 @@ def _discover(seen: Seen) -> GenerationResult:
                 *(("web_search", {"query": q, "limit": WEB_LIMIT}) for q in web_queries(seen)),
             ],
         )
-    searches = seen.of("search")
+    searches = [r for r in seen.of("search") if r.args.get("terms") == list(MANUAL_TERMS)]
     manual = searches[-1] if searches else None
     web = choose_results(seen.of("web_search"))
     if not _fetched(seen):
@@ -787,10 +810,23 @@ def _discover(seen: Seen) -> GenerationResult:
         if reads or urls:
             return _calls(seen, [*(("fetch_page", a) for a in reads),
                                  *(("fetch_url", u) for u in urls)])  # fmt: skip
-    fetched = [r for r in _fetched(seen) if r.data and _sells(r)]
-    tables = [r for r in fetched if (r.data or {}).get("kind") == "pricing_table"]
-    pages = [_identity(r) for r in fetched if r not in tables]
-    companies = analysis.resolve(pages)
+    named = _seller_names([r for r in _fetched(seen) if r.data])
+    looked = [r for r in seen.of("search") if r not in searches]
+    if named and not looked:  # other records that name a seller: a memo, a chat, a newsletter
+        return _calls(seen, [("search", {"terms": named, "formats": list(DOCUMENT_FORMATS)})])
+    done = {_target(r) for r in _fetched(seen)}
+    more = [h["record"] for r in looked for h in (r.data or {}).get("hits", [])
+            if h["record"] not in done]  # fmt: skip
+    if more:
+        return _calls(seen, [("fetch_page", {"record": h}) for h in dict.fromkeys(more)])
+    fetched = [r for r in _fetched(seen) if r.data]
+    cut = looked[0].step if looked else "~"
+    sellers = [r for r in fetched if r.step < cut and _sells(r)]
+    documents = [r for r in fetched if r.step >= cut
+                 and (r.data or {}).get("kind") in DOCUMENT_KINDS]  # fmt: skip
+    tables = [r for r in sellers if (r.data or {}).get("kind") == "pricing_table"]
+    pages = [_identity(r) for r in sellers if r not in tables]
+    companies = analysis.resolve(pages, [_statements(r) for r in documents])
     rows: list[dict[str, Any]] = []
     relations: list[dict[str, Any]] = []
     for c in companies:
@@ -812,14 +848,20 @@ def _discover(seen: Seen) -> GenerationResult:
         evidence = []
         for src, dst, rel in c.merges:
             quote = str(rel["text"])
-            evidence.append({"page": src.record, "cite": {"span": rel["span"], "quote": quote}})
+            said = str(rel.get("record") or src.record)  # another record may state the merge
+            evidence.append({"page": said, "cite": {"span": rel["span"], "quote": quote}})
             ref = {"kind": "record", "id": src.record, "version": src.version}
+            source = {
+                "kind": "record",
+                "id": said,
+                "version": str(rel.get("version") or src.version),
+            }
             relations.append(
                 {
                     "kind": "same_entity_as",
                     "src": ref,
                     "dst": {"kind": "record", "id": dst.record, "version": dst.version},
-                    "evidence": [{"source": ref, "quote": quote, "span": rel["span"]}],
+                    "evidence": [{"source": source, "quote": quote, "span": rel["span"]}],
                 }
             )
         rows.append(
@@ -844,6 +886,7 @@ def _discover(seen: Seen) -> GenerationResult:
             }
         )
     _table_sellers(rows, tables)
+    _documents(rows, documents)
     failed = [_target(r) for r in _fetched(seen) if r.error]
     manual_hits = [] if manual is None else (manual.data or {}).get("hits", [])
     scope = seen.artifact("research.scope")
@@ -904,10 +947,86 @@ def _discover(seen: Seen) -> GenerationResult:
     )
 
 
+DOCUMENT_KINDS = ("market_report", "conversation", "internal_note", "other")
+"""Records that sell nothing but may name a seller: a memo, a report, a chat, a newsletter."""
+DOCUMENT_FORMATS = ("text", "markdown", "email", "html")
+
+
+def _seller_names(fetched: Sequence[Result]) -> list[str]:
+    """Every name the seller pages and price lists give, to find the other records naming them."""
+    out: list[str] = []
+    for r in fetched:
+        assert r.data is not None
+        if r.data.get("kind") not in SELLER_KINDS:
+            continue
+        for p in r.data["passages"]:
+            if p["kind"] in ("brand", "product", "seller"):
+                name = " ".join(str(p["fields"]["name"]).split())
+                if len(name) >= 3 and name not in out:
+                    out.append(name)
+    return out
+
+
+def _statements(r: Result) -> list[dict[str, str]]:
+    """A document's sentences that say two names are one company, each with its cite.
+
+    A newsletter or a memo may be the only place a rename is stated; the statement is the
+    record's own, quoted and cited like a page's relationship sentence. Each statement is
+    the one sentence that says it, not its whole passage, so a third name elsewhere in the
+    passage is not merged in.
+    """
+    assert r.data is not None
+    out = []
+    for p in r.data["passages"]:
+        for m in re.finditer(r"[^.!?\n]+(?:[.!?]|$)", str(p["text"])):
+            sentence = m.group(0).strip()
+            if fakes_readers.RELATION.search(sentence):
+                out.append({"text": sentence, "span": r.cites[p["n"]],
+                            "record": str(r.data["record"]),
+                            "version": str(r.data["version"])})  # fmt: skip
+    return out
+
+
+COMMON_WORDS = frozenset({"the", "open", "smart", "data", "cloud", "global", "first", "new",
+                          "best", "pro", "one", "our", "your", "easy", "free"})  # fmt: skip
+
+
+def _mentions(text: str, names: set[str]) -> bool:
+    """Whether ``text`` names a company by one of its names or by its names' leading word.
+
+    People write a company by its short name ("Siltgrove" for "Siltgrove Inc."): the first
+    word of a name counts when it is not a common word.
+    """
+    folded = f" {fold(text)} "
+    short = {n.split()[0] for n in names if n.split() and len(n.split()[0]) >= 4}
+    short -= COMMON_WORDS
+    return any(len(n) >= 3 and f" {n} " in folded for n in names | short) or any(
+        re.search(rf"\b{re.escape(w)}(?:'s)?\b", folded) for w in short
+    )
+
+
+def _documents(rows: list[dict[str, Any]], documents: Sequence[Result]) -> None:
+    """Attach to each company the documents that name it (a memo's section, a sales chat)."""
+    for r in documents:
+        assert r.data is not None
+        text = " ".join(str(p["text"]) for p in r.data["passages"])
+        for row in rows:
+            if _mentions(text, _names(row)):
+                ref = _where(r)
+                listed = row.setdefault("documents", [])
+                if ref not in listed:
+                    listed.append(ref)
+
+
 def _names(row: Mapping[str, Any]) -> set[str]:
     """Every name a company row goes by, folded: its canonical name and its aliases."""
     names = {str(row["canonical"]["value"])} | {str(a["value"]) for a in row.get("aliases", [])}
-    return {" ".join(n.lower().split()) for n in names}
+    return {fold(n) for n in names}
+
+
+def fold(name: str) -> str:
+    """A name for exact matching: case, punctuation and spacing folded ("Ltd." is "ltd")."""
+    return " ".join(re.sub(r"[^\w\s&]", " ", name.lower()).split())
 
 
 def _table_sellers(rows: list[dict[str, Any]], tables: Sequence[Result]) -> None:
@@ -924,7 +1043,7 @@ def _table_sellers(rows: list[dict[str, Any]], tables: Sequence[Result]) -> None
                 continue
             name = " ".join(str(p["fields"]["name"]).split())
             ref = _where(r)
-            row = next((c for c in rows if name.lower() in _names(c)), None)
+            row = next((c for c in rows if fold(name) in _names(c)), None)
             if row is None:
                 row = {
                     "key": f"c{len(rows) + 1:02d}-{analysis.slug(name)}",
@@ -969,7 +1088,7 @@ def _evidence(seen: Seen) -> GenerationResult:
         return _calls(seen, [_finish(f"{key} is not a resolved company")])
     dims = list(found[1].get("dimensions", [])) if found else []
     fetched = _fetched(seen)
-    sources = [*company["pages"], *company.get("tables", [])]
+    sources = [*company["pages"], *company.get("tables", []), *company.get("documents", [])]
     if not fetched:
         return _calls(seen, [_read_again(p) for p in sources])
     ok = [r for r in fetched if r.data]
@@ -984,12 +1103,24 @@ def _evidence(seen: Seen) -> GenerationResult:
     cells: dict[str, list[dict[str, Any]]] = {str(d["id"]): [] for d in dims}
     notes: list[dict[str, Any]] = []
     flags: list[dict[str, Any]] = []
+    others = {n for c in companies if c["key"] != key for n in _names(c)} - names
+    documents = {d["record"] for d in company.get("documents", [])}
     for r in ok:
         assert r.data is not None
+        if r.data["record"] in documents:
+            said, noted, inside = _document_prices(r, names, others)
+            prices += said
+            notes += noted
+            for p in inside:  # what a document says of the company, by what it says
+                label = analysis.claim_label("text", str(p["text"]))
+                for d in dims:
+                    if analysis.term_hits(str(p["text"]), d["terms"]):
+                        cells[str(d["id"])].append(_entry(r, p, str(p["text"]), label))
+            continue
         listed = r.data.get("kind") == "pricing_table"
         for p in r.data["passages"]:
             kind, text = p["kind"], p["text"]
-            seller = " ".join(str(p.get("fields", {}).get("seller", "")).split()).lower()
+            seller = fold(str(p.get("fields", {}).get("seller", "")))
             if listed and (seller not in names or kind not in ("price", "text", "spec")):
                 continue  # a price list's other rows and blocks are other companies'
             if p.get("instruction_like"):
@@ -1012,8 +1143,13 @@ def _evidence(seen: Seen) -> GenerationResult:
                          item=f.get("label", ""), terms=terms)  # fmt: skip
                 prices.append(e)
                 continue
-            if PRICE_SECTION.search(str(p.get("section", ""))) and kind == "text":
+            if kind == "text" and (
+                PRICE_SECTION.search(str(p.get("section", "")))
+                or (PRICE_NOTE.search(text) and not parsing.MONEY.search(text))
+            ):
                 notes.append(_entry(r, p, text, "fact"))
+            elif kind == "text" and _defines_unit(text, r.data["passages"]):
+                notes.append(_entry(r, p, text, "fact"))  # what one unit of the price is
             if kind not in ("text", "claim", "spec", "relationship"):
                 continue
             label = analysis.claim_label(kind, text)
@@ -1082,6 +1218,69 @@ def _evidence(seen: Seen) -> GenerationResult:
             _finish(f"profile of {name} saved"),
         ],
     )
+
+
+_TIME_WORDS = frozenset({"month", "year", "week", "day", "annum", "semester", "term", "hour"})
+
+
+def _defines_unit(text: str, passages: Sequence[Mapping[str, Any]]) -> bool:
+    """Whether a short sentence says what the unit a price is charged per is ("A seat is ...")."""
+    if len(text.split()) > 25:
+        return False
+    for p in passages:
+        if p["kind"] != "price":
+            continue
+        words = [w for w in re.findall(r"[a-z]+", str(p["fields"].get("per", "")).lower())
+                 if w not in _TIME_WORDS and w != "per"]  # fmt: skip
+        unit = " ".join(words[:2])
+        if unit and re.search(rf"\b(?:an?|one|each|the)\s+{re.escape(unit)}s?\s+(?:is|are|means|"
+                              rf"counts as)\b", text, re.I):  # fmt: skip
+            return True
+    return False
+
+
+def _document_prices(
+    r: Result, names: set[str], others: set[str]
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[Mapping[str, Any]]]:
+    """The prices a document states for one company, read the way a person reads a memo.
+
+    A passage that names the company starts its part of the document, and a heading or a
+    short title line that names another company (or none) ends it; each price stated inside
+    (a ``price`` passage the reader quoted) is the company's, dated by the document, and a
+    passage about its price that states none ("does not publish prices") is a price note.
+    """
+    assert r.data is not None
+    out: list[dict[str, Any]] = []
+    notes: list[dict[str, Any]] = []
+    said: list[Mapping[str, Any]] = []
+    inside = False
+    for p in r.data["passages"]:
+        text = str(p["text"])
+        opens = p["kind"] == "heading" or (
+            p["kind"] != "price"
+            and len(text.split()) <= 12
+            and not text.rstrip().endswith((".", "!", "?"))
+        )
+        if _mentions(text, names):
+            inside = True
+        elif _mentions(text, others) or opens:
+            inside = False
+        if not inside or p.get("instruction_like"):
+            continue
+        if p["kind"] in ("text", "claim") and _mentions(text, names):
+            said.append(p)
+        if p["kind"] in ("text", "claim") and PRICE_NOTE.search(text):
+            if not parsing.MONEY.search(text):
+                notes.append(_entry(r, p, text, "fact"))  # what it says of the price
+            continue
+        if p["kind"] != "price":
+            continue
+        f = p["fields"]
+        e = _entry(r, p, str(f["amount"]), "fact")
+        e.update(currency=f["currency"], number=f["number"], per=f["per"], item="",
+                 terms=f.get("condition", ""))  # fmt: skip
+        out.append(e)
+    return out, notes, said
 
 
 # --- voice --------------------------------------------------------------------------
@@ -1176,7 +1375,7 @@ def _voice(seen: Seen) -> GenerationResult:
         )
     dates = sorted(str(r["fields"]["date"]) for r in sample.unique if r["fields"].get("date"))
     scales = {
-        str(r["fields"].get("rating_unit") or r["fields"].get("rating_scale_max") or "")
+        str(r["fields"].get("rating_basis") or r["fields"].get("rating_scale") or "")
         for r in sample.unique
     } - {""}
     content = {
@@ -1501,5 +1700,6 @@ ADAPTERS = {
     "doc_kind": fakes_readers.DocKind(),
     "price_table": fakes_readers.PriceTable(),
     "report_facts": fakes_readers.ReportFacts(),
+    "conversation_facts": fakes_readers.ConversationFacts(),
 }
 """The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

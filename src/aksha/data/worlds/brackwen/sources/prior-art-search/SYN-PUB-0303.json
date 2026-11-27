@@ -1,0 +1,17 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication export. Invented for testing; not a real patent, applicant or office.",
+  "pub_no": "SYN-PUB-0303",
+  "pub_kind": "A1",
+  "authority": "SYN-Office-2",
+  "title": "Grasp selection from a depth image",
+  "parties": {"applicant": "Tessaline Logistics Systems"},
+  "priority": [{"no": "SYN-PRI-2022-0517", "date": "2022-05-17"}],
+  "events": {"filed": "2023-05-16", "published": "2023-11-23"},
+  "status_line": "Application published",
+  "summary": "Candidate grasps on a depth image are ranked by the planarity of the surface patch under each fingertip and by the distance from the grasp to the centroid of the segmented object.",
+  "claims": [
+    {"n": 1, "parent": null, "text": "A method of selecting a grasp, comprising: for each candidate grasp on a depth image, measuring the planarity of the surface patch under each fingertip; measuring the distance from the grasp to the centroid of the segmented object; and ranking the candidate grasps by planarity and distance."}
+  ],
+  "web": "https://patents.synthetic.example/SYN-PUB-0303"
+}

@@ -1,0 +1,628 @@
+{
+  "_comment": "SYNTHETIC FIXTURE. Invented for testing the agents; not real fleets, vendors or reviews.",
+  "export": {
+    "tool": "fleet-software review hub (synthetic)",
+    "exported_at": "2026-11-20T09:12:00Z",
+    "schema_version": 3,
+    "listings": [
+      {
+        "listing": {
+          "id": "SYN-LST-1",
+          "product": {
+            "name": "Glacivo TrackPoint",
+            "vendor_display": "Glacivo"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-101",
+            "submitted": {
+              "at": "2026-04-02T10:15:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Fleet manager, 40 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Does the job",
+              "body": "Battery lasts about five weeks between charges on our routes, which is fine."
+            }
+          },
+          {
+            "review_id": "SYN-RV-102",
+            "submitted": {
+              "at": "2026-04-19T08:02:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Dispatcher",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 2,
+              "of": 5
+            },
+            "text": {
+              "title": "Noisy at stops",
+              "body": "We got a false alarm every time the van door opened at a stop."
+            }
+          },
+          {
+            "review_id": "SYN-RV-103",
+            "submitted": {
+              "at": "2026-05-07T16:40:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Owner-operator, 12 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 5,
+              "of": 5
+            },
+            "text": {
+              "title": "Quick start",
+              "body": "Setup took one afternoon for twelve vans."
+            }
+          },
+          {
+            "review_id": "SYN-RV-104",
+            "submitted": {
+              "at": "2026-06-23T12:30:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Ops lead",
+              "location": {
+                "region": "Michigan",
+                "country": {
+                  "code": "US"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Mixed",
+              "body": "The batteries need a recharge every week, and the nuisance alerts at loading docks wear on drivers."
+            }
+          },
+          {
+            "review_id": "SYN-RV-105",
+            "submitted": {
+              "at": "2026-07-11T09:00:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Quality manager",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Clear dashboard",
+              "body": "The dashboard is clear and the CSV export works."
+            }
+          }
+        ]
+      },
+      {
+        "listing": {
+          "id": "SYN-LST-2",
+          "product": {
+            "name": "Pellisar U8",
+            "vendor_display": "Pellisar"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-201",
+            "submitted": {
+              "at": "2026-02-14T13:20:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Pharmacy courier",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 5,
+              "of": 5
+            },
+            "text": {
+              "title": "Simple",
+              "body": "No install needed: press start and drop it in the tote."
+            }
+          },
+          {
+            "review_id": "SYN-RV-202",
+            "submitted": {
+              "at": "2026-03-03T11:11:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Quality manager",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Accepted by clients",
+              "body": "Single-use is wasteful but the PDF report is accepted by our pharmacy clients."
+            }
+          },
+          {
+            "review_id": "SYN-RV-203",
+            "submitted": {
+              "at": "2026-03-28T15:45:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Fleet manager, 25 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Does what it says",
+              "body": "Battery is sealed and not replaceable, which is the point of a single-use logger."
+            }
+          },
+          {
+            "review_id": "SYN-RV-204",
+            "submitted": {
+              "at": "2026-05-16T07:55:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Driver lead",
+              "location": {
+                "region": "Manitoba",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 2,
+              "of": 5
+            },
+            "text": {
+              "title": "Spiky starts",
+              "body": "Readings spike when the logger touches an ice pack, so we get false alerts at the start of every run."
+            }
+          }
+        ]
+      },
+      {
+        "listing": {
+          "id": "SYN-LST-3",
+          "product": {
+            "name": "SafeTemp U8",
+            "vendor_display": "Coldhaven"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-301",
+            "submitted": {
+              "at": "2026-07-02T10:05:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Owner-operator, 6 vans",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 5,
+              "of": 5
+            },
+            "text": {
+              "title": "Easy ordering",
+              "body": "Ordering was easy and onboarding took ten minutes."
+            }
+          },
+          {
+            "review_id": "SYN-RV-302",
+            "submitted": {
+              "at": "2026-08-09T14:14:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Grocery courier",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Good value",
+              "body": "Same logger as the one we used before, cheaper in packs of ten."
+            }
+          },
+          {
+            "review_id": "SYN-RV-303",
+            "submitted": {
+              "at": "2026-06-11",
+              "channel": "partner feed"
+            },
+            "reviewer": {
+              "display": "Fleet manager, 25 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Does what it says",
+              "body": "Battery is sealed and not replaceable, which is the point of a single-use logger."
+            }
+          }
+        ]
+      },
+      {
+        "listing": {
+          "id": "SYN-LST-4",
+          "product": {
+            "name": "Frostmark Reefer Link",
+            "vendor_display": "Frostmark"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-401",
+            "submitted": {
+              "at": "2026-03-12T09:30:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Fleet engineer",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Needs a technician",
+              "body": "Installation needs a technician because it wires into the reefer unit."
+            }
+          },
+          {
+            "review_id": "SYN-RV-402",
+            "submitted": {
+              "at": "2026-04-26T17:10:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Dispatcher",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 5,
+              "of": 5
+            },
+            "text": {
+              "title": "Sees the unit itself",
+              "body": "Ties into the reefer controller, so we see the target temperature and return air together."
+            }
+          },
+          {
+            "review_id": "SYN-RV-403",
+            "submitted": {
+              "at": "2026-06-04T08:48:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Ops lead",
+              "location": {
+                "region": "New York",
+                "country": {
+                  "code": "US"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Better after update",
+              "body": "After the firmware update the nuisance alarms stopped, but the set-up wizard is confusing."
+            }
+          },
+          {
+            "review_id": "SYN-RV-404",
+            "submitted": {
+              "at": "2026-08-30T12:00:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Owner-operator, 30 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Nothing to charge",
+              "body": "No battery to worry about, since it runs off the trailer power."
+            }
+          }
+        ]
+      },
+      {
+        "listing": {
+          "id": "SYN-LST-5",
+          "product": {
+            "name": "Tundrel Halo",
+            "vendor_display": "Tundrel"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-501",
+            "submitted": {
+              "at": "2026-05-21T10:10:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Pharmacy courier",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 5,
+              "of": 5
+            },
+            "text": {
+              "title": "Long-lived tags",
+              "body": "Tags run for a year on one coin cell battery."
+            }
+          },
+          {
+            "review_id": "SYN-RV-502",
+            "submitted": {
+              "at": "2026-06-15T13:33:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Dispatcher",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 2,
+              "of": 5
+            },
+            "text": {
+              "title": "Dropouts",
+              "body": "Tag dropouts in the back of the van show up as false alarms in the app."
+            }
+          },
+          {
+            "review_id": "SYN-RV-503",
+            "submitted": {
+              "at": "2026-07-29T09:41:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Fleet manager, 18 vans",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Slow pairing",
+              "body": "Pairing tags to the gateway during setup was slow, and gateway batteries drain in cold cabs."
+            }
+          },
+          {
+            "review_id": "SYN-RV-504",
+            "submitted": {
+              "at": "2026-09-03T11:27:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Grocery courier",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 4,
+              "of": 5
+            },
+            "text": {
+              "title": "Per tote",
+              "body": "Good value for mixed loads of chilled and frozen totes."
+            }
+          },
+          {
+            "review_id": "SYN-RV-505",
+            "submitted": {
+              "at": "2026-06-22",
+              "channel": "portal import"
+            },
+            "reviewer": {
+              "display": "Dispatcher",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 2,
+              "of": 5
+            },
+            "text": {
+              "title": "Dropouts",
+              "body": "Tag dropouts in the back of the van show up as false alarms in the app."
+            }
+          }
+        ]
+      },
+      {
+        "listing": {
+          "id": "SYN-LST-6",
+          "product": {
+            "name": "Varrow Gateway",
+            "vendor_display": "Varrow Labs"
+          }
+        },
+        "reviews": [
+          {
+            "review_id": "SYN-RV-601",
+            "submitted": {
+              "at": "2026-04-08T15:00:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Fleet engineer",
+              "location": {
+                "region": "Ontario",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 3,
+              "of": 5
+            },
+            "text": {
+              "title": "Bring your own server",
+              "body": "We had to set up our own server to receive the data."
+            }
+          },
+          {
+            "review_id": "SYN-RV-602",
+            "submitted": {
+              "at": "2026-05-30T10:20:00Z",
+              "channel": "review hub"
+            },
+            "reviewer": {
+              "display": "Driver lead",
+              "location": {
+                "region": "Quebec",
+                "country": {
+                  "code": "CA"
+                }
+              }
+            },
+            "rating": {
+              "stars": 2,
+              "of": 5
+            },
+            "text": {
+              "title": "Fahrenheit only",
+              "body": "Readings are shown in Fahrenheit only, which confused our drivers."
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

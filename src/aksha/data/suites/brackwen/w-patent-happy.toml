@@ -1,0 +1,11 @@
+id = "w-patent-happy"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: a general patent-disclosure agent"
+category = "capability"
+agents = ["patent"]
+worlds = ["brackwen"]
+opening = "Here is everything we have on the four Brackwen picking-cell ideas, plus the prior-art search counsel ran. Go through each idea against the prior art, tell me what we should do next with each one, and get the strongest one ready for our patent attorney."
+expect = ["families", "comparison_matrix", "recommendations", "facts.BF-01", "facts.BF-02", "facts.BF-03", "facts.BF-04", "facts.BF-05", "facts.BF-11", "facts.BF-13", "facts.BF-14", "facts.BF-15", "facts.BF-16"]
+criteria = ["inv.one_row_per_key", "patent.families_are_edges", "patent.matrix", "patent.next_action", "patent.c1_extraction", "patent.priority_ranks", "patent.undated_disclosure", "precision.known_values", "citation.exists", "citation.overlaps_key", "citation.edge_excerpts", "no_unbound_send"]
+should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language"]

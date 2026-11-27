@@ -1,0 +1,66 @@
+{
+  "world": "kelasora",
+  "synthetic": true,
+  "frozen_today": "2026-11-27",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths and publish dates. No answers (no duplicate links, no units, no traps). The agents read sources/ as uploaded inputs; folder names mean nothing to them.",
+  "records": [
+    {
+      "path": "brief/kelasora-brief.md",
+      "folder": "brief",
+      "synthetic": true
+    },
+    {
+      "path": "chats/pintaria-sales-chat.txt",
+      "folder": "chats",
+      "synthetic": true,
+      "published": "2026-10-12"
+    },
+    {
+      "path": "feedback/ulasan-platform.csv",
+      "folder": "feedback",
+      "synthetic": true
+    },
+    {
+      "path": "feeds/tutorgrid-plans.json",
+      "folder": "feeds",
+      "synthetic": true,
+      "published": "2026-05-10"
+    },
+    {
+      "path": "newsletters/edtech-weekly-2026-07.eml.txt",
+      "folder": "newsletters",
+      "synthetic": true,
+      "published": "2026-07-04"
+    },
+    {
+      "path": "research/bimbel-market-scan.pdf.txt",
+      "folder": "research",
+      "synthetic": true
+    },
+    {
+      "path": "sites/akara-tutor.html",
+      "folder": "sites",
+      "synthetic": true,
+      "published": "2026-09-01"
+    },
+    {
+      "path": "sites/belajarin-pro.html",
+      "folder": "sites",
+      "synthetic": true,
+      "published": "2026-02-03"
+    },
+    {
+      "path": "sites/pintaria-kelas.html",
+      "folder": "sites",
+      "synthetic": true,
+      "published": "2026-03-15"
+    },
+    {
+      "path": "sites/ruang-bimbel.html",
+      "folder": "sites",
+      "synthetic": true,
+      "published": "2026-06-20"
+    }
+  ]
+}

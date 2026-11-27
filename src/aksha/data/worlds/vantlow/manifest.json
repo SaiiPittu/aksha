@@ -1,0 +1,64 @@
+{
+  "world": "vantlow",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. The agents read sources/ as uploaded inputs; folder names and file extensions mean nothing to them.",
+  "records": [
+    {
+      "path": "benchmarks/open-ingest-bench-2026.md",
+      "folder": "benchmarks",
+      "synthetic": true
+    },
+    {
+      "path": "benchmarks/siltgrove-query-benchmark-2026.pdf.txt",
+      "folder": "benchmarks",
+      "synthetic": true
+    },
+    {
+      "path": "pricing/brackpond-plans-saved.md",
+      "folder": "pricing",
+      "synthetic": true
+    },
+    {
+      "path": "pricing/emberwick.html",
+      "folder": "pricing",
+      "synthetic": true
+    },
+    {
+      "path": "pricing/ferrowind-plans.html",
+      "folder": "pricing",
+      "synthetic": true
+    },
+    {
+      "path": "pricing/quarnel-price-list.json",
+      "folder": "pricing",
+      "synthetic": true
+    },
+    {
+      "path": "pricing/siltgrove-pricing.html",
+      "folder": "pricing",
+      "synthetic": true
+    },
+    {
+      "path": "team/what-we-need.txt",
+      "folder": "team",
+      "synthetic": true
+    },
+    {
+      "path": "threads/t418-which-log-tool.html",
+      "folder": "threads",
+      "synthetic": true
+    },
+    {
+      "path": "threads/t433-ingest-bills.html",
+      "folder": "threads",
+      "synthetic": true
+    },
+    {
+      "path": "threads/t451-how-long-do-you-keep-logs.html",
+      "folder": "threads",
+      "synthetic": true
+    }
+  ]
+}

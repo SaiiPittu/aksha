@@ -1,0 +1,54 @@
+{
+  "world": "pulvane",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. The agents read sources/ as uploaded inputs; folder names and file extensions mean nothing to them.",
+  "records": [
+    {
+      "path": "decks/optics-review-2026-q2.txt",
+      "folder": "decks",
+      "synthetic": true
+    },
+    {
+      "path": "disclosures/sharing-register.txt",
+      "folder": "disclosures",
+      "synthetic": true
+    },
+    {
+      "path": "forms/attorney-questionnaire.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "people/contributors.yaml",
+      "folder": "people",
+      "synthetic": true
+    },
+    {
+      "path": "planning/okrs-2026-h2.md",
+      "folder": "planning",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/search-export-2026-10-30.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "regulatory/SYN-REG-0042-device-summary.txt",
+      "folder": "regulatory",
+      "synthetic": true
+    },
+    {
+      "path": "transcripts/2026-01-14-rhythm-design-sync.vtt",
+      "folder": "transcripts",
+      "synthetic": true
+    },
+    {
+      "path": "transcripts/2026-04-22-night-baseline-call.txt",
+      "folder": "transcripts",
+      "synthetic": true
+    }
+  ]
+}

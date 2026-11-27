@@ -1,0 +1,15 @@
+{
+  "files": {
+    "key.json": "sha256:d6ae0e14c8f5265969f048c0fb21d75f6a5fc65d2fac092a8f799d7cbe7e507f",
+    "manifest.json": "sha256:38050337144af76a4d5d80e70015ecff244092d9ec8c080c7592998736daf47d",
+    "sources/datasheets/glacivo-trackpoint-datasheet.pdf.txt": "sha256:d6360baa9ec289770aedbca16d4f890f516ce737bdfaaf7cc5e566113db2dfd1",
+    "sources/datasheets/pellisar-u8-datasheet.pdf.txt": "sha256:4ed37aa99fc82156f57770b5ddc25dafc41bcf0eeba5701a545571fe0535d0d8",
+    "sources/exports/review-hub-export.json": "sha256:fca1cd7caa3e7f464d9b79ec5c87b6be92b6d035ad3372491ebce67e2969db83",
+    "sources/memo/vendor-landscape-memo.pdf.txt": "sha256:92dac1af6c578df524e297f12b7ee2d9c32f175839835136de55881a46f45051",
+    "sources/notes/what-we-need.md": "sha256:2538db011daab2393791f96afe8fc3f8b99ff8d54d30da635a211921c461dfb9",
+    "sources/pricelists/coldhaven-safetemp-price-list.pdf.txt": "sha256:3b7cab7c025260b44cb95d9a34baffa95427272e464862446e72c410965f8666",
+    "sources/sheets/vendor-shortlist.csv": "sha256:e22110496751e0bd7e27a602c1d5c66a0cb5ebd135d1d59495bcae59059152b5",
+    "spec.yaml": "sha256:f5986e0b305f6ac82220c7fcfba235f0f7f441164a614d626753467812d8b08f"
+  },
+  "world": "rimefold"
+}

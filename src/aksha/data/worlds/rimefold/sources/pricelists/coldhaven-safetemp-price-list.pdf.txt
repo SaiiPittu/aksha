@@ -1,0 +1,23 @@
+SYNTHETIC FIXTURE - text extracted from a PDF price list. Invented for testing; not a real company, product or price.
+
+COLDHAVEN SUPPLY
+SafeTemp U8 single-use temperature logger
+Price list, valid from 1 June 2026
+
+SafeTemp U8 starts at the press of a button and gives a PDF report on
+any computer at the end of the trip. Range -30 °C to +70 °C. Up to 90
+days of recording. Free shipping anywhere in Canada.
+
+  Pack            Price
+  10-pack         CAD 129 per 10-pack
+  50-pack         CAD 560 per 50-pack
+
+Orders: orders@coldhaven.example
+Delivery in 3 to 5 working days.
+
+
+
+Terms. Prices exclude sales tax. Packs are not split. Loggers are single
+use and cannot be returned once started. Coldhaven is a trading name of Pellisar Sensors Ltd. Warranty claims go to the manufacturer.
+
+SYNTHETIC FIXTURE - end of price list

@@ -21,6 +21,7 @@ from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.types import SystemReceipt
 
 from .story import REQUESTS
+from .world import BASE
 
 
 class DiesAfterDelivery:
@@ -47,7 +48,9 @@ class DiesAfterDelivery:
 
 def main(work: Path, sources: Path, run: str) -> None:
     """Drive ``run`` until the mailbox delivery kills the process."""
-    rt = open_demo(work, sources, REQUESTS, mailbox=DiesAfterDelivery(counsel_mailbox(work)))
+    rt = open_demo(
+        work, sources, REQUESTS, web_world=BASE, mailbox=DiesAfterDelivery(counsel_mailbox(work))
+    )
     drive(rt.patent, rt.executor(), run)
     print("the run finished without reaching the mailbox", file=sys.stderr)
     sys.exit(3)

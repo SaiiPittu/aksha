@@ -1,0 +1,27 @@
+X-Synthetic: true
+From: Ines Valcourt <ines@lintmoor.example>
+To: Ravi Anand <ravi@brackwen.example>
+Date: Fri, 20 Feb 2026 16:02:00 +0100
+Subject: Re: Re: wrist keeps knocking things over
+
+SYNTHETIC FIXTURE. Invented for testing; not a real email, person or company.
+
+Ravi,
+
+Glad the breakaway behaves on the bench. For your records: my statement of work with you only starts on 16 Feb, so what I sent on the 3rd was before any of that. Happy to talk about how you want to handle it.
+
+Ines
+
+On Wed, 04 Feb 2026 09:15:00 +0100, Ravi Anand <ravi@brackwen.example> wrote:
+> Love it. We will try the torque release on the clutch next week. I am writing the
+> lock-on-contact part up as a design note this month.
+>
+> Ravi
+>
+> On Tue, 03 Feb 2026 18:40:00 +0100, Ines Valcourt <ines@lintmoor.example> wrote:
+> > Hi Ravi,
+> >
+> > Saw the videos of the wrist. A thought, free of charge: once it is locked, let the clutch open by itself when the wrist torque goes past about 1.2 N·m, and stop the arm at the same moment. Then a snag never turns into a broken finger or a bruised hand.
+> >
+> > Ines Valcourt
+> > Lintmoor Mechatronics

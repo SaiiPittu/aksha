@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SYNTHETIC FIXTURE. A patent publication invented for testing; not a real publication. -->
+<publication synthetic="true">
+  <bibliographic>
+    <doc-number>SYN-PUB-0304</doc-number>
+    <kind>A1</kind>
+    <office>SYN-Office-1</office>
+    <title>Energy-aware field sensing and scheduled agronomic advice</title>
+    <applicant>Tessaline Farm Data (synthetic)</applicant>
+    <dates>
+      <priority number="SYN-PRI-2023-1020">2023-10-20</priority>
+      <filed>2024-10-18</filed>
+      <published>2025-04-24</published>
+    </dates>
+    <status>Application published</status>
+  </bibliographic>
+  <abstract>
+    A solar-powered field sensor lengthens its sampling interval when the state of charge of
+    its battery falls below a threshold, and returns to the normal interval once charged.
+    Agronomic advice is delivered to the farmer only within a time window the farmer selects.
+    The sensor's calibration offset is updated by exponential smoothing each time a
+    reference reading is available.
+  </abstract>
+  <claims>
+    <claim n="1">A solar-powered field sensor that increases its sampling interval when its battery state of charge is below a threshold.</claim>
+    <claim n="2">A method of delivering agronomic advice only within a delivery window selected by the farmer.</claim>
+  </claims>
+</publication>

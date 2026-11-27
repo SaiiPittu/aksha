@@ -1,0 +1,10 @@
+id = "e-research-claim"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-CLAIM"
+category = "capability"
+agents = ["research"]
+worlds = ["kelasora"]
+opening = "How much do the platforms improve students' grades, for after-school tutoring centres in Indonesia? Compare learning gains (grade level*, nilai, score*)."
+expect = ["facts.EF-07", "facts.EF-08", "traps.T-CLAIM"]
+criteria = ["citation.exists", "citation.overlaps_key", "trap.T-CLAIM"]

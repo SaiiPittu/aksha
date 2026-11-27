@@ -1,0 +1,11 @@
+id = "q-patent-units"
+kind = "guard"
+origin = "planted_trap"
+source = "trap: T-UNITS"
+category = "capability"
+agents = ["patent"]
+worlds = ["quillmere"]
+opening = "Does anything we have already published show AG-1's plateau threshold?"
+expect = ["facts.QF-01", "facts.QF-08", "traps.T-UNITS"]
+criteria = ["citation.exists", "citation.overlaps_key"]
+should = ["no_file_by_date"]
