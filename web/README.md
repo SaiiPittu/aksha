@@ -16,7 +16,7 @@ nice -n 19 npm install
 npm run dev                      # http://localhost:5173, proxies /api to 127.0.0.1:8787
 ```
 
-Set `AKSHA_API` to proxy somewhere else (`AKSHA_API=http://127.0.0.1:9000 npm run dev`).
+If the port is taken, `aksha serve` exits 8 with one line naming it; pick another with `--port N` and point `AKSHA_API` at it. Set `AKSHA_API` to proxy somewhere else (`AKSHA_API=http://127.0.0.1:9000 npm run dev`).
 
 | Script | What |
 |---|---|

@@ -858,7 +858,7 @@ def cmd_capabilities(ctx: Context, args: argparse.Namespace) -> int:
 def cmd_serve(ctx: Context, args: argparse.Namespace) -> int:
     """Run the server: the runtime thread holds the writer lock; the CLI and web are clients."""
     try:
-        from aksha.interfaces.http.serve import serve
+        from aksha.interfaces.http.serve import CannotListen, serve
         from aksha.interfaces.http.web import WebDistMissing
     except ImportError as e:
         ctx.say(f"aksha serve needs the server extra: {install_hint('server')} ({e.name})")
@@ -868,6 +868,9 @@ def cmd_serve(ctx: Context, args: argparse.Namespace) -> int:
                      trust_user_header=args.trust_user_header, web=args.web)  # fmt: skip
     except WebDistMissing as e:
         ctx.say(f"aksha serve --web: {e}")
+        return wire.EXIT_ENVIRONMENT
+    except CannotListen as e:
+        ctx.say(f"aksha serve: {e}")
         return wire.EXIT_ENVIRONMENT
 
 
