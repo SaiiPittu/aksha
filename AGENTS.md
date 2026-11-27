@@ -8,7 +8,7 @@ The full rules are in [REVIEWING.md](REVIEWING.md). This file holds the short ve
 
 - `make venv` once, then `make test`, `make lint` (ruff check and ruff format --check) and `make typecheck` (mypy). `make check` runs all three.
 - Layout: `src/aksha/runtime/` is the domain; `src/aksha/adapters/` implements its ports; `src/aksha/agents/<name>/` and `src/aksha/extensions/<name>/` are agents and extensions; `src/aksha/interfaces/` is the outer surface; `src/aksha/app.py` is the only module that wires adapters to ports.
-- Dependency rule: the runtime imports only itself, the standard library and `jsonschema`. Agents and extensions import only `aksha.runtime.api`. Every `typing.Protocol` lives in a `ports.py`.
+- Dependency rule: the runtime imports only itself, the standard library and `jsonschema`. Agents and extensions import only `aksha.runtime.api`, and an agent also the extensions it names (`aksha.extensions.<name>`). Every `typing.Protocol` lives in a `ports.py`.
 - A pull request implements a decision recorded in `docs/design/adr/`; it does not invent one. If the code must differ, amend the ADR in the same PR.
 
 ## Code Review Rules
@@ -26,7 +26,7 @@ Review against REVIEWING.md. Breaking any of these is a blocking finding:
 - No wall clock, sleep, randomness or UUID minting in `src/aksha/runtime/`. Time comes from the `Clock` port, IDs from the event store.
 
 ### Policy gate
-- One pure `check` decides every tool call, denies by default, fails closed on any exception, runs its layers in the ADR order, and takes no model-written input.
+- One pure `check` decides every tool call, denies by default, fails closed on any exception, runs its layers in the ADR order, and checks the proposed call's name and arguments; no other model-written text (tool results, documents, memory, artifact content) is an input, and model output never grants a permission.
 - Headless never asks, but every deny holds: only an approval route changes. A headless start with no sandbox backend is refused (`sandbox_required`).
 
 ### Generality and tests

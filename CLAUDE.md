@@ -6,7 +6,7 @@ Read [REVIEWING.md](REVIEWING.md) before changing or reviewing code; its invaria
 
 In short:
 - One append-only, hash-chained event store; only the `EventStore` adapter writes. Store facts, derive interpretations: no stored status.
-- Ports and adapters: the runtime imports only itself, the standard library and `jsonschema`; agents and extensions import only `aksha.runtime.api`.
+- Ports and adapters: the runtime imports only itself, the standard library and `jsonschema`; agents and extensions import only `aksha.runtime.api`, and an agent also the extensions it names.
 - Every external effect goes through the outbox with a meaning-based idempotency key; every tool declares `at_least_once`, `reconcile` or `at_most_once`.
 - The policy gate denies by default and fails closed; headless never asks, but every deny holds, and a sandbox is required.
 - No agent-specific code in the runtime. Tests must fail when the guarantee breaks.

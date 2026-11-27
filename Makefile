@@ -23,9 +23,14 @@ test:
 
 ## The PostgreSQL adapter's tests, failing (not skipping) when they cannot run. Needs psycopg
 ## (make venv-postgres) and either AKSHA_TEST_POSTGRES_DSN or docker with a local postgres
-## image (never pulled; AKSHA_PG_IMAGE picks it, default postgres:16).
+## image (never pulled; AKSHA_PG_IMAGE picks it, default postgres:16). The second run is the
+## PostgreSQL variant of every integration test parameterised over the backend (budgets,
+## cancellation, durable execution, effect steps, the outbox): the SQLite job skips them for
+## want of a driver, so this is the only job that runs them. A module that adds a postgres
+## parameter is picked up by its id; an empty selection fails (pytest exit code 5).
 test-postgres:
 	AKSHA_REQUIRE_POSTGRES=1 $(BIN)/pytest tests/contract tests/unit/adapters/storage tests/unit/test_app.py
+	AKSHA_REQUIRE_POSTGRES=1 $(BIN)/pytest tests/integration -k postgres
 
 lint:
 	$(BIN)/ruff check .

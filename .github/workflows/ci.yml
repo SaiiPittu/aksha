@@ -81,7 +81,9 @@ jobs:
 
   test-postgres:
     # AKSHA_REQUIRE_POSTGRES=1 turns every PostgreSQL skip into a failure, so the job cannot pass
-    # by not running the tests. With AKSHA_TEST_POSTGRES_DSN set, tests/support/postgres.py uses
+    # by not running the tests. make test-postgres runs the contract and adapter suites, then
+    # the PostgreSQL variant of every backend-parameterised integration test (tests/integration
+    # -k postgres), which the SQLite job skips. With AKSHA_TEST_POSTGRES_DSN set, tests/support/postgres.py uses
     # the service container below and never starts docker itself.
     name: Tests, PostgreSQL 16 (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04

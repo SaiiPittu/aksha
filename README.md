@@ -110,7 +110,7 @@ flowchart LR
   V --> NEXT["Next decision"]
 ```
 
-Facts go in through one writer and every view is computed from them by pure functions, so a restart rebuilds the same state and a budget cannot reset. The runtime in `src/aksha/runtime/` imports no adapter; backends plug in behind ports, and `src/aksha/app.py` is the one place that wires them. Agents and extensions import only `aksha.runtime.api`, and the tests in `tests/architecture/` enforce both rules. The three tiers, the ports and the hash chain are in [docs/architecture/overview.md](docs/architecture/overview.md).
+Facts go in through one writer and every view is computed from them by pure functions, so a restart rebuilds the same state and a budget cannot reset. The runtime in `src/aksha/runtime/` imports no adapter; backends plug in behind ports, and `src/aksha/app.py` is the one place that wires them. Agents and extensions import only `aksha.runtime.api` (and an agent also the extensions it names), and the tests in `tests/architecture/` enforce both rules. The three tiers, the ports and the hash chain are in [docs/architecture/overview.md](docs/architecture/overview.md).
 
 ## Status and limitations
 
