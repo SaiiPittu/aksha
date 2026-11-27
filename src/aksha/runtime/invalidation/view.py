@@ -364,9 +364,7 @@ class _Walk:
         waits: list[tuple[str, ...]] = []
         for read in v.reads:
             status, waits_on = self.read_state(v, read)
-            moved = status.state in ("moved", "gone") and status.now != EXPIRED
-            if moved and self.keyed is not None and self.keyed.strength(v, read) == "weak":
-                status = ReadStatus(read, "weak", status.now)
+            status = self.keyed_status(v, status)
             statuses.append(status)
             if waits_on is not None:
                 waits.append(self.evaluate(self.by_ref[waits_on])[2])
@@ -393,9 +391,19 @@ class _Walk:
     def stale(self, v: ArtifactVersion) -> bool:
         return self.evaluate(v)[0] in STALE_STATES
 
+    def keyed_status(self, v: ArtifactVersion, status: ReadStatus) -> ReadStatus:
+        """A moved read of a citation-keyed version that is a weak dependency is ``weak`` (M2)."""
+        moved = status.state in ("moved", "gone") and status.now != EXPIRED
+        if moved and self.keyed is not None and self.keyed.strength(v, status.input) == "weak":
+            return ReadStatus(status.input, "weak", status.now)
+        return status
+
     def evaluate_all_modes(self, v: ArtifactVersion) -> Freshness:
-        """``v``'s freshness by its reads alone, as if its run had opted into ``rebuild``."""
-        statuses = [self.read_state(v, read)[0] for read in v.reads]
+        """``v``'s freshness by its reads alone, as if its run had opted into ``rebuild``.
+
+        Citation keying (M2) applies as in :meth:`evaluate`: a weak read does not invalidate.
+        """
+        statuses = [self.keyed_status(v, self.read_state(v, read)[0]) for read in v.reads]
         states = {s.state for s in statuses}
         if str(v.ref) in self.facts.expired_artifacts or states & {"moved", "gone"}:
             return "invalidated"
@@ -542,12 +550,15 @@ class ReadChecker:
 
         A newer version of an input's slot counts when it was written for ``line`` or for
         the version's own runs, so a later run that recomputed an input with other
-        content moves the read, and an equal one is ``equivalent`` (early cutoff).
+        content moves the read, and an equal one is ``equivalent`` (early cutoff). For a
+        citation-keyed version (M2), a moved read that is a weak dependency is ``weak``.
         """
         v = self._walk.by_ref[ref]
         mine = line | self._walk.line(v)
+        walk = self._walk
         return tuple(
-            self._walk.read_state_for(mine, read, v.event_seq, reader=v)[0] for read in v.reads
+            walk.keyed_status(v, walk.read_state_for(mine, read, v.event_seq, reader=v)[0])
+            for read in v.reads
         )
 
 

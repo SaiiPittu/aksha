@@ -21,9 +21,10 @@ decides at entry, in the stop decision that records ``task.entered`` (U3):
    run, so a run that recomputes does not regenerate over the domain owner's value.
 
 The request is compared whole because it is a dependency no version records: every turn
-of the run that wrote it showed the model that text. Reads are compared as recorded:
-every recorded read is a dependency here; where a version's citations narrow its strong
-dependencies, the same check applies to those only.
+of the run that wrote it showed the model that text. Reads are compared as recorded. For
+a version of a citation-keyed run (ADR-P05 M2) only its strong dependencies (cited
+spans, scoped claims, definitions) must hold: a moved weak read is ``weak`` and does not
+stop reuse, as it does not reopen the version. Under read keying every read is strong.
 
 ``run.started{reuse: "off"}`` turns it off for a run (``Agent.reuse`` or the runtime's
 ``AKSHA_REUSE=off``): every instance of the run recomputes. A run that records nothing
@@ -54,6 +55,10 @@ REUSE_FIELD = "reuse"
 
 ARTIFACT_REUSED = "artifact.reused"
 """The fact one reuse records, with the entry (U3)."""
+
+HOLDING = frozenset({"same", "equivalent", "weak"})
+"""Read states that still hold for reuse: unchanged, equal by early cutoff, or a weak
+dependency of a citation-keyed version (ADR-P05 M2), which a moved read does not reopen."""
 
 REUSABLE_ORIGINS = frozenset({"task", "derived", "correction"})
 """Origins a later run may reuse: never a person's choice, made for its own run."""
@@ -197,7 +202,7 @@ def refusal(view: LogView, run: str, v: ArtifactVersion, checker: ReadChecker) -
     if checker.freshness(str(v.ref)) in STALE_STATES:
         return "stale"
     for status in checker.holds(str(v.ref), checker.line(run)):
-        if status.state not in ("same", "equivalent"):
+        if status.state not in HOLDING:
             return f"read_{status.state}"
     return None
 
