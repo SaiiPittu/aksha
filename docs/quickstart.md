@@ -54,6 +54,22 @@ aksha upload my-inputs
 aksha inspect R-0002         # its steps: only the review reading (voice) and the report re-ran
 ```
 
+A wrong value can also be corrected through a proposal that its domain owner approves, rather than edited in place. The correction names a record or an output value, carries evidence, and waits. Once approved, a correction to an upload becomes that file's next version, a correction to a shared source goes through the outbox to its system of record (`AKSHA_CORRECTIONS`), and a correction to an output value is saved as that output's next version. Each time, only the work built on the old value is rebuilt:
+
+```sh
+aksha correct research.profile/c02-aquasense-labs#/name --text "AquaSense Agritech" \
+  --evidence "the company registry lists it as AquaSense Agritech"
+# proposed K-0001: research.profile/c02-aquasense-labs#/name (artifact), waiting for person
+aksha approve K-0001
+# K-0001 applied
+# R-0003 research ended complete
+#   research.matrix@v1 replaced by research.matrix@v2
+#     read research.profile/c02-aquasense-labs@v2
+aksha corrections K-0001     # the evidence, who decided, what it reopened and what replaced it
+```
+
+Run the same request again and the agent reuses the earlier run's outputs, because every input they recorded still holds. Each reuse is recorded as `artifact.reused`, and no model turn is taken. `AKSHA_REUSE=off`, or `reuse="off"` on an agent, makes every run recompute.
+
 The farm's own files are the uploads; the vendors' pages and the published prior art are on the web the agents search (`web_search`, `fetch_url`), here the world's offline web, which mixes them with noise: a copy of a vendor page on a listing site, a sale site, a glossary, a skin-moisture probe, a mirror of a publication. The agents search, choose what to fetch and cite only what they fetched; `aksha show research.competitors` lists the queries, what was fetched and what was skipped, and why. See [web search and replay](design/web-search-and-replay.md).
 
 The patent agent reads the same inputs (invention notes, contributor and disclosure tables, emails, priorities, blank forms) and searches the web for prior art, and prepares a counsel-review packet:

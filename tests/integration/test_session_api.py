@@ -203,6 +203,10 @@ def test_every_listed_command_reaches_its_handler(bench: SessionBench) -> None:
         "Stop": n.Stop(owner=OWNER, run_id="R-0001"),
         "Finalize": n.Finalize(owner=OWNER, interrupt_id="I-1"),
         "Steer": n.Steer(owner=OWNER, run_id="R-0001", text="faster"),
+        "ProposeCorrection": n.ProposeCorrection(
+            owner=OWNER, target="note.draft", value="x", evidence=("why",)
+        ),
+        "DecideCorrection": n.DecideCorrection(owner=OWNER, correction_id="K-0001", approve=True),
     }
     assert set(record.commands) <= set(samples)
     for name in record.commands:

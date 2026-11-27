@@ -117,18 +117,23 @@ def unknown_slots(
 
 
 def entries(
-    view: LogView, tree: CompiledTree, instance: InstanceRef, kind: str
+    view: LogView,
+    tree: CompiledTree,
+    instance: InstanceRef,
+    kind: str,
+    hidden: frozenset[str] = frozenset(),
 ) -> Mapping[str | None, ArtifactVersion | Unknown]:
     """Every key of ``kind``: its current version, or its explicit unknown (D2, D4).
 
     An unknown takes the place of any version its key has: a blocked or voided writer's
-    output is never read as a value. Keys are sorted as strings.
+    output is never read as a value. ``hidden`` is the calling view's set of versions it
+    may not read (ADR-P04 R1). Keys are sorted as strings.
     """
     from aksha.runtime.tasks.view import TaskView  # deferred: the view calls this module
 
     full = tree.kind(kind)
     found: dict[str | None, ArtifactVersion | Unknown] = dict(
-        TaskView(view, tree, instance).all_latest(full)
+        TaskView(view, tree, instance, hidden).all_latest(full)
     )
     for key, entry in unknown_slots(view, tree, instance.run, full):
         found[key] = as_unknown(full, entry, key)

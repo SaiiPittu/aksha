@@ -128,3 +128,7 @@ class InputWorkspace(Protocol):
     def reader(self, owner: str) -> RecordReader:
         """``owner``'s inputs as a record reader."""
         ...
+
+    def uploaded(self, owner: str, record_id: str) -> bool:
+        """Whether ``record_id`` is one of ``owner``'s own uploads (not the shared base)."""
+        ...

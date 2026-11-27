@@ -185,5 +185,9 @@ EVENT_MAP: Mapping[str, tuple[Role, str]] = {
     "document.stored": ("span_event", "aksha.document.stored"),
     "document.gap": ("span_event", "aksha.document.gap"),
     "document.refused": ("span_event", "aksha.document.refused"),
+    "artifact.reused": ("span_event", "aksha.artifact.reused"),
+    "correction.proposed": ("span_event", "aksha.correction.proposed"),
+    "correction.decided": ("span_event", "aksha.correction.decided"),
+    "correction.applied": ("span_event", "aksha.correction.applied"),
 }
 """Every core event type and what it becomes in the trace (D9)."""

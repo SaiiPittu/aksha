@@ -481,3 +481,31 @@ def test_fields_the_tool_passes_itself_are_keyed_on_the_agent_definition(
         assert iv.state(f"{AGENT}.note@v1").freshness == "current"  # no model read it
     finally:
         b.close()
+
+
+def _second_run(b: Bench, run: str = "R-0002") -> set[str]:
+    """Drive a later request run of the same agent; the versions it reused (ADR-P04 R1)."""
+    payload = {"agent": AGENT, "cause": "request", "invalidation": "rebuild",
+               "invalidation_keys": "citations"}  # fmt: skip
+    b.store.append(OWNER, "U1", (NewEvent("run.started", payload, run=run),))
+    result = drive(b.setup, b.executor, run)
+    assert (result.state, result.outcome) == ("ended", "complete"), result
+    return {str(e.payload["version"]) for e in b.events("artifact.reused") if e.run == run}
+
+
+def test_a_later_run_reuses_a_version_whose_only_moved_reads_are_weak(bench: Bench) -> None:
+    """Cross-run reuse checks strong dependencies only: an uncited paragraph moved."""
+    bench.pages.put("pages/p1.md", P1.replace("two years", "three years"))  # nobody cites it
+    bench.change("battery")
+    reused = _second_run(bench)
+    assert {f"{AGENT}.note@v1", f"{AGENT}.facts@v1"} <= reused
+    assert not [e for e in bench.events("artifact.saved") if e.run == "R-0002"]
+
+
+def test_a_later_run_recomputes_a_version_whose_cited_span_moved(bench: Bench) -> None:
+    bench.pages.put("pages/p1.md", P1.replace("without a camera", "with a thermal camera"))
+    bench.change("camera")
+    reused = _second_run(bench)
+    assert f"{AGENT}.note@v1" not in reused
+    saved = {str(e.payload["ref"]) for e in bench.events("artifact.saved") if e.run == "R-0002"}
+    assert f"{AGENT}.note@v2" in saved

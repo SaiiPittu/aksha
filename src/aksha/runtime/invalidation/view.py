@@ -95,6 +95,15 @@ from aksha.runtime.projections.view import LogView
 HUMAN_ORIGINS = frozenset({"choice", "copy_choice"})
 """Origins whose content a person chose: such a version is human-reviewed (D1)."""
 
+CORRECTION_ORIGIN = "correction"
+"""The origin of a version a domain owner's approved correction saved (ADR-P05 C1).
+
+It is human-reviewed (a person approved its value), so a later invalidation proposes a
+revision for review instead of regenerating over it, and like a superseding version it
+counts for every reader whatever its run (rule 6): the correction replaces the slot for
+everyone.
+"""
+
 
 @dataclass(frozen=True)
 class InvalidationView:
@@ -299,7 +308,11 @@ class _Walk:
         return self.lines.get(v.run, frozenset({v.run}))
 
     def human_reviewed(self, v: ArtifactVersion) -> bool:
-        return v.origin in HUMAN_ORIGINS or str(v.ref) in self.reviewed
+        return (
+            v.origin in HUMAN_ORIGINS
+            or v.origin == CORRECTION_ORIGIN
+            or str(v.ref) in self.reviewed
+        )
 
     def is_latest(self, v: ArtifactVersion) -> bool:
         if str(v.ref) in self.unaccepted:
@@ -312,7 +325,11 @@ class _Walk:
 
     def counts(self, newer: ArtifactVersion, line: frozenset[str]) -> bool:
         """Whether ``newer`` counts for a reader of ``line``: one run in common, or rule 6."""
-        return bool(self.line(newer) & line) or str(newer.ref) in self.superseding
+        return (
+            bool(self.line(newer) & line)
+            or str(newer.ref) in self.superseding
+            or newer.origin == CORRECTION_ORIGIN
+        )
 
     def rejected(self) -> frozenset[str]:
         """Old versions whose last review was rejected and whose slot saw no save since."""
@@ -347,9 +364,7 @@ class _Walk:
         waits: list[tuple[str, ...]] = []
         for read in v.reads:
             status, waits_on = self.read_state(v, read)
-            moved = status.state in ("moved", "gone") and status.now != EXPIRED
-            if moved and self.keyed is not None and self.keyed.strength(v, read) == "weak":
-                status = ReadStatus(read, "weak", status.now)
+            status = self.keyed_status(v, status)
             statuses.append(status)
             if waits_on is not None:
                 waits.append(self.evaluate(self.by_ref[waits_on])[2])
@@ -375,6 +390,26 @@ class _Walk:
 
     def stale(self, v: ArtifactVersion) -> bool:
         return self.evaluate(v)[0] in STALE_STATES
+
+    def keyed_status(self, v: ArtifactVersion, status: ReadStatus) -> ReadStatus:
+        """A moved read of a citation-keyed version that is a weak dependency is ``weak`` (M2)."""
+        moved = status.state in ("moved", "gone") and status.now != EXPIRED
+        if moved and self.keyed is not None and self.keyed.strength(v, status.input) == "weak":
+            return ReadStatus(status.input, "weak", status.now)
+        return status
+
+    def evaluate_all_modes(self, v: ArtifactVersion) -> Freshness:
+        """``v``'s freshness by its reads alone, as if its run had opted into ``rebuild``.
+
+        Citation keying (M2) applies as in :meth:`evaluate`: a weak read does not invalidate.
+        """
+        statuses = [self.keyed_status(v, self.read_state(v, read)[0]) for read in v.reads]
+        states = {s.state for s in statuses}
+        if str(v.ref) in self.facts.expired_artifacts or states & {"moved", "gone"}:
+            return "invalidated"
+        if "unsettled" in states:
+            return "dirty"
+        return "current_by_cutoff" if "equivalent" in states else "current"
 
     def read_state(self, reader: ArtifactVersion, read: InputRef) -> tuple[ReadStatus, str | None]:
         """One read's status, and the ref it waits on when unsettled.
@@ -494,6 +529,37 @@ class ReadChecker:
     def mode(self, run: str) -> InvalidationMode:
         """The invalidation mode ``run`` recorded (decision 38; unrecorded reads ``rebuild``)."""
         return self._walk.modes.get(run, UNRECORDED_MODE)
+
+    def line(self, run: str) -> frozenset[str]:
+        """The runs ``run`` writes for (S1): itself, or a rebuild run's ``for_runs``."""
+        return self._walk.lines.get(run, frozenset({run}))
+
+    def freshness(self, ref: str) -> Freshness | None:
+        """``ref``'s state by the view's rules, whatever its run's mode; None if not stored.
+
+        Unlike the view, a version of a run that did not opt into ``rebuild`` is evaluated
+        too: cross-run reuse (ADR-P04 R1) asks whether its recorded inputs still hold.
+        """
+        v = self._walk.by_ref.get(ref)
+        if v is None:
+            return None
+        return self._walk.evaluate_all_modes(v)
+
+    def holds(self, ref: str, line: frozenset[str]) -> tuple[ReadStatus, ...]:
+        """Each recorded read of ``ref`` judged for a reader of the runs ``line`` (R1).
+
+        A newer version of an input's slot counts when it was written for ``line`` or for
+        the version's own runs, so a later run that recomputed an input with other
+        content moves the read, and an equal one is ``equivalent`` (early cutoff). For a
+        citation-keyed version (M2), a moved read that is a weak dependency is ``weak``.
+        """
+        v = self._walk.by_ref[ref]
+        mine = line | self._walk.line(v)
+        walk = self._walk
+        return tuple(
+            walk.keyed_status(v, walk.read_state_for(mine, read, v.event_seq, reader=v)[0])
+            for read in v.reads
+        )
 
 
 def expiry_read(ref: ArtifactRef) -> InputRef:

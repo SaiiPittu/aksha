@@ -51,6 +51,20 @@ from aksha.runtime.cancellation.ending import honour_stop
 from aksha.runtime.cancellation.requests import runs_to_resume_for_stop
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import ContextPolicy
+from aksha.runtime.corrections.commands import (
+    apply_outbox,
+    apply_upload,
+    decide_correction,
+    pending,
+    propose_correction,
+)
+from aksha.runtime.corrections.resolve import Unresolved, resolve, version_now
+from aksha.runtime.corrections.types import (
+    PROPOSER_UNKNOWN,
+    CorrectionRouting,
+    Evidence,
+    Target,
+)
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.events.envelope import NewEvent
@@ -114,6 +128,7 @@ from aksha.runtime.session.types import (
 )
 from aksha.runtime.session.views import SessionStatus, session_status
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tasks.reuse import run_request
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
@@ -247,6 +262,7 @@ class Session:
         run_query: QueryRunner | None = None,
         rebuilds: bool = False,
         ingester: DocumentIngester | None = None,
+        corrections: CorrectionRouting | None = None,
     ) -> None:
         """Serve ``agents`` over ``store`` (a writer handle); ``reader`` serves tool reads.
 
@@ -258,6 +274,9 @@ class Session:
         calls for (ADR-P05 D8) once no open run can move, so an upload reaches its work.
         ``ingester`` converts every uploaded file before it reaches ``inputs``
         (``runtime/inputs/ports.py``); without one, uploads must be UTF-8 text.
+        ``corrections`` routes approved corrections and names their domain owners
+        (ADR-P05 C1); without it, every correction is decided by ``person`` and a shared
+        source has no system of record for them.
         """
         self.store = store
         self.clock = clock
@@ -274,6 +293,7 @@ class Session:
         self.ingester = ingester
         self.run_query = run_query
         self.rebuilds = rebuilds
+        self.corrections = corrections or CorrectionRouting()
         self._executors: dict[str, StepExecutor] = {}
         self._inputs_checked: set[str] = set()
         self._unavailable: dict[str, dict[str, str]] = {}
@@ -297,7 +317,8 @@ class Session:
     def commands(self) -> frozenset[str]:
         """The named commands :meth:`dispatch` carries out here (the capability record's)."""
         out = {"SendMessage", "AnswerInterrupt", "Approve", "Reject", "GrantBudget",
-               "Finalize", "Stop", "AcceptReview", "RejectReview", "Steer"}  # fmt: skip
+               "Finalize", "Stop", "AcceptReview", "RejectReview", "Steer",
+               "ProposeCorrection", "DecideCorrection"}  # fmt: skip
         if any(a.approval_specs() for a in self.agents.values()):
             out |= {"EditAction", "Handoff"}
         if self.sources or self.inputs is not None:
@@ -368,6 +389,10 @@ class Session:
                                        command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.UploadInputs):
             return self._upload(command)
+        if isinstance(command, n.ProposeCorrection):
+            return self._propose(command)
+        if isinstance(command, n.DecideCorrection):
+            return self._decide_correction(command)
         raise AssertionError(f"{type(command).__name__} has no handler")  # pragma: no cover
 
     def check_inputs(self, store: EventStore, owner: str) -> tuple[str, ...]:
@@ -459,6 +484,70 @@ class Session:
                                           f"{name}:after:{before}",
                                           run_query=self.run_query, facts=facts)  # fmt: skip
         return receipt
+
+    # --- corrections (ADR-P05 C1) -----------------------------------------------------------
+
+    def _kinds(self) -> dict[str, ArtifactKind]:
+        return {k: v for a in self.agents.values() for k, v in a.kinds.items()}
+
+    def _propose(self, command: n.ProposeCorrection) -> CommandReceipt:
+        """Resolve the target against the live sources and artifacts, then record the proposal."""
+        view = load_view(self.store, command.owner)
+        found = resolve(command.target, command.owner, view, sources=self._versioned(),
+                        reader=self._reader(command.owner), inputs=self.inputs,
+                        kinds=frozenset(self._kinds()), routing=self.corrections,
+                        systems=frozenset(self.systems))  # fmt: skip
+        if isinstance(found, Unresolved):
+            return self._refuse(command, "propose_correction", command.owner,
+                                {"target": command.target}, found.code, found.message)  # fmt: skip
+        proposer = command.by.removeprefix("agent:")
+        if command.by.startswith("agent:") and proposer not in self.agents:
+            return self._refuse(command, "propose_correction", command.owner,
+                                {"target": command.target}, PROPOSER_UNKNOWN,
+                                f"no agent {proposer!r} is loaded")  # fmt: skip
+        evidence = (*(Evidence(t) for t in command.evidence),
+                    *(Evidence(f"cites {r}", r) for r in command.cites))  # fmt: skip
+        return propose_correction(self.store, command.owner, self.ids, found.target,
+                                  command.value, evidence, route=found.route,
+                                  approver=found.approver, by=command.by,
+                                  reason=command.reason, system=found.system, held=found.held,
+                                  command_id=command.command_id)  # fmt: skip
+
+    def _decide_correction(self, command: n.DecideCorrection) -> CommandReceipt:
+        """The domain owner's decision; an approved source correction is applied at once."""
+        owner = command.owner
+
+        def now(target: Target) -> str | None:
+            return version_now(target, owner, load_view(self.store, owner), self._versioned())
+
+        receipt = decide_correction(self.store, owner, command.correction_id,
+                                    approve=command.approve, by=command.by, version_now=now,
+                                    kinds=self._kinds(), note=command.note,
+                                    command_id=command.command_id)  # fmt: skip
+        if receipt.accepted:
+            self.apply_corrections(owner)
+        return receipt
+
+    def apply_corrections(self, owner: str) -> bool:
+        """Apply the owner's approved source corrections still unapplied; whether any was.
+
+        An upload correction writes the file's next version; an outbox one is delivered by
+        the owner's outbox worker. Each then records what moved (ADR-P05 C1). Runs after a
+        decision and on every :meth:`step`, so a crash between the decision and the source
+        change is finished on the next pass.
+        """
+        if not any(e.type == "correction.decided" for e in load_view(self.store, owner).events):
+            return False
+        wrote = False
+        for found in pending(load_view(self.store, owner)):
+            if found.route == "upload" and self.inputs is not None:
+                wrote = apply_upload(self.store, owner, found, self.inputs, self._versioned(),
+                                     run_query=self.run_query) or wrote  # fmt: skip
+            elif found.route == "outbox" and self.systems:
+                wrote = apply_outbox(self.store, owner, found, self._versioned(),
+                                     drain=lambda: self._worker(owner).drain(),
+                                     run_query=self.run_query) or wrote  # fmt: skip
+        return wrote
 
     def _send(self, command: n.SendMessage) -> CommandReceipt:
         agent = command.agent
@@ -621,6 +710,7 @@ class Session:
         waiting for an answer that will never come.
         """
         ticked = self.tick(owner).wrote
+        ticked = self.apply_corrections(owner) or ticked
         blocked = self._blocked(owner)
         self._unavailable.setdefault(owner, {}).update(blocked)
         for run in self.runnable(owner):
@@ -782,31 +872,8 @@ def _plain(value: object) -> Any:
 
 
 def _request(view: LogView, run: str) -> str:
-    """The text of the message that opened ``run``.
-
-    A reminder's run (ADR-P25 D2) states its request on its ``run.started``. A rebuild run
-    no message opened has the request of the first run it rebuilds for
-    (``run.started{for_runs}``), so every pass of it shows the model the same request; a run
-    with none of these is empty.
-    """
-    for e in view.events:
-        if e.type == "run.started" and e.run == run and e.payload.get("request"):
-            return str(e.payload["request"])
-    message: str | None = None
-    for e in view.events:
-        if e.type == "route.decided" and e.payload.get("run") == run:
-            message = str(e.payload.get("message"))
-            break
-    if message is None:
-        for e in view.events:
-            if e.type == "run.started" and e.run == run:
-                for_runs = [str(r) for r in e.payload.get("for_runs", ()) if r != run]
-                return _request(view, for_runs[0]) if for_runs else ""
-        return ""
-    for e in view.events:
-        if e.type == "user.message" and e.payload.get("message") == message:
-            return str(e.payload.get("text", ""))
-    return ""
+    """The text of the message that opened ``run`` (``tasks.reuse.run_request``)."""
+    return run_request(view, run)
 
 
 def _latest_request(view: LogView, agent: str) -> str:

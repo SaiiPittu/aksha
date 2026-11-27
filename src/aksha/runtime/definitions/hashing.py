@@ -113,7 +113,7 @@ def run_started_fields(
     ``invalidation`` is the agent's mode (decision 38), so every reader of the log derives
     what invalidation the run gets from the run's own facts.
     """
-    return {
+    fields: dict[str, Any] = {
         "definition_hash": loaded.definition_hash,
         "extension_versions": {
             e.ext.name: {"version": e.ext.version, "hash": tree_hash(e.file_hashes)}
@@ -125,6 +125,9 @@ def run_started_fields(
         "invalidation": loaded.agent.invalidation,
         "invalidation_keys": loaded.agent.invalidation_keys,
     }
+    if loaded.agent.reuse == "off":
+        fields["reuse"] = "off"  # ADR-P04 R1; a run that records none reuses
+    return fields
 
 
 def resume_refusal(recorded: str | None, loaded: str) -> str | None:

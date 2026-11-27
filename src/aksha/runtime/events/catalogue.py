@@ -114,6 +114,9 @@ RUN_STARTED = EventTypeSpec(
             "invalidation": {"enum": ["off", "edit_guard", "notify", "rebuild"]},
             # ADR-P05 M2: what the run's versions are keyed on; none recorded reads "reads".
             "invalidation_keys": {"enum": ["reads", "citations"]},
+            # ADR-P04 R1: whether the run may reuse an earlier run's versions by writer key;
+            # a run that records none reuses.
+            "reuse": {"enum": ["on", "off"]},
             # ADR-P07 D2, D9: the run mode and each alias's binding (alias, class, adapter
             # class, native), with its hash; never a configuration value or a key.
             "run_mode": {"enum": ["fake", "scripted", "replay", "live"]},
@@ -238,12 +241,15 @@ ARTIFACT_SAVED = EventTypeSpec(
                 "required": ["agent", "task_path", "key"],
                 "additionalProperties": False,
             },
-            "origin": {"enum": ["task", "derived", "choice", "copy_choice"]},
+            "origin": {"enum": ["task", "derived", "choice", "copy_choice", "correction"]},
+            # ADR-P04 C1: the approved correction a ``correction`` version applies.
+            "correction": {"type": "string", "pattern": "^K-[0-9]{4,}$"},
         },
         "required": ["ref", "kind", "key", "version", "content_hash"],
     },
     writer="artifacts",
-    boundaries=frozenset({"U2", "U10"}),
+    # U4: an approved correction to an artifact value saves its version in the decision.
+    boundaries=frozenset({"U2", "U4", "U10"}),
     dedup_key="save:{ref}",
 )
 # --- P04 lineage inputs and typed relations (``artifacts/lineage.py``, ``relations.py``) --
@@ -361,7 +367,8 @@ CITATION_BOUND = EventTypeSpec(
         "additionalProperties": False,
     },
     writer="artifacts",
-    boundaries=frozenset({"U2", "U10"}),
+    # U4: an approved correction's version carries over its old version's citations.
+    boundaries=frozenset({"U2", "U4", "U10"}),
     dedup_key="cite:{carrier}#{n}",
 )
 RECOVERY_COMPLETED = EventTypeSpec(
@@ -1037,7 +1044,9 @@ INTERRUPT_RAISED = EventTypeSpec(
         "properties": {
             "interrupt": {"type": "string", "minLength": 1},
             # ADR-P16 D3: ``budget`` is the budget interrupt a stop decision raises (U3).
-            "kind": {"enum": ["input", "choice", "approval", "review", "budget", "route"]},
+            "kind": {
+                "enum": ["input", "choice", "approval", "review", "budget", "route", "correction"]
+            },
             # ADR-P17: what an interrupt shows. ``questions`` (S2, one answer each),
             # ``options`` (a choice; the agents a route lists), the agent's ``label``, and an
             # approval's ID, signature, tool, facts and targets (its body is on the request).
@@ -1074,6 +1083,9 @@ INTERRUPT_RAISED = EventTypeSpec(
             "message": {"type": "string", "pattern": "^M-[0-9]{4,}$"},
             "purposes": {"type": "object", "additionalProperties": {"type": "string"}},
             "suggested": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            # ADR-P17 C1: a correction proposal waiting on its domain owner.
+            "correction": {"type": "string", "pattern": "^K-[0-9]{4,}$"},
+            "approver": {"type": "string", "minLength": 1},
         },
         "required": ["interrupt"],
         "allOf": [
@@ -1084,6 +1096,10 @@ INTERRUPT_RAISED = EventTypeSpec(
             {
                 "if": {"properties": {"kind": {"const": "approval"}}, "required": ["kind"]},
                 "then": {"required": ["approval", "signature"]},
+            },
+            {
+                "if": {"properties": {"kind": {"const": "correction"}}, "required": ["kind"]},
+                "then": {"required": ["correction", "approver"]},
             },
         ],
     },
@@ -1339,6 +1355,33 @@ COMPLETION_CHECK_EVALUATED = EventTypeSpec(
     },
     writer="stop_policy",
     boundaries=frozenset({"U3"}),
+)
+# ADR-P04 R1: a later run reuses an earlier run's version by writer key, recorded with the
+# entry it lets pop DONE (U3).
+ARTIFACT_REUSED = EventTypeSpec(
+    name="artifact.reused",
+    schema={
+        "type": "object",
+        "properties": {
+            "version": {"type": "string", "minLength": 1},
+            "from_run": {"type": ["string", "null"]},
+            "writer": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "minLength": 1},
+                    "task_path": {"type": "string", "minLength": 1},
+                    "key": {"type": ["string", "null"]},
+                },
+                "required": ["agent", "task_path", "key"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["version", "from_run", "writer"],
+        "additionalProperties": False,
+    },
+    writer="stop_policy",
+    boundaries=frozenset({"U3"}),
+    dedup_key="reuse:{run}/{version}",
 )
 COMPLETION_CHECK_RESET = EventTypeSpec(
     name="completion_check.reset",
@@ -1736,6 +1779,109 @@ DOCUMENT_REFUSED = EventTypeSpec(
     boundaries=frozenset({"U8"}),
 )
 
+# --- Corrections (ADR-P05 C1, ADR-P17 C1, ADR-P04 C1) ------------------------------------
+# A person or an agent proposes a correction to a source record or an artifact value, with
+# evidence; the domain owner approves or rejects it (an owner-level ``correction``
+# interrupt, U4); an approved correction is applied once (a new upload version or an
+# outbox write recorded with its source change, U8; an artifact version, U4), and
+# invalidation reopens what read the old value.
+
+_CORRECTION_ID = {"type": "string", "pattern": "^K-[0-9]{4,}$"}
+_CORRECTION_ROUTE = {"enum": ["upload", "outbox", "artifact"]}
+
+CORRECTION_PROPOSED = EventTypeSpec(
+    name="correction.proposed",
+    schema={
+        "type": "object",
+        "properties": {
+            "correction": _CORRECTION_ID,
+            "target": {
+                "type": "object",
+                "properties": {
+                    "kind": {"enum": ["record", "artifact"]},
+                    "id": {"type": "string", "minLength": 1},
+                    "version": {"type": ["string", "null"]},
+                    "source": {"type": "string", "minLength": 1},
+                    "path": {"type": "string"},
+                },
+                "required": ["kind", "id", "version"],
+                "additionalProperties": False,
+            },
+            "value": {},
+            "value_hash": _HASH,
+            "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "minLength": 1},
+                        "ref": {"type": "string", "minLength": 1},
+                    },
+                    "required": ["text"],
+                    "additionalProperties": False,
+                },
+            },
+            "by": {"type": "string", "minLength": 1},
+            "reason": {"type": "string"},
+            "route": _CORRECTION_ROUTE,
+            "system": {"type": "string", "minLength": 1},
+            "approver": {"type": "string", "minLength": 1},
+        },
+        "required": [
+            "correction",
+            "target",
+            "value",
+            "value_hash",
+            "evidence",
+            "by",
+            "route",
+            "approver",
+        ],
+        "additionalProperties": False,
+    },
+    writer="corrections",
+    boundaries=frozenset({"U4"}),
+    dedup_key="cprop:{correction}",
+)
+CORRECTION_DECIDED = EventTypeSpec(
+    name="correction.decided",
+    schema={
+        "type": "object",
+        "properties": {
+            "correction": _CORRECTION_ID,
+            "interrupt": {"type": "string", "minLength": 1},
+            "decision": {"enum": ["approved", "rejected"]},
+            "by": {"type": "string", "minLength": 1},
+            "note": {"type": "string"},
+        },
+        "required": ["correction", "interrupt", "decision", "by"],
+        "additionalProperties": False,
+    },
+    writer="corrections",
+    boundaries=frozenset({"U4"}),
+    dedup_key="cdecide:{correction}",
+)
+CORRECTION_APPLIED = EventTypeSpec(
+    name="correction.applied",
+    schema={
+        "type": "object",
+        "properties": {
+            "correction": _CORRECTION_ID,
+            "route": _CORRECTION_ROUTE,
+            "source_version": {"type": "integer", "minimum": 0},
+            "record_version": {"type": ["string", "null"]},
+            "version": {"type": "string", "minLength": 1},
+            "outbox_key": _KEY,
+        },
+        "required": ["correction", "route"],
+        "additionalProperties": False,
+    },
+    writer="corrections",
+    boundaries=frozenset({"U4", "U8"}),
+    dedup_key="capply:{correction}",
+)
+
 CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     RUN_STARTED,
     RUN_ENDED,
@@ -1781,6 +1927,7 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     TASK_ENTERED,
     TASK_WITHDRAWN,
     COMPLETION_CHECK_EVALUATED,
+    ARTIFACT_REUSED,
     COMPLETION_CHECK_RESET,
     KEYS_LISTED,
     USER_MESSAGE,
@@ -1795,6 +1942,9 @@ CORE_EVENT_TYPES: tuple[EventTypeSpec, ...] = (
     DOCUMENT_STORED,
     DOCUMENT_GAP,
     DOCUMENT_REFUSED,
+    CORRECTION_PROPOSED,
+    CORRECTION_DECIDED,
+    CORRECTION_APPLIED,
 )
 """The runtime core's closed catalogue. Each primitive adds its section when it is built."""
 

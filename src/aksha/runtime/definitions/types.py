@@ -9,7 +9,7 @@ calls through the interface that kind of thing already has (D3).
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from aksha.runtime.artifacts.types import ArtifactKind, RelationKind
 from aksha.runtime.budgets.types import Budget, Limits
@@ -89,6 +89,9 @@ class Agent:
     ``citations`` (the cited spans, scoped claims and definitions a version rests on are
     strong dependencies, every other read weak); the loader refuses any other value
     (``invalidation_keys_unknown``) and hashes it into the definition.
+    ``reuse`` is whether a later run may reuse an earlier run's versions by writer key
+    when their recorded inputs still hold (ADR-P04 R1, ``tasks.reuse``); ``off`` makes
+    every run recompute (``reuse_unknown`` for any other value).
     """
 
     name: str
@@ -113,3 +116,4 @@ class Agent:
     concurrency: int = 1
     invalidation: InvalidationMode = DEFAULT_MODE
     invalidation_keys: InvalidationKeys = DEFAULT_KEYS
+    reuse: Literal["on", "off"] = "on"

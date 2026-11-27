@@ -14,6 +14,9 @@ tree and the instance; it has no clock, no model and no network. Its readers:
    that reads a tool's report can refuse a report the files moved past (D4).
 6. ``called(tool)``: how many calls of ``tool`` this instance completed, so a forced
    first call (ADR-P09 D3's ``recall``) holds only until it is made.
+8. ``hidden``: versions another run's line saved for this instance's writer that this run
+   did not reuse (ADR-P04 R1, ``tasks.reuse``); ``latest``, ``own`` and ``all_latest``
+   skip them, so an earlier run's work does not pass this run's check unexamined.
 7. ``entries(kind)``: every key of a kind, its current version or, where its writer was
    blocked under a partial rule or voided by finalization, an explicit ``Unknown``
    (ADR-P24 D2, D4). A check that refuses unknowns still refuses them (D3).
@@ -46,6 +49,7 @@ class TaskView:
     log: LogView
     tree: CompiledTree
     instance: InstanceRef
+    hidden: frozenset[str] = frozenset()
 
     @property
     def key(self) -> str | None:
@@ -54,7 +58,15 @@ class TaskView:
 
     def latest(self, kind: str, key: str | None = None) -> ArtifactVersion | None:
         """The current version of slot ``(kind, key)``, or None while it is empty."""
-        return current(self.log, self.tree.kind(kind), key)
+        if not self.hidden:
+            return current(self.log, self.tree.kind(kind), key)
+        pending = unaccepted_revisions(self.log)
+        found = [
+            v
+            for v in versions(self.log, self.tree.kind(kind), key)
+            if str(v.ref) not in pending and str(v.ref) not in self.hidden
+        ]
+        return found[-1] if found else None
 
     def own(self, kind: str) -> ArtifactVersion | None:
         """The current version of ``kind`` at this instance's own key."""
@@ -71,7 +83,11 @@ class TaskView:
         }
         out: dict[str | None, ArtifactVersion] = {}
         for key in sorted(keys, key=lambda k: "" if k is None else str(k)):
-            found = [v for v in versions(self.log, full, key) if str(v.ref) not in pending]
+            found = [
+                v
+                for v in versions(self.log, full, key)
+                if str(v.ref) not in pending and str(v.ref) not in self.hidden
+            ]
             if found:
                 out[key] = found[-1]
         return MappingProxyType(out)
@@ -104,7 +120,7 @@ class TaskView:
         """Every key of ``kind``: its current version, or its explicit unknown (ADR-P24)."""
         from aksha.runtime.finalization.unknowns import entries  # deferred: it reads statuses
 
-        return entries(self.log, self.tree, self.instance, kind)
+        return entries(self.log, self.tree, self.instance, kind, self.hidden)
 
     def freshness(self, ref: str) -> Freshness | None:
         """The version's state in the invalidation view, or None when the view lacks it."""

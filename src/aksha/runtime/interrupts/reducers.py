@@ -44,7 +44,7 @@ APPROVAL_REJECTED = "approval.rejected"
 APPROVAL_VOIDED = "approval.voided"
 APPROVAL_REVOKED = "approval.revoked"
 
-DETACHED_KINDS: frozenset[str] = frozenset({"review"})
+DETACHED_KINDS: frozenset[str] = frozenset({"review", "correction"})
 """Interrupt kinds that wait on a person without holding the run or instance that raised them.
 
 A diff review (ADR-P05 D1) waits on the person, and the readers of the old version wait
@@ -53,6 +53,9 @@ writer that proposed the revision is done (F2, decision 34) and its run may end.
 review never suspends its instance, never holds its run, is not voided when the run
 ends, and is not counted by :func:`pending_interrupts`. It stays open in
 :func:`interrupts` until a person accepts or rejects it, or invalidation voids it.
+
+A correction proposal (ADR-P17 C1) is raised for the owner, not for a run: it waits on
+the domain owner and holds nothing, so it is detached too.
 """
 
 

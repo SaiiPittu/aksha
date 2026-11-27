@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.12"
+API_VERSION = "2.13"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -73,6 +73,8 @@ record holding several kinds is decided section by section (ADR-P07 G4).
 ``WEB_SOURCE``, ``WEB_EGRESS`` and ``web_record_id``.
 2.12 (27 Nov 2026, ADR-P05 amendment M2) added citation keying: the trailing field
 ``Agent.invalidation_keys`` (``reads`` by default) and the name ``InvalidationKeys``.
+2.13 (27 Nov 2026) added cross-run reuse (ADR-P04 R1): the trailing fields ``Agent.reuse``
+(``on`` by default) and ``TaskView.hidden`` (the versions a check does not see).
 """
 
 Version = tuple[int, int]

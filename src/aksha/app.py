@@ -63,6 +63,7 @@ from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
+from aksha.adapters.systems.folder import FolderSystem
 from aksha.adapters.systems.mailbox import MailboxSystem
 from aksha.evals.agents.runtime import EpisodeSource, EpisodeWeb, RuntimeUnderTest
 from aksha.evals.agents.scripted import ScriptedResearchAgent
@@ -76,6 +77,7 @@ from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.budgets.types import Limits
 from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import effective_policy
+from aksha.runtime.corrections.types import CorrectionRouting
 from aksha.runtime.definitions.hashing import run_started_fields
 from aksha.runtime.definitions.loader import (
     LoadedDefinition,
@@ -243,6 +245,12 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # ``AKSHA_REENTRY``        re-entry setting a request run records:         ``fresh``
 #                          ``fresh`` or ``resume`` (decision 36)
 # ``AKSHA_SYSTEMS``        ``<system>=<kind>:<folder>`` pairs (``,``)      none
+# ``AKSHA_CORRECTIONS``    ``<source>=<system>`` pairs (``,``): where an   none
+#                          approved correction to a shared source goes
+# ``AKSHA_CORRECTION_APPROVER``  the domain owner's role, or              ``person``
+#                          ``<source>=<role>`` pairs (``,``)
+# ``AKSHA_REUSE``          ``off`` makes every run recompute instead of    ``on``
+#                          reusing an earlier run's work (ADR-P04 R1)
 # ``AKSHA_IMAGE_PROFILE``  the image profile of the model reading uploads  none (no vision)
 #                          (``patch28-standard``, ``patch28-hires``,
 #                          ``patch32-high``, ``flat-1120``)
@@ -288,12 +296,20 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # with ``state_dir``: a folder beside the SQLite file (``systems/<full name>``) where a
 # local or fixture system may keep its own ledger. A real adapter may ignore it.
 #
+# ``AKSHA_CORRECTIONS`` routes approved corrections (ADR-P05 C1): a correction to an
+# owner's own upload becomes that file's next version; one to a record of a shared source
+# (``AKSHA_SOURCES``) goes through the outbox to the system named here, which must be bound.
+# ``AKSHA_CORRECTION_APPROVER`` names the role that decides: a command sent under another
+# role (``by``) is refused ``not_domain_owner``.
+#
 # ``AKSHA_SYSTEMS`` is opt-in and for development only. It binds a system of record that
 # an effect names (``counsel_mail`` for the patent agent's ``send_packet``) or that an
 # extension contributes (``<extension>.<name>``, replacing the extension's own) to a mock
 # kind the composition root builds. The one kind is ``mailbox``: the ledgered mock mailbox
 # ``make demo`` uses (``adapters.systems.mailbox``), a JSON file ``<folder>/mailbox.json``
-# that delivers once per idempotency key and reaches no one. Nothing is bound by default,
+# that delivers once per idempotency key and reaches no one. The kind ``folder`` writes each
+# approved correction's text as a file into ``<folder>`` (``adapters.systems.folder``), a
+# shared source's folder, with its ledger beside the store. Nothing is bound by default,
 # so an approval whose effect has no system is refused ``system_unavailable``; a name no
 # loaded agent or extension uses is refused ``system_unknown``, an unknown kind
 # ``system_invalid``. The CLI says on every command that the bound system is a mock.
@@ -342,7 +358,7 @@ SERVER_FILE = "aksha.server.json"
 """Beside the store: the URL of the server holding the writer lock, written by ``serve``."""
 SYSTEMS_DIR = "systems"
 """Beside the store: one state folder per contributed system of record."""
-MOCK_SYSTEM_KINDS = ("mailbox",)
+MOCK_SYSTEM_KINDS = ("mailbox", "folder")
 """The development systems of record ``AKSHA_SYSTEMS`` can bind (mocks, never real ones)."""
 
 
@@ -412,6 +428,14 @@ class RuntimeConfig:
     recorded."""
     record: Path | None = None
     """``AKSHA_RECORD``: the folder every model call, search and fetch is recorded into."""
+    corrections: Mapping[str, str] = field(default_factory=dict)
+    """``AKSHA_CORRECTIONS``: the system of record each shared source's corrections go to."""
+    approver: str = "person"
+    """``AKSHA_CORRECTION_APPROVER``: the domain owner's role for every source."""
+    approvers: Mapping[str, str] = field(default_factory=dict)
+    """``AKSHA_CORRECTION_APPROVER`` pairs: a source's own domain owner role."""
+    reuse: str = "on"
+    """``AKSHA_REUSE``: ``off`` records ``reuse: off`` on every run (ADR-P04 R1)."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -448,6 +472,12 @@ class RuntimeConfig:
             web_world=env.get("AKSHA_WEB_WORLD") or None,
             search_env={k: v for k, v in env.items() if k.startswith("AKSHA_BRAVE_") and v},
             record=Path(env["AKSHA_RECORD"]) if env.get("AKSHA_RECORD") else None,
+            corrections=_pairs("AKSHA_CORRECTIONS", env.get("AKSHA_CORRECTIONS", "")),
+            approver=_approver(env.get("AKSHA_CORRECTION_APPROVER", "")),
+            approvers=_pairs(
+                "AKSHA_CORRECTION_APPROVER", _role_pairs(env.get("AKSHA_CORRECTION_APPROVER", ""))
+            ),
+            reuse=_reuse(env.get("AKSHA_REUSE") or "on"),
         )
 
     def reentry_setting(self) -> ReentrySetting:
@@ -481,6 +511,34 @@ def _source_settings(raw: str) -> dict[str, Path]:
     return out
 
 
+def _pairs(name: str, raw: str) -> dict[str, str]:
+    """``a=b`` items separated by commas."""
+    out: dict[str, str] = {}
+    for item in (part.strip() for part in raw.split(",") if part.strip()):
+        key, sep, value = item.partition("=")
+        if not sep or not key.strip() or not value.strip():
+            raise StoreError("setting_invalid", f"{name} item {item!r}: use name=value")
+        out[key.strip()] = value.strip()
+    return out
+
+
+def _role_pairs(raw: str) -> str:
+    """The ``<source>=<role>`` items of ``AKSHA_CORRECTION_APPROVER``."""
+    return ",".join(p for p in raw.split(",") if "=" in p)
+
+
+def _approver(raw: str) -> str:
+    """The plain role among ``AKSHA_CORRECTION_APPROVER``'s items, ``person`` without one."""
+    plain = [p.strip() for p in raw.split(",") if p.strip() and "=" not in p]
+    return plain[-1] if plain else "person"
+
+
+def _reuse(raw: str) -> str:
+    if raw not in ("on", "off"):
+        raise StoreError("setting_invalid", f"AKSHA_REUSE={raw!r}: use on or off")
+    return raw
+
+
 def _system_settings(raw: str) -> dict[str, tuple[str, Path]]:
     """``AKSHA_SYSTEMS``: ``name=kind:folder`` items separated by commas."""
     out: dict[str, tuple[str, Path]] = {}
@@ -500,7 +558,8 @@ def _system_settings(raw: str) -> dict[str, tuple[str, Path]]:
 def mock_system_notes(config: RuntimeConfig) -> tuple[str, ...]:
     """One line per ``AKSHA_SYSTEMS`` binding, saying it is a mock, for every CLI command."""
     return tuple(
-        f"mock: {name} is a development {kind} at {folder / 'mailbox.json'} (AKSHA_SYSTEMS); "
+        f"mock: {name} is a development {kind} at "
+        f"{folder if kind == 'folder' else folder / 'mailbox.json'} (AKSHA_SYSTEMS); "
         "nothing it receives leaves this machine"
         for name, (kind, folder) in sorted(config.systems.items())
     )
@@ -763,15 +822,18 @@ def configured_systems(
 
     Raises ``StoreError`` ``system_unknown`` for a name no loaded agent or extension uses.
     """
-    known = effect_system_names(loaded)
+    known = effect_system_names(loaded) | frozenset(config.corrections.values())
     unknown = sorted(set(config.systems) - known)
     if unknown:
         raise StoreError("system_unknown", f"AKSHA_SYSTEMS names {unknown}, which no loaded "
                          f"agent or extension uses; used: {sorted(known)}")  # fmt: skip
-    return {
-        name: MailboxSystem(folder / "mailbox.json", name)
-        for name, (_, folder) in config.systems.items()
-    }
+    out: dict[str, SystemOfRecord] = {}
+    for name, (kind, folder) in config.systems.items():
+        if kind == "folder":
+            out[name] = FolderSystem(folder, name, config.system_dir(name) / "ledger.json")
+        else:
+            out[name] = MailboxSystem(folder / "mailbox.json", name)
+    return out
 
 
 INPUTS_SOURCE = "inputs"
@@ -1159,8 +1221,13 @@ def open_session(
         router = Router(routable, PurposeClassifier(), ids)
     sandbox = tier.gate_availability
     recorded = tier.record()
-    agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded}) for a in agents)
+    off = {"reuse": "off"} if config.reuse == "off" else {}
+    agents = tuple(replace(a, run_extra={**a.run_extra, "sandbox": recorded, **off})
+                   for a in agents)  # fmt: skip
+    routing = CorrectionRouting(systems=dict(config.corrections), approver=config.approver,
+                                approvers=dict(config.approvers))  # fmt: skip
     return Session(store, clock, agents, router=router, sandbox=lambda: sandbox,
+                   corrections=routing,
                    blobs=open_blob_store(config.storage), systems=every_system,
                    reader=reader, ids=ids, tier=tier, inputs=inputs, rebuilds=True,
                    ingester=ingester,

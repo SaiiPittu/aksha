@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal
 
-InterruptKind = Literal["input", "choice", "approval", "budget", "review", "route"]
+InterruptKind = Literal["input", "choice", "approval", "budget", "review", "route", "correction"]
 """The closed set of interrupt kinds (D2, P17-3); an agent's word goes in a ``label``."""
 
 INTERRUPT_KINDS: tuple[InterruptKind, ...] = (
@@ -28,6 +28,7 @@ INTERRUPT_KINDS: tuple[InterruptKind, ...] = (
     "budget",
     "review",
     "route",
+    "correction",
 )
 
 FREE_TEXT_KINDS: frozenset[str] = frozenset({"input", "choice", "route"})

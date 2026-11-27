@@ -100,6 +100,8 @@ def validate_agent(
         keys = ", ".join(INVALIDATION_KEYS)
         message = f"invalidation_keys {agent.invalidation_keys!r} is not one of {keys}"
         out.add("invalidation_keys", "invalidation_keys_unknown", message)
+    if agent.reuse not in ("on", "off"):
+        out.add("reuse", "reuse_unknown", f"reuse {agent.reuse!r} is not on or off")
     if agent.concurrency != MAX_CONCURRENCY:
         message = f"concurrency {agent.concurrency!r} is not built; v1 runs one instance at a time"
         out.add("concurrency", "concurrency_unsupported", message)

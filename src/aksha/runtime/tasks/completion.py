@@ -23,6 +23,8 @@ facts it returns commit in that stop decision (U3). The rules:
    message. The ``max_finish_vetoes``-th failing finish since the instance was last entered
    (or reset) is FAIL instead, and the instance becomes ``blocked``. ``check_raised`` and
    ``child_blocked`` are FAIL at once: another turn cannot clear them.
+6. Cross-run reuse (ADR-P04 R1): the own check does not see the versions another run's
+   line saved for this writer unless this run reused them (``tasks.reuse.hidden_for``).
 """
 
 from __future__ import annotations
@@ -30,11 +32,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Literal
 
+from aksha.runtime.artifacts.types import WriterId
 from aksha.runtime.budgets.limits import vetoes_since_entry
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import check_name, run_check
 from aksha.runtime.tasks.rebuilds import rebuild_targets
+from aksha.runtime.tasks.reuse import hidden_for
 from aksha.runtime.tasks.status import CHECK_EVALUATED, CHECK_RESET, RunState, run_state
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import (
@@ -104,7 +108,8 @@ def _own(state: RunState, ref: InstanceRef) -> Evaluation:
     check = state.tree.node(ref.task_path).task.done
     if check is None:
         return Evaluation(ref.instance, ok=True)
-    result, raised = run_check(check, TaskView(state.view, state.tree, ref))
+    hidden = hidden_for(state.view, ref.run, writer_key(state.tree, ref))
+    result, raised = run_check(check, TaskView(state.view, state.tree, ref, hidden))
     code: EvaluationCode = "" if result.ok else ("check_raised" if raised else "check_failed")
     return Evaluation(
         ref.instance,
@@ -116,6 +121,11 @@ def _own(state: RunState, ref: InstanceRef) -> Evaluation:
         code=code,
         check=check_name(check),
     )
+
+
+def writer_key(tree: CompiledTree, ref: InstanceRef) -> WriterId:
+    """The writer key of ``ref``: (agent, Task path, key), the same in every run."""
+    return WriterId(tree.agent, ref.task_path, ref.key)
 
 
 def task_done(state: RunState, path: str) -> Evaluation:

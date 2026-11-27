@@ -40,6 +40,7 @@ from aksha.runtime.artifacts.versions import unaccepted_revisions
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.finalization.types import UnknownEntry
 from aksha.runtime.interrupts.reducers import APPROVAL_VOIDED, approvals
+from aksha.runtime.invalidation.confirm import after
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.completion import (
     evaluate_in,
@@ -49,6 +50,7 @@ from aksha.runtime.tasks.completion import (
 )
 from aksha.runtime.tasks.errors import TaskUnknown
 from aksha.runtime.tasks.rebuilds import is_rebuild_run, rebuild_targets
+from aksha.runtime.tasks.reuse import reuse_facts
 from aksha.runtime.tasks.status import (
     TASK_ENTERED,
     TASK_WITHDRAWN,
@@ -263,9 +265,16 @@ class Entry:
 
 
 def enter(view: LogView, tree: CompiledTree, ref: InstanceRef, *, cause: EntryCause) -> Entry:
-    """``task.entered`` and the entry's ``completion_check.evaluated`` for ``ref``. Pure."""
-    evaluation = evaluate_in(run_state(view, tree, ref.run), ref)
-    facts = (entered_fact(tree, ref, cause=cause), evaluated_fact(ref, evaluation, on="entry"))
+    """``task.entered`` and the entry's ``completion_check.evaluated`` for ``ref``. Pure.
+
+    Between them, the ``artifact.reused`` facts of an earlier run's versions this entry
+    reuses (ADR-P04 R1, ``tasks.reuse``); the entry's check reads the log with them.
+    """
+    reused = reuse_facts(view, ref.run, writer_of(tree, ref), ref.instance)
+    seen = after(view, reused) if reused else view
+    evaluation = evaluate_in(run_state(seen, tree, ref.run), ref)
+    facts = (entered_fact(tree, ref, cause=cause), *reused,
+             evaluated_fact(ref, evaluation, on="entry"))  # fmt: skip
     return Entry(ref, facts, evaluation.ok)
 
 
