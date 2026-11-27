@@ -374,3 +374,30 @@ def test_a_run_that_recomputes_does_not_regenerate_over_a_corrected_value(
                 if r == "R-0003" and str(p["ref"]).startswith(slot)]  # fmt: skip
     code, out = aksha(tmp_path, "show", slot)
     assert json.loads(out)["content"]["name"] == "AquaSense Agritech", out
+
+
+def test_a_corrected_output_has_its_computed_counts_recomputed(tmp_path: Path) -> None:
+    """ADR-P04 K1: a correction's save applies the kind's computed fields as any save does.
+
+    Dropping a review from a need's evidence changes its "N of M" phrase with it: the phrase
+    is computed from the evidence at save, never left as the old version said it.
+    """
+    first_run(tmp_path, TILLDEW)
+    code, out = aksha(tmp_path, "show", "research.needs")
+    need = next(n for n in json.loads(out)["content"]["needs"] if len(n["evidence"]) >= 2)
+    i = json.loads(out)["content"]["needs"].index(need)
+    m = int(need["phrase"].split(" of ")[1].split()[0])
+    fewer = json.dumps(need["evidence"][:-1])
+    code, out = aksha(tmp_path, "correct", f"research.needs#/needs/{i}/evidence", "--value",
+                      fewer, "--evidence", "one review is under the wrong theme")  # fmt: skip
+    assert code == wire.EXIT_OK, out
+    # Only the corrected version is asserted here: how its readers rebuild is the test above.
+    code, out = aksha(tmp_path, "approve", "K-0001")
+    assert "K-0001 applied" in out, out
+    code, out = aksha(tmp_path, "show", "research.needs")
+    shown = json.loads(out)
+    assert shown["ref"] == "research.needs@v2", out
+    fixed = shown["content"]["needs"][i]
+    n = len(need["evidence"]) - 1
+    assert fixed["phrase"] == f"{n} of {m} reviews in this sample"
+    assert (fixed.get("count"), fixed.get("of")) == (n, m)
