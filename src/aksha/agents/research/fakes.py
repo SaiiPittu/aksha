@@ -50,7 +50,7 @@ from aksha.runtime.api import (
     ToolCall,
 )
 
-from . import analysis, fakes_readers, parsing
+from . import analysis, fakes_readers, fakes_views, parsing
 
 MANUAL_TERMS = ("spreadsheet", "manual count", "by hand", "walk-round", "clipboard", "paper log")
 """Words for doing the job without a product, in any market."""
@@ -186,6 +186,8 @@ class Seen:
     queries: tuple[str, ...] = ()
     """Web searches a person who knows the market would type, beside the request's own words
     (:class:`ResearchModel`'s ``queries``, from the task's world); a live model writes its own."""
+    pending: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    """Reads to continue where a window was cut (``fakes_views.continuations``)."""
 
     def of(self, name: str) -> list[Result]:
         """Earlier results of tool ``name``, oldest first."""
@@ -214,7 +216,72 @@ def parse(request: GenerationRequest) -> Seen:
         elif m.role == "tool" and m.call_id in calls and m.text:
             step, name, args = calls[m.call_id]  # type: ignore[misc]
             seen.results.append(_result(step, name, args, m.text))
+    _as_read(seen)
     return seen
+
+
+def _as_read(seen: Seen) -> None:
+    """The shared tools' results as the views the rules read (``fakes_views``)."""
+    view = fakes_views.VIEW_OF_TASK.get(seen.ref.task_id, "fetch_page")
+    scope = seen.artifact("research.scope")
+    themes = [
+        {
+            "id": str(t["id"]),
+            "name": str(t.get("name", t["id"])),
+            "terms": [str(x) for x in t.get("terms", ()) or ()],
+        }
+        for t in (scope[1].get("themes", []) if scope else [])
+    ]
+    docs: dict[tuple[Any, ...], fakes_views.Document] = {}
+    order: list[Result | tuple[Any, ...]] = []
+    for r in seen.results:
+        if r.name not in ("read_document", "fetch_url"):
+            if r.name == "list_inputs" and r.data is not None:
+                r = Result(r.step, r.name, r.args, fakes_views.listing_view(r.data), None, r.cites)
+            elif r.name == "search_inputs":
+                legacy_args, shown = fakes_views.search_view(r.args, r.data or {})
+                found = shown if r.data else None
+                r = Result(r.step, "search", legacy_args, found, r.error, r.cites)
+            order.append(r)
+            continue
+        target = r.args.get("url") if r.name == "fetch_url" else r.args.get("ref")
+        name = "fetch_url" if r.name == "fetch_url" else view
+        legacy: dict[str, Any] = {"url": target} if r.name == "fetch_url" else {"record": target}
+        if r.args.get("section") is not None:
+            legacy["section"] = r.args["section"]
+        if r.data is None:
+            order.append(Result(r.step, name, legacy, None, r.error, r.cites))
+            continue
+        key = (r.name, target, r.args.get("section"), r.data.get("version"))
+        doc = docs.get(key)
+        if doc is None:
+            base = {k: v for k, v in r.args.items() if k != "offset"}
+            doc = docs[key] = fakes_views.Document(r.name, base, dict(r.data), step=r.step)
+            order.append(key)
+        doc.add(r.data, r.cites)
+    seen.pending = fakes_views.continuations(list(docs.values()))
+    models = fakes_views.readers() if docs else None
+    out: list[Result] = []
+    for item in order:
+        if isinstance(item, Result):
+            out.append(item)
+            continue
+        doc = docs[item]
+        assert models is not None
+        name = "fetch_url" if doc.name == "fetch_url" else view
+        legacy = {"url": item[1]} if doc.name == "fetch_url" else {"record": item[1]}
+        if item[2] is not None:
+            legacy["section"] = item[2]
+        if name == "read_note":
+            data: dict[str, Any] | None = fakes_views.note_view(doc, models)
+        elif name == "read_table":
+            data = fakes_views.table_view(doc, models, themes)
+            legacy["offset"] = 0
+        else:
+            data = fakes_views.page_view(doc, models)
+        error = None if data is not None else {"status": "error", "code": "unreadable"}
+        out.append(Result(doc.step, name, legacy, data, error, tuple(doc.cites)))
+    seen.results = out
 
 
 def _user(seen: Seen, text: str) -> None:
@@ -260,7 +327,8 @@ def _result(step: str, name: str, args: Mapping[str, Any], text: str) -> Result:
 
 
 def _calls(seen: Seen, calls: Sequence[tuple[str, Mapping[str, Any]]]) -> GenerationResult:
-    out = tuple(ToolCall(f"t{seen.turn}-{i}", n, a) for i, (n, a) in enumerate(calls, start=1))
+    shared = [fakes_views.outgoing(n, a) for n, a in calls]
+    out = tuple(ToolCall(f"t{seen.turn}-{i}", n, a) for i, (n, a) in enumerate(shared, start=1))
     return GenerationResult(None, out, "tool_calls")
 
 
@@ -1663,6 +1731,8 @@ class ResearchModel(RuleGenerationModel):
         """The next calls of the request's Task, from what the request carries."""
         seen = parse(request)
         seen.queries = self.queries
+        if seen.pending:  # a cut window: read the rest before concluding anything
+            return _calls(seen, seen.pending)
         handler = _HANDLERS.get(seen.ref.task_id)
         if handler is None:
             return GenerationResult(
@@ -1693,13 +1763,6 @@ class ObedientModel(ResearchModel):
 
 ADAPTERS = {
     "generate": ResearchModel(),
-    "page_facts": fakes_readers.PageFacts(),
-    "feedback_items": fakes_readers.FeedbackItems(),
-    "table_roles": fakes_readers.TableRoles(),
-    "theme_match": fakes_readers.ThemeMatch(),
-    "doc_kind": fakes_readers.DocKind(),
-    "price_table": fakes_readers.PriceTable(),
-    "report_facts": fakes_readers.ReportFacts(),
-    "conversation_facts": fakes_readers.ConversationFacts(),
+    **{k: v for k, v in fakes_views.READERS.items() if k not in ("table_roles", "theme_match")},
 }
 """The ``fake`` run mode's model per alias: the composition root binds it (ADR-P07)."""

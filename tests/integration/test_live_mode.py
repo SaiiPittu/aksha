@@ -32,8 +32,14 @@ CINDRAL = data.world_path("cindral") / "sources"
 CASE = (data.suites() / "cindral" / "h-research-happy.toml").read_text("utf-8")
 PROMPT = re.search(r'^opening = "(.*)"$', CASE, re.M).group(1)  # type: ignore[union-attr]
 KEY = "sk-local-test-only"
-FAST = ("doc_kind", "page_facts", "price_table", "report_facts", "conversation_facts",
-        "feedback_items", "table_roles", "theme_match")  # fmt: skip
+FAST = (
+    "doc_kind",
+    "page_facts",
+    "price_table",
+    "report_facts",
+    "conversation_facts",
+    "feedback_items",
+)
 
 
 @pytest.fixture
@@ -94,11 +100,10 @@ def test_the_research_agent_runs_live_over_http_with_every_fast_alias_on_the_wir
                       "--input", str(CINDRAL))  # fmt: skip
     assert code == wire.EXIT_OK, out
     assert "R-0001 research ended complete" in out, out
-    # The decide step, three schemas and both classifiers were asked over HTTP, each by the
+    # The decide step and the schemas were asked over HTTP, each by the
     # model its own setting names, and the key travelled only in the Authorization header.
     asked = {r["body"]["model"] for r in stub.requests}
-    assert {"stub:doc_kind", "stub:page_facts", "stub:price_table", "stub:table_roles",
-            "stub:theme_match"} <= asked, asked  # fmt: skip
+    assert {"stub:doc_kind", "stub:page_facts", "stub:price_table"} <= asked, asked
     for r in stub.requests:
         assert r["path"] == "/v1/chat/completions"
         assert r["headers"]["Authorization"] == f"Bearer {KEY}"
