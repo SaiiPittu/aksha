@@ -328,7 +328,10 @@ def _artifact_version(
         content = corrected_content(old, found.target.path, found.value)
         if not isinstance(content, dict):
             raise SaveRefused("schema", "", "an artifact's content is an object")
-        content = computed(kind, content)  # a corrected count is recomputed, as at any save
+        space = old_ref.kind.rpartition(".")[0]
+        content = computed(  # a corrected count is recomputed, as at any save
+            kind, content, lambda n: current(view, n if "." in n else f"{space}.{n}", None)
+        )
         hashed = checked_content(kind, content)
     except (KeyError, ValueError, SaveRefused) as e:
         return CommandRefused(VALUE_INVALID, f"{found.target}: {e}")

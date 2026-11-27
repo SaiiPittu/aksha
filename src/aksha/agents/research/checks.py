@@ -282,9 +282,10 @@ def needs_done(view: Any) -> CheckResult:
     needs = _objects(found.get("needs"))
     if not isinstance(unique, int) or isinstance(unique, bool) or unique < 0:
         return CheckResult(
-            False, f"sample.unique is {unique!r}: set it to the number of distinct reviews "
-            "read, cross-posted copies counted once (rows and each need's phrase are "
-            "computed from it at save)",
+            False, f"sample.unique is {unique!r}: list in sample.reviews the ID of every "
+            "review row read, cross-posted copies included, and each copy in "
+            "sample.duplicates (rows, unique and each need's phrase are computed from them "
+            "at save)",
         )  # fmt: skip
     if rows != unique + copies:
         return CheckResult(
@@ -312,7 +313,18 @@ def needs_done(view: Any) -> CheckResult:
     ):
         return CheckResult(False, "no customer voice was read: read them, or say "
                            "status no_feedback_found with the listings checked")  # fmt: skip
-    have = {str(n.get("theme")) for n in needs}
+    resolve = computed.theme_resolver(scope)
+    unknown = [
+        str(computed.need_theme(n)) for n in needs if resolve(computed.need_theme(n)) is None
+    ]
+    have = {t for n in needs if (t := resolve(computed.need_theme(n))) is not None}
+    if want and unknown and want - have:
+        return CheckResult(
+            False, f"needs name themes {unknown} that the scope does not have: set each "
+            f"need's theme to one of the scope's theme IDs {sorted(want)}, one need per "
+            "theme, keeping the needs already saved",
+            keys=tuple(sorted(want - have)),
+        )  # fmt: skip
     if want - have:
         missing = sorted(want - have)
         return CheckResult(
@@ -327,7 +339,9 @@ def needs_done(view: Any) -> CheckResult:
         m = PHRASE.match(got)
         n = len(computed.cited_reviews(need) or [])
         if m is None or int(m.group(1)) != n or int(m.group(2)) != unique:
-            bad[str(need.get("theme"))] = (got, computed.phrase(n, unique))
+            bad[str(resolve(computed.need_theme(need)) or computed.need_theme(need))] = (
+                got, computed.phrase(n, unique)
+            )  # fmt: skip
     if bad:
         said = "; ".join(f"{t}: {g!r}, expected {w!r}" for t, (g, w) in bad.items())
         return CheckResult(

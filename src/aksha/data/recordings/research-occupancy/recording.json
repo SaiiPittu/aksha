@@ -3,6 +3,28 @@
   "inputs": [
     "priorities/business-priorities.md"
   ],
+  "limits": {
+    "patent": {
+      "active_ms": 120000,
+      "backoff": {
+        "base_ms": 500,
+        "cap_ms": 4000,
+        "factor": 2
+      },
+      "max_retries": 2,
+      "model_timeout_ms": 60000
+    },
+    "research": {
+      "active_ms": 600000,
+      "backoff": {
+        "base_ms": 500,
+        "cap_ms": 4000,
+        "factor": 2
+      },
+      "max_retries": 2,
+      "model_timeout_ms": 60000
+    }
+  },
   "mode": "fake",
   "modes": {
     "patent": "fake",
@@ -18,7 +40,7 @@
     "text": "Who sells camera-free occupancy sensing for offices in the EU, and at what price? Compare power (PoE, battery powered, mains) and privacy (privacy, camera, image)."
   },
   "search": "world",
-  "started_at": "2026-11-27T20:56:48.725420+00:00",
+  "started_at": "2026-11-27T22:35:40.509894+00:00",
   "synthetic_notice": "A recording of one run: what the person gave, every model answer, every search and fetch. Replay it with aksha replay.",
   "waiting": []
 }

@@ -59,6 +59,9 @@ class ArtifactKind:
     function from the content saved to the content stored (ADR-P04 K1): the fields it
     writes are computed by code, never taken from the model (a count, a total, a phrase
     built from them), and every save of the kind, a correction's too, applies it first.
+    ``compute_reads`` names the kinds (local, or ``ns.kind``; unkeyed) whose current content
+    a ``compute`` needs as well (K1e): when it names any, ``compute`` is called with the
+    content and a mapping from each name to that kind's current content (None when unsaved).
     """
 
     name: str
@@ -77,6 +80,7 @@ class ArtifactKind:
     cites: tuple[CitePolicy, ...] = ()
     max_age_s: int | None = None
     compute: Callable[[dict[str, Any]], Mapping[str, Any]] | None = None
+    compute_reads: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
