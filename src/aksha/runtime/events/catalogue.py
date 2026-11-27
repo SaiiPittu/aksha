@@ -152,6 +152,9 @@ RUN_STARTED = EventTypeSpec(
                 },
                 "required": ["probes", "network"],
             },
+            # ADR-P14 D2 (amendment L1): the multiplier a live run's turn and tool-call
+            # limits ran under; a run that records none ran under its definition's own.
+            "turn_factor": {"type": "integer", "minimum": 1},
             # ADR-P14 D2: the run's budget; a dimension left out is not capped.
             "budget": {
                 "type": "object",

@@ -242,6 +242,40 @@ def test_missing_is_unknown_not_zero() -> None:
     assert verify_content(_cell(unknown.as_json()), CELLS, evidence()) == ()
 
 
+def _messages(content: Mapping[str, Any], **kw: Any) -> list[str]:
+    return [
+        r.message
+        for r in verify_content(content, CELLS, evidence(**kw))
+        if isinstance(r, CiteError)
+    ]
+
+
+def test_an_ungrounded_field_is_told_the_shape_it_needs() -> None:
+    """The refusal names the rule, the cite and unknown shapes, never a bare 'cite it'."""
+    (bare,) = _messages(_cell({"value": 279}))
+    assert "must hold its evidence in a cite object, or be an explicit unknown" in bare
+    assert '{"cite": {"span": "<ID>", "quote": "<exact words>"}}' in bare
+    assert '{"unknown": {"question": ' in bare and "beside the value" not in bare
+
+
+def test_a_span_and_quote_beside_the_value_are_told_to_go_inside_cite() -> None:
+    """The common miss: the named span's text comes back, ready to copy from."""
+    beside = {"value": "279 EUR", "span": "EX-0001", "quote": "279 EUR"}
+    (message,) = _messages(_cell(beside))
+    assert 'quote, span go inside "cite", not beside the value' in message
+    assert f"EX-0001 reads: {PRICE!r}" in message
+    # A span this instance was never shown is not echoed.
+    (unseen,) = _messages(_cell({**beside, "span": "EX-0002"}))
+    assert "reads:" not in unseen
+
+
+def test_a_short_quote_is_told_its_length_and_the_whole_span() -> None:
+    cited = {"value": "279 EUR", "cite": {"span": "EX-0001", "quote": "279 EUR"}}
+    (message,) = _messages(_cell(cited))
+    assert message.startswith("the quote '279 EUR' has 7 characters: copy at least 12")
+    assert message.endswith(repr(PRICE))
+
+
 def test_unknown_needs_its_backing() -> None:
     assert _codes(_cell(Unknown("q?", "not_found").as_json())) == ["unknown_invalid"]
     unread = Unknown("q?", "not_found", ("record:pages/P-0001@1",))

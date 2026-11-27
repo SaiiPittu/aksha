@@ -372,8 +372,13 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # the agent's own if higher) with :data:`LIVE_BACKOFF`: from ``AKSHA_LIVE_BACKOFF_MS``
 # (2 s) doubling to ``AKSHA_LIVE_BACKOFF_CAP_MS`` (60 s), a quarter of each delay drawn at
 # random, at least the provider's ``Retry-After``, and never past the run's active time
-# (ADR-P14 B2). Fake mode, and so every offline eval, keeps the agent's own limits
-# (:func:`live_limits`).
+# (ADR-P14 B2). A live model also takes more turns than a scripted fake to reach the same
+# save (it misreads a schema, fixes a refused cite), so every Task's turn limit and the
+# run's turn and tool-call budget are multiplied by ``AKSHA_LIVE_TURN_FACTOR`` (a whole
+# number from 1, default :data:`LIVE_TURN_FACTOR`). ``run.started{turn_factor}`` records it
+# (the stop policy reads it there) and a recording's manifest keeps it, so a resumed run and
+# a replay run under the same limits (:func:`scaled_limits`). Fake mode, and so every
+# offline eval, keeps the agent's own limits (:func:`live_limits`).
 #
 # ``AKSHA_NATIVE_FILES`` is ``off`` unless set to ``on``: off, no file is sent natively and
 # every upload goes through intake's parsers, its route recorded ``text`` with the reason
@@ -468,6 +473,10 @@ class RuntimeConfig:
     """``AKSHA_CORRECTION_APPROVER`` pairs: a source's own domain owner role."""
     reuse: str = "on"
     """``AKSHA_REUSE``: ``off`` records ``reuse: off`` on every run (ADR-P04 R1)."""
+    turn_factors: Mapping[str, int] = field(default_factory=dict)
+    """The turn factor each agent runs under, by name, where it is not its mode's own: a
+    replay sets the ones its recording ran under (:func:`scaled_limits`). Not an
+    environment setting."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -682,6 +691,42 @@ LIVE_BACKOFF = Backoff(base_ms=2_000, factor=2, cap_ms=60_000)
 LIVE_JITTER = 0.25
 """The share of each live backoff drawn at random, so runs that failed together spread out."""
 
+LIVE_TURN_FACTOR = 3
+"""Live mode's multiplier on turn and tool-call limits, unless ``AKSHA_LIVE_TURN_FACTOR`` says."""
+
+
+def live_turn_factor(env: Mapping[str, str]) -> int:
+    """``AKSHA_LIVE_TURN_FACTOR``, else :data:`LIVE_TURN_FACTOR` (app comment above).
+
+    Raises ``BindRefused`` (``live_config_missing``) unless it is a whole number from 1.
+    """
+    raw = (env.get("AKSHA_LIVE_TURN_FACTOR") or "").strip()
+    if not raw:
+        return LIVE_TURN_FACTOR
+    if not raw.isdigit() or int(raw) < 1:
+        message = f"AKSHA_LIVE_TURN_FACTOR={raw!r}: a whole number from 1"
+        raise BindRefused((BindRefusal("*", "live_config_missing", message),))
+    return int(raw)
+
+
+def scaled_limits(agent: Agent, factor: int) -> Agent:
+    """``agent`` with its run budget's turn and tool-call caps multiplied by ``factor``.
+
+    The Task turn limits scale where they are read: the stop policy multiplies each by the
+    ``turn_factor`` its run's ``run.started`` records (``budgets.limits.turn_factor``), so a
+    resumed run keeps the factor it started under. Only the counts a slower model spends
+    more of scale: the veto, restart and retry limits and the time caps keep their values.
+    The agent itself when ``factor`` is 1.
+    """
+    if factor == 1:
+        return agent
+    budget = agent.budget or Budget()
+    scaled = replace(
+        budget, model_turns=budget.model_turns * factor, tool_calls=budget.tool_calls * factor
+    )
+    return replace(agent, budget=scaled)
+
+
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
 """Hosts a live server may be on without a key: this machine."""
 
@@ -855,6 +900,7 @@ def session_agent(
     commit: tuple[str, bool] = ("unknown", False),
     reentry: ReentrySetting | None = None,
     live_env: Mapping[str, str] | None = None,
+    turn_factor: int | None = None,
 ) -> SessionAgent:
     """One loaded definition bound to its models, as a session runs it.
 
@@ -862,10 +908,15 @@ def session_agent(
     from ``live_env`` (the ``AKSHA_LIVE_*`` and ``AKSHA_ALIAS_*`` settings).
 
     ``reentry`` is the setting its request runs record (decision 36); None is ``fresh``.
+    ``turn_factor`` scales the agent's turn and tool-call limits (:func:`scaled_limits`);
+    None is live mode's :func:`live_turn_factor` and 1 in every other mode. A replay passes
+    the factor its recording ran under.
     """
     agent = loaded.agent
     if mode == "live":
         agent = live_limits(loaded, live_env or {})
+    factor = turn_factor or (live_turn_factor(live_env or {}) if mode == "live" else 1)
+    agent = scaled_limits(agent, factor)
     if adapters is None:
         if mode == "live":
             adapters = bind_live(loaded, live_env or {})
@@ -880,7 +931,9 @@ def session_agent(
         for path, node in compile_tree(agent.name, agent.tasks).nodes.items()
         if node.task.brief
     }
-    extra = run_started_fields(loaded, runtime_commit=commit[0], dirty=commit[1])
+    extra = dict(run_started_fields(loaded, runtime_commit=commit[0], dirty=commit[1]))
+    if factor != 1:
+        extra["turn_factor"] = factor
     return SessionAgent(
         agent=agent,
         tree=compile_tree(agent.name, agent.tasks),
@@ -962,6 +1015,7 @@ def load_session_agents(
             commit=commit,
             reentry=reentry,
             live_env=config.live_env,
+            turn_factor=config.turn_factors.get(d.agent.name),
         )
         for d in loaded
     )
@@ -1975,6 +2029,11 @@ def record_run(
         ended = drive_script(session, script, files)
         trace = _trace(session, script.owner, ended.run, folder / "trace")
         binding = {a.agent.name: a.table.mode for a in session.agents.values()}
+        factors = {
+            a.agent.name: int(a.run_extra["turn_factor"])
+            for a in session.agents.values()
+            if "turn_factor" in a.run_extra
+        }
     finally:
         session.store.close()
     manifest = {
@@ -1991,6 +2050,8 @@ def record_run(
         "outcome": ended.outcome,
         "waiting": list(ended.waiting),
     }
+    if factors:
+        manifest["turn_factors"] = factors  # a replay runs under the same limits
     (folder / RECORDING_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
                                          encoding="utf-8")  # fmt: skip
     (folder / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True)
@@ -2028,9 +2089,10 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
         for p in sorted(inputs.rglob("*")) if p.is_file()
     } if inputs.is_dir() else {}  # fmt: skip
     recorded = Recorded(read_stream(folder, "models"))
+    factors = {str(k): int(v) for k, v in (manifest.get("turn_factors") or {}).items()}
     cfg = replace(config, storage=_local_store(out / "store"), mode="replay", record=None,
                   search=f"replay:{folder}", network="off", server_url=None,
-                  live_env={}, search_env={})  # fmt: skip
+                  live_env={}, search_env={}, turn_factors=factors)  # fmt: skip
     loaded = load_definitions(cfg)
     adapters = {d.agent.name: recorded_adapters(d.model_aliases.values(), recorded)
                 for d in loaded}  # fmt: skip

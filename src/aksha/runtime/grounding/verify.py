@@ -150,7 +150,8 @@ def _span(cite: SpanCite, ev: Evidence, policy: CitePolicy, at: str) -> Verified
     if len(quote) < MIN_QUOTE_CHARS and quote != text:
         return _err(
             "quote_too_short", at,
-            f"quote at least {MIN_QUOTE_CHARS} characters, or the whole span: {span.text!r}",
+            f"the quote {quote!r} has {len(quote)} characters: copy at least "
+            f"{MIN_QUOTE_CHARS} characters exactly from {cite.span}, or all of it: {span.text!r}",
         )  # fmt: skip
     return Verified(at, "span", cite.span, quote=quote, occurrence=occurrence)
 
@@ -306,8 +307,7 @@ def verify_content(
             elif isinstance(node, Mapping) and "cite" in node:
                 out.append(_cite_node(node, evidence, policy, at))
             else:
-                why = f"{policy.field} cites its evidence or, if allowed, is an explicit unknown"
-                out.append(_err("ungrounded_value", at, why))
+                out.append(_err("ungrounded_value", at, ungrounded_message(node, policy, evidence)))
     for at, node in _nodes(content):
         if at in governed:
             continue
@@ -319,6 +319,48 @@ def verify_content(
         if at not in governed and (refused := _claim(node, evidence, at)) is not None:
             out.append(refused)
     return tuple(out)
+
+
+UNKNOWN_EXAMPLE = (
+    '{"unknown": {"question": "What does the source not say?", "reason": "not_checked"}}'
+)
+"""An explicit unknown as a refusal and the save tool's description show it (D5)."""
+
+
+def cite_shape(policy: CitePolicy) -> str:
+    """How a node ``policy`` governs is written: the cite forms it allows, and an unknown."""
+    forms = {
+        "span": '{"cite": {"span": "<ID>", "quote": "<exact words>"}}',
+        "statement": '{"cite": {"statement": "<ID>"}}',
+        "artifact": '{"cite": {"artifact": "<kind@vN>", "path": "<pointer>"}}',
+    }
+    shapes = [forms[f] for f in sorted(policy.forms) if f in forms]
+    if policy.may_be_unknown:
+        shapes.append(UNKNOWN_EXAMPLE)
+    return " or ".join(shapes)
+
+
+def ungrounded_message(node: Any, policy: CitePolicy, ev: Evidence) -> str:
+    """Why ``node`` grounds nothing, the shape it needs, and the span it names, if any.
+
+    The common miss is a span ID and a quote written beside the value instead of inside
+    ``cite``; the message then says so and gives the named span's text to copy from.
+    """
+    rule = f"{policy.field} must hold its evidence in a cite object"
+    rule += ", or be an explicit unknown" if policy.may_be_unknown else ""
+    misplaced = (
+        sorted(k for k in ("span", "quote", "statement", "artifact") if k in node)
+        if isinstance(node, Mapping)
+        else []
+    )
+    if misplaced:
+        rule += f'; {", ".join(misplaced)} go inside "cite", not beside the value'
+    message = f"{rule}. Write it as {cite_shape(policy)}"
+    named = node.get("span") if isinstance(node, Mapping) else None
+    span = ev.spans.get(named) if isinstance(named, str) else None
+    if span is not None and _seen(span, ev):
+        message += f". {named} reads: {span.text!r}"
+    return message
 
 
 def _claim(node: Mapping[str, Any], ev: Evidence, at: str) -> CiteError | None:

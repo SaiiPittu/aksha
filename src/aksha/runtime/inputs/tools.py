@@ -66,7 +66,7 @@ from aksha.runtime.grounding.segment import (
     sniff_format,
     visible,
 )
-from aksha.runtime.grounding.types import ReturnedText, SpanDraft
+from aksha.runtime.grounding.types import MIN_QUOTE_CHARS, ReturnedText, SpanDraft
 from aksha.runtime.models.documents import (
     OTHER_KIND,
     DocumentKind,
@@ -91,6 +91,13 @@ READ_DOCUMENT = "read_document"
 SEARCH_INPUTS = "search_inputs"
 INPUT_TOOLS = (LIST_INPUTS, READ_DOCUMENT, SEARCH_INPUTS)
 """The names :func:`input_tools` declares, in order."""
+
+CITE_UNIT = (
+    'cite unit n as {"cite": {"span": <the n-th ID of citation_spans>, "quote": <its '
+    f"words copied exactly, at least {MIN_QUOTE_CHARS} characters, or the whole unit>}}}} "
+    "inside the saved field it grounds"
+)
+"""What a read result says about citing one of its units (ADR-P13 D2)."""
 
 PAGE_LINES = 400
 """Lines a window holds at most by default."""
@@ -527,8 +534,7 @@ def _view(
         data["truncated"] = "; ".join(notes)
     data["units"] = [_unit_json(n, u, starts, text) for n, u in enumerate(units)]
     data["cite"] = (
-        "cite unit n by the n-th ID of citation_spans, quoting its words exactly; "
-        "a unit is [n, kind, first line, last line, start, end, anchor]; start "
+        f"{CITE_UNIT}; a unit is [n, kind, first line, last line, start, end, anchor]; start "
         "and end count characters from the start of the document, and 'start' "
         "is where the first line shown begins"
     )
@@ -626,7 +632,7 @@ def _where_view(
         "lines": lines,
         "start": starts[numbers[0] - 1] if numbers else 0,
         "units": [_unit_json(n, u, starts, text) for n, u in enumerate(units)],
-        "cite": "cite unit n by the n-th ID of citation_spans, quoting its words exactly",
+        "cite": CITE_UNIT,
     }
     if notes:
         data["truncated"] = "; ".join(notes)

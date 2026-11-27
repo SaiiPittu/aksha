@@ -233,13 +233,15 @@ class Bench:
             definition_hash=DEFINITION,
         )
 
-    def start(self, *, headless: bool = False) -> None:
+    def start(self, *, headless: bool = False, turn_factor: int | None = None) -> None:
         payload: dict[str, Any] = {
             "agent": AGENT, "cause": "request", "definition_hash": DEFINITION,
             "budget": self.budget,
         }  # fmt: skip
         if headless:
             payload["headless"] = True
+        if turn_factor is not None:
+            payload["turn_factor"] = turn_factor  # what a live run records
         self.store.append(OWNER, "U1", (NewEvent("run.started", payload, run=RUN),))
 
     def drive(self) -> DriveResult:

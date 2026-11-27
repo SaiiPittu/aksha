@@ -4,12 +4,14 @@ the span IDs it may cite, and a person's answer names its statement span."""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from aksha.adapters.sources.folder import FolderSource
+from aksha.runtime.context.types import CITE_AS
 from aksha.runtime.grounding.types import SpanDraft
 from aksha.runtime.interrupts.commands import answer
 from aksha.runtime.interrupts.reducers import open_interrupts
@@ -71,7 +73,9 @@ def test_a_read_through_the_reader_mints_and_the_model_is_shown_the_span(tmp_pat
     assert span["version"].startswith("sha256:")
     assert list(minted.payload["shown"]) == [span["span_id"]]
     (shown,) = _tool_texts(model.requests[1])
-    assert shown.endswith('{"citation_spans":["' + span["span_id"] + '"]}')
+    tail = json.loads(shown.rsplit("\n", 1)[1])
+    assert tail["citation_spans"] == [span["span_id"]]
+    assert tail["cite_as"] == CITE_AS  # how a saved field cites one of them
     b.close()
 
 

@@ -12,6 +12,8 @@ from __future__ import annotations
 import io
 import json
 import shutil
+import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from aksha import data
@@ -54,6 +56,7 @@ def test_a_recorded_run_replays_offline_to_the_same_outputs(tmp_path: Path) -> N
         "priorities/business-priorities.md"
     ]
     assert manifest["search"] == "world"
+    assert "turn_factors" not in manifest  # an offline run keeps its own limits
     lines = (rec / "models.jsonl").read_text().splitlines()
     assert {json.loads(x)["class"] for x in lines} == {"generation", "extraction",
                                                         "classification"}  # fmt: skip
@@ -98,6 +101,21 @@ def test_a_recording_that_does_not_match_the_run_is_refused_not_filled_in(
     (rec / "recording.json").write_text(json.dumps(manifest))
     done = replay_run(RuntimeConfig(), rec, tmp_path / "replay")
     assert not done.same and done.run.outcome != "complete"
+
+
+def test_a_replay_runs_under_the_turn_factor_its_recording_ran_under(tmp_path: Path) -> None:
+    rec = tmp_path / "rec"
+    shutil.copytree(EXAMPLE, rec)
+    manifest = json.loads((rec / "recording.json").read_text())
+    manifest["turn_factors"] = {"research": 3}  # what a live recording's manifest keeps
+    (rec / "recording.json").write_text(json.dumps(manifest))
+    done = replay_run(RuntimeConfig(), rec, tmp_path / "replay")
+    assert done.same, done.differing
+    (store,) = (tmp_path / "replay" / "store").glob("*.sqlite")
+    with closing(sqlite3.connect(store)) as db:
+        (payload,) = db.execute("SELECT payload FROM events WHERE type = 'run.started'")
+    started = json.loads(payload[0])
+    assert started["turn_factor"] == 3 and started["budget"]["model_turns"] == 270
 
 
 def test_recording_into_a_used_folder_and_replaying_nothing_are_refused(tmp_path: Path) -> None:

@@ -16,8 +16,16 @@ from typing import Any, Final, Literal
 from aksha.runtime.artifacts.types import ArtifactRef, InputRef
 from aksha.runtime.canonical import canonical_json, thaw
 from aksha.runtime.events.envelope import NewEvent
+from aksha.runtime.grounding.types import MIN_QUOTE_CHARS
 from aksha.runtime.models.types import GenerationRequest, ToolCall
 from aksha.runtime.tools.types import ToolResultView
+
+CITE_AS: Final = (
+    '{"cite": {"span": "<one of citation_spans>", "quote": "<words copied exactly from '
+    f'that span, at least {MIN_QUOTE_CHARS} characters, or all of it>"}}}}, '
+    "inside the field it grounds"
+)
+"""What a result that minted spans says beside their IDs: how a saved field cites one."""
 
 CONTEXT_POLICY_VERSION: Final[int] = 2
 """Bumped when stub, recitation, notice or render text changes; part of the definition hash.
@@ -182,7 +190,8 @@ class ToolPair:
             return canonical_json({"status": "error", "code": self.code or self.outcome})
         if not self.cites:
             return self.view.text
-        return f"{self.view.text}\n{canonical_json({'citation_spans': list(self.cites)})}"
+        cites = {"citation_spans": list(self.cites), "cite_as": CITE_AS}
+        return f"{self.view.text}\n{canonical_json(cites)}"
 
     @property
     def arguments_text(self) -> str:
