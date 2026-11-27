@@ -63,6 +63,12 @@ def _cells(prefix: str, forms: frozenset[Form] = SPAN) -> tuple[CitePolicy, ...]
     )
 
 
+SOURCED: dict[str, Any] = {
+    **_obj("value", "basis", value={"type": "string"}, basis={"type": "string"}),
+    "description": "the value, and where it came from (basis): request, answer, an input",
+}
+NAMED: dict[str, Any] = _obj("id", "name", id={"type": "string"}, name={"type": "string"})
+
 SCOPE = ArtifactKind(
     "scope",
     _obj(
@@ -73,13 +79,22 @@ SCOPE = ArtifactKind(
         "dimensions",
         "themes",
         "asked",
+        "plan",
         question={"type": "string"},
-        segment=OBJECT,
-        geography=OBJECT,
-        boundary=OBJECT,
-        dimensions=LIST,
-        themes=LIST,
-        asked=LIST,
+        plan=_obj(
+            "kind",
+            kind={"enum": ["comparison", "synthesis"]},
+            outputs={"type": "array", "items": {"type": "string"}},
+        ),
+        segment=SOURCED,
+        geography=SOURCED,
+        boundary={
+            **_obj("in", "out", **{"in": {"type": "string"}, "out": LIST}),
+            "description": "what is in, and each thing out as {value, cite}",
+        },
+        dimensions={"type": "array", "items": NAMED},
+        themes={"type": "array", "items": NAMED},
+        asked={"type": "array", "items": {"type": "string"}, "description": "questions asked"},
     ),
     cites=(CitePolicy("/boundary/out/*", forms=SPAN),),
 )
