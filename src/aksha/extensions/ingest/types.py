@@ -290,6 +290,20 @@ class ImagePlan:
 
 
 @dataclass(frozen=True)
+class FileInput:
+    """What the reading model takes as native file input, and whether it is switched on.
+
+    ``accepts`` and ``max_inline_bytes`` come from the model's capability record (ADR-P07
+    G6); ``enabled`` is the operator's opt-in (``AKSHA_NATIVE_FILES=on``), off by default,
+    so every file goes through intake's own parsers unless someone asks otherwise.
+    """
+
+    accepts: frozenset[str]
+    max_inline_bytes: int
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class Route:
     """What one consuming step receives for one document (design note section 3.0)."""
 

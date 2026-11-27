@@ -12,6 +12,8 @@ retryable failure.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from aksha.runtime.errors import AkshaError
 
 
@@ -40,6 +42,21 @@ class NotRecoveryWriter(AkshaError):
 
 
 class TransientStepError(AkshaError):
-    """Raised by a step's work for a failure worth retrying; ``code`` is matched to ``retry_on``."""
+    """Raised by a step's work for a failure worth retrying; ``code`` is matched to ``retry_on``.
+
+    ``detail`` is what the failure was, for ``step.failed{error}`` (a provider's error type,
+    status and short message); it never carries a key or a request body.
+    """
 
     default_code = "transient"
+
+    def __init__(
+        self,
+        code: str | None = None,
+        message: str = "",
+        *,
+        detail: Mapping[str, str | int] | None = None,
+    ) -> None:
+        """As :class:`AkshaError`, plus the failure's ``detail``."""
+        super().__init__(code, message)
+        self.detail = dict(detail) if detail else None

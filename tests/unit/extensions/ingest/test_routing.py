@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import pytest
+
 from aksha.extensions.ingest.profiles import PROFILES
 from aksha.extensions.ingest.routing import (
+    NATIVE_FILES_OFF,
     NO_VISION,
+    OVER_INLINE,
     resolve_bindings,
     resolve_route,
     setup_of,
 )
-from aksha.extensions.ingest.types import Document
+from aksha.extensions.ingest.types import Document, FileInput, Route
+from aksha.uploads import UploadIngester
 from tests.support import ingest_fixtures as fx
 
 
@@ -61,3 +66,43 @@ def test_an_image_goes_native_to_a_vision_model_and_is_a_gap_without_one() -> No
 def test_every_other_type_is_its_text_representation_in_every_setup() -> None:
     for profile in (None, PROFILES["patch28-standard"]):
         assert resolve_route(_doc("application/pdf"), profile).kind == "text"
+
+
+# --- native file input (ADR-P07 G6): off by default, recorded either way ---------------
+
+PDF_INPUT = FileInput(frozenset({"application/pdf"}), 1_000_000)
+
+
+def _pdf_doc(size: int = 2_000) -> Document:
+    return Document("D-1", 1, "sha256:" + "0" * 64, "SYN-terms.pdf", "upload", None, None,
+                    "application/pdf", None, None, size)  # fmt: skip
+
+
+def test_a_pdf_is_text_with_the_reason_while_native_files_are_off() -> None:
+    assert resolve_route(_pdf_doc(), None) == Route("text")  # the model declares no files
+    assert resolve_route(_pdf_doc(), None, files=PDF_INPUT) == Route("text", None, NATIVE_FILES_OFF)
+    on = FileInput(PDF_INPUT.accepts, PDF_INPUT.max_inline_bytes, enabled=True)
+    assert resolve_route(_pdf_doc(), None, files=on) == Route("native_file")
+    assert resolve_route(_pdf_doc(2_000_000), None, files=on) == Route("text", None, OVER_INLINE)
+    docx = Document("D-2", 1, "sha256:" + "0" * 64, "a.docx", "upload", None, None,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    None, None, 10)  # fmt: skip
+    assert resolve_route(docx, None, files=on) == Route("text")
+
+
+@pytest.mark.parametrize(("enabled", "kind"), [(False, "text"), (True, "native_file")])
+def test_an_uploaded_pdf_records_the_route_taken(enabled: bool, kind: str) -> None:
+    fx.need("pypdf")
+    files = FileInput(PDF_INPUT.accepts, 10_000_000, enabled=enabled)
+    served = UploadIngester(files=files).ingest(
+        {"SYN-terms.pdf": fx.text_pdf(["Synthetic terms: renews yearly."])}, {}, 1, None
+    )
+    (stored,) = [p for e in served for t, p in e.facts if t == "document.stored"]
+    assert stored["route"]["kind"] == kind
+    assert (stored["route"].get("reason") == NATIVE_FILES_OFF) is not enabled
+    # Either way the PDF is parsed and its text served: decide then extract always runs.
+    assert b"renews yearly" in served[0].data
+    (plain,) = [p for e in UploadIngester().ingest(
+        {"SYN-terms.pdf": fx.text_pdf(["Synthetic terms."])}, {}, 1, None)
+        for t, p in e.facts if t == "document.stored"]  # fmt: skip
+    assert "route" not in plain  # a model with no native files records no route, as before

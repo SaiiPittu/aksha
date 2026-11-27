@@ -6,29 +6,70 @@ backoff on the injected clock, then ``model_unavailable``), ``PermanentModelErro
 ``replay_missing`` or ``replay_mismatch``) and ``ContextOverflow`` (``context_overflow``).
 What the binder raises: ``BindRefused`` (``bind_refused``), listing every
 :class:`BindRefusal` at once. What building a request raises: ``OptionsUnavailable``
-(``options_unavailable``). No message ever carries a key or a configuration value.
+(``options_unavailable``). No message ever carries a key or a configuration value. A live
+adapter may attach the provider's :data:`ErrorDetail` (``detail``), which the model step
+records on ``step.failed{error}`` or ``step.completed{error}``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from aksha.runtime.errors import AkshaError
 
+ErrorDetail = Mapping[str, str | int]
+"""What a live adapter says about a provider's refusal, for the step's record: ``type``
+(the provider library's error class), ``status`` (the HTTP status), ``provider`` and a
+short ``message``. Never a key, a header or a request body (``failure_detail``)."""
 
-class TransientModelError(AkshaError):
+DETAIL_FIELDS = frozenset({"type", "status", "provider", "message"})
+DETAIL_MESSAGE_CHARS = 300
+
+
+def failure_detail(detail: Mapping[str, object] | None) -> dict[str, str | int] | None:
+    """``detail`` cut to the recorded shape: known fields, a status as an integer, short text."""
+    if not detail:
+        return None
+    out: dict[str, str | int] = {}
+    for name in sorted(DETAIL_FIELDS & set(detail)):
+        value = detail[name]
+        if name == "status":
+            if isinstance(value, int) and not isinstance(value, bool) and 0 <= value < 1000:
+                out[name] = value
+        elif isinstance(value, str) and value:
+            out[name] = value[: 80 if name != "message" else DETAIL_MESSAGE_CHARS]
+    return out or None
+
+
+class _ModelError(AkshaError):
+    """A model refusal that may carry the provider's :data:`ErrorDetail` for the record."""
+
+    def __init__(
+        self,
+        code: str | None = None,
+        message: str = "",
+        *,
+        detail: Mapping[str, object] | None = None,
+    ) -> None:
+        """As :class:`AkshaError`, plus ``detail`` (cut by :func:`failure_detail`)."""
+        super().__init__(code, message)
+        self.detail = failure_detail(detail)
+
+
+class TransientModelError(_ModelError):
     """A failure worth retrying: a timeout, a rate limit, a server error."""
 
     default_code = "model_transient"
 
 
-class PermanentModelError(AkshaError):
+class PermanentModelError(_ModelError):
     """A failure no retry fixes: a refused request, a missing replay, a used-up script."""
 
     default_code = "model_permanent"
 
 
-class ContextOverflow(AkshaError):
+class ContextOverflow(_ModelError):
     """The request is larger than the model's context window."""
 
     default_code = "context_overflow"

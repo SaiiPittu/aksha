@@ -45,6 +45,7 @@ from aksha.extensions.ingest.types import (
     Caps,
     Converted,
     Document,
+    FileInput,
     Gap,
     ImageProfile,
     Origin,
@@ -126,6 +127,7 @@ def ingest(
     cache: SentCopyCache | None = None,
     depth: int = 0,
     parse: Parse | None = None,
+    files: FileInput | None = None,
 ) -> Ingested | Refusal:
     """Run intake for one input (module doc)."""
     caps = caps or Caps()
@@ -168,7 +170,7 @@ def ingest(
         got = ingest(child.name, child.data, "attachment", doc_key=key, version=ver,
                      parent=doc_key, declared_type=child.declared_type, caps=caps, allow=allow,
                      key_for=key_for, put=put, profile=profile, cache=cache,
-                     depth=depth + 1, parse=parse)  # fmt: skip
+                     depth=depth + 1, parse=parse, files=files)  # fmt: skip
         if isinstance(got, Refusal):
             refusals.append(got)
         else:
@@ -190,6 +192,8 @@ def ingest(
             )  # fmt: skip
         except Exception as e:  # a resize or encode that fails leaves the header alone
             route = Route("header_only", None, f"the sent copy failed: {type(e).__name__}")
+    elif files is not None and doc.detected_type in files.accepts:
+        route = resolve_route(doc, profile, files=files)  # recorded: native or text, and why
     header = render_header(doc, rep, None, route=route)
     return Ingested(doc, rep, None, header, route, tuple(frames), tuple(children),
                     tuple(refusals))  # fmt: skip

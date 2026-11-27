@@ -33,7 +33,7 @@ from aksha.runtime.execution.types import StepId
 from aksha.runtime.loop.calls import run_calls
 from aksha.runtime.loop.classify import is_malformed, overflow_end, recorded_turn_end
 from aksha.runtime.loop.types import STEP_MISMATCH, LoopSetup, TurnEnd
-from aksha.runtime.models.steps import generation_step
+from aksha.runtime.models.steps import MODEL_STEP_POLICY, generation_step
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.evaluation import summary_refusal
 from aksha.runtime.stop_policy.stack import narrowing_of, prep_for
@@ -62,12 +62,14 @@ def run_turn(
     before = as_of(as_of(setup.view(), step), step.compaction())
     prep = prep_for(stop_view(setup, ref.run, before), ref)
     tools = setup.registry.offered(setup.task(ref), prep.tools)
+    model_policy = replace(MODEL_STEP_POLICY, timeout_ms=setup.limits.model_timeout_ms)
     try:
         prepared = prepare_context(
             setup.store, setup.owner, executor, setup.table, setup.tree, ref, turn=turn,
             inputs=setup.inputs(ref), prep=replace(prep, tools=None), policy=setup.policy(),
             tools=tools, kinds=setup.kinds, alias=GENERATE, blobs=setup.blobs,
             approve_summary=lambda log: summary_refusal(stop_view(setup, ref.run, log), ref),
+            model_policy=model_policy,
         )  # fmt: skip
         context = prepared.context
         if isinstance(context, ContextOverLimit):
@@ -75,7 +77,7 @@ def run_turn(
         facts = context.facts
         out = generation_step(
             executor, step, setup.table, context.request,
-            started=context.started_fields(), facts=lambda _: facts,
+            started=context.started_fields(), facts=lambda _: facts, policy=model_policy,
         )  # fmt: skip
         if out.result is not None and not is_malformed(out.result):
             run_calls(setup, executor, ref, turn, out.result.tool_calls, narrowing_of(prep))

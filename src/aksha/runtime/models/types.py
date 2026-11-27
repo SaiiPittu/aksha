@@ -21,6 +21,7 @@ written as fractions in the agent definition and converted once (``fixed.ppm``).
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, get_args
@@ -80,6 +81,10 @@ class ModelCapabilities:
     returns_spans: bool = False
     returns_distribution: bool = False
     offline: bool = True
+    file_types: frozenset[str] = frozenset()
+    """Media types the model takes as native file parts (ADR-P07 G6); empty for none."""
+    max_inline_bytes: int = 0
+    """The most file bytes one request may carry inline; 0 when it takes no files."""
 
 
 @dataclass(frozen=True)
@@ -201,22 +206,50 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class FilePart:
+    """One file a message carries as native input (ADR-P07 G6), off unless opted in.
+
+    The hashed form is the media type, size and ``sha256:`` of the bytes, never the bytes.
+    """
+
+    media_type: str
+    data: bytes = field(repr=False)
+    name: str = ""
+
+    def as_json(self) -> dict[str, Any]:
+        """The part as JSON data: what it is, never its bytes."""
+        return {
+            "media_type": self.media_type,
+            "size_bytes": len(self.data),
+            "sha256": "sha256:" + hashlib.sha256(self.data).hexdigest(),
+            "name": self.name,
+        }
+
+
+@dataclass(frozen=True)
 class Message:
-    """One message of a generation context. A ``tool`` message answers ``call_id``."""
+    """One message of a generation context. A ``tool`` message answers ``call_id``.
+
+    ``files`` are native file parts (G6); a message with none hashes as it always did.
+    """
 
     role: Role
     text: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
     call_id: str | None = None
+    files: tuple[FilePart, ...] = ()
 
     def as_json(self) -> dict[str, Any]:
-        """The message as JSON data."""
-        return {
+        """The message as JSON data (``files`` only when it carries some)."""
+        out: dict[str, Any] = {
             "role": self.role,
             "text": self.text,
             "tool_calls": [c.as_json() for c in self.tool_calls],
             "call_id": self.call_id,
         }
+        if self.files:
+            out["files"] = [f.as_json() for f in self.files]
+        return out
 
 
 @dataclass(frozen=True)

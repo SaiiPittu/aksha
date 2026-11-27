@@ -264,7 +264,8 @@ class StepOutput:
     ``events`` and ``artifacts`` commit in the same transaction as ``step.completed``
     (boundary U2): saves, relations, an interrupt. ``usage`` is what a model step reports
     spending (``input_tokens``, ``output_tokens``, ``cost_micro_usd``), which budget
-    accounting reads (ADR-P14 D9).
+    accounting reads (ADR-P14 D9). ``error`` is what an error outcome's provider said
+    (``step.completed{error}``, ADR-P07 G6): its error type, status and a short message.
     """
 
     value: Mapping[str, Any] | None = None
@@ -273,6 +274,7 @@ class StepOutput:
     events: tuple[NewEvent, ...] = ()
     artifacts: tuple[ArtifactRow, ...] = ()
     usage: Mapping[str, int] | None = None
+    error: Mapping[str, str | int] | None = None
 
     def __post_init__(self) -> None:
         """An error names its code; usage holds only the three known counts, none negative."""

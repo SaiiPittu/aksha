@@ -102,8 +102,13 @@ def step_failed(
     retried: bool,
     backoff_ms: int,
     duration_ms: int | None = None,
+    error: Mapping[str, str | int] | None = None,
 ) -> NewEvent:
-    """A failed attempt; ``retried`` says another attempt follows after ``backoff_ms``."""
+    """A failed attempt; ``retried`` says another attempt follows after ``backoff_ms``.
+
+    ``error`` is what the failure was when the work said (a provider's error type, status
+    and short message, ADR-P07 G6); never a key or a request body.
+    """
     payload: dict[str, Any] = {
         "attempt": attempt,
         "code": code,
@@ -112,6 +117,8 @@ def step_failed(
     }
     if duration_ms is not None:
         payload["duration_ms"] = duration_ms
+    if error:
+        payload["error"] = dict(error)
     return NewEvent("step.failed", payload, **_envelope(step))
 
 
@@ -135,11 +142,13 @@ def step_completed(
     duration_ms: int | None = None,
     usage: Mapping[str, int] | None = None,
     kill: str | None = None,
+    error: Mapping[str, str | int] | None = None,
 ) -> NewEvent:
     """The step's result: its outcome, code, recorded value and how many attempts it took.
 
     ``duration_ms`` is the last attempt's active time; ``usage`` a model step's spend;
-    ``kill`` how the kill boundary ended the step's unit (ADR-P18 D6).
+    ``kill`` how the kill boundary ended the step's unit (ADR-P18 D6); ``error`` what an
+    error outcome's provider said (as on ``step.failed``).
     """
     payload: dict[str, Any] = {"outcome": outcome, "kind": kind, "attempts": attempts}
     if kind == "tool" and name is not None:
@@ -160,6 +169,8 @@ def step_completed(
         payload["usage"] = dict(usage)
     if kill is not None:
         payload["kill"] = kill
+    if error:
+        payload["error"] = dict(error)
     return NewEvent("step.completed", payload, **_envelope(step))
 
 

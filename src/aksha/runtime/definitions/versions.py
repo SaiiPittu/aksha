@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.14"
+API_VERSION = "2.15"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -78,6 +78,9 @@ record holding several kinds is decided section by section (ADR-P07 G4).
 2.14 (27 Nov 2026, ADR-P10 T1 and T2) added the harness's input and common tools:
 ``input_tools``, ``InputReading``, ``INPUT_TOOLS``, ``read_view``, ``fetch_url_tool``,
 ``todo_tool``, ``think_tool`` and ``OfflineReaders``.
+2.15 (27 Nov 2026, ADR-P07 G6) added native file input: the trailing fields
+``Message.files`` (no files by default; a message with none hashes as before) and
+``ModelCapabilities.file_types`` and ``ModelCapabilities.max_inline_bytes`` (none).
 """
 
 Version = tuple[int, int]

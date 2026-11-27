@@ -17,7 +17,9 @@ writes the same bytes:
    question for a machine-only artifact, ``review`` for a reviewed one, or ``fail``).
 3. A ``TransientModelError`` is retried twice with backoff on the injected clock; then
    the step ends ``model_transient`` and the call is ``model_unavailable``. A permanent
-   error ends the step with its own code; in a cascade the next candidate is tried.
+   error ends the step with its own code; in a cascade the next candidate is tried. What
+   the provider said (an adapter's ``detail``: error type, status, short message) is
+   recorded on each ``step.failed{error}`` and on an error ``step.completed{error}``.
 
 A fast-class call is never made inside a completion check (P-3), and its answer can only
 refuse what a code rule allowed: nothing here authorises an effect.
@@ -74,11 +76,9 @@ def _call(work: Callable[[], StepOutput]) -> StepOutput:
     try:
         return work()
     except TransientModelError as e:
-        raise TransientStepError(MODEL_TRANSIENT, e.message) from e
-    except ContextOverflow as e:
-        return StepOutput(outcome="error", code=e.code)
-    except PermanentModelError as e:
-        return StepOutput(outcome="error", code=e.code)
+        raise TransientStepError(MODEL_TRANSIENT, e.message, detail=e.detail) from e
+    except (ContextOverflow, PermanentModelError) as e:
+        return StepOutput(outcome="error", code=e.code, error=e.detail)
 
 
 def _failure_code(step: StepResult) -> str:

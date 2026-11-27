@@ -370,3 +370,24 @@ def test_summary_refusal_reads_the_budget_and_the_holds(make: Any) -> None:
     other = make(Recorder([finish_reply()]))
     stop(other.store, OWNER, RUN)
     assert summary_refusal(stop_view(other.setup, RUN), EDIT) == SUMMARY_HELD
+
+
+def test_the_model_step_waits_as_long_as_the_agents_model_timeout(make: Any) -> None:
+    """``Limits.model_timeout_ms`` is the generation step's timeout (live mode raises it)."""
+    import threading
+    from dataclasses import replace
+
+    from aksha.runtime.budgets.types import Limits
+
+    release = threading.Event()
+
+    def slow(request: GenerationRequest) -> GenerationResult:
+        release.wait(0.4)  # a model slower than the step allows
+        return finish_reply()
+
+    b = make(Recorder(rule=slow))
+    b.setup = replace(b.setup, limits=Limits(model_timeout_ms=50, max_retries=0))
+    b.drive()
+    release.set()
+    failed = [e for e in b.events("step.failed") if e.step == T01]
+    assert failed and {e.payload["code"] for e in failed} == {"timeout"}
