@@ -1,0 +1,2065 @@
+{
+  "as_of": "2026-11-28",
+  "statuses": [
+    "met",
+    "partly met",
+    "not met"
+  ],
+  "groups": [
+    {
+      "id": "interface",
+      "title": "Interface and routing",
+      "rows": [
+        {
+          "id": "R-01",
+          "requirement": "Offer one simple interface: a web chat, a command line or a messaging bot.",
+          "how": "The `aksha` command line and an HTTP server (`aksha serve`) both drive one session API; a browser app and a chat terminal are in review in pull request 101.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/cli/main.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/http/server.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli.py::test_run_embedded_completes_and_exits_zero"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_http.py::test_a_message_returns_a_receipt_and_the_run_moves_on_the_writer"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha --help",
+              "expect": "lists demo, run, answer, approve, reject, status, inspect and the other subcommands"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-02",
+          "requirement": "Let the user pick an agent by name or describe the request and have the harness route it.",
+          "how": "A named agent skips the classifier; otherwise the router classifies the request by each loaded agent's declared purpose.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/router/router.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_named_agent_skips_classifier"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_a_disclosure_request_routes_by_purpose"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-03",
+          "requirement": "Show which agent handles the request.",
+          "how": "The route decision is recorded and the reply is labelled with the chosen agent.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_route_labels_reply"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_route_not_repeated_after_restart"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-04",
+          "requirement": "Ask for clarification when the request is unclear.",
+          "how": "When the classifier abstains or fails, the router raises a route question instead of guessing.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_route_abstains_and_asks"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_a_failed_classification_asks_and_never_guesses"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "runtime",
+      "title": "Shared runtime",
+      "rows": [
+        {
+          "id": "R-05",
+          "requirement": "The harness calls the model and runs tools.",
+          "how": "One loop runs every agent: a model turn, then each tool call through the policy gate and the durable executor.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/loop"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/execution"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_loop.py::test_a_run_reads_saves_and_finishes_complete"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_loop.py::test_loop_writes_only_through_the_executor"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-06",
+          "requirement": "Keep conversation history and separate user sessions.",
+          "how": "Every command and model step is an event in the store, keyed by owner and session; a resumed run continues its own session.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/session/service.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_resume.py::test_resume_continues_the_writers_own_session"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_resume.py::test_split_sessions_are_never_merged"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_session_streams.py::test_another_sessions_events_never_reach_the_stream"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-07",
+          "requirement": "Control which tools each agent can use.",
+          "how": "Each agent lists its tools; the policy gate denies by default and checks every call against the agent's permissions.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/policy/gate.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/architecture/permission_matrix.md"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_definitions.py::test_permission_matrix_matches_definitions"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-08",
+          "requirement": "Handle errors, timeouts and execution limits.",
+          "how": "Each step has a timeout and a bounded retry policy, and each run has a budget of model turns, tool calls and active time.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/budgets/limits.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/budgets/meter.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/execution/test_executor.py::test_timeout_real_time"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/execution/test_executor.py::test_retries_used_up_end_in_an_error"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_budgets.py::test_budget_tool_calls"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-09",
+          "requirement": "Record what happened during a run.",
+          "how": "The hash-chained event store is the record; the inspector, `aksha status` and the trace export are projections of it.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/storage/chain.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/extensions/otel/trace.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_session_api.py::test_the_inspector_reads_a_run_without_booting"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/extensions/test_otel.py::test_a_run_is_one_trace_with_the_span_tree"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha verify",
+              "expect": "the hash chain verifies"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-10",
+          "requirement": "Ask for approval before sending documents through a mock service.",
+          "how": "`send_packet` needs an approval bound to the exact packet version by signature, and the send goes through the outbox to a mock mailbox.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/systems/mailbox.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/interrupts/approvals.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_no_send_without_an_approval_bound_to_the_packet_signature"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli_patent_send.py::test_an_approved_send_goes_to_the_mock_mailbox_exactly_once"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-11",
+          "requirement": "Save conversations, workflow checkpoints, artifacts and pending approvals so they survive a restart.",
+          "how": "All of these are events or versioned artifacts in the store, so a restarted process rebuilds them and resumes.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_durable_execution.py::test_crash_and_restart_runs_no_step_twice"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_interrupts.py::test_mid_approval_restart_shows_the_same_request"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_steering.py::test_a_steer_typed_before_a_restart_reaches_the_run_after_it"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_sigkill_recovery.py::test_every_commit_point_recovers_to_one_result_per_step"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "agents",
+      "title": "Pluggable agents",
+      "rows": [
+        {
+          "id": "R-12",
+          "requirement": "Each agent defines its purpose, instructions and allowed tools, separate from the shared runtime.",
+          "how": "An agent is a data definition in its own package: Tasks, prompts, tool list and limits, loaded and hashed by one loader.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/research/agent.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/agent.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/prompts/instructions.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/research/prompts/instructions.md"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_extension_boundary.py::test_runtime_has_no_agent_terms"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_definition_loads_and_declares_its_source"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-13",
+          "requirement": "A new agent can be added without editing the runtime.",
+          "how": "Test fixture agents load through the same extension API, and a test checks the runtime's hash does not change when a third agent is added.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "tests/fixtures/agents/scribe"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/fixtures/agents/toy"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_extension_boundary.py::test_third_agent_runtime_hash_unchanged"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_extension_boundary.py::test_third_extension_runtime_hash_unchanged"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/design/adr/ADR-P20-extension-api-and-agent-definition.md"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "fixtures",
+      "title": "Fictional venture and fixtures",
+      "rows": [
+        {
+          "id": "R-14",
+          "requirement": "Use one fictional venture: a camera-free room occupancy sensor.",
+          "how": "The `stillroom` world is that venture; every input is synthetic and labelled so in its own content.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/spec.yaml"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/README.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-15",
+          "requirement": "Create four invention candidates (self-calibration, sensor placement, privacy-preserving coordination, battery-saving sampling) with technical mechanisms.",
+          "how": "One engineering note per candidate states its problem, mechanism steps and alternatives.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/notes/C1-self-calibration.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/notes/C2-sensor-placement.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/notes/C3-privacy-preserving-coordination.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/notes/C4-battery-saving-sampling.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-16",
+          "requirement": "Include engineering notes, contributor records, dated disclosure history, business priorities and blank disclosure templates.",
+          "how": "Each kind is its own input file in the world.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/contributors/records.csv"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/disclosures/history.csv"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/disclosures/2026-03-10-trade-show-demo.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/priorities/business-priorities.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/templates/invention-disclosure-form.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/templates/filing-information-worksheet.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-17",
+          "requirement": "Add competitor pages, customer reviews and patent-publication fixtures, clearly labelled as synthetic, with no invented number presented as a real patent.",
+          "how": "Vendor pages live on the world's offline web; publications use `SYN-PUB-` identifiers and each file carries a synthetic label.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/web.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/web/kelvra.example/product"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/reviews/reviews.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/publications/SYN-PUB-0001.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/publications/SYN-PUB-0006.pdf.txt"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/README.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-18",
+          "requirement": "Limit the core exercise to five competitors and five patent families.",
+          "how": "The answer key counts five resolved competitors on six pages and five families over ten publications.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/key.json"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_five_companies_on_six_pages_one_merged_with_its_excerpt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_families_are_grouped_by_priority_with_exact_identifiers"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "research",
+      "title": "Research agent",
+      "rows": [
+        {
+          "id": "R-19",
+          "requirement": "Establish the customer segment, geography and research boundary, asking only material questions.",
+          "how": "The `scope` Task saves segment, geography and boundary with where each value came from, and asks only for a value the request leaves open.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_scope_asks_one_material_question_and_cites_the_answer"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_runs.py::test_a_request_that_names_the_geography_asks_nothing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_checks.py::test_scope_needs_where_each_value_came_from_and_a_boundary"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-20",
+          "requirement": "Search for competing products and manual alternatives, and resolve company identity and duplicates.",
+          "how": "The `discover` Task merges pages into one company only on a stated relationship; manual alternatives are searched and, when none is found, saved as an explicit unknown.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_five_companies_on_six_pages_one_merged_with_its_excerpt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_analysis.py::test_names_that_look_alike_are_never_merged"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_manual_alternatives_not_found_is_an_explicit_unknown"
+            }
+          ],
+          "status": "partly met",
+          "reason": "The bundled worlds hold no page describing a manual alternative, so only the not-found path is tested."
+        },
+        {
+          "id": "R-21",
+          "requirement": "Fetch product and pricing pages; search snippets alone do not support a claim.",
+          "how": "A search mints no citable span, and grounding refuses a citation to a search hit.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/web/tools.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_tools.py::test_search_mints_nothing_and_records_only_its_hit_set"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_grounding.py::test_search_hit_cannot_be_cited"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-22",
+          "requirement": "Query mock customer reviews or keyword data, preserving source IDs, dates, geography and units.",
+          "how": "Reviews are read one passage per row with their IDs and dates, and prices keep amount, currency and terms.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_parsing.py::test_reviews_are_one_passage_per_row_over_the_text_value"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_parsing.py::test_price_rows_carry_amount_currency_and_terms"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_reviews_counted_once_reported_as_this_sample"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-23",
+          "requirement": "Separate facts, vendor claims, inferences and unknowns, and keep conflicting findings visible.",
+          "how": "Every claim carries a label, and two pages that disagree are saved side by side with a conflict relation.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_analysis.py::test_claim_labels"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_vendor_claim_and_measured_fact_are_both_shown_and_labelled"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_conflicting_prices_stay_side_by_side_with_their_dates"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-24",
+          "requirement": "Produce a competitor matrix and a source list linking each finding to its exact supporting excerpt.",
+          "how": "Every matrix cell cites a span whose text is checked against the stored page at its offsets, or is an explicit unknown.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_matrix_every_cell_is_cited_or_an_explicit_unknown"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_every_minted_span_is_the_stored_page_text_at_its_offsets"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_grounding.py::test_quote_must_be_verbatim_and_long_enough"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-25",
+          "requirement": "Propose one small customer experiment with thresholds labelled as proposals.",
+          "how": "The report check refuses a test whose thresholds are not marked as proposals.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_findings_name_their_unknowns_and_tests_are_proposals"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_checks.py::test_report_needs_every_row_and_proposal_thresholds"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-26",
+          "requirement": "Do not treat reviews or search interest as proof of demand, or infer market prevalence from a small sample.",
+          "how": "Findings must be stated as N of M in this sample, and no output may state a market share.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_checks.py::test_needs_must_say_n_of_m_in_this_sample"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_no_output_states_a_market_share"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-27",
+          "requirement": "Required outputs: competitor table, linked source list, deduplicated customer findings, one proposed test.",
+          "how": "The run completes only when its four outputs exist at current versions.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_checks.py::test_the_run_completes_only_with_its_four_outputs"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/research/s1-research-happy.toml"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "patent",
+      "title": "Patent agent",
+      "rows": [
+        {
+          "id": "R-28",
+          "requirement": "Extract each invention's problem, mechanism, alternatives, contributors and disclosure history from the notes.",
+          "how": "`extract[Cn]` saves an extraction where every graded fact carries its exact quote.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_every_graded_fact_is_found_with_its_exact_quote"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_reads_name_only_the_rows_they_used"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-29",
+          "requirement": "Ask targeted questions about missing technical details and never invent an answer.",
+          "how": "A value the note leaves undecided raises an input question on that candidate only; the field stays unknown until answered.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_gaps_are_asked_never_filled"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_only_extract_c2_waits_for_its_gap_question"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-30",
+          "requirement": "Search related references and fetch publication text, including independent claims.",
+          "how": "`search_publications` and `fetch_publication` read the uploaded publications, claims included.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/tools.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_st9_claims_at_the_end_of_the_text_are_read"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_missing_references_are_reported_not_found"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-31",
+          "requirement": "Group related publications into families and keep material differences between members.",
+          "how": "Families are grouped by shared priority numbers, with each member kept.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_families_are_grouped_by_priority_with_exact_identifiers"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_families_group_by_any_shared_priority_number"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-32",
+          "requirement": "Record publication identifiers, dates, source URLs and status wording exactly as stated.",
+          "how": "Status wording is kept verbatim, and two differing statuses stay visible.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_status_wordings_are_kept_verbatim_and_the_conflict_stays_visible"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_pdf_publication_keeps_both_status_wordings"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-33",
+          "requirement": "Build a feature-by-reference matrix that separates overlap from missing features.",
+          "how": "`compare` saves one cell per mechanism step and family with a state of `disclosed`, `partial`, `not_found` or `not_checked`.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_comparison_matrix_equals_the_key"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/limitations.md"
+            }
+          ],
+          "status": "partly met",
+          "reason": "The matrix equals the key on the bundled worlds, but the offline comparison counts words, so some held-out worlds get wrong cells (limitations item 19); a live model is the fix."
+        },
+        {
+          "id": "R-34",
+          "requirement": "Compare business importance, implementation evidence, distinctions, closest prior art and risks, and give one next action per candidate.",
+          "how": "A rule table picks `prioritize_counsel_review`, `collect_more_evidence` or `deprioritize_for_now`, and a check vetoes any action the rules do not give.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/rules.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_rule_table"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_recommendation_check_vetoes_an_action_the_rules_do_not_give"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_recommendations_equal_the_key_for_all_four"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-35",
+          "requirement": "Explain tradeoffs and what new evidence would change each recommendation, without an unexplained score.",
+          "how": "Each recommendation states why, its risks and what would change it; no score field exists.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_recommendations_equal_the_key_for_all_four"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_no_forbidden_output_anywhere"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-36",
+          "requirement": "Use Research Agent outputs through explicit artifact IDs and versions, not as proof of novelty.",
+          "how": "Research outputs are saved with IDs and versions, but the patent agent declares no read of them.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/agent.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_context.py::test_patent_context_has_no_research_text"
+            }
+          ],
+          "status": "not met",
+          "reason": "No patent Task reads a `research.*` artifact, so no recommendation cites research work; the two agents share only the uploaded inputs."
+        },
+        {
+          "id": "R-37",
+          "requirement": "Show each candidate's recommendation with sources, concerns and missing information.",
+          "how": "`table` gathers every recommendation with its citations, risks and missing documents.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_recommendations_equal_the_key_for_all_four"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_a_referenced_agreement_is_looked_for_not_assumed_absent"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-38",
+          "requirement": "Ask the user which candidates to prepare and save the selection before continuing.",
+          "how": "`select` raises a choice interrupt and saves the selection before any form is filled.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_the_selection_comes_before_any_form_and_one_send_happens"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-39",
+          "requirement": "Fill a structured invention disclosure and a mock filing-information worksheet through a tool.",
+          "how": "`fill_form` writes each field against the blank template, which decides what is required.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_fill_form_records_required_from_the_template_not_the_model"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_form_refusals"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-40",
+          "requirement": "Include technical explanation, alternatives, source references, contributors and dated disclosure history in the forms.",
+          "how": "Every template field is reported, and contributor fields carry counsel flags where needed.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_forms_report_every_field_and_refuse_nothing_silently"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/templates/invention-disclosure-form.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-41",
+          "requirement": "Add a figure list, prior-art matrix, unresolved questions and coverage directions phrased as questions for counsel.",
+          "how": "The disclosure template requires `figure_list` and `open_questions_for_counsel`, and the packet opens with a counsel section.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/sources/templates/invention-disclosure-form.md"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_packet_opens_with_counsel_section_and_scope_note"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-42",
+          "requirement": "Validate required fields and report each as complete, missing or needing counsel confirmation.",
+          "how": "A field cannot be marked complete when it needs counsel, and a missing required field keeps the packet from ready.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_fill_form_refuses_marking_a_counsel_field_complete"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_a_missing_required_field_keeps_the_packet_from_ready"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-43",
+          "requirement": "Save a versioned counsel-review packet and keep unknowns rather than guessing.",
+          "how": "Every artifact version is immutable, and the packet check needs the counsel section first.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_artifacts.py::test_version_cannot_be_overwritten"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_packet_check_needs_the_counsel_section_first"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-44",
+          "requirement": "Request separate approval before a simulated external handoff; selection does not authorise sending.",
+          "how": "Selecting a candidate creates no approval; `send_packet` asks for its own.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_no_send_without_an_approval_bound_to_the_packet_signature"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_send_needs_an_approval_and_goes_through_the_outbox"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-45",
+          "requirement": "Give no patentability or freedom-to-operate opinion, no final claims, no legal deadlines and no filing.",
+          "how": "The instructions forbid them and a test scans every output for forbidden content; date facts are dates and day counts only.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/prompts/instructions.md"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_no_forbidden_output_anywhere"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_grace_period_fact_is_dates_and_days_only"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-46",
+          "requirement": "Required outputs: a recommendation table for all four candidates, comparison matrix, saved selection, completed forms and packets.",
+          "how": "The patent happy-path case checks each output against the world's key.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/patent/s2-patent-happy.toml"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_eval_agents.py::test_the_patent_happy_path_passes_and_sends_once_under_its_approval"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "workflow",
+      "title": "Workflow and change recovery",
+      "rows": [
+        {
+          "id": "R-47",
+          "requirement": "Describe each workflow's states, dependencies, completion checks and approval points, and why.",
+          "how": "Each agent's Task tree, reads and checks are declared in its definition and explained in its module docstring and the design records.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/agent.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/research/agent.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/checks.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/research/checks.py"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/design/adr/ADR-P15-task-model-and-scheduler.md"
+            }
+          ],
+          "status": "partly met",
+          "reason": "The design is written down, but it cannot be shown to have come before the code."
+        },
+        {
+          "id": "R-48",
+          "requirement": "Execute tool calls; tool results affect the next step.",
+          "how": "The model sees each tool result before its next call.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_loop.py::test_tool_result_changes_next_call"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_loop.py::test_unknown_tool_refused_and_counted"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-49",
+          "requirement": "Track completed steps, blockers, source versions and the next action.",
+          "how": "The scheduler's status is a projection of the store, equal to a full rebuild.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_scheduler.py::test_status_equals_full_rebuild"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_scheduler.py::test_three_vetoes_then_blocked_and_the_run_ends_blocked"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha status",
+              "expect": "each run's state, open interrupts and next step"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-50",
+          "requirement": "Pause for missing information or approval, then resume from that state.",
+          "how": "A question or approval holds the run; an answer or grant resumes it.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_loop.py::test_ask_raises_an_interrupt_and_holds"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli.py::test_a_question_exits_three_and_the_answer_finishes_the_run"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli.py::test_an_approval_exits_four_and_a_wrong_signature_is_refused"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-51",
+          "requirement": "Keep evidence and saved outputs linked to their inputs.",
+          "how": "Every saved version records the reads and citations it rests on.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_citation_keying.py::test_every_output_names_what_it_rests_on"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_tool_artifacts.py::test_a_tool_that_declares_reads_kinds_reads_versions_as_of_its_step"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-52",
+          "requirement": "When inputs change, mark affected findings and approvals stale and recheck them before further action.",
+          "how": "Invalidation marks dependent versions invalidated or dirty and revokes approvals on invalidated targets.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_invalidation.py::test_s6_change_and_recovery"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_commands.py::test_request_on_an_invalidated_target_is_revoked_with_its_interrupt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_grounding.py::test_stale_source_refused"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-53",
+          "requirement": "Preserve unaffected work and explain what needs to run again.",
+          "how": "Only the dependents of a moved input are rebuilt, and the rebuild plan names each one with its cause.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_invalidation.py::test_unrelated_writer_is_not_touched"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_citation_keying.py::test_a_changed_uncited_paragraph_does_not_reopen"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_change_reopens_only_c1s_chain_and_keeps_the_rest"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-54",
+          "requirement": "Return a partial result when evidence is insufficient; do not manufacture completion.",
+          "how": "A run with a gap ends `partial` with the gap named, never `complete`.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_partial_results.py::test_one_vendor_blocked_run_partial_through_the_store"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_runs.py::test_a_blocked_source_ends_the_run_partial_with_the_gap_named"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/finalization/test_unknowns.py::test_partial_never_labelled_complete"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-55",
+          "requirement": "Save Research Agent outputs with IDs and versions so the Patent Agent can read and cite them.",
+          "how": "Research outputs are versioned artifacts that any Task could read by ID, but the patent agent does not.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_artifacts.py::test_version_cannot_be_overwritten"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha show",
+              "expect": "lists each saved output as kind@version"
+            }
+          ],
+          "status": "partly met",
+          "reason": "Saving with IDs and versions is met; the patent agent reading them is not (see the patent agent row on research outputs)."
+        },
+        {
+          "id": "R-56",
+          "requirement": "Keep both agents separate, not one long prompt.",
+          "how": "Each agent has its own definition and context; the patent context holds no research text.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_context.py::test_patent_context_has_no_research_text"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "Tools and execution limits",
+      "rows": [
+        {
+          "id": "R-57",
+          "requirement": "Provide executable mock adapters for document reading, search, page and publication fetching, review queries, form writing and artifact storage.",
+          "how": "Shared input and web tools, the patent domain tools and `save_artifact` all run offline against a world.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/inputs/tools.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/web/tools.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/search/world.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/tools.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/runtime/tools/loader_added.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_tools.py::test_the_agent_lists_only_shared_tools"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_the_agent_keeps_only_domain_tools_of_its_own"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-58",
+          "requirement": "Add a mock document-sending tool that cannot send without approval.",
+          "how": "`send_packet` without an approval writes no outbox entry.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_outbox.py::test_send_refused_by_authority_writes_no_entry"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli_patent_send.py::test_a_refused_approval_leaves_the_run_waiting_and_other_commands_work"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-59",
+          "requirement": "Enforce each agent's allowed operations in code.",
+          "how": "Architecture tests prove no tool body runs without a gate allow.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_policy_gate.py::test_no_bypass_path"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_policy_gate.py::test_bypass_guard_catches_a_body_called_without_an_allow"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-60",
+          "requirement": "Save workflow progress and draft documents automatically.",
+          "how": "A save commits with its step, so a rerun replays it.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_artifacts.py::test_a_save_commits_with_its_step_and_a_rerun_replays_it"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-61",
+          "requirement": "Include a deterministic fixture or replay mode and a fake-model mode; run with no paid credentials or network.",
+          "how": "Offline, every model is a rule-based fake; a recorded run replays with no model and no network.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/models/replay.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/recordings/research-occupancy"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_router.py::test_fake_mode_writes_the_same_bytes_twice"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha demo",
+              "expect": "exits 0 with no API key and no network"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-62",
+          "requirement": "Document optional live search and model adapters without committing secrets.",
+          "how": "Live mode reads keys from the environment and refuses to start without them.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "docs/quickstart.md"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/models/litellm.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/search/brave.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_live_mode.py::test_a_missing_server_or_model_names_the_setting_to_set"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_live_mode.py::test_a_remote_server_without_a_key_is_refused_before_any_call"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-63",
+          "requirement": "Set and enforce tool-call limits, timeouts and bounded retries.",
+          "how": "Budgets cap tool calls and turns per run; each tool has a `RetryPolicy` with a timeout and a retry cap.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_budgets.py::test_budget_tool_calls"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_budgets.py::test_a_crash_loop_runs_no_more_than_max_retries_plus_one_attempts"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/execution/test_executor.py::test_retry_count_survives_a_restart"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-64",
+          "requirement": "Make fixtures replaceable so the workflow works on changed inputs, not a scripted transcript.",
+          "how": "Both agents run on eleven worlds of different shapes, six written without sight of the code.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_eval_agents.py::test_both_agents_pass_a_world_their_code_has_never_seen"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_eval_agents.py::test_both_agents_pass_a_world_of_other_shapes"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/architecture/test_no_world_leakage.py"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/limitations.md"
+            }
+          ],
+          "status": "partly met",
+          "reason": "On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 17 of 24 in fake model mode (limitations item 19)."
+        }
+      ]
+    },
+    {
+      "id": "safeguards",
+      "title": "Safeguards",
+      "rows": [
+        {
+          "id": "R-65",
+          "requirement": "Enforce tool permissions in code, not only in prompts.",
+          "how": "The gate is pure code over the agent definition and holds no model text.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/architecture/test_policy_gate.py::test_gate_inputs_hold_no_model_text"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_policy_gate.py::test_every_cell_fails_closed_when_a_helper_raises"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-66",
+          "requirement": "Keep users' conversations and data separate.",
+          "how": "Every store read, upload folder and stream is keyed by owner.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_http.py::test_another_owner_sees_nothing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/adapters/sources/test_workspace.py::test_owners_never_see_each_others_uploads"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_session_api.py::test_another_owners_interrupt_reads_as_unknown"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_outbox.py::test_effect_key_includes_owner"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-67",
+          "requirement": "Treat documents and tool results as data, not instructions that change permissions.",
+          "how": "Instruction-like text is flagged; a world with injected text gives the same gate decisions as a clean one.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_instruction_like_text_is_flagged_and_changes_nothing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_policy_gate.py::test_injection_world_equals_clean_world"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_interrupts.py::test_injection_cannot_create_approval"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-68",
+          "requirement": "Show the exact action for approval; rejection changes nothing; an edited action needs fresh approval.",
+          "how": "The approval shows its action and signature; a reject writes no effect; any change to the action changes the signature.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli_patent_send.py::test_status_shows_what_the_approval_would_do"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_commands.py::test_reject_changes_nothing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_commands.py::test_edit_needs_fresh_approval"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_approvals.py::test_signature_is_version_prefixed_and_covers_every_field"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-69",
+          "requirement": "Prevent retries from creating duplicate records or sends.",
+          "how": "Saves and sends are keyed by meaning; a retry returns the first result.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_outbox.py::test_send_retried_3x_restart_1x_one_row"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/artifacts/test_store.py::test_retry_returns_existing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_session_api.py::test_a_retried_command_returns_the_first_receipt_and_writes_nothing"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-70",
+          "requirement": "Keep secrets out of code and logs.",
+          "how": "Keys come from the environment, go only in request headers and are dropped from provider error messages.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/unit/adapters/models/test_litellm.py::test_a_key_in_a_provider_message_is_never_kept"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/adapters/models/test_live.py::test_a_live_call_sends_the_key_only_in_its_header"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/extensions/memory/test_tools.py::test_remember_redacts_credential_shapes_from_the_text"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-71",
+          "requirement": "Connect no real company accounts; use mock services and fake-model mode.",
+          "how": "The only system of record is a development mailbox in a JSON file.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/adapters/systems/mailbox.py"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/limitations.md"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "cases",
+      "title": "The eight listed test cases",
+      "rows": [
+        {
+          "id": "R-72",
+          "requirement": "Automated tests cover both agents, adding a plugin, blocked tool access, user isolation, approvals and restart recovery.",
+          "how": "Each area has its own test files, run by `make test`.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "tests/agents/test_patent_episodes.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/agents/research/test_episodes.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/architecture/test_extension_boundary.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/integration/test_policy_gate.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/integration/test_http.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/integration/test_interrupts.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/integration/test_sigkill_recovery.py"
+            },
+            {
+              "kind": "command",
+              "ref": "make test",
+              "expect": "every test passes"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-73",
+          "requirement": "Duplicate competitor results and patent-family members do not inflate outputs.",
+          "how": "Pages merge into one company, reviews are counted once, and family members group under one family.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_five_companies_on_six_pages_one_merged_with_its_excerpt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_analysis.py::test_a_cross_posted_review_is_counted_once_and_its_theme_too"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_families_are_grouped_by_priority_with_exact_identifiers"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/research/r-duplicate-competitor.toml"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/research/r-review-duplicates.toml"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-74",
+          "requirement": "Conflicting pricing or publication statuses stay visible with their sources.",
+          "how": "Both values are saved with their citations and a conflict relation.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_conflicting_prices_stay_side_by_side_with_their_dates"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_status_wordings_are_kept_verbatim_and_the_conflict_stays_visible"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/patent/p-status-conflict.toml"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-75",
+          "requirement": "Missing data stays unknown, not zero; a failed fetch stays unverified.",
+          "how": "Grounding refuses a zero where the value is missing and marks a failed fetch unverified.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_episodes.py::test_an_unlisted_price_is_unknown_never_zero"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_grounding.py::test_missing_is_unknown_not_zero"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_grounding.py::test_failed_fetch_is_unverified"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-76",
+          "requirement": "A fetched document that tells the agent to change permissions or bypass approval has no effect.",
+          "how": "A model that obeys the page is refused by the gate and nothing changes.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/research/test_runs.py::test_a_model_that_obeys_page_text_is_refused_and_nothing_changes"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_interrupts.py::test_injection_cannot_create_approval"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/research/s8a-injection-research.toml"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-77",
+          "requirement": "A tool timeout, exhausted retries or the tool-call limit keeps useful partial work.",
+          "how": "The step ends in an error, the budget raises an interrupt, and finalisation saves a partial result from the reserve.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/execution/test_executor.py::test_timeout_real_time"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/execution/test_executor.py::test_retries_used_up_end_in_an_error"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_loop.py::test_a_spent_budget_ends_the_turn_and_raises_the_budget_interrupt"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_partial_results.py::test_finalize_after_budget_through_the_store"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/suites/scripted/r-flaky-pages.toml"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-78",
+          "requirement": "A rejected approval causes no action; an edited action needs fresh approval.",
+          "how": "See the approval row under safeguards; the command line keeps the run waiting after a refusal.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_commands.py::test_reject_changes_nothing"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/unit/runtime/interrupts/test_commands.py::test_edit_needs_fresh_approval"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_cli_patent_send.py::test_a_refused_approval_leaves_the_run_waiting_and_other_commands_work"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-79",
+          "requirement": "A restart during a write or simulated handoff does not duplicate the effect.",
+          "how": "A kill at every commit point recovers to one result per step and one send per packet version.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_sigkill_recovery.py::test_every_commit_point_recovers_to_one_result_per_step"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_restart_mid_approval_and_mid_send_sends_once"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_outbox.py::test_crash_after_send_intent_sends_once_after_restart"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_effect_steps.py::test_crash_at_each_commit_point_sends_once_and_records_once"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-80",
+          "requirement": "Insufficient evidence blocks readiness even when the user asks to mark a candidate complete.",
+          "how": "Insisting does not unblock a check, and `fill_form` refuses to mark a counsel field complete.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_scheduler.py::test_insist_does_not_unblock"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_fill_form_refuses_marking_a_counsel_field_complete"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_a_missing_required_field_keeps_the_packet_from_ready"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "demo",
+      "title": "The change-and-recovery demo, sentence by sentence",
+      "rows": [
+        {
+          "id": "R-81",
+          "requirement": "Run both agents on the fictional venture.",
+          "how": "Act 1 of `aksha demo` runs the research and patent agents on `stillroom` to `complete`.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/demo/story.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_chain_verifies_and_the_demo_is_quick"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha demo",
+              "expect": "step 1 prints both runs complete"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-82",
+          "requirement": "Select a patent candidate and prepare its draft documents.",
+          "how": "The scripted person selects C1; its forms and packet are filled and the packet is sent once under an approval.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_the_selection_comes_before_any_form_and_one_send_happens"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_a_fresh_approval_is_asked_for_the_new_packet_and_scripted"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-83",
+          "requirement": "Introduce a closer prior-art reference and reveal an external contributor to the key mechanism.",
+          "how": "The change adds `SYN-PUB-0011` (family E, which discloses C1's two gates) and moves the outside consultant's email to a date before the consulting agreement took effect.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/demo/world.py"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom-v2/key.json"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_change_set_is_the_variant_keys_change_and_one_uncited_review"
+            }
+          ],
+          "status": "partly met",
+          "reason": "The outside contributor is already in the base inputs; the change re-dates the email so the contribution predates the agreement, rather than adding a person the first run never saw."
+        },
+        {
+          "id": "R-84",
+          "requirement": "Restart the application.",
+          "how": "The demo closes its runtime after the rebuild and kills a child process with SIGKILL mid-send; recovery runs in a fresh runtime.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/demo/child.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_sigkill_mid_send_recovers_to_exactly_one_send_per_packet"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_invalidation.py::test_crash_during_invalidation"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_resume.py::test_sigkill_at_every_commit_of_a_resumed_rebuild_recovers"
+            }
+          ],
+          "status": "partly met",
+          "reason": "In the demo the restart comes after the rebuild, during the send; a restart between the change and the rebuild is covered by tests, not shown in the demo."
+        },
+        {
+          "id": "R-85",
+          "requirement": "Reopen affected comparisons, forms and recommendations.",
+          "how": "Invalidation reopens C1's extraction, prior art, comparison, recommendation, forms and packet.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_change_reopens_only_c1s_chain_and_keeps_the_rest"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_the_change_set_invalidates_exactly_the_c1_chain"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-86",
+          "requirement": "Flag contribution and ownership questions for counsel.",
+          "how": "The outside contribution is saved `needs_counsel_confirmation` with inventorship and ownership questions.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_consultant_suggestion_is_raised_for_counsel"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-87",
+          "requirement": "Invalidate affected approvals and request fresh approval.",
+          "how": "The new packet version has a new signature, so the old approval does not cover it and a fresh one is asked for.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_a_fresh_approval_is_asked_for_the_new_packet_and_scripted"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_episodes.py::test_the_fresh_approval_for_the_new_packet_sends_it_once"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_interrupts.py::test_fact_change_after_handoff_abandons_the_entry"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-88",
+          "requirement": "Preserve unaffected research and prevent duplicate records or sends.",
+          "how": "Research outputs the change did not reach are kept, and the mailbox holds one delivery per packet version.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_change_reopens_only_c1s_chain_and_keeps_the_rest"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_sigkill_mid_send_recovers_to_exactly_one_send_per_packet"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-89",
+          "requirement": "Explain the revised result using the new evidence.",
+          "how": "C1's next action moves from `prioritize_counsel_review` to `collect_more_evidence` because family E discloses two of its steps, and the packet's diff review shows what changed.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_change_reopens_only_c1s_chain_and_keeps_the_rest"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/demo/summary.py"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-90",
+          "requirement": "Make each run inspectable: agent, state, tool calls, input versions, approvals, outputs and errors.",
+          "how": "The inspector and `aksha status` read all of these from the store without booting a run.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_session_api.py::test_the_inspector_reads_a_run_without_booting"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha inspect",
+              "expect": "the run's agent, state, steps, reads, approvals and outputs"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    },
+    {
+      "id": "deliverables",
+      "title": "Deliverables",
+      "rows": [
+        {
+          "id": "R-91",
+          "requirement": "A repository with clear setup and test commands.",
+          "how": "The README and Makefile give one-command setup, tests and the demo.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "README.md"
+            },
+            {
+              "kind": "path",
+              "ref": "Makefile"
+            },
+            {
+              "kind": "command",
+              "ref": "make venv && make test",
+              "expect": "every test passes"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-92",
+          "requirement": "A short README on the architecture and how to add an agent.",
+          "how": "The README links to the architecture overview and the extension API record.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "README.md"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/architecture/overview.md"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/design/adr/ADR-P20-extension-api-and-agent-definition.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-93",
+          "requirement": "All fictional fixtures, blank templates, expected-output examples and example conversations.",
+          "how": "Each world ships its inputs and an answer key; one recorded run holds a whole conversation with its outputs.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/worlds/stillroom/key.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/recordings/research-occupancy/outputs.json"
+            },
+            {
+              "kind": "path",
+              "ref": "src/aksha/data/recordings/research-occupancy/recording.json"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-94",
+          "requirement": "Workflow state diagrams or tables, tool schemas and the decision rules.",
+          "how": "The rule table is code, tool schemas are declared in each tool and snapshotted, and the approval states are in their record.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/agents/patent/rules.py"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/architecture/api_surface.json"
+            },
+            {
+              "kind": "path",
+              "ref": "tests/architecture/permission_matrix.md"
+            },
+            {
+              "kind": "path",
+              "ref": "docs/design/adr/ADR-P17-interrupts-and-approvals.md"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-95",
+          "requirement": "Structured JSON outputs plus readable summaries; each recommendation traces to its evidence.",
+          "how": "Every output is a JSON artifact that names its citations; `aksha show` prints them.",
+          "evidence": [
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_citation_keying.py::test_every_output_names_what_it_rests_on"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha show",
+              "expect": "lists the saved outputs; with an ID, prints one as JSON"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-96",
+          "requirement": "A short demo of both agents, an approval and the change-and-recovery scenario.",
+          "how": "`aksha demo` runs all of it offline in about 20 seconds and exits 0 only when every check passes.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "src/aksha/interfaces/demo/story.py"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/integration/test_demo.py::test_the_readmes_demo_excerpt_matches_a_run"
+            },
+            {
+              "kind": "command",
+              "ref": "aksha demo",
+              "expect": "exits 0"
+            }
+          ],
+          "status": "met"
+        },
+        {
+          "id": "R-97",
+          "requirement": "Known limitations and what comes next.",
+          "how": "Each limitation is numbered and dated.",
+          "evidence": [
+            {
+              "kind": "path",
+              "ref": "docs/limitations.md"
+            }
+          ],
+          "status": "met"
+        }
+      ]
+    }
+  ]
+}
