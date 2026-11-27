@@ -6,6 +6,7 @@ made through the durable step executor:
 1. The stop-policy stack's preparation for the instance (``prep_for``), read from the log
    as it stood before the turn's first step, so a resumed turn prepares the same request:
    brief lines for the context, and a tool narrowing the registry and the gate apply.
+   ``save_artifact`` is described with the kinds the Task writes and their schemas.
 2. The context (ADR-P08 ``prepare_context``): masking, and a recorded summary step when
    one is due and stop-policy evaluation's ``summary_refusal`` approves it (D7). Over the
    hard limit nothing is sent and the turn ends ``context_overflow``.
@@ -39,6 +40,7 @@ from aksha.runtime.stop_policy.evaluation import summary_refusal
 from aksha.runtime.stop_policy.stack import narrowing_of, prep_for
 from aksha.runtime.stop_policy.types import StopView
 from aksha.runtime.tasks.types import InstanceRef
+from aksha.runtime.tools.loader_added import offered_for_task
 
 
 class TurnUnfinished(RuntimeError):
@@ -61,7 +63,10 @@ def run_turn(
     step = StepId(ref.run, ref.instance, turn=turn)
     before = as_of(as_of(setup.view(), step), step.compaction())
     prep = prep_for(stop_view(setup, ref.run, before), ref)
-    tools = setup.registry.offered(setup.task(ref), prep.tools)
+    task = setup.task(ref)
+    kinds = setup.artifacts.kinds if setup.artifacts is not None else setup.kinds
+    writable = {n: kinds[n] for n in (setup.tree.kind(w) for w in task.writes) if n in kinds}
+    tools = offered_for_task(setup.registry.offered(task, prep.tools), writable)
     model_policy = replace(MODEL_STEP_POLICY, timeout_ms=setup.limits.model_timeout_ms)
     try:
         prepared = prepare_context(

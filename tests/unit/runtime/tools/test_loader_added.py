@@ -53,3 +53,38 @@ def test_save_artifact_reads_primary_inputs_and_relations_from_json() -> None:
     assert req.primary_inputs == (record,)
     evidence = (Excerpt(record, "Acme", span="EX-0001"),)
     assert req.relations == (RelationRequest("same_as", SELF, record, evidence),)
+
+
+def test_a_dataclass_kind_is_shown_as_a_json_schema_of_its_fields() -> None:
+    from dataclasses import dataclass, field
+
+    from aksha.runtime.artifacts.types import ArtifactKind
+    from aksha.runtime.tools.loader_added import content_schema, save_description
+
+    @dataclass
+    class Row:
+        name: str
+        count: int = 0
+        tags: list[str] = field(default_factory=list)
+
+    kind = ArtifactKind("row", Row, keyed=True)
+    shown = content_schema(kind)
+    assert shown == {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "count": {"type": "integer"},
+            "tags": {"type": "array"},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    Draft202012Validator.check_schema(shown)
+    text = save_description({"a.row": kind})
+    assert '- kind "a.row" (keyed: pass `key`)' in text
+
+
+def test_a_task_that_writes_nothing_keeps_the_plain_description() -> None:
+    from aksha.runtime.tools.loader_added import save_description
+
+    assert save_description({}) == LOADER_ADDED_DECLS["save_artifact"].spec.description

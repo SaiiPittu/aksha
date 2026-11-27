@@ -56,6 +56,7 @@ built; nor is a kind's ``save="tool_only"``, which needs the tool's name on the 
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Collection, Iterable, Mapping
 from types import MappingProxyType
 from typing import Any, Literal
@@ -239,10 +240,17 @@ class ArtifactStore:
         """
         kind_name = _resolve_name(request.kind, writer.agent)
         kind = self._kinds.get(kind_name)
+        writable = ", ".join(repr(w) for w in sorted(writes)) or "no kind"
         if kind is None:
-            raise SaveRefused("kind_unknown", "/kind", f"no artifact kind {kind_name!r}")
+            raise SaveRefused(
+                "kind_unknown",
+                "/kind",
+                f"no artifact kind {kind_name!r}; this Task writes {writable}",
+            )
         if kind_name not in writes:
-            raise SaveRefused("rights", "/kind", f"this Task does not write {kind_name!r}")
+            raise SaveRefused(
+                "rights", "/kind", f"this Task does not write {kind_name!r}; it writes {writable}"
+            )
         if kind.keyed and request.key is None:
             raise SaveRefused("key_required", "/key", f"{kind_name} is keyed")
         if not kind.keyed and request.key is not None:
@@ -620,23 +628,78 @@ def _content_hash(content: Mapping[str, Any]) -> str:
         raise SaveRefused("not_canonical_content", "/content", f"{e.path}: {e.reason}") from None
 
 
+_FRAGMENT_CHARS = 400
+"""The longest expected-schema fragment a schema refusal quotes for one path."""
+
+
+def _fragment(schema: Any) -> str:
+    text = json.dumps(thaw(schema), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return text if len(text) <= _FRAGMENT_CHARS else text[: _FRAGMENT_CHARS - 3] + "..."
+
+
+def _schema_errors(schema: Mapping[str, Any], content: Mapping[str, Any]) -> list[tuple[str, str]]:
+    """Every (pointer, message) of ``content`` against ``schema``, each with what was expected.
+
+    A missing required property is reported at its own path with its own schema; any other
+    error at the failing value's path with the schema part that refused it.
+    """
+    found: dict[str, str] = {}
+    for error in Draft202012Validator(dict(schema)).iter_errors(thaw(content)):
+        base = list(error.absolute_path)
+        sub = error.schema if isinstance(error.schema, Mapping) else {}
+        if error.validator == "required" and isinstance(error.instance, Mapping):
+            props = sub.get("properties", {})
+            for name in error.validator_value:
+                if name not in error.instance:
+                    expected = props.get(name, {}) if isinstance(props, Mapping) else {}
+                    pointer = "/content" + _json_pointer([*base, name])
+                    found.setdefault(
+                        pointer, f"{name!r} is required; expected {_fragment(expected)}"
+                    )
+            continue
+        if error.validator == "additionalProperties" and isinstance(error.instance, Mapping):
+            allowed = sub.get("properties", {})
+            for name in error.instance:
+                if name not in allowed:
+                    pointer = "/content" + _json_pointer([*base, name])
+                    found.setdefault(
+                        pointer, f"{name!r} is not allowed; allowed: {sorted(allowed)}"
+                    )
+            continue
+        pointer = "/content" + _json_pointer(base)
+        found.setdefault(pointer, f"{error.message}; expected {_fragment(sub)}")
+    return sorted(found.items())
+
+
 def _check_schema(kind: ArtifactKind, content: Mapping[str, Any]) -> None:
-    """Check 2's schema half: a JSON Schema, or a dataclass's fields."""
+    """Check 2's schema half: a JSON Schema, or a dataclass's fields.
+
+    Every error is reported in one refusal, each path with what it expected, so the model
+    can fix them all in its next call.
+    """
     schema = kind.schema
     if isinstance(schema, Mapping):
         # A body's arguments are frozen (``tools.bodies``); the validator reads plain JSON.
-        errors = Draft202012Validator(dict(schema)).iter_errors(thaw(content))
-        error = min(errors, key=lambda e: list(map(str, e.absolute_path)), default=None)
-        if error is not None:
-            pointer = "/content" + _json_pointer(error.absolute_path)
-            raise SaveRefused("schema", pointer, error.message)
-        return
-    if not dataclasses.is_dataclass(schema):
+        errors = _schema_errors(schema, content)
+    elif dataclasses.is_dataclass(schema):
+        fields = {f.name: f for f in dataclasses.fields(schema)}
+        errors = [
+            ("/content" + _json_pointer([n]), f"{kind.name} has no field {n!r}")
+            for n in sorted(set(content) - set(fields))
+        ]
+        for name, f in sorted(fields.items()):
+            needed = f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
+            if needed and name not in content:
+                errors.append(("/content" + _json_pointer([name]), f"{kind.name} needs {name!r}"))
+        errors.sort()
+    else:
         raise SaveRefused("schema", "", f"{kind.name}: a schema is a JSON Schema or a dataclass")
-    fields = {f.name: f for f in dataclasses.fields(schema)}
-    for name in sorted(set(content) - set(fields)):
-        raise SaveRefused("schema", f"/content/{name}", f"{kind.name} has no field {name!r}")
-    for name, f in sorted(fields.items()):
-        required = f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
-        if required and name not in content:
-            raise SaveRefused("schema", f"/content/{name}", f"{kind.name} needs {name!r}")
+    if not errors:
+        return
+    if len(errors) == 1:
+        raise SaveRefused("schema", errors[0][0], errors[0][1])
+    paths = tuple(p for p, _ in errors)
+    listed = "; ".join(f"{p}: {m}" for p, m in errors)
+    raise SaveRefused(
+        "schema", "/content", f"{len(errors)} schema errors, fix them all: {listed}", paths=paths
+    )

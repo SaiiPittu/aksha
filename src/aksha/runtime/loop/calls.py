@@ -374,7 +374,7 @@ def _dispatched(
                     origin=save_origin(view, name, request.key),
                 )  # fmt: skip
             except SaveRefused as refused:
-                err = Err(refused.code, refused.message, paths=(refused.path,))
+                err = Err(refused.code, refused.message, paths=refused.paths)
                 return _shown(ToolOutcome(err), cap)
             events.extend(saved.events)
             rows.extend(saved.rows)

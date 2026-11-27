@@ -15,24 +15,35 @@ appears in the permission matrix. Two words, kept apart on purpose:
 ``save_artifact`` is one generic typed save, a ``store`` tool whose body returns a single
 ``SaveRequest``; the step executor restricts that save to the Task's ``writes``, and a
 narrowing (plan mode) removes it like any other store tool.
+
+What the model is shown of ``save_artifact`` is made per Task (:func:`offered_for_task`):
+its description names each kind the Task writes, whether it takes a ``key``, which fields
+must cite their evidence, and the kind's content schema, so a model can fill the content
+right on its first call. The parameters schema stays the one the gate validates (ADR-P10
+D3); the store checks the content against the kind's schema.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import dataclasses
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from types import MappingProxyType
 from typing import Any
 
 from aksha.runtime.artifacts.types import (
     SELF,
+    ArtifactKind,
     End,
     Excerpt,
     InputRef,
     RelationRequest,
     SaveRequest,
 )
+from aksha.runtime.canonical import thaw
 from aksha.runtime.events.catalogue import INPUT_REF_SCHEMA
-from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl, ToolOutcome, ToolSpec
+from aksha.runtime.tools.types import Ok, ToolContext, ToolDecl, ToolOutcome, ToolSpec, ToolView
 
 LOADER_ADDED_TOOLS: frozenset[str] = frozenset({"finish", "ask", "save_artifact"})
 """The tools the loader adds to every registry; no agent or extension may declare these names."""
@@ -171,3 +182,80 @@ LOADER_ADDED_DECLS: Mapping[str, ToolDecl] = MappingProxyType(
     }
 )
 """The three loader-added tools, by name, as the registry adds them."""
+
+
+SAVE_TOOL = "save_artifact"
+
+_JSON_TYPES: Mapping[str, str] = MappingProxyType(
+    {"str": "string", "int": "integer", "float": "number", "bool": "boolean",
+     "list": "array", "tuple": "array", "dict": "object"}
+)  # fmt: skip
+
+
+def _field_type(annotation: Any) -> dict[str, Any]:
+    name = annotation if isinstance(annotation, str) else getattr(annotation, "__name__", "")
+    found = _JSON_TYPES.get(str(name).split("[", 1)[0].strip())
+    return {"type": found} if found else {}
+
+
+def content_schema(kind: ArtifactKind) -> dict[str, Any]:
+    """The JSON Schema of ``kind``'s content: its own, or one made from a dataclass's fields."""
+    schema = kind.schema
+    if isinstance(schema, Mapping):
+        return dict(thaw(schema))
+    if not (dataclasses.is_dataclass(schema) and isinstance(schema, type)):
+        return {"type": "object"}
+    fields = dataclasses.fields(schema)
+    return {
+        "type": "object",
+        "properties": {f.name: _field_type(f.type) for f in fields},
+        "required": [
+            f.name
+            for f in fields
+            if f.default is dataclasses.MISSING and f.default_factory is dataclasses.MISSING
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _compact(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _kind_line(name: str, kind: ArtifactKind) -> str:
+    key = "keyed: pass `key`" if kind.keyed else "not keyed: omit `key`"
+    lines = [f'- kind "{name}" ({key}). content schema: {_compact(content_schema(kind))}']
+    if kind.cites:
+        cited = ", ".join(
+            f"{c.field} ({' or '.join(sorted(c.forms))}"
+            f"{', or an explicit unknown' if c.may_be_unknown else ''})"
+            for c in kind.cites
+        )
+        lines.append(f"  Fields that cite their evidence: {cited}.")
+    return "\n".join(lines)
+
+
+def save_description(kinds: Mapping[str, ArtifactKind]) -> str:
+    """``save_artifact``'s description on a Task that writes ``kinds``, by full name."""
+    if not kinds:
+        return _SAVE_ARTIFACT.description
+    return "\n".join(
+        (
+            "Save one artifact of a kind this Task writes. Pass `kind` exactly as named "
+            "below and `content` as a JSON object that matches that kind's content schema; "
+            "a refused save lists every field to fix. This Task writes:",
+            *(_kind_line(n, kinds[n]) for n in sorted(kinds)),
+        )
+    )
+
+
+def offered_for_task(
+    tools: Sequence[ToolView], kinds: Mapping[str, ArtifactKind]
+) -> tuple[ToolView, ...]:
+    """``tools`` with ``save_artifact`` described for a Task that writes ``kinds`` (full names).
+
+    Only the description changes: the parameters schema is the validated one (ADR-P10 D3).
+    """
+    return tuple(
+        replace(t, description=save_description(kinds)) if t.name == SAVE_TOOL else t for t in tools
+    )

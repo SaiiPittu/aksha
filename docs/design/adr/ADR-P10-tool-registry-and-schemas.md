@@ -89,6 +89,13 @@ Not done, and open for the maintainer:
 - Content tags for read-before-cite are not built.
 - `where` reads only comma-separated tables. A table whose columns name no candidate is read whole.
 
+### Amendment L1: `save_artifact` shows what the Task writes (27 Nov 2026, Proposed)
+
+A live run of the research agent on a hosted model made 68 model calls with no provider error and still ran out of turns on its first Task. Every `save_artifact` call was refused: first a guessed kind, then one schema error per call, because the model was never shown the kinds it may write or their schemas, and each refusal named only one error.
+
+1. L1, the save tool is described per Task (`offered_for_task` in `runtime/tools/loader_added.py`, applied by `run_turn`). Its description names each kind the Task writes by full name, whether it takes a `key`, the fields that must cite their evidence (each kind's `CitePolicy` patterns), and the kind's content schema as compact JSON (a dataclass kind is shown as a JSON Schema of its fields). The parameters schema is unchanged, so D3 holds: what the gate validates is what the model is shown, and the per-Task part is the description, made from kinds that are already in the definition hash. A union over kinds in the parameters was considered and left out: it would publish a schema the gate does not validate, and not every provider takes a union.
+2. L2, a schema refusal lists every error (ADR-P04 D7 check 2). The store reports every failing path of the content in one `schema` refusal, each with its message and the schema part it expected (a missing property with that property's schema, cut at 400 characters), and the step's error carries every path. A `kind_unknown` or `rights` refusal names the kinds the Task writes. So a model can fix a save in one retry.
+
 ## Alternatives considered
 
 | Option | What it is | For | Against | Verdict |

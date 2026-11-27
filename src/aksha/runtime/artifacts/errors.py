@@ -25,9 +25,14 @@ class SaveRefused(AkshaError):
 
     default_code = "save_refused"
 
-    def __init__(self, code: str, path: str, message: str) -> None:
-        """Name the code, the pointer into the request (``""`` for all of it) and why."""
+    def __init__(self, code: str, path: str, message: str, *, paths: tuple[str, ...] = ()) -> None:
+        """Name the code, the pointer into the request (``""`` for all of it) and why.
+
+        ``paths`` lists every failing pointer when there are several (a ``schema`` refusal
+        reports all its errors at once); it defaults to ``(path,)``.
+        """
         self.path = path
+        self.paths = paths or (path,)
         super().__init__(code, f"{path or '/'}: {message}")
 
 
