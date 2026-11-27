@@ -112,7 +112,7 @@ Counted from the code on main on 27 Nov 2026:
 | | |
 |---|---|
 | Primitives | 29 of the 30 in the [catalogue](docs/design/03-primitives.md) have code and tests; erasure (P30) is in review |
-| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.15 |
+| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.16 |
 | Session commands | 16 named commands behind one `dispatch`, with stored receipts so a retried command gets its first receipt back |
 | Event types | 62 in the core catalogue |
 | Command line | 23 subcommands, one server (`aksha serve`), fixed exit codes |

@@ -55,7 +55,7 @@ from .commit import TOOL, commit_round, commit_spec, commit_tool
 from .kinds import DIRECTIVE, ROUND, STATES, kinds
 from .spec import PortfolioSpec, Tier
 
-EXTENSION = Extension(name="portfolio", version="0.1.0", requires_api=">=2.15,<3")
+EXTENSION = Extension(name="portfolio", version="0.1.0", requires_api=">=2.16,<3")
 """The kit contributes nothing by itself: an agent declares the kinds in its own namespace
 (``kinds()``) and binds ``commit_round`` to its ``PortfolioSpec`` (``commit_tool``)."""
 

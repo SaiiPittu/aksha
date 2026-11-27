@@ -1,5 +1,5 @@
 {
-  "api_version": "2.15",
+  "api_version": "2.16",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off', invalidation_keys: 'InvalidationKeys' = 'reads', reuse: \"Literal['on', 'off']\" = 'on') -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
