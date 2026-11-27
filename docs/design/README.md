@@ -46,7 +46,7 @@ Caption: each product document traces to the one before it, the requirements tra
 3. **Accepted in part**: named decisions inside the ADR are Accepted; every other part, including every amendment from the stress test, is Proposed.
 4. **Open**: the options are listed and no shape is proposed.
 
-Separately from status, each piece of work is labelled by what happened to it: designed (on paper only), built (code exists with tests), or built and run (exercised end to end). As of 26 Nov 2026, four primitives are built and tested on a branch in review: the event store and projections (ADR-P01), the agent definition and extension API (ADR-P20), the tool registry (ADR-P10) and the policy gate (ADR-P11). Everything else in these documents is designed only.
+Separately from status, each piece of work is labelled by what happened to it: designed (on paper only), built (code exists with tests), or built and run (exercised end to end). As of 27 Nov 2026, 29 of the 30 primitives are built and tested on main; erasure (ADR-P30) is designed and in review. The [architecture overview](../architecture/overview.md#the-primitives) lists what exists for each. An ADR's status is about the decision, not the code: most built primitives implement decisions that are still Proposed, and the code says so.
 
 ## Words these documents use
 
