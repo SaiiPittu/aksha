@@ -17,11 +17,9 @@ import pytest
 
 from aksha.adapters.sources.folder import FolderSource
 from aksha.agents.patent import rules
-from aksha.agents.patent.fakes import ADAPTERS
+from aksha.agents.patent.fakes_views import readers
 from aksha.agents.patent.world import SourceWorld, label_steps, quantity, record_units
 from aksha.runtime.api import segment
-from tests.support.fast import models_for
-from tests.support.patent import AGENT_DIR
 
 NOTEBOOK = """SYNTHETIC FIXTURE - a bench notebook.
 BENCH NOTEBOOK, VOLUME 1
@@ -132,8 +130,7 @@ def _world(tmp_path: Path, files: dict[str, str]) -> SourceWorld:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     source = FolderSource("inputs", tmp_path, "input")
-    return SourceWorld(date(2026, 11, 26)).over(source, models=models_for(AGENT_DIR, ADAPTERS,
-                                                                          "read_note"))  # fmt: skip
+    return SourceWorld(date(2026, 11, 26)).over(source, models=readers())
 
 
 def _ids(world: SourceWorld) -> list[str]:
