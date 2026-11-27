@@ -161,6 +161,10 @@ class StopView:
     ``context_policy`` is the agent's context policy, which the re-entry choice reads
     (decision 36); None is the default policy. ``blobs`` is the blob store the choice
     reads offloaded step payloads through (a port, not data: it is read, never written).
+    ``failed`` holds the instances the evaluation under way has already popped FAIL: the
+    Run policy picks none of them again in it (ADR-P15 S6, #95), so an instance the
+    rebuild plan still lists ends blocked instead of being re-entered until the loop bound.
+    Evaluation fills it; a caller leaves it empty.
     """
 
     log: LogView
@@ -172,6 +176,7 @@ class StopView:
     meter: Meter | None = None
     context_policy: ContextPolicy | None = None
     blobs: BlobStore | None = None
+    failed: frozenset[InstanceRef] = frozenset()
 
 
 # --- verdicts and preparation ----------------------------------------------------------

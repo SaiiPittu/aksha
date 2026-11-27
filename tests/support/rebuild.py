@@ -132,11 +132,17 @@ def agent(world: World) -> Agent:
     )
 
 
-def replies(world: World, script: dict[str, int], on_first: dict[str, Callable[[], object]]) -> Any:
+def replies(
+    world: World,
+    script: dict[str, int],
+    on_first: dict[str, Callable[[], object]],
+    finish_only: set[str] | None = None,
+) -> Any:
     """The model: each instance does its work in turn 1 and finishes; ``script`` counts calls.
 
     ``on_first`` runs a callback the first time an instance is asked (a change mid-run);
-    a callback that returns ``"finish_only"`` makes that reply a bare ``finish``.
+    a callback that returns ``"finish_only"`` makes that reply a bare ``finish``. An
+    instance in ``finish_only`` always replies with a bare ``finish`` (it never saves).
     """
 
     def rule(request: GenerationRequest) -> GenerationResult:
@@ -144,7 +150,7 @@ def replies(world: World, script: dict[str, int], on_first: dict[str, Callable[[
         instance = str(step.instance)
         script[instance] = script.get(instance, 0) + 1
         hook = on_first.pop(instance, None)
-        if hook is not None and hook() == "finish_only":
+        if instance in (finish_only or ()) or (hook is not None and hook() == "finish_only"):
             return tools_reply(call("finish", summary="nothing to redo"))
         task, _, rest = instance.partition("[")
         key = rest.rstrip("]") or None
@@ -171,7 +177,8 @@ class Rig:
         self.source = FakeSource()
         self.calls: dict[str, int] = {}
         self.on_first: dict[str, Callable[[], object]] = {}
-        self.model = Recorder(rule=replies(self.world, self.calls, self.on_first))
+        self.finish_only: set[str] = set()
+        self.model = Recorder(rule=replies(self.world, self.calls, self.on_first, self.finish_only))
         self.store: EventStore = open_store(path, self.clock, writer=True)
         a = agent(self.world)
         listed = {t.spec.name: t for t in a.tools if isinstance(t, ToolDecl)}

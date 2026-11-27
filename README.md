@@ -185,7 +185,7 @@ The ones a first user meets, as of 27 Nov 2026:
 3. **One local sandbox backend, Linux only.** Bubblewrap is the only local confining backend, and a session's sandbox is stateful: a crash loses what was only in its temporary space.
 4. **Erasure is open.** Forgetting a memory hides it from recall but erases nothing from the append-only store; the erasure design is in review.
 5. **Some reopening is still wider than the change.** An output that cites nothing stays keyed on every read, a changed seller page reopens every company's evidence, and in the patent agent an edit to one section of a record reopens all the work built on that record.
-6. **A Task that fails while waiting to be rebuilt can loop.** The scheduler re-enters it in the same evaluation until the evaluation loop's bound runs out, so the run ends refused (`evaluation_loop ... did not settle`) instead of failing that one instance cleanly ([#95](https://github.com/SaiiPittu/aksha/issues/95)). The trigger found so far is fixed; the loop itself is not.
+6. **A failed rebuild can be tried again later in the run.** An instance that fails while it is being rebuilt is no longer re-entered in the same decision, so the run goes on to other work or ends `blocked`, naming it ([#95](https://github.com/SaiiPittu/aksha/issues/95)). A later decision does not remember the failure, so while other work runs the instance can be re-entered again, bounded by the run budget.
 
 The full list, with what each one means in practice, is in [docs/limitations.md](docs/limitations.md).
 
@@ -200,7 +200,7 @@ The full list, with what each one means in practice, is in [docs/limitations.md]
 | Shared input tools: the harness declares the upload, web and plan tools, agents keep only their domain actions | Built (decision Proposed) |
 | Super agent: a supervisor Task over a work board, two tiers, an audited drop list | Built as a slice (decision Proposed); the patent agent uses it above eight candidates. The scale path (its instructions, criteria changes, an incremental board, pivot ranking) is not built |
 | Live models from any provider through LiteLLM | Built and smoke-tested on one Gemini model; native file input is in the code but off |
-| A clean failure for a Task that fails while awaiting rebuild ([#95](https://github.com/SaiiPittu/aksha/issues/95)) | Open |
+| A clean failure for a Task that fails while awaiting rebuild ([#95](https://github.com/SaiiPittu/aksha/issues/95)) | Built (decision Proposed); a later decision can still re-enter it while other work runs |
 | Erasure in the append-only store (P30) | In review |
 | A whole task on a real model, the evals in live mode, and the live fresh-against-resumed rebuild comparison | Not run |
 | A container backend, a real system of record behind the outbox, OTLP/HTTP export | Not built |
