@@ -268,7 +268,7 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # --record`` sets it for one run in a store of its own (:func:`record_run`).
 #
 # ``AKSHA_SOURCES`` names the folder each declared versioned source reads (ADR-P13 B1),
-# for example ``inputs=src/aksha/data/worlds/stillroom/sources`` for the research and patent
+# for example ``inputs=src/aksha/data/worlds/<world>/sources`` for the research and patent
 # agents, which both read the ``inputs`` source. Uploads (``aksha run --input``, ``aksha
 # upload``, ``UploadInputs``) go to each owner's input workspace beside the SQLite file
 # (``inputs/<owner>/``), which every run of that owner reads over the configured folder. A

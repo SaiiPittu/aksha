@@ -79,7 +79,7 @@ COLLECTIONS = (COLLECTION,)
 
 ROLES = (
     "record_id", "person_id", "name", "employer", "role", "candidate", "contributed", "date",
-    "agreement_ref", "source", "event_id", "event_type", "what_was_shown", "audience",
+    "agreement", "source", "disclosure_id", "event_type", "content_shown", "audience",
     "public", "by", "rank", "other",
 )  # fmt: skip
 """What a column of a contributor table, a disclosure history or a priority table holds."""
@@ -516,7 +516,7 @@ class SourceWorld:
 
     def history_tables(self) -> list[Table]:
         """Tables with a date and what was shown."""
-        return [t for t in self._tables() if "date" in t.roles and "what_was_shown" in t.roles]
+        return [t for t in self._tables() if "date" in t.roles and "content_shown" in t.roles]
 
     def _person_id(self, t: Table, row: Mapping[str, Any]) -> str:
         pid = t.get(row, "person_id")
@@ -530,7 +530,7 @@ class SourceWorld:
             if cell == candidate:
                 out.append(r)
                 continue
-            text = cell or t.get(r, "contributed") or t.get(r, "what_was_shown")
+            text = cell or t.get(r, "contributed") or t.get(r, "content_shown")
             if cell and any(str(c["candidate"]) == cell for c in cands):
                 continue
             if self.candidate_of(text, cands) == candidate:
@@ -646,7 +646,10 @@ class SourceWorld:
             seg = next((g for g in segs if g.start <= s <= g.end), None)
             marker = (seg.attrs.get("marker", "") if seg is not None else "").rstrip(".)")
             n = int(marker) if marker.isdigit() else i
-            mechanism.append({"n": n, "text": text.strip()})
+            step: dict[str, Any] = {"n": n, "text": text.strip()}
+            if re.fullmatch(r"[A-Z]{1,2}\d{1,2}", marker):
+                step["label"] = marker  # a step the note labels itself ("E2") keeps its label
+            mechanism.append(step)
         refs = sorted({t.strip() for t, _, _ in read.items(raw, "references")})
         return {
             "file": rel,
@@ -679,14 +682,14 @@ class SourceWorld:
 
     def contributor_rows(self, candidate: str) -> dict[str, Any]:
         """The contributor records for ``candidate``, without names or employers."""
-        keep = ("record_id", "role", "candidate", "contributed", "date", "agreement_ref",
+        keep = ("record_id", "role", "candidate", "contributed", "date", "agreement",
                 "source")  # fmt: skip
         rows, parts = [], []
         for t in self.contributor_tables():
             mine = self._rows_of(t, candidate)
             parts.append(self._part(t, candidate, mine))
             for r in mine:
-                agreement = t.get(r, "agreement_ref")
+                agreement = t.get(r, "agreement")
                 refs = sorted(set(re.findall(r"\b[A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+)*[-/]\d+\b",
                                              agreement)))  # fmt: skip
                 documents = [{"ref": ref, "found": self.file_naming(ref)} for ref in refs]
@@ -728,17 +731,18 @@ class SourceWorld:
             parts.append(self._part(t, candidate, mine))
             for n, r in enumerate(mine, start=1):
                 when = t.get(r, "date")
-                ends = [x for x in (t.cell_end(r, k) for k in ("event_id", "date", "candidate"))
+                keys = ("disclosure_id", "date", "candidate")
+                ends = [x for x in (t.cell_end(r, k) for k in keys)
                         if x is not None]  # fmt: skip
                 start = int(r["_start"])
                 row_start = t.text[start : max(ends)] if ends else t.text[start : int(r["_end"])]
                 out.append(
                     {
-                        "event_id": t.get(r, "event_id") or f"{slug(stem(t.record))}-{n}",
+                        "disclosure_id": t.get(r, "disclosure_id") or f"{slug(stem(t.record))}-{n}",
                         "date": day_first(when) if when else None,
                         "date_as_written": when or None,
                         "event_type": t.get(r, "event_type"),
-                        "what_was_shown": t.get(r, "what_was_shown"),
+                        "content_shown": t.get(r, "content_shown"),
                         "public": t.get(r, "public"),
                         "by": t.get(r, "by"),
                         "linked_file": self.resolve(t.get(r, "source")),
@@ -780,9 +784,9 @@ class SourceWorld:
                 n += 1
                 iso, ds, de = dates[0]
                 parts.append((rel, None, None))
-                out.append({"event_id": f"{slug(stem(rel))}-{n}", "date": iso,
+                out.append({"disclosure_id": f"{slug(stem(rel))}-{n}", "date": iso,
                             "date_as_written": text[ds:de], "event_type": None,
-                            "what_was_shown": text.strip(), "public": "unknown", "by": None,
+                            "content_shown": text.strip(), "public": "unknown", "by": None,
                             "linked_file": rel, "file": rel,
                             "row_start": text.strip()})  # fmt: skip
         return out
@@ -824,7 +828,7 @@ class SourceWorld:
         return {
             "file": rel,
             "type": "record",
-            "event_id": meta.get("event_id"),
+            "disclosure_id": meta.get("disclosure_id"),
             "date": dated,
             "sections": sections,
             "body": "\n".join(p for v in texts.values() for p in v),

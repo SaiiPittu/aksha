@@ -159,7 +159,7 @@ def test_disclosure_reads_count_days_but_version_only_the_rows() -> None:
     tool = _tools()["read_disclosures"]
     out = tool.body(_ctx(), {"candidate": "C1"})
     assert isinstance(out.result, Ok)
-    rows = {r["event_id"]: r for r in out.result.data["rows"]}
+    rows = {r["disclosure_id"]: r for r in out.result.data["rows"]}
     assert rows["DISC-01"]["elapsed_days"] == (date(2026, 11, 26) - date(2026, 3, 10)).days == 261
     assert rows["DISC-01"]["linked_file"] == "input/disclosures/2026-03-10-trade-show-demo.md"
     later = _tools(SourceWorld(date(2026, 12, 1)))["read_disclosures"]
@@ -176,7 +176,7 @@ def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
     assert note["date"] == "2026-01-19" and note["alternatives"]
     (row,) = [r for r in w.contributor_rows("TD-1")["rows"] if r["person_id"] == "SYN-P-03"]
     assert row["agreement_documents"] == [{"ref": "SYN-AA-2025-04", "found": False}]
-    events = {r["event_id"]: r for r in w.disclosure_rows("TD-3")["rows"]}
+    events = {r["disclosure_id"]: r for r in w.disclosure_rows("TD-3")["rows"]}
     assert events["SYN-EV-04"]["date"] is None
     forms = {t["template"] for t in w.templates()["templates"]}
     assert forms == {"tilldew-idf", "tilldew-filing-sheet"}
@@ -209,7 +209,7 @@ def test_a_disclosure_row_is_quoted_by_its_own_cells_whatever_the_column_order(
     )
     w = _world(tmp_path)
     (row,) = w.disclosure_rows("INV-12")["rows"]
-    assert (row["event_id"], row["date"]) == ("EV-7", "2026-02-01")
+    assert (row["disclosure_id"], row["date"]) == ("EV-7", "2026-02-01")
     assert row["row_start"] == '"A demo, with a poster",yes,INV-12,2026-02-01,EV-7'
     (other,) = w.disclosure_rows("INV-3")["rows"]
     assert other["row_start"] == "A call,no,INV-3,2026-02-02,EV-8"

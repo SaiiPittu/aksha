@@ -55,15 +55,7 @@ COMMON = frozenset(
 )  # fmt: skip
 """Extracted values that are ordinary vocabulary, not a world's own."""
 
-_ROLE = "a column role named after the first world's header"
-KNOWN_LEAKS: dict[tuple[str, str], str] = {
-    ("app.py", "stillroom"): "a comment's example path names the first world's sources folder",
-    ("agents/patent/world.py", "agreement_ref"): _ROLE,
-    ("agents/patent/world.py", "event_id"): _ROLE,
-    ("agents/patent/world.py", "what_was_shown"): _ROLE,
-    ("agents/research/parsing.py", "rating_scale_max"): _ROLE,
-    ("agents/research/parsing.py", "rating_unit"): _ROLE,
-}
+KNOWN_LEAKS: dict[tuple[str, str], str] = {}
 """Leaks found when this guard was written, by (file, lowercased value), each to be removed.
 
 A known leak passes ``test_names_no_world_value`` but fails ``test_known_leaks_still_exist``
