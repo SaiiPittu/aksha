@@ -378,7 +378,10 @@ def open_blob_store(config: StorageConfig) -> BlobStore:
 # number from 1, default :data:`LIVE_TURN_FACTOR`). ``run.started{turn_factor}`` records it
 # (the stop policy reads it there) and a recording's manifest keeps it, so a resumed run and
 # a replay run under the same limits (:func:`scaled_limits`). Fake mode, and so every
-# offline eval, keeps the agent's own limits (:func:`live_limits`).
+# offline eval, keeps the agent's own limits (:func:`live_limits`). A recording's manifest
+# also keeps the active-time cap, model step timeout, retries and backoff each agent ran
+# under (``limits``, :func:`run_limits`), and a replay runs under those, never under the
+# replaying machine's ``AKSHA_LIVE_*`` (it reads none).
 #
 # ``AKSHA_NATIVE_FILES`` is ``off`` unless set to ``on``: off, no file is sent natively and
 # every upload goes through intake's parsers, its route recorded ``text`` with the reason
@@ -477,6 +480,10 @@ class RuntimeConfig:
     """The turn factor each agent runs under, by name, where it is not its mode's own: a
     replay sets the ones its recording ran under (:func:`scaled_limits`). Not an
     environment setting."""
+    run_limits: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    """The active-time cap, model step timeout, retries and backoff each agent runs under, by
+    name, in place of its mode's own: a replay sets the ones its recording ran under
+    (:func:`run_limits`, :func:`with_run_limits`). Not an environment setting."""
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> RuntimeConfig:
@@ -870,6 +877,47 @@ def live_limits(loaded: LoadedDefinition, env: Mapping[str, str]) -> Agent:
     )
 
 
+def run_limits(agent: Agent) -> dict[str, Any]:
+    """What of ``agent``'s limits live mode sets, as a recording keeps them (record and replay).
+
+    The active-time cap, the model step timeout, its retries and backoff: they decide how
+    often a failed call is asked again and how long a run may wait, so a replay that ran
+    under the replaying machine's own would retry a recorded timeout fewer times, or stop
+    sooner, than the run it replays. The turn and tool-call caps travel as ``turn_factors``.
+    """
+    budget = agent.budget or Budget()
+    limits = agent.limits or Limits()
+    b = limits.backoff
+    return {"active_ms": budget.active_ms, "model_timeout_ms": limits.model_timeout_ms,
+            "max_retries": limits.max_retries,
+            "backoff": {"base_ms": b.base_ms, "factor": b.factor, "cap_ms": b.cap_ms}}  # fmt: skip
+
+
+def with_run_limits(agent: Agent, recorded: Mapping[str, Any]) -> Agent:
+    """``agent`` under the :func:`run_limits` a recording kept.
+
+    Jitter is off: a replay draws no randomness, so each backoff is its full delay.
+    """
+    budget = agent.budget or Budget()
+    limits = agent.limits or Limits()
+    b = recorded.get("backoff") or {}
+    backoff = Backoff(base_ms=int(b.get("base_ms", limits.backoff.base_ms)),
+                      factor=int(b.get("factor", limits.backoff.factor)),
+                      cap_ms=int(b.get("cap_ms", limits.backoff.cap_ms)))  # fmt: skip
+    return replace(
+        agent,
+        budget=replace(budget, active_ms=int(recorded.get("active_ms", budget.active_ms))),
+        limits=replace(
+            limits,
+            model_timeout_ms=int(recorded.get("model_timeout_ms", limits.model_timeout_ms)),
+            max_retries=int(recorded.get("max_retries", limits.max_retries)),
+            backoff=backoff,
+            jitter=0.0,
+            jitter_source=None,
+        ),
+    )
+
+
 def _whole_number(env: Mapping[str, str], name: str, unit: str) -> int | None:
     """``env[name]`` as a whole number, None when unset; ``live_config_missing`` if malformed."""
     raw = (env.get(name) or "").strip()
@@ -901,6 +949,7 @@ def session_agent(
     reentry: ReentrySetting | None = None,
     live_env: Mapping[str, str] | None = None,
     turn_factor: int | None = None,
+    limits: Mapping[str, Any] | None = None,
 ) -> SessionAgent:
     """One loaded definition bound to its models, as a session runs it.
 
@@ -910,10 +959,14 @@ def session_agent(
     ``reentry`` is the setting its request runs record (decision 36); None is ``fresh``.
     ``turn_factor`` scales the agent's turn and tool-call limits (:func:`scaled_limits`);
     None is live mode's :func:`live_turn_factor` and 1 in every other mode. A replay passes
-    the factor its recording ran under.
+    the factor its recording ran under. ``limits`` (:func:`run_limits`) replace the
+    active-time cap, model step timeout, retries and backoff the mode would set: a replay
+    passes the ones its recording ran under.
     """
     agent = loaded.agent
-    if mode == "live":
+    if limits is not None:
+        agent = with_run_limits(agent, limits)
+    elif mode == "live":
         agent = live_limits(loaded, live_env or {})
     factor = turn_factor or (live_turn_factor(live_env or {}) if mode == "live" else 1)
     agent = scaled_limits(agent, factor)
@@ -1016,6 +1069,7 @@ def load_session_agents(
             reentry=reentry,
             live_env=config.live_env,
             turn_factor=config.turn_factors.get(d.agent.name),
+            limits=config.run_limits.get(d.agent.name),
         )
         for d in loaded
     )
@@ -1859,7 +1913,14 @@ def eval_judge() -> Judge:
 # fully offline: each model call is answered from the recording (``replay`` run mode, a
 # mismatch is ``replay_mismatch``), each search and fetch from the recorded answers
 # (``ReplayWeb``), on a clock fixed at the recorded start, and the outputs are compared
-# with the recorded ones.
+# with the recorded ones. A model call or a web call that failed is recorded with its
+# error and fails again in the replay, so a step retries as it did. Every setting that
+# shapes the run comes from the recording, never from the replaying environment: the
+# turn factor (``turn_factors``) and the active-time cap, model step timeout, retries and
+# backoff (``limits``) each agent ran under. A recording made before ``limits`` was kept
+# replays under the agent's own limits, and one made before failed model calls were
+# recorded cannot replay a run whose tool step was retried after a model timeout: the
+# answers of the attempt that failed are not marked. Record it again.
 
 RECORDING_FORMAT = "aksha-recording/1"
 RECORDING_FILE = "recording.json"
@@ -2034,6 +2095,7 @@ def record_run(
             for a in session.agents.values()
             if "turn_factor" in a.run_extra
         }
+        limits = {a.agent.name: run_limits(a.agent) for a in session.agents.values()}
     finally:
         session.store.close()
     manifest = {
@@ -2052,6 +2114,7 @@ def record_run(
     }
     if factors:
         manifest["turn_factors"] = factors  # a replay runs under the same limits
+    manifest["limits"] = limits  # and the same timeouts, retries and active-time cap
     (folder / RECORDING_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
                                          encoding="utf-8")  # fmt: skip
     (folder / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True)
@@ -2067,6 +2130,8 @@ class Replayed:
     same: bool
     differing: tuple[str, ...]
     out: Path
+    older: bool = False
+    """The recording predates ``limits`` and recorded failed model calls (section doc)."""
 
 
 def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
@@ -2090,9 +2155,11 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
     } if inputs.is_dir() else {}  # fmt: skip
     recorded = Recorded(read_stream(folder, "models"))
     factors = {str(k): int(v) for k, v in (manifest.get("turn_factors") or {}).items()}
+    limits = {str(k): dict(v) for k, v in (manifest.get("limits") or {}).items()}
     cfg = replace(config, storage=_local_store(out / "store"), mode="replay", record=None,
                   search=f"replay:{folder}", network="off", server_url=None,
-                  live_env={}, search_env={}, turn_factors=factors)  # fmt: skip
+                  live_env={}, search_env={}, turn_factors=factors,
+                  run_limits=limits)  # fmt: skip
     loaded = load_definitions(cfg)
     adapters = {d.agent.name: recorded_adapters(d.model_aliases.values(), recorded)
                 for d in loaded}  # fmt: skip
@@ -2114,4 +2181,5 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
                              if want.get(k) != ended.outputs.get(k)))  # fmt: skip
     if not differing and (out / OUTPUTS_FILE).read_bytes() != (folder / OUTPUTS_FILE).read_bytes():
         differing = (OUTPUTS_FILE,)
-    return Replayed(replace(ended, trace=trace), not differing, differing, out)
+    return Replayed(replace(ended, trace=trace), not differing, differing, out,
+                    older="limits" not in manifest)  # fmt: skip

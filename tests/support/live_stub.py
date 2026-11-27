@@ -156,3 +156,58 @@ class OfflineGeneration:
     def generate(self, request: GenerationRequest) -> GenerationResult:
         """The policy's next calls."""
         return self._policy.generate(request)
+
+
+class FakesLiteLLM:
+    """The LiteLLM module answering every fast-class call from an agent's offline fakes.
+
+    What :class:`StubServer` does over HTTP, as LiteLLM's ``completion`` (installed in
+    ``sys.modules`` by the test): the fake is chosen by the call's ``model``
+    (``stub:<alias>``). ``fail`` holds the numbers of the calls (from 1) that time out
+    instead, as LiteLLM's ``Timeout``, so a test can make one call of a tool body fail
+    after the calls before it were answered. A real model need not answer one request the
+    same way twice: a classification request asked before the first failing call is
+    answered with each question's first option, certain, the first time; later askings
+    get the fake's answer.
+    Every call's keyword arguments are kept.
+    """
+
+    def __init__(self, fakes: Mapping[str, Any], fail: frozenset[int] = frozenset()) -> None:
+        """Answer from ``fakes`` (alias to fake); time out the calls numbered in ``fail``."""
+        self.fakes = dict(fakes)
+        self.fail = fail
+        self.calls: list[dict[str, Any]] = []
+        self.asked: set[str] = set()
+        self.telemetry = True
+        self.suppress_debug_info = False
+
+    def completion(self, **kwargs: Any) -> Any:
+        from tests.support.litellm_stub import StubResponse, Timeout
+
+        self.calls.append(kwargs)
+        if len(self.calls) in self.fail:
+            raise Timeout("Request timed out.", llm_provider="openai")
+        fake = self.fakes[str(kwargs["model"]).removeprefix("stub:")]
+        system = kwargs["messages"][0]["content"]
+        ask = json.loads(kwargs["messages"][1]["content"])
+        content = _extract(fake, ask) if system == EXTRACT_SYSTEM else _classify(fake, ask)
+        again = json.dumps(kwargs["messages"], sort_keys=True)
+        if system != EXTRACT_SYSTEM:
+            first = len(self.calls) < min(self.fail, default=0) and again not in self.asked
+            for q in ask["questions"]:
+                options = list(q.get("options") or [])
+                odds = content["answers"].get(q["name"], {}).get("probabilities", {})
+                if first and options:
+                    odds = {options[0]: 1.0}
+                full = {o: float(odds.get(o, 0.0)) for o in options}
+                choice = max(options, key=lambda o: full[o]) if options else None
+                content["answers"][q["name"]] = {"choice": choice, "probabilities": full}
+        self.asked.add(again)
+        message = {"role": "assistant", "content": json.dumps(content)}
+        return StubResponse({"choices": [{"index": 0, "finish_reason": "stop",
+                                          "message": message}],
+                             "usage": {"prompt_tokens": 10, "completion_tokens": 5}})  # fmt: skip
+
+    def validate_environment(self, model: str) -> dict[str, Any]:
+        """Every model has what it needs."""
+        return {"keys_in_environment": True, "missing_keys": []}

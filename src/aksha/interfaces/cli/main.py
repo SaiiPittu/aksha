@@ -558,6 +558,11 @@ def cmd_replay(ctx: Context, args: argparse.Namespace) -> int:
         ctx.say(f"outputs: the same as recorded ({len(run.outputs)} outputs)")
         return wire.EXIT_OK
     ctx.say("outputs differ from the recording: " + ", ".join(done.differing))
+    if done.older:
+        ctx.say(
+            "this recording predates recorded limits and failed model calls: a step "
+            "retried after a model timeout cannot replay from it; record the run again"
+        )
     return wire.EXIT_FAILED
 
 

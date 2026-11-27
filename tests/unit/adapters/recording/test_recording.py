@@ -8,6 +8,7 @@ one asked something else ``replay_mismatch``, a fast-class request never asked
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -30,7 +31,7 @@ from aksha.runtime.egress.client import RefusingHttpClient
 from aksha.runtime.egress.errors import EgressRefused
 from aksha.runtime.egress.ports import HttpClient
 from aksha.runtime.execution.errors import TransientStepError
-from aksha.runtime.models.errors import PermanentModelError
+from aksha.runtime.models.errors import PermanentModelError, TransientModelError
 from aksha.runtime.models.types import (
     ClassAnswer,
     ClassificationRequest,
@@ -190,3 +191,50 @@ def test_answers_replay_in_the_order_the_run_got_them(tmp_path: Path) -> None:
     with pytest.raises(EgressRefused) as refused:  # the same refusal the body turns into Err
         replay.fetch("https://private.example/x", http)
     assert (refused.value.host, refused.value.reason) == ("10.0.0.1", "private_address")
+
+
+class _TimesOutOnce:
+    """A generation adapter whose first call times out; the next answers ``REPLY``."""
+
+    model_class = "generation"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate(self, request: GenerationRequest) -> GenerationResult:
+        self.calls += 1
+        if self.calls == 1:
+            raise TransientModelError(message="timed out", detail={"type": "Timeout"})
+        return REPLY
+
+
+def test_a_failed_model_call_is_recorded_and_fails_again_in_the_replay(tmp_path: Path) -> None:
+    sink = JsonlSink(tmp_path)
+    wrapped = recording_adapters({"generate": _TimesOutOnce()}, sink)["generate"]
+    with pytest.raises(TransientModelError):
+        wrapped.generate(ASK)  # type: ignore[attr-defined]
+    wrapped.generate(ASK)  # type: ignore[attr-defined]
+    failed, answered = read_stream(tmp_path, "models")
+    assert failed["error"]["kind"] == "transient" and "result" in answered
+    again = RecordedGeneration("generate", Recorded(read_stream(tmp_path, "models")))
+    with pytest.raises(TransientModelError) as raised:
+        again.generate(ASK)
+    assert raised.value.detail == {"type": "Timeout"}
+    assert again.generate(ASK).tool_calls == REPLY.tool_calls
+
+
+def test_a_step_replays_its_failures_then_its_last_answer() -> None:
+    other = GenerationResult("again", (), "text")
+    line = {"class": "generation", "alias": "generate", "key": "scope/t01",
+            "hash": ASK.context_hash}  # fmt: skip
+    error = {"kind": "permanent", "code": "model_permanent", "message": "refused"}
+
+    def said(text: str | None) -> dict[str, Any]:
+        return {**line, "result": {"text": text, "tool_calls": [], "finish": "text"}}
+
+    lines: list[dict[str, Any]] = [said("first"), {**line, "error": error}, said(other.text)]
+    again = RecordedGeneration("generate", Recorded(lines))
+    with pytest.raises(PermanentModelError):  # the answer asked again after a crash is dropped
+        again.generate(ASK)
+    assert again.generate(ASK).text == "again"
+    assert again.generate(ASK).text == "again"  # the last answer repeats
