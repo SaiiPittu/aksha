@@ -197,13 +197,13 @@
     },
     "C4": {
       "B1": {
-        "D": "disclosed"
+        "D": "partial (PIR-woken fixed observation window; no 60 s window or 1 Hz rate)"
       },
       "B2": {
         "D": "partial"
       },
       "B3": {
-        "D": "disclosed (SYN-PUB-0008 only)"
+        "D": "partial (SYN-PUB-0008 only: report on change and a fixed-interval heartbeat; no 15 min interval)"
       },
       "B4": {
         "D": "not_found"
@@ -232,7 +232,7 @@
     },
     "C4": {
       "next_action": "collect_more_evidence",
-      "why": "blog post 2026-06-02 fully describes it; family D discloses the PIR-woken window and, in the continuation, the heartbeat",
+      "why": "blog post 2026-06-02 fully describes it; family D partly discloses the PIR-woken window and, in the continuation, the heartbeat, without the 60 s window, the 1 Hz rate or the 15 min interval",
       "would_change_if": "counsel's view of the blog post and an element family D lacks"
     }
   },

@@ -2,8 +2,8 @@
   "files": {
     "changes/scope-eu-uk/business-priorities.md": "sha256:4135b1d58a0f9f2d9f1f88df2902a0c09d8fd0fb380abdca5833bdf79183ac6c",
     "changes/scope-eu-uk/changeset.json": "sha256:8af0af56d33f7c793f10528c99a3cc678d9d2cf4c4570212de9a9b27e4a20a87",
-    "changes/scope-eu-uk/key.json": "sha256:4344d4da6bd7ae1d26ff50155ab79fc7f984b6fe427f7bc80313057ddec8a02c",
-    "key.json": "sha256:378ca05c7fce37154b3ef495122b58a9e0017e3fe2c03dbde1a00d6472544a3d",
+    "changes/scope-eu-uk/key.json": "sha256:83ef997439521e330b86b1f962b5ae8676e4eab51d09d23eb2992504c95c70be",
+    "key.json": "sha256:a1e10b1f4998ee3ff69f9635c0fa88c4aeb29fdefbf6b57a1696593d0dadbaf0",
     "manifest.json": "sha256:aa6d7201656dbb4f12034eb354341dad1038f81336d60037446a2561332dc41c",
     "sources/contributors/records.csv": "sha256:d1ce108b57c81034837697c16fc99781146af776bf853f2ff8ebf8cfe743cfaf",
     "sources/disclosures/2026-03-10-trade-show-demo.md": "sha256:775186a438728fbc63861d94333cd8ed5e12ed1ac6631b5b67048f8867f85e14",

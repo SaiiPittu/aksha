@@ -51,6 +51,16 @@ def test_json_rows_are_the_largest_list_with_nested_fields_flattened() -> None:
     assert value == "Ireland" and raw[start:end] == "Ireland"
 
 
+def test_json_row_cells_come_from_their_own_object_whatever_the_key_order() -> None:
+    raw = '[{"text": "first", "id": "1"}, {"id": "2", "text": "second"}, {"text": "third"}]'
+    table = read_rows(raw, "json")
+    texts = [r.cells["text"] for r in table.rows]
+    assert [v for v, _, _ in texts] == ["first", "second", "third"]
+    for row, (_, start, end) in zip(table.rows, texts, strict=True):
+        assert row.start <= start < end <= row.end  # the cell lies inside its row's span
+    assert [r.value("id") for r in table.rows[:2]] == ["1", "2"]
+
+
 @pytest.mark.parametrize(
     ("text", "order", "iso"),
     [
