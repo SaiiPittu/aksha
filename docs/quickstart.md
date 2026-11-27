@@ -134,7 +134,7 @@ aksha replay runs/first
 # outputs: the same as recorded (11 outputs)
 ```
 
-A live run is recorded the same way: set `AKSHA_MODE=live` with the `AKSHA_LIVE_*` settings above, and `AKSHA_SEARCH=brave` with `AKSHA_BRAVE_API_KEY` (read from the environment, never recorded) and `AKSHA_NETWORK=on`, so each page is fetched over HTTPS under the `aksha.web` egress policy. The replay needs none of them. A small recording made from a fake run ships in `src/aksha/data/recordings/research-occupancy/`: `aksha replay src/aksha/data/recordings/research-occupancy --out replay-1`.
+A live run is recorded the same way: set `AKSHA_MODE=live` with the `AKSHA_LIVE_*` settings above, and `AKSHA_SEARCH=brave` with `AKSHA_BRAVE_API_KEY` (read from the environment, never recorded) and `AKSHA_NETWORK=on`, so each page is fetched over HTTPS under the `aksha.web` egress policy. The replay needs none of them. A small recording made from a fake run ships in `src/aksha/data/recordings/research-occupancy/`: `aksha replay src/aksha/data/recordings/research-occupancy --out replay-1`. A real run on GPT-6.2 Sol (against the world's offline web) ships in `src/aksha/data/recordings/research-live-gpt/`: `aksha replay src/aksha/data/recordings/research-live-gpt --out replay-live` gives the same 7 outputs with no key and no network. That run ended partial, with two competitors left unknown rather than guessed.
 
 ## The command line, step by step
 

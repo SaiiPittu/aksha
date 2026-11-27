@@ -1,0 +1,9 @@
+record_id,person_id,name,employer,role,candidate,contributed,date,agreement_ref,source,synthetic
+CR-01,P-01,Asha Rao,Stillroom,firmware lead,C1,Wrote the gated baseline update rule and the engineering note,2026-01-14,"employment, standard IP assignment",NOTE-C1,true
+CR-02,P-02,Ravi Menon,Stillroom,embedded engineer,C1,Implemented the gated update in firmware fw-0.9.3,2026-02-02,"employment, standard IP assignment",BL-2026-011,true
+CR-03,P-02,Ravi Menon,Stillroom,embedded engineer,C4,Designed the event-driven sampling schedule and heartbeat,2026-01-28,"employment, standard IP assignment",NOTE-C4,true
+CR-04,P-03,Lena Fischer,Stillroom,hardware engineer,C2,Sketched the placement planner and the walk test,2026-02-03,"employment, standard IP assignment",NOTE-C2,true
+CR-05,P-06,Mira Okafor,Okafor Prototyping (contractor),contract technician,C2,Built the mounting jig from the hardware engineer's drawings,2026-02-10,contractor statement of work SOW-14,invoice INV-0042,true
+CR-06,P-04,Tomas Ibarra,Stillroom,data engineer,C3,Designed the count-only overlap aggregator,2026-02-20,"employment, standard IP assignment",NOTE-C3,true
+CR-07,P-05,Dr. Wei Lin,Northgate University,outside consultant,C1,Reviewed the thermal noise model,2026-01-21,"consulting agreement CA-2025-11, effective 2025-12-01",invoice INV-0037,true
+CR-08,P-07,Daniel Sato,Stillroom,founder and CEO,C1,Presented the self-calibration demo at the trade show,2026-03-10,"founder, IP assignment",DISC-01,true

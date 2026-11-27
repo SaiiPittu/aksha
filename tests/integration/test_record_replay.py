@@ -23,6 +23,7 @@ from aksha.interfaces.cli.main import main
 from tests.support.session import env
 
 EXAMPLE = data.recordings() / "research-occupancy"
+LIVE = data.recordings() / "research-live-gpt"
 REQUEST = (
     "Who sells camera-free occupancy sensing for offices in the EU, and at what price? "
     "Compare power (PoE, battery powered, mains) and privacy (privacy, camera, image)."
@@ -89,6 +90,18 @@ def test_the_bundled_example_replays_to_its_recorded_outputs(tmp_path: Path) -> 
     skipped = {s["why"] for s in competitors["web"]["skipped"]}
     assert skipped == {"an advert", "a copy of a page already chosen",
                        "an older version of a page on the same site"}  # fmt: skip
+
+
+def test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs(
+    tmp_path: Path,
+) -> None:
+    """A real GPT run, with its failed calls, replays with no key and no network."""
+    done = replay_run(RuntimeConfig(), LIVE, tmp_path / "replay")
+    assert done.same, done.differing
+    again = (tmp_path / "replay" / "outputs.json").read_bytes()
+    assert again == (LIVE / "outputs.json").read_bytes()  # byte for byte
+    manifest = json.loads((LIVE / "recording.json").read_text())
+    assert done.run.outcome == manifest["outcome"]
 
 
 def test_a_recording_that_does_not_match_the_run_is_refused_not_filled_in(

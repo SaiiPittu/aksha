@@ -1,0 +1,31 @@
+SYNTHETIC FIXTURE - text rendered from a PDF-like layout. Invented for testing; not a real patent.
+
+SYN-Office-2                                   (11) SYN-PUB-0006 B1
+(54) Privacy-preserving occupancy counting across overlapping sensors
+(73) Proprietor: Helio Buildings AG
+(22) Filing date: 2023-01-17        (30) Priority: SYN-PRI-2022-0118, 2022-01-18
+(45) Date of grant: 2025-02-11
+Status: Granted
+
+Description
+
+Each sensor processes its frames locally and transmits only a count of persons and a count of
+persons inside a predefined overlap region. A room controller computes the room count as the
+sum of the sensor counts minus the overlap count. Each sensor updates its background only while
+no motion has been detected for a holding period.
+
+Page 1 of 2 - SYNTHETIC FIXTURE
+
+Claims
+
+1. A method of counting occupants of a room monitored by a first sensor and a second sensor with
+an overlap region, comprising: at each sensor, counting persons locally and counting persons
+within the overlap region; transmitting only the counts; and computing a room count as the sum
+of the counts minus the overlap count, wherein the sensors transmit no image data.
+
+2. The method of claim 1, wherein room counts are aggregated to floor level.
+
+Legal status (register extract, 2026-08-03): Lapsed - renewal fee not paid (2025-11-30).
+The legal status is an assumption and is not a legal conclusion.
+
+Page 2 of 2 - SYNTHETIC FIXTURE

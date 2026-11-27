@@ -1,0 +1,42 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0005",
+  "office": "SYN-Office-2",
+  "kind_code": "A1",
+  "title": "Privacy-preserving occupancy counting across overlapping sensors",
+  "applicant": "Helio Buildings AG",
+  "dates": {
+    "priority": "2022-01-18",
+    "filing": "2023-01-17",
+    "publication": "2023-07-20"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2022-0118",
+      "date": "2022-01-18"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0005",
+  "status_observations": [
+    {
+      "wording": "Application closed - patent granted",
+      "source": "SYN-Office-2 register",
+      "as_of": "2025-02-11"
+    }
+  ],
+  "abstract": "Sensors send counts, not images; a controller subtracts the overlap count.",
+  "description": "Each sensor processes its frames locally and transmits only a count of persons and a count of persons inside a predefined overlap region. A room controller computes the room count as the sum of the sensor counts minus the overlap count. Each sensor updates its background only while no motion has been detected for a holding period.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count."
+    },
+    {
+      "number": 2,
+      "depends_on": 1,
+      "text": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period."
+    }
+  ]
+}
