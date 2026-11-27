@@ -1,0 +1,189 @@
+{
+ "content": {
+  "candidate": "C1",
+  "cells": [
+   {
+    "element": "F1",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0001.json",
+      "publication": "SYN-PUB-0001",
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0002.json",
+      "publication": "SYN-PUB-0002",
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a fixed temperature offset.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2021-0412",
+    "members": {
+     "SYN-PUB-0001": "disclosed",
+     "SYN-PUB-0002": "disclosed"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "F1",
+    "evidence": [],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "not_found",
+     "SYN-PUB-0006": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "F2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0001.json",
+      "publication": "SYN-PUB-0001",
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0002.json",
+      "publication": "SYN-PUB-0002",
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a fixed temperature offset.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2021-0412",
+    "members": {
+     "SYN-PUB-0001": "partial",
+     "SYN-PUB-0002": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "F2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "publication": "SYN-PUB-0005",
+      "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period.",
+      "where": "claim 2"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "Each sensor updates its background only while\nno motion has been detected for a holding period.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "disclosed",
+     "SYN-PUB-0006": "disclosed"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "F3",
+    "evidence": [],
+    "family": "SYN-PRI-2021-0412",
+    "members": {
+     "SYN-PUB-0001": "not_found",
+     "SYN-PUB-0002": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "F3",
+    "evidence": [],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "not_found",
+     "SYN-PUB-0006": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "F4",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0001.json",
+      "publication": "SYN-PUB-0001",
+      "quote": "During periods of low activity, the background frame is updated as a running average of recent frames.",
+      "where": "description"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0002.json",
+      "publication": "SYN-PUB-0002",
+      "quote": "During periods of low activity, the background frame is updated as a running average of recent frames.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2021-0412",
+    "members": {
+     "SYN-PUB-0001": "partial",
+     "SYN-PUB-0002": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "F4",
+    "evidence": [],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "not_found",
+     "SYN-PUB-0006": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "F5",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0001.json",
+      "publication": "SYN-PUB-0001",
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0002.json",
+      "publication": "SYN-PUB-0002",
+      "quote": "A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2021-0412",
+    "members": {
+     "SYN-PUB-0001": "disclosed",
+     "SYN-PUB-0002": "disclosed"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "F5",
+    "evidence": [],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "not_found",
+     "SYN-PUB-0006": "not_found"
+    },
+    "state": "not_found"
+   }
+  ],
+  "closest_families": [
+   "SYN-PRI-2021-0412"
+  ],
+  "elements": [
+   "F1",
+   "F2",
+   "F3",
+   "F4",
+   "F5"
+  ],
+  "families": [
+   "SYN-PRI-2021-0412",
+   "SYN-PRI-2022-0118"
+  ],
+  "note": "not_found means this search showed no reference for the element; it is not a finding that the element is new."
+ },
+ "freshness": "current",
+ "ref": "patent.comparison/C1@v1"
+}

@@ -1,0 +1,18 @@
+{
+ "content": {
+  "based_on": [
+   "patent.extraction/C2@v1",
+   "patent.comparison/C2@v1"
+  ],
+  "candidate": "C2",
+  "next_action": "collect_more_evidence",
+  "risks": [
+   "disclosure 2026-03-10-trade-show-demo-1 on 2026-03-10: the record does not say whether it was public"
+  ],
+  "rule": "R2",
+  "why": "business priority 4; implementation: idea_only; P3 not found in any family searched; family SYN-PRI-2019-0630 discloses P1; referenced document missing: placement-trial-02.csv",
+  "would_change_if": "the missing evidence appears and the unmatched elements stay not found"
+ },
+ "freshness": "current",
+ "ref": "patent.recommendation/C2@v1"
+}

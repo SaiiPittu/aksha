@@ -1,0 +1,130 @@
+{
+ "content": {
+  "candidate": "C4",
+  "families": [
+   {
+    "differences": [
+     "independent claims differ between members"
+    ],
+    "family": "SYN-PRI-2021-1103",
+    "members": [
+     "SYN-PUB-0007",
+     "SYN-PUB-0008"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0007": [
+      "Pending"
+     ],
+     "SYN-PUB-0008": [
+      "Pending"
+     ]
+    }
+   }
+  ],
+  "hits": [
+   "SYN-PUB-0007",
+   "SYN-PUB-0008"
+  ],
+  "publications": [
+   {
+    "abstract": "A PIR detector wakes a high-power sensing element for a fixed window.",
+    "dates": {
+     "filing": "2022-11-02",
+     "priority": "2021-11-03",
+     "publication": "2023-05-11"
+    },
+    "dependent_claims": [],
+    "description": "A battery-powered occupancy sensor keeps its high-power sensing element off. A passive infrared detector wakes the high-power element for a fixed observation window when motion is detected, and the element is switched off again if no occupant is classified within the window.",
+    "family": "SYN-PRI-2021-1103",
+    "file": "input/publications/SYN-PUB-0007.json",
+    "id": "SYN-PUB-0007",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0007.json",
+      "number": 1,
+      "quote": "A battery-powered occupancy sensor comprising a passive infrared detector and a high-power sensing element, wherein the passive infrared detector wakes the high-power sensing element for a fixed observation window upon detecting motion, and the high-power sensing element is switched off if no occupant is classified within the window."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2021-11-03",
+      "number": "SYN-PRI-2021-1103"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0007.json",
+      "quote": "Pending",
+      "source": "document",
+      "wording": "Pending"
+     }
+    ],
+    "title": "Low-power occupancy sensor with motion-triggered sensing window",
+    "url": "https://patents.synthetic.example/SYN-PUB-0007"
+   },
+   {
+    "abstract": "The sensor transmits only on a change of count, with a periodic heartbeat.",
+    "dates": {
+     "filing": "2024-12-09",
+     "priority": "2021-11-03",
+     "publication": "2025-06-19"
+    },
+    "dependent_claims": [],
+    "description": "A battery-powered occupancy sensor keeps its high-power sensing element off. A passive infrared detector wakes the high-power element for a fixed observation window when motion is detected, and the element is switched off again if no occupant is classified within the window. The sensor transmits a message only when the occupant count changes, and transmits a heartbeat message at a fixed interval so that a silent sensor is distinguishable from a failed one.",
+    "family": "SYN-PRI-2021-1103",
+    "file": "input/publications/SYN-PUB-0008.json",
+    "id": "SYN-PUB-0008",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0008.json",
+      "number": 1,
+      "quote": "A battery-powered occupancy sensor configured to transmit a message only when an occupant count changes, and to transmit a heartbeat message at a fixed interval when the count has not changed."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2021-11-03",
+      "number": "SYN-PRI-2021-1103"
+     },
+     {
+      "date": "2022-11-02",
+      "number": "SYN-APP-2022-1102",
+      "relation": "continuation of"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0008.json",
+      "quote": "Pending",
+      "source": "document",
+      "wording": "Pending"
+     }
+    ],
+    "title": "Low-power occupancy sensor with event-driven reporting",
+    "url": "https://patents.synthetic.example/SYN-PUB-0008"
+   }
+  ],
+  "query": "patent.search_publications?{\"all_of\":[[\"passive infrared\",\"PIR\"],[\"battery\"]]}",
+  "web": {
+   "kept": [],
+   "queries": [
+    "passive infrared PIR battery"
+   ],
+   "read": [
+    "https://noctra.example/product",
+    "https://brightfield.example/product",
+    "https://buildingwords.example/glossary/occupancy-sensor",
+    "https://corvane.example/product",
+    "https://tallyway.example/product"
+   ]
+  }
+ },
+ "freshness": "current",
+ "ref": "patent.prior_art/C4@v1"
+}

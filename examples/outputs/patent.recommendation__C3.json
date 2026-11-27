@@ -1,0 +1,18 @@
+{
+ "content": {
+  "based_on": [
+   "patent.extraction/C3@v1",
+   "patent.comparison/C3@v1"
+  ],
+  "candidate": "C3",
+  "next_action": "deprioritize_for_now",
+  "risks": [
+   "disclosure DISC-02 on 2026-04-15: the record does not say whether it was public"
+  ],
+  "rule": "R5",
+  "why": "business priority 3; implementation: in_use_under_nda; family SYN-PRI-2022-0118 discloses Q1, Q3",
+  "would_change_if": "an element the closest family lacks proves material"
+ },
+ "freshness": "current",
+ "ref": "patent.recommendation/C3@v1"
+}

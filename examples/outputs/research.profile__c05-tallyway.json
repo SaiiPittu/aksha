@@ -1,0 +1,113 @@
+{
+ "content": {
+  "cells": {
+   "battery_life": [
+    {
+     "cite": {
+      "quote": "Up to 7 years of battery life. Install it and forget it.",
+      "span": "EX-0188"
+     },
+     "label": "vendor_claim",
+     "passage": "claim",
+     "published": "2026-08-21",
+     "record": "web/tallyway.example/product",
+     "value": "Up to 7 years of battery life. Install it and forget it."
+    },
+    {
+     "cite": {
+      "quote": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)",
+      "span": "EX-0208"
+     },
+     "label": "fact",
+     "passage": "spec",
+     "published": "2026-08-21",
+     "record": "web/tallyway.example/product",
+     "value": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)"
+    }
+   ],
+   "power": [
+    {
+     "cite": {
+      "quote": "A time-of-flight (ToF) doorway counter. Counts people in and out of a room; battery powered.",
+      "span": "EX-0187"
+     },
+     "label": "fact",
+     "passage": "text",
+     "published": "2026-08-21",
+     "record": "web/tallyway.example/product",
+     "value": "A time-of-flight (ToF) doorway counter. Counts people in and out of a room; battery powered."
+    },
+    {
+     "cite": {
+      "quote": "2 x AA lithium",
+      "span": "EX-0211"
+     },
+     "label": "fact",
+     "passage": "spec",
+     "published": "2026-08-21",
+     "record": "web/tallyway.example/product",
+     "value": "2 x AA lithium"
+    }
+   ],
+   "privacy": [
+    {
+     "unknown": {
+      "checked": [
+       "record:web/tallyway.example/product@sha256:babd2c62d03529e763af01301a1b9585566967dc75625be8a7cd2bd54316c4b7"
+      ],
+      "question": "What does Tallyway state about privacy? Its pages do not say.",
+      "reason": "not_found"
+     }
+    }
+   ]
+  },
+  "conflicts": [],
+  "flags": [],
+  "key": "c05-tallyway",
+  "name": "Tallyway",
+  "pages": [
+   {
+    "published": "2026-08-21",
+    "record": "web/tallyway.example/product",
+    "url": "https://tallyway.example/product"
+   }
+  ],
+  "price_notes": [],
+  "prices": [
+   {
+    "cite": {
+     "quote": "USD 189 per unit",
+     "span": "EX-0196"
+    },
+    "currency": "USD",
+    "item": "Tallyway Beam counter",
+    "label": "fact",
+    "number": "189",
+    "passage": "price",
+    "per": "unit",
+    "published": "2026-08-21",
+    "record": "web/tallyway.example/product",
+    "terms": "one-off",
+    "value": "189"
+   },
+   {
+    "cite": {
+     "quote": "USD 5 per counter per month",
+     "span": "EX-0200"
+    },
+    "currency": "USD",
+    "item": "Cloud dashboard",
+    "label": "fact",
+    "number": "5",
+    "passage": "price",
+    "per": "counter per month",
+    "published": "2026-08-21",
+    "record": "web/tallyway.example/product",
+    "terms": "billed annually",
+    "value": "5"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.profile/c05-tallyway@v1"
+}

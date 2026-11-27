@@ -1,0 +1,268 @@
+{
+ "content": {
+  "candidate": "C1",
+  "families": [
+   {
+    "differences": [
+     "independent claims differ between members",
+     "status wordings differ; each is kept as written"
+    ],
+    "family": "SYN-PRI-2021-0412",
+    "members": [
+     "SYN-PUB-0001",
+     "SYN-PUB-0002"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0001": [
+      "Published application"
+     ],
+     "SYN-PUB-0002": [
+      "Granted - in force"
+     ]
+    }
+   },
+   {
+    "differences": [
+     "independent claims differ between members",
+     "status wordings differ; each is kept as written"
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": [
+     "SYN-PUB-0005",
+     "SYN-PUB-0006"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0005": [
+      "Application closed - patent granted"
+     ],
+     "SYN-PUB-0006": [
+      "Status: Granted",
+      "Lapsed - renewal fee not paid (2025-11-30)."
+     ]
+    }
+   }
+  ],
+  "hits": [
+   "SYN-PUB-0001",
+   "SYN-PUB-0002",
+   "SYN-PUB-0005",
+   "SYN-PUB-0006"
+  ],
+  "publications": [
+   {
+    "abstract": "A thermal array occupancy sensor subtracts a stored background frame and adapts it during low activity.",
+    "dates": {
+     "filing": "2022-04-11",
+     "priority": "2021-04-12",
+     "publication": "2022-10-13"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0001.json",
+      "number": 2,
+      "quote": "The method of claim 1, wherein low activity is determined from the variance of recent frames."
+     }
+    ],
+    "description": "A ceiling thermal array sensor stores a background frame at installation. During periods of low activity, the background frame is updated as a running average of recent frames. A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+    "family": "SYN-PRI-2021-0412",
+    "file": "input/publications/SYN-PUB-0001.json",
+    "id": "SYN-PUB-0001",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0001.json",
+      "number": 1,
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2021-04-12",
+      "number": "SYN-PRI-2021-0412"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0001.json",
+      "quote": "Published application",
+      "source": "document",
+      "wording": "Published application"
+     }
+    ],
+    "title": "Thermal array occupancy sensing with background subtraction",
+    "url": "https://patents.synthetic.example/SYN-PUB-0001"
+   },
+   {
+    "abstract": "A thermal array occupancy sensor subtracts a stored background frame and adapts it during low activity.",
+    "dates": {
+     "filing": "2022-04-11",
+     "grant": "2024-03-05",
+     "priority": "2021-04-12",
+     "publication": "2022-10-13"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0002.json",
+      "number": 2,
+      "quote": "The method of claim 1, wherein the fixed temperature offset is 0.5 degrees Celsius."
+     }
+    ],
+    "description": "A ceiling thermal array sensor stores a background frame at installation. During periods of low activity, the background frame is updated as a running average of recent frames. A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+    "family": "SYN-PRI-2021-0412",
+    "file": "input/publications/SYN-PUB-0002.json",
+    "id": "SYN-PUB-0002",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0002.json",
+      "number": 1,
+      "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a fixed temperature offset."
+     }
+    ],
+    "kind_code": "B2",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2021-04-12",
+      "number": "SYN-PRI-2021-0412"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0002.json",
+      "quote": "Granted - in force",
+      "source": "document",
+      "wording": "Granted - in force"
+     }
+    ],
+    "title": "Thermal array occupancy sensing with background subtraction",
+    "url": "https://patents.synthetic.example/SYN-PUB-0002"
+   },
+   {
+    "abstract": "Sensors send counts, not images; a controller subtracts the overlap count.",
+    "dates": {
+     "filing": "2023-01-17",
+     "grant": "2025-02-11",
+     "priority": "2022-01-18",
+     "publication": "2023-07-20"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0005.json",
+      "number": 2,
+      "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period."
+     }
+    ],
+    "description": "Each sensor processes its frames locally and transmits only a count of persons and a count of persons inside a predefined overlap region. A room controller computes the room count as the sum of the sensor counts minus the overlap count. Each sensor updates its background only while no motion has been detected for a holding period.",
+    "family": "SYN-PRI-2022-0118",
+    "file": "input/publications/SYN-PUB-0005.json",
+    "id": "SYN-PUB-0005",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "number": 1,
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-2",
+    "priority_claims": [
+     {
+      "date": "2022-01-18",
+      "number": "SYN-PRI-2022-0118"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0005.json",
+      "quote": "Application closed - patent granted",
+      "source": "document",
+      "wording": "Application closed - patent granted"
+     }
+    ],
+    "title": "Privacy-preserving occupancy counting across overlapping sensors",
+    "url": "https://patents.synthetic.example/SYN-PUB-0005"
+   },
+   {
+    "abstract": "",
+    "dates": {
+     "filing": "2023-01-17",
+     "grant": "2025-02-11",
+     "priority": "2022-01-18"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "number": 2,
+      "quote": "The method of claim 1, wherein room counts are aggregated to floor level."
+     }
+    ],
+    "description": "Each sensor processes its frames locally and transmits only a count of persons and a count of\npersons inside a predefined overlap region. A room controller computes the room count as the\nsum of the sensor counts minus the overlap count. Each sensor updates its background only while\nno motion has been detected for a holding period.",
+    "family": "SYN-PRI-2022-0118",
+    "file": "input/publications/SYN-PUB-0006.pdf.txt",
+    "id": "SYN-PUB-0006",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "number": 1,
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data."
+     }
+    ],
+    "kind_code": "B1",
+    "office": "SYN-Office-2",
+    "priority_claims": [
+     {
+      "date": "2022-01-18",
+      "number": "SYN-PRI-2022-0118"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "quote": "Status: Granted",
+      "source": "document",
+      "wording": "Status: Granted"
+     },
+     {
+      "as_of": "2026-08-03",
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "quote": "Lapsed - renewal fee not paid (2025-11-30).",
+      "source": "register extract",
+      "wording": "Lapsed - renewal fee not paid (2025-11-30)."
+     }
+    ],
+    "title": "Privacy-preserving occupancy counting across overlapping sensors",
+    "url": {
+     "gap": {
+      "question": "What is the URL of SYN-PUB-0006?",
+      "reason": "not_found"
+     }
+    }
+   }
+  ],
+  "query": "patent.search_publications?{\"all_of\":[[\"background\"],[\"sensor\"]]}",
+  "web": {
+   "kept": [],
+   "queries": [
+    "background sensor"
+   ],
+   "read": [
+    "https://kelvra.example/product",
+    "https://veyra.example/product",
+    "https://noctra.example/product",
+    "https://buildingwords.example/glossary/occupancy-sensor",
+    "https://brightfield.example/product"
+   ]
+  }
+ },
+ "freshness": "current",
+ "ref": "patent.prior_art/C1@v1"
+}

@@ -1,0 +1,102 @@
+{
+ "content": {
+  "cells": {
+   "battery_life": [
+    {
+     "unknown": {
+      "checked": [
+       "record:web/kelvra.example/product@sha256:7e7f12b6916ae8f584237a64bcfc7336506aab6f01c25720252a4c382409094b"
+      ],
+      "question": "What does Kelvra Systems state about battery life? Its pages do not say.",
+      "reason": "not_found"
+     }
+    }
+   ],
+   "power": [
+    {
+     "cite": {
+      "quote": "A 32 x 32 thermal array for meeting rooms and open desks. Powered over Ethernet (PoE), ceiling mounted.",
+      "span": "EX-0056"
+     },
+     "label": "fact",
+     "passage": "text",
+     "published": "2026-10-14",
+     "record": "web/kelvra.example/product",
+     "value": "A 32 x 32 thermal array for meeting rooms and open desks. Powered over Ethernet (PoE), ceiling mounted."
+    },
+    {
+     "cite": {
+      "quote": "Installation requires a PoE cable run to every sensor.",
+      "span": "EX-0072"
+     },
+     "label": "fact",
+     "passage": "text",
+     "published": "2026-10-14",
+     "record": "web/kelvra.example/product",
+     "value": "Installation requires a PoE cable run to every sensor."
+    }
+   ],
+   "privacy": [
+    {
+     "cite": {
+      "quote": "Thermal only. The sensor cannot capture faces or identities.",
+      "span": "EX-0071"
+     },
+     "label": "fact",
+     "passage": "text",
+     "published": "2026-10-14",
+     "record": "web/kelvra.example/product",
+     "value": "Thermal only. The sensor cannot capture faces or identities."
+    }
+   ]
+  },
+  "conflicts": [],
+  "flags": [],
+  "key": "c01-kelvra-systems",
+  "name": "Kelvra Systems",
+  "pages": [
+   {
+    "published": "2026-10-14",
+    "record": "web/kelvra.example/product",
+    "url": "https://kelvra.example/product"
+   }
+  ],
+  "price_notes": [],
+  "prices": [
+   {
+    "cite": {
+     "quote": "EUR 249 per unit",
+     "span": "EX-0064"
+    },
+    "currency": "EUR",
+    "item": "Kelvra TS-32 sensor",
+    "label": "fact",
+    "number": "249",
+    "passage": "price",
+    "per": "unit",
+    "published": "2026-10-14",
+    "record": "web/kelvra.example/product",
+    "terms": "one-off",
+    "value": "249"
+   },
+   {
+    "cite": {
+     "quote": "EUR 6 per sensor per month",
+     "span": "EX-0068"
+    },
+    "currency": "EUR",
+    "item": "Workplace analytics",
+    "label": "fact",
+    "number": "6",
+    "passage": "price",
+    "per": "sensor per month",
+    "published": "2026-10-14",
+    "record": "web/kelvra.example/product",
+    "terms": "billed annually",
+    "value": "6"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.profile/c01-kelvra-systems@v1"
+}

@@ -1,0 +1,17 @@
+{
+ "content": {
+  "based_on": {
+   "C1": "patent.recommendation/C1@v1",
+   "C2": "patent.recommendation/C2@v1",
+   "C3": "patent.recommendation/C3@v1",
+   "C4": "patent.recommendation/C4@v1"
+  },
+  "chosen_by": "person",
+  "selected": [
+   "C1"
+  ],
+  "table": "patent.table@v1"
+ },
+ "freshness": "current",
+ "ref": "patent.selection@v1"
+}

@@ -1,0 +1,246 @@
+{
+ "content": {
+  "candidate": "C3",
+  "families": [
+   {
+    "differences": [
+     "status wordings differ; each is kept as written"
+    ],
+    "family": "SYN-PRI-2020-0907",
+    "members": [
+     "SYN-PUB-0003",
+     "SYN-PUB-0004"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0003": [
+      "Pending"
+     ],
+     "SYN-PUB-0004": [
+      "Application deemed to be withdrawn"
+     ]
+    }
+   },
+   {
+    "differences": [
+     "independent claims differ between members",
+     "status wordings differ; each is kept as written"
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": [
+     "SYN-PUB-0005",
+     "SYN-PUB-0006"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0005": [
+      "Application closed - patent granted"
+     ],
+     "SYN-PUB-0006": [
+      "Status: Granted",
+      "Lapsed - renewal fee not paid (2025-11-30)."
+     ]
+    }
+   }
+  ],
+  "hits": [
+   "SYN-PUB-0003",
+   "SYN-PUB-0004",
+   "SYN-PUB-0005",
+   "SYN-PUB-0006"
+  ],
+  "publications": [
+   {
+    "abstract": "Frames from overlapping thermal sensors are merged on a server into one room image before counting.",
+    "dates": {
+     "filing": "2021-09-06",
+     "priority": "2020-09-07",
+     "publication": "2022-03-17"
+    },
+    "dependent_claims": [],
+    "description": "Two or more thermal sensors with overlapping fields of view stream their frames to a building server. The server registers the frames to a common floor grid, merges them into one thermal image of the room, and counts people in the merged image so that a person in the overlap is counted once.",
+    "family": "SYN-PRI-2020-0907",
+    "file": "input/publications/SYN-PUB-0003.json",
+    "id": "SYN-PUB-0003",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0003.json",
+      "number": 1,
+      "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2020-09-07",
+      "number": "SYN-PRI-2020-0907"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0003.json",
+      "quote": "Pending",
+      "source": "document",
+      "wording": "Pending"
+     }
+    ],
+    "title": "Merging overlapping thermal sensor views for room counting",
+    "url": "https://patents.synthetic.example/SYN-PUB-0003"
+   },
+   {
+    "abstract": "Frames from overlapping thermal sensors are merged on a server into one room image before counting.",
+    "dates": {
+     "filing": "2021-09-06",
+     "priority": "2020-09-07",
+     "publication": "2022-04-06"
+    },
+    "dependent_claims": [],
+    "description": "Two or more thermal sensors with overlapping fields of view stream their frames to a building server. The server registers the frames to a common floor grid, merges them into one thermal image of the room, and counts people in the merged image so that a person in the overlap is counted once.",
+    "family": "SYN-PRI-2020-0907",
+    "file": "input/publications/SYN-PUB-0004.json",
+    "id": "SYN-PUB-0004",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0004.json",
+      "number": 1,
+      "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-2",
+    "priority_claims": [
+     {
+      "date": "2020-09-07",
+      "number": "SYN-PRI-2020-0907"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0004.json",
+      "quote": "Application deemed to be withdrawn",
+      "source": "document",
+      "wording": "Application deemed to be withdrawn"
+     }
+    ],
+    "title": "Merging overlapping thermal sensor views for room counting",
+    "url": "https://patents.synthetic.example/SYN-PUB-0004"
+   },
+   {
+    "abstract": "Sensors send counts, not images; a controller subtracts the overlap count.",
+    "dates": {
+     "filing": "2023-01-17",
+     "grant": "2025-02-11",
+     "priority": "2022-01-18",
+     "publication": "2023-07-20"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0005.json",
+      "number": 2,
+      "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period."
+     }
+    ],
+    "description": "Each sensor processes its frames locally and transmits only a count of persons and a count of persons inside a predefined overlap region. A room controller computes the room count as the sum of the sensor counts minus the overlap count. Each sensor updates its background only while no motion has been detected for a holding period.",
+    "family": "SYN-PRI-2022-0118",
+    "file": "input/publications/SYN-PUB-0005.json",
+    "id": "SYN-PUB-0005",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "number": 1,
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-2",
+    "priority_claims": [
+     {
+      "date": "2022-01-18",
+      "number": "SYN-PRI-2022-0118"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0005.json",
+      "quote": "Application closed - patent granted",
+      "source": "document",
+      "wording": "Application closed - patent granted"
+     }
+    ],
+    "title": "Privacy-preserving occupancy counting across overlapping sensors",
+    "url": "https://patents.synthetic.example/SYN-PUB-0005"
+   },
+   {
+    "abstract": "",
+    "dates": {
+     "filing": "2023-01-17",
+     "grant": "2025-02-11",
+     "priority": "2022-01-18"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "number": 2,
+      "quote": "The method of claim 1, wherein room counts are aggregated to floor level."
+     }
+    ],
+    "description": "Each sensor processes its frames locally and transmits only a count of persons and a count of\npersons inside a predefined overlap region. A room controller computes the room count as the\nsum of the sensor counts minus the overlap count. Each sensor updates its background only while\nno motion has been detected for a holding period.",
+    "family": "SYN-PRI-2022-0118",
+    "file": "input/publications/SYN-PUB-0006.pdf.txt",
+    "id": "SYN-PUB-0006",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "number": 1,
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data."
+     }
+    ],
+    "kind_code": "B1",
+    "office": "SYN-Office-2",
+    "priority_claims": [
+     {
+      "date": "2022-01-18",
+      "number": "SYN-PRI-2022-0118"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "quote": "Status: Granted",
+      "source": "document",
+      "wording": "Status: Granted"
+     },
+     {
+      "as_of": "2026-08-03",
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "quote": "Lapsed - renewal fee not paid (2025-11-30).",
+      "source": "register extract",
+      "wording": "Lapsed - renewal fee not paid (2025-11-30)."
+     }
+    ],
+    "title": "Privacy-preserving occupancy counting across overlapping sensors",
+    "url": {
+     "gap": {
+      "question": "What is the URL of SYN-PUB-0006?",
+      "reason": "not_found"
+     }
+    }
+   }
+  ],
+  "query": "patent.search_publications?{\"all_of\":[[\"overlap\"]]}",
+  "web": {
+   "kept": [],
+   "queries": [
+    "overlap"
+   ],
+   "read": []
+  }
+ },
+ "freshness": "current",
+ "ref": "patent.prior_art/C3@v1"
+}

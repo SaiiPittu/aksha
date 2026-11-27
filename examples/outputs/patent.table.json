@@ -1,0 +1,37 @@
+{
+ "content": {
+  "note": "Next actions order work for counsel; none is a legal view.",
+  "rows": [
+   {
+    "candidate": "C1",
+    "next_action": "prioritize_counsel_review",
+    "recommendation": "patent.recommendation/C1@v1",
+    "why": "business priority 1; implementation: built_and_tested; F3 not found in any family searched; family SYN-PRI-2021-0412 discloses F1, F5; family SYN-PRI-2022-0118 discloses F2",
+    "would_change_if": "a reference discloses F3, or an outside contributor's role changes inventorship or ownership"
+   },
+   {
+    "candidate": "C2",
+    "next_action": "collect_more_evidence",
+    "recommendation": "patent.recommendation/C2@v1",
+    "why": "business priority 4; implementation: idea_only; P3 not found in any family searched; family SYN-PRI-2019-0630 discloses P1; referenced document missing: placement-trial-02.csv",
+    "would_change_if": "the missing evidence appears and the unmatched elements stay not found"
+   },
+   {
+    "candidate": "C3",
+    "next_action": "deprioritize_for_now",
+    "recommendation": "patent.recommendation/C3@v1",
+    "why": "business priority 3; implementation: in_use_under_nda; family SYN-PRI-2022-0118 discloses Q1, Q3",
+    "would_change_if": "an element the closest family lacks proves material"
+   },
+   {
+    "candidate": "C4",
+    "next_action": "collect_more_evidence",
+    "recommendation": "patent.recommendation/C4@v1",
+    "why": "business priority 2; implementation: prototype; B4 not found in any family searched",
+    "would_change_if": "counsel's view of the public disclosure, and an element no family shows"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "patent.table@v1"
+}

@@ -1,0 +1,249 @@
+{
+ "content": {
+  "agreements": [],
+  "alternatives": [
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "quote": "Server-side fusion of both heat frames."
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "quote": "Assigning each overlap pixel to one unit only."
+   }
+  ],
+  "business_priority": {
+   "file": "input/priorities/business-priorities.md",
+   "quote": "**Privacy story for EU works councils.**",
+   "rank": 3
+  },
+  "candidate": "C3",
+  "conception": {
+   "date": "2026-02-20",
+   "file": "input/notes/C3-privacy-preserving-coordination.md",
+   "quote": "Date: 20 Feb 2026"
+  },
+  "contributors": [
+   {
+    "agreement": "employment, standard IP assignment",
+    "contributed": "Designed the count-only overlap aggregator",
+    "date": "2026-02-20",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-04",
+    "quote": "Designed the count-only overlap aggregator",
+    "record_id": "CR-06",
+    "role": "data engineer"
+   }
+  ],
+  "counsel_questions": [
+   {
+    "question": "Who are the inventors of each element?",
+    "status": "needs_counsel_confirmation",
+    "topic": "inventorship"
+   },
+   {
+    "question": "Do the employment, contractor and consulting agreements assign each contribution?",
+    "status": "needs_counsel_confirmation",
+    "topic": "ownership"
+   },
+   {
+    "question": "DISC-02 on 2026-04-15, 226 days before today: who could see it? The record does not say whether it was public.",
+    "status": "needs_counsel_confirmation",
+    "topic": "disclosure"
+   }
+  ],
+  "disclosures": [
+   {
+    "as_of": "2026-11-27",
+    "counsel_question": "DISC-02 on 2026-04-15, 226 days before today: who could see it? The record does not say whether it was public.",
+    "date": "2026-04-15",
+    "describes_fully": false,
+    "disclosure_id": "DISC-02",
+    "elapsed_days": 226,
+    "event_type": "customer pilot",
+    "file": "input/disclosures/history.csv",
+    "own_disclosure": true,
+    "public": "no, under NDA-2026-03",
+    "quote": "Count-only aggregator running in one customer office",
+    "row": {
+     "file": "input/disclosures/history.csv",
+     "quote": "DISC-02,2026-04-15,C3"
+    },
+    "status": "needs_counsel_confirmation"
+   }
+  ],
+  "elements": [
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "id": "Q1",
+    "label": "on-device processing, counts only",
+    "quote": "Each unit processes frames on the device and outputs counts only; no frame ever leaves the unit.",
+    "step": 1,
+    "terms": [
+     [
+      "locally",
+      "on the device",
+      "on-device"
+     ],
+     [
+      "transmitting only the counts",
+      "transmit only",
+      "transmits only"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "id": "Q2",
+    "label": "overlap zone marked in each unit's pixel coordinates at install",
+    "quote": "At install time, the overlap zone is marked in each unit's own pixel coordinates.",
+    "step": 2,
+    "terms": [
+     [
+      "overlap"
+     ],
+     [
+      "pixel coordinates"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "id": "Q3",
+    "label": "each unit reports total and overlap counts",
+    "quote": "Each unit reports two integers every 30 seconds: total people seen, and people seen inside the overlap zone.",
+    "step": 3,
+    "terms": [
+     [
+      "count of persons inside",
+      "counting persons within the overlap region"
+     ],
+     [
+      "transmits only",
+      "transmitting only"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "id": "Q4",
+    "label": "room = A + B - min(overlap_A, overlap_B)",
+    "quote": "The room aggregator computes room count = A + B - min(overlap_A, overlap_B).",
+    "step": 4,
+    "terms": [
+     [
+      "counted once",
+      "minus the overlap count"
+     ],
+     [
+      "min(",
+      "minimum of"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "id": "Q5",
+    "label": "single-occupant rooms grouped in roll-ups",
+    "quote": "Above room level, counts roll up to floors, and any room with a single regular occupant is grouped with its neighbours so no one person is singled out.",
+    "step": 5,
+    "terms": [
+     [
+      "floor level",
+      "roll up"
+     ],
+     [
+      "grouped",
+      "single regular occupant"
+     ]
+    ]
+   }
+  ],
+  "implementation": {
+   "file": "input/notes/C3-privacy-preserving-coordination.md",
+   "quote": "Aggregator running in the pilot at a customer office since 15 Apr 2026, under NDA.",
+   "status": "in_use_under_nda"
+  },
+  "mechanism": [
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "n": 1,
+    "quote": "Each unit processes frames on the device and outputs counts only; no frame ever leaves the unit.",
+    "text": "Each unit processes frames on the device and outputs counts only; no frame ever leaves the unit."
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "n": 2,
+    "quote": "At install time, the overlap zone is marked in each unit's own pixel coordinates.",
+    "text": "At install time, the overlap zone is marked in each unit's own pixel coordinates."
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "n": 3,
+    "quote": "Each unit reports two integers every 30 seconds: total people seen, and people seen inside the overlap zone.",
+    "text": "Each unit reports two integers every 30 seconds: total people seen, and people seen inside the overlap zone."
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "n": 4,
+    "quote": "The room aggregator computes room count = A + B - min(overlap_A, overlap_B).",
+    "text": "The room aggregator computes room count = A + B - min(overlap_A, overlap_B)."
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "n": 5,
+    "quote": "Above room level, counts roll up to floors, and any room with a single regular occupant is grouped with its neighbours so no one person is singled out.",
+    "text": "Above room level, counts roll up to floors, and any room with a single regular occupant is grouped with its neighbours so no one person is singled out."
+   }
+  ],
+  "missing_details": [],
+  "missing_documents": [],
+  "note": "input/notes/C3-privacy-preserving-coordination.md",
+  "opinions": [],
+  "outside_contributions": [],
+  "parameters": [
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "name": "Report interval",
+    "quote": "| Report interval | 30 | seconds |",
+    "status": "complete",
+    "unit": "seconds",
+    "value": "30"
+   },
+   {
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "name": "Minimum group size for roll-up",
+    "quote": "| Minimum group size for roll-up | 3 | rooms |",
+    "status": "complete",
+    "unit": "rooms",
+    "value": "3"
+   }
+  ],
+  "people_terms": [
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "data engineer"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "employment, standard IP assignment"
+   }
+  ],
+  "problem": {
+   "file": "input/notes/C3-privacy-preserving-coordination.md",
+   "quote": "Large rooms need two units with overlapping views. A person in the overlap is seen by both, and adding the counts double-counts. Sending both heat images to a server to merge them would move raw sensor data off the device."
+  },
+  "search": [
+   [
+    "overlap"
+   ]
+  ],
+  "sources": {
+   "contributors": "input/contributors/records.csv",
+   "disclosures": "input/disclosures/history.csv"
+  },
+  "title": "Engineering note: counting across overlapping units without images"
+ },
+ "freshness": "current",
+ "ref": "patent.extraction/C3@v1"
+}

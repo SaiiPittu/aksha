@@ -1,0 +1,135 @@
+{
+ "content": {
+  "asked": [
+   "Which buyers is this for? It decides which competitors and reviews count.",
+   "Which geography should this cover? Prices and reviews can come from several countries, so it changes what counts."
+  ],
+  "boundary": {
+   "in": "products that do the job the question names, and the manual ways buyers use today",
+   "out": [
+    {
+     "cite": {
+      "quote": "Not a priority in H1 2026: care homes, retail footfall, and any product that needs mains power.",
+      "span": "EX-0018"
+     },
+     "value": "Not a priority in H1 2026: care homes, retail footfall, and any product that needs mains power."
+    }
+   ]
+  },
+  "dimensions": [
+   {
+    "basis": "request",
+    "id": "power",
+    "name": "power",
+    "terms": [
+     "PoE",
+     "Ethernet",
+     "mains",
+     "USB-C",
+     "battery powered",
+     "battery thermal",
+     "AA"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "battery_life",
+    "name": "battery life",
+    "terms": [
+     "battery life",
+     "years of battery",
+     "months at"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "privacy",
+    "name": "privacy",
+    "terms": [
+     "privacy",
+     "camera",
+     "faces",
+     "identities",
+     "image"
+    ]
+   }
+  ],
+  "geography": {
+   "basis": "answer",
+   "cite": {
+    "statement": "EX-0020"
+   },
+   "normalised": "EU",
+   "value": "EU"
+  },
+  "plan": {
+   "kind": "comparison",
+   "outputs": [
+    "competitors",
+    "profiles",
+    "matrix",
+    "needs",
+    "findings",
+    "tests"
+   ]
+  },
+  "prices_named": [],
+  "question": "Who sells camera-free occupancy sensing, and at what price? Compare power (PoE, Ethernet, mains, USB-C, battery powered, battery thermal, AA), battery life (battery life, years of battery, months at) and privacy (privacy, camera, faces, identities, image). What do customers say about: battery (batter*, not battery powered); stillness (sit*, sat, seated, still, do not move, barely move); setup (cabl*, electrician, socket*, wiring, install*, setup); privacy (privacy, works council, image)?",
+  "segment": {
+   "basis": "answer",
+   "cite": {
+    "statement": "EX-0019"
+   },
+   "value": "offices"
+  },
+  "themes": [
+   {
+    "basis": "request",
+    "id": "battery",
+    "name": "battery",
+    "terms": [
+     "batter*",
+     "not battery powered"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "stillness",
+    "name": "stillness",
+    "terms": [
+     "sit*",
+     "sat",
+     "seated",
+     "still",
+     "do not move",
+     "barely move"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "setup",
+    "name": "setup",
+    "terms": [
+     "cabl*",
+     "electrician",
+     "socket*",
+     "wiring",
+     "install*",
+     "setup"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "privacy",
+    "name": "privacy",
+    "terms": [
+     "privacy",
+     "works council",
+     "image"
+    ]
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.scope@v1"
+}

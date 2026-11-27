@@ -1,0 +1,106 @@
+{
+ "content": {
+  "candidate": "C1",
+  "counts": {
+   "complete": 2,
+   "missing": 3,
+   "needs_counsel_confirmation": 6
+  },
+  "fields": [
+   {
+    "field": "working_title",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": "Engineering note: self-calibrating thermal baseline"
+   },
+   {
+    "counsel_question": "Counsel to confirm.",
+    "field": "applicant",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": null
+   },
+   {
+    "counsel_question": "Who are the inventors?",
+    "field": "proposed_inventors",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": [
+     "Asha Rao",
+     "Daniel Sato",
+     "Dr. Wei Lin",
+     "Ravi Menon"
+    ]
+   },
+   {
+    "counsel_question": "Counsel to confirm.",
+    "field": "ownership_and_assignments",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": [
+     "employment, standard IP assignment",
+     "employment, standard IP assignment",
+     "consulting agreement CA-2025-11, effective 2025-12-01",
+     "founder, IP assignment"
+    ]
+   },
+   {
+    "counsel_question": "Counsel to confirm.",
+    "field": "outside_party_agreements",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": [
+     "CA-2025-11"
+    ]
+   },
+   {
+    "counsel_question": "Counsel to confirm.",
+    "field": "earlier_public_disclosures",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": [
+     "DISC-01"
+    ]
+   },
+   {
+    "field": "related_applications",
+    "required": false,
+    "status": "missing",
+    "value": null
+   },
+   {
+    "field": "priority_claims",
+    "required": false,
+    "status": "missing",
+    "value": null
+   },
+   {
+    "counsel_question": "Counsel to confirm.",
+    "field": "jurisdictions_of_interest",
+    "required": false,
+    "status": "needs_counsel_confirmation",
+    "value": null
+   },
+   {
+    "field": "representative",
+    "required": false,
+    "status": "missing",
+    "value": null
+   },
+   {
+    "field": "attachments",
+    "required": true,
+    "status": "complete",
+    "value": {
+     "comparison": "patent.comparison/C1@v1"
+    }
+   }
+  ],
+  "form": "Filing-information worksheet (blank, mock)",
+  "template": "filing-information-worksheet",
+  "template_version": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2"
+ },
+ "freshness": "current",
+ "ref": "patent.form/C1~filing-information-worksheet@v1"
+}

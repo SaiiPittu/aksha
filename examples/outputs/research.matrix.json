@@ -1,0 +1,531 @@
+{
+ "content": {
+  "columns": [
+   "company",
+   "prices",
+   "power",
+   "battery_life",
+   "privacy"
+  ],
+  "dimensions": [
+   {
+    "id": "power",
+    "name": "power"
+   },
+   {
+    "id": "battery_life",
+    "name": "battery life"
+   },
+   {
+    "id": "privacy",
+    "name": "privacy"
+   }
+  ],
+  "note": "each cell lists its entries with their page and date; prices are as listed, never converted or averaged",
+  "pages_found": 6,
+  "resolved": 5,
+  "rows": [
+   {
+    "aliases": [
+     "Kelvra TS-32"
+    ],
+    "cells": {
+     "battery_life": [
+      {
+       "cite": {
+        "artifact": "research.profile/c01-kelvra-systems@v1",
+        "path": "/cells/battery_life/0"
+       },
+       "question": "What does Kelvra Systems state about battery life? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ],
+     "power": [
+      {
+       "cite": {
+        "quote": "A 32 x 32 thermal array for meeting rooms and open desks. Powered over Ethernet (PoE), ceiling mounted.",
+        "span": "EX-0056"
+       },
+       "label": "fact",
+       "passage": "text",
+       "published": "2026-10-14",
+       "record": "web/kelvra.example/product",
+       "value": "A 32 x 32 thermal array for meeting rooms and open desks. Powered over Ethernet (PoE), ceiling mounted."
+      },
+      {
+       "cite": {
+        "quote": "Installation requires a PoE cable run to every sensor.",
+        "span": "EX-0072"
+       },
+       "label": "fact",
+       "passage": "text",
+       "published": "2026-10-14",
+       "record": "web/kelvra.example/product",
+       "value": "Installation requires a PoE cable run to every sensor."
+      }
+     ],
+     "privacy": [
+      {
+       "cite": {
+        "quote": "Thermal only. The sensor cannot capture faces or identities.",
+        "span": "EX-0071"
+       },
+       "label": "fact",
+       "passage": "text",
+       "published": "2026-10-14",
+       "record": "web/kelvra.example/product",
+       "value": "Thermal only. The sensor cannot capture faces or identities."
+      }
+     ]
+    },
+    "company": {
+     "cite": {
+      "quote": "Kelvra Systems",
+      "span": "EX-0074"
+     },
+     "value": "Kelvra Systems"
+    },
+    "key": "c01-kelvra-systems",
+    "price_conflict": false,
+    "prices": [
+     {
+      "cite": {
+       "quote": "EUR 249 per unit",
+       "span": "EX-0064"
+      },
+      "currency": "EUR",
+      "item": "Kelvra TS-32 sensor",
+      "label": "fact",
+      "number": "249",
+      "passage": "price",
+      "per": "unit",
+      "published": "2026-10-14",
+      "record": "web/kelvra.example/product",
+      "terms": "one-off",
+      "value": "249"
+     },
+     {
+      "cite": {
+       "quote": "EUR 6 per sensor per month",
+       "span": "EX-0068"
+      },
+      "currency": "EUR",
+      "item": "Workplace analytics",
+      "label": "fact",
+      "number": "6",
+      "passage": "price",
+      "per": "sensor per month",
+      "published": "2026-10-14",
+      "record": "web/kelvra.example/product",
+      "terms": "billed annually",
+      "value": "6"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     "Noctra Air"
+    ],
+    "cells": {
+     "battery_life": [
+      {
+       "cite": {
+        "quote": "Battery powered, 5 year battery life claimed. CO2 accuracy +/- 50 ppm.",
+        "span": "EX-0087"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-07-08",
+       "record": "web/noctra.example/product",
+       "value": "Battery powered, 5 year battery life claimed. CO2 accuracy +/- 50 ppm."
+      }
+     ],
+     "power": [
+      {
+       "cite": {
+        "quote": "Battery powered, 5 year battery life claimed. CO2 accuracy +/- 50 ppm.",
+        "span": "EX-0087"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-07-08",
+       "record": "web/noctra.example/product",
+       "value": "Battery powered, 5 year battery life claimed. CO2 accuracy +/- 50 ppm."
+      }
+     ],
+     "privacy": [
+      {
+       "cite": {
+        "artifact": "research.profile/c02-noctra@v1",
+        "path": "/cells/privacy/0"
+       },
+       "question": "What does Noctra state about privacy? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ]
+    },
+    "company": {
+     "cite": {
+      "quote": "Noctra",
+      "span": "EX-0089"
+     },
+     "value": "Noctra"
+    },
+    "key": "c02-noctra",
+    "price_conflict": false,
+    "prices": [
+     {
+      "cite": {
+       "artifact": "research.profile/c02-noctra@v1",
+       "path": "/prices/0"
+      },
+      "question": "What does Noctra charge? No price is listed on its pages.",
+      "reason": "not_found",
+      "status": "unknown"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     "OccuPoint",
+     "Corvane Group",
+     "Corvane Presence P1"
+    ],
+    "cells": {
+     "battery_life": [
+      {
+       "cite": {
+        "quote": "Battery life up to 3 years.",
+        "span": "EX-0122"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-04-02",
+       "record": "web/brightfield.example/product",
+       "value": "Battery life up to 3 years."
+      },
+      {
+       "cite": {
+        "quote": "Battery thermal and PIR sensor. Battery life up to 3 years.",
+        "span": "EX-0147"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-09-15",
+       "record": "web/corvane.example/product",
+       "value": "Battery thermal and PIR sensor. Battery life up to 3 years."
+      }
+     ],
+     "power": [
+      {
+       "cite": {
+        "quote": "A battery thermal and PIR desk and room sensor from Brightfield Analytics.",
+        "span": "EX-0108"
+       },
+       "label": "fact",
+       "passage": "text",
+       "published": "2026-04-02",
+       "record": "web/brightfield.example/product",
+       "value": "A battery thermal and PIR desk and room sensor from Brightfield Analytics."
+      },
+      {
+       "cite": {
+        "quote": "Battery thermal and PIR sensor. Battery life up to 3 years.",
+        "span": "EX-0147"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-09-15",
+       "record": "web/corvane.example/product",
+       "value": "Battery thermal and PIR sensor. Battery life up to 3 years."
+      }
+     ],
+     "privacy": [
+      {
+       "cite": {
+        "artifact": "research.profile/c03-brightfield-analytics@v1",
+        "path": "/cells/privacy/0"
+       },
+       "question": "What does Brightfield Analytics state about privacy? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ]
+    },
+    "company": {
+     "cite": {
+      "quote": "Brightfield Analytics",
+      "span": "EX-0124"
+     },
+     "value": "Brightfield Analytics"
+    },
+    "key": "c03-brightfield-analytics",
+    "price_conflict": true,
+    "prices": [
+     {
+      "cite": {
+       "quote": "USD 229 per unit",
+       "span": "EX-0116"
+      },
+      "currency": "USD",
+      "item": "OccuPoint sensor",
+      "label": "fact",
+      "number": "229",
+      "passage": "price",
+      "per": "unit",
+      "published": "2026-04-02",
+      "record": "web/brightfield.example/product",
+      "terms": "one-off",
+      "value": "229"
+     },
+     {
+      "cite": {
+       "quote": "USD 7 per sensor per month",
+       "span": "EX-0120"
+      },
+      "currency": "USD",
+      "item": "Occupancy insights",
+      "label": "fact",
+      "number": "7",
+      "passage": "price",
+      "per": "sensor per month",
+      "published": "2026-04-02",
+      "record": "web/brightfield.example/product",
+      "terms": "billed annually",
+      "value": "7"
+     },
+     {
+      "cite": {
+       "quote": "USD 199 per unit",
+       "span": "EX-0141"
+      },
+      "currency": "USD",
+      "item": "Corvane Presence P1 sensor",
+      "label": "fact",
+      "number": "199",
+      "passage": "price",
+      "per": "unit",
+      "published": "2026-09-15",
+      "record": "web/corvane.example/product",
+      "terms": "one-off, launch offer",
+      "value": "199"
+     },
+     {
+      "cite": {
+       "quote": "USD 7 per sensor per month",
+       "span": "EX-0145"
+      },
+      "currency": "USD",
+      "item": "Occupancy insights",
+      "label": "fact",
+      "number": "7",
+      "passage": "price",
+      "per": "sensor per month",
+      "published": "2026-09-15",
+      "record": "web/corvane.example/product",
+      "terms": "billed annually",
+      "value": "7"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     "Veyra Halo"
+    ],
+    "cells": {
+     "battery_life": [
+      {
+       "cite": {
+        "artifact": "research.profile/c04-veyra-labs@v1",
+        "path": "/cells/battery_life/0"
+       },
+       "question": "What does Veyra Labs state about battery life? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ],
+     "power": [
+      {
+       "cite": {
+        "quote": "Mains powered (USB-C, 5 V). Detection range up to 6 m.",
+        "span": "EX-0175"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-09-30",
+       "record": "web/veyra.example/product",
+       "value": "Mains powered (USB-C, 5 V). Detection range up to 6 m."
+      }
+     ],
+     "privacy": [
+      {
+       "cite": {
+        "artifact": "research.profile/c04-veyra-labs@v1",
+        "path": "/cells/privacy/0"
+       },
+       "question": "What does Veyra Labs state about privacy? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ]
+    },
+    "company": {
+     "cite": {
+      "quote": "Veyra Labs",
+      "span": "EX-0177"
+     },
+     "value": "Veyra Labs"
+    },
+    "key": "c04-veyra-labs",
+    "price_conflict": false,
+    "prices": [
+     {
+      "cite": {
+       "quote": "EUR 319 per unit",
+       "span": "EX-0169"
+      },
+      "currency": "EUR",
+      "item": "Veyra Halo sensor",
+      "label": "fact",
+      "number": "319",
+      "passage": "price",
+      "per": "unit",
+      "published": "2026-09-30",
+      "record": "web/veyra.example/product",
+      "terms": "one-off",
+      "value": "319"
+     },
+     {
+      "cite": {
+       "quote": "EUR 9 per sensor per month",
+       "span": "EX-0173"
+      },
+      "currency": "EUR",
+      "item": "Presence API",
+      "label": "fact",
+      "number": "9",
+      "passage": "price",
+      "per": "sensor per month",
+      "published": "2026-09-30",
+      "record": "web/veyra.example/product",
+      "terms": "billed monthly",
+      "value": "9"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     "Tallyway Beam"
+    ],
+    "cells": {
+     "battery_life": [
+      {
+       "cite": {
+        "quote": "Up to 7 years of battery life. Install it and forget it.",
+        "span": "EX-0188"
+       },
+       "label": "vendor_claim",
+       "passage": "claim",
+       "published": "2026-08-21",
+       "record": "web/tallyway.example/product",
+       "value": "Up to 7 years of battery life. Install it and forget it."
+      },
+      {
+       "cite": {
+        "quote": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)",
+        "span": "EX-0208"
+       },
+       "label": "fact",
+       "passage": "spec",
+       "published": "2026-08-21",
+       "record": "web/tallyway.example/product",
+       "value": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)"
+      }
+     ],
+     "power": [
+      {
+       "cite": {
+        "quote": "A time-of-flight (ToF) doorway counter. Counts people in and out of a room; battery powered.",
+        "span": "EX-0187"
+       },
+       "label": "fact",
+       "passage": "text",
+       "published": "2026-08-21",
+       "record": "web/tallyway.example/product",
+       "value": "A time-of-flight (ToF) doorway counter. Counts people in and out of a room; battery powered."
+      },
+      {
+       "cite": {
+        "quote": "2 x AA lithium",
+        "span": "EX-0211"
+       },
+       "label": "fact",
+       "passage": "spec",
+       "published": "2026-08-21",
+       "record": "web/tallyway.example/product",
+       "value": "2 x AA lithium"
+      }
+     ],
+     "privacy": [
+      {
+       "cite": {
+        "artifact": "research.profile/c05-tallyway@v1",
+        "path": "/cells/privacy/0"
+       },
+       "question": "What does Tallyway state about privacy? Its pages do not say.",
+       "reason": "not_found",
+       "status": "unknown"
+      }
+     ]
+    },
+    "company": {
+     "cite": {
+      "quote": "Tallyway",
+      "span": "EX-0213"
+     },
+     "value": "Tallyway"
+    },
+    "key": "c05-tallyway",
+    "price_conflict": false,
+    "prices": [
+     {
+      "cite": {
+       "quote": "USD 189 per unit",
+       "span": "EX-0196"
+      },
+      "currency": "USD",
+      "item": "Tallyway Beam counter",
+      "label": "fact",
+      "number": "189",
+      "passage": "price",
+      "per": "unit",
+      "published": "2026-08-21",
+      "record": "web/tallyway.example/product",
+      "terms": "one-off",
+      "value": "189"
+     },
+     {
+      "cite": {
+       "quote": "USD 5 per counter per month",
+       "span": "EX-0200"
+      },
+      "currency": "USD",
+      "item": "Cloud dashboard",
+      "label": "fact",
+      "number": "5",
+      "passage": "price",
+      "per": "counter per month",
+      "published": "2026-08-21",
+      "record": "web/tallyway.example/product",
+      "terms": "billed annually",
+      "value": "5"
+     }
+    ]
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.matrix@v1"
+}

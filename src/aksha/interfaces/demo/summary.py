@@ -43,6 +43,7 @@ def render(report: Report, work: str) -> str:
     runs = report.runs
     rebuilds = [r for r, v in runs.items() if v["cause"] == "rebuild"]
     c, k, m, n = report.change, report.kill, report.mailbox, report.next_action
+    o = report.contributor
     kept_research, kept_patent = report.kept["research"], report.kept["patent"]
     first_approval, fresh_approval = report.approvals[0], report.approvals[-1]
     lines = [
@@ -90,6 +91,12 @@ def render(report: Report, work: str) -> str:
         f"{len(report.cutoff)} rebuilt version came out equal",
         f"   C1 next action: {n['before']} -> {n['after']} "
         f"(the v2 answer key expects {n['key_expects']})",
+        f"   C1 outside contributor {o['person']}: suggested {', '.join(o['elements'])} on "
+        f"{o['date']}{', before their agreement took effect' if o['before_agreement'] else ''}"
+        f"; flagged {o['status']} for counsel",
+        f"     question for counsel: {o['question']}",
+        f"   {first_approval['approval']} approved {first_approval['targets'][0]} only, so it "
+        f"does not cover {fresh_approval['targets'][0]}; a fresh approval is requested",
         f"   scripted: accepted the packet's diff review, {report.reviewed}",
         f"   scripted: approved the fresh request {fresh_approval['approval']} for "
         f"{fresh_approval['targets'][0]}",

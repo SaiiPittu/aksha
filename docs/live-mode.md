@@ -1,0 +1,35 @@
+# Live models
+
+Offline is the default (`AKSHA_MODE=fake`). Live mode calls every provider through [LiteLLM](https://docs.litellm.ai/docs/providers), so Aksha has one adapter, not one per provider. One general model can fill all three contracts: generation with tool calls, and decide and extract under a forced JSON schema, with every quote still checked word for word in code.
+
+```sh
+uv tool install "aksha-harness[live] @ git+https://github.com/SaiiPittu/aksha"
+export AKSHA_MODE=live
+export GEMINI_API_KEY=...                     # the provider's own variable; LiteLLM reads it, Aksha never records it
+export AKSHA_LIVE_MODEL=gemini/gemini-4-neon  # LiteLLM's <provider>/<model> form
+```
+
+| Setting | Meaning |
+|---|---|
+| `AKSHA_LIVE_MODEL` | one model for every alias; `AKSHA_LIVE_MODEL_<CLASS>` (`GENERATION`, `EXTRACTION`, `CLASSIFICATION`) or `AKSHA_LIVE_MODEL_<ALIAS>` overrides it |
+| `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ... | the key, in the provider's own variable; a start without it is refused `live_key_missing`, naming the variable |
+| `AKSHA_LIVE_TIMEOUT_S` | one attempt's timeout (default 240 seconds for generation, 90 for decide and extract), per class or alias too |
+| `AKSHA_LIVE_REASONING_EFFORT` | `minimal`, `low`, `medium`, `high`, `xhigh` or `none`, passed to the provider's thinking setting |
+| `AKSHA_LIVE_BASE_URL` | a local server, such as Ollama, passed as `api_base` |
+| `AKSHA_LIVE_SAMPLES` | ask each classification N times and use the votes (default 1) |
+| `AKSHA_LIVE_ACTIVE_MS` | a live run's active-time budget (at least an hour by default) |
+| `AKSHA_LIVE_TURN_FACTOR` | the multiplier on every Task's turn limit and the run's turn and tool-call budget in a live run (default 3) |
+| `AKSHA_LIVE_PROVIDER=chat-completions` | the standard-library adapter instead, for any chat-completions server, with `AKSHA_LIVE_BASE_URL` and `AKSHA_LIVE_API_KEY` |
+| `AKSHA_ALIAS_<ALIAS>=module:Class` | a native extraction or classification service for one alias |
+| `AKSHA_SEARCH=brave`, `AKSHA_BRAVE_API_KEY`, `AKSHA_NETWORK=on` | live web search, and page fetches under the `aksha.web` egress policy |
+
+A live run records each call's real tokens, LiteLLM's cost estimate when it has a price for the model, and, for a failed attempt, the provider's error type, HTTP status and a short message (never a key). A missing model or install is refused before any call (`live_config_missing`).
+
+What has run live, as of 28 Nov 2026:
+
+- **Smoke tests.** The adapters were tested by hand against `gemini/gemini-4-neon`: one tool call and its follow-up turn, one decide call and one extract call. Each contract held. The API often answered 503 for high demand.
+- **Found and fixed: retries.** Live runs ended `blocked` when a 503 spike outlasted two quick retries. A live model step now retries six times with backoff over about two minutes and honours `Retry-After` ([#99](https://github.com/SaiiPittu/aksha/pull/99)).
+- **Found and fixed: citations.** A live research run saved its scope, then ended `blocked` at two Tasks' turn limits. Every save of cited content was refused `ungrounded_value` or `quote_too_short`, because the model had never been told how a cite is written. The `save_artifact` description now spells out the cite object, a save reports every grounding error at once, and `AKSHA_LIVE_TURN_FACTOR` scales turn limits for live runs ([#100](https://github.com/SaiiPittu/aksha/pull/100)).
+- **Not yet done.** No agent has completed a whole task on a real model, and the evals have not run in live mode. CI runs live mode only against a stub server on localhost and a stubbed LiteLLM. [Limitations item 11](limitations.md) has the detail.
+
+Retries, backoff, recorded usage and replay of a live run are in the [quick start](quickstart.md) and [ADR-P07](design/adr/ADR-P07-model-interface-and-routing.md).

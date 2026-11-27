@@ -1,0 +1,292 @@
+{
+ "content": {
+  "companies": [
+   {
+    "aliases": [
+     {
+      "cite": {
+       "quote": "Kelvra TS-32",
+       "span": "EX-0075"
+      },
+      "value": "Kelvra TS-32"
+     }
+    ],
+    "canonical": {
+     "cite": {
+      "quote": "Kelvra Systems",
+      "span": "EX-0074"
+     },
+     "value": "Kelvra Systems"
+    },
+    "key": "c01-kelvra-systems",
+    "merge_evidence": [],
+    "pages": [
+     {
+      "published": "2026-10-14",
+      "record": "web/kelvra.example/product",
+      "url": "https://kelvra.example/product",
+      "version": "sha256:7e7f12b6916ae8f584237a64bcfc7336506aab6f01c25720252a4c382409094b"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     {
+      "cite": {
+       "quote": "Noctra Air",
+       "span": "EX-0090"
+      },
+      "value": "Noctra Air"
+     }
+    ],
+    "canonical": {
+     "cite": {
+      "quote": "Noctra",
+      "span": "EX-0089"
+     },
+     "value": "Noctra"
+    },
+    "key": "c02-noctra",
+    "merge_evidence": [],
+    "pages": [
+     {
+      "published": "2026-07-08",
+      "record": "web/noctra.example/product",
+      "url": "https://noctra.example/product",
+      "version": "sha256:6c30caf92697e45d1b5e350e0e334d647ba7137c32e0b3d152c77d746809d566"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     {
+      "cite": {
+       "quote": "OccuPoint",
+       "span": "EX-0125"
+      },
+      "value": "OccuPoint"
+     },
+     {
+      "cite": {
+       "quote": "Corvane Group",
+       "span": "EX-0149"
+      },
+      "value": "Corvane Group"
+     },
+     {
+      "cite": {
+       "quote": "Corvane Presence P1",
+       "span": "EX-0150"
+      },
+      "value": "Corvane Presence P1"
+     }
+    ],
+    "canonical": {
+     "cite": {
+      "quote": "Brightfield Analytics",
+      "span": "EX-0124"
+     },
+     "value": "Brightfield Analytics"
+    },
+    "key": "c03-brightfield-analytics",
+    "merge_evidence": [
+     {
+      "cite": {
+       "quote": "Corvane Presence P1 is the new name for OccuPoint.",
+       "span": "EX-0152"
+      },
+      "page": "web/corvane.example/product"
+     }
+    ],
+    "pages": [
+     {
+      "published": "2026-04-02",
+      "record": "web/brightfield.example/product",
+      "url": "https://brightfield.example/product",
+      "version": "sha256:fae5ff29bb29ce7d84730f48d0fb01626ea010ee242f9993a8c4aaeee8b6c846"
+     },
+     {
+      "published": "2026-09-15",
+      "record": "web/corvane.example/product",
+      "url": "https://corvane.example/product",
+      "version": "sha256:df94cc6e70d104584179ccade524ee02e64220bcf4fefbfe27e4879323525560"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     {
+      "cite": {
+       "quote": "Veyra Halo",
+       "span": "EX-0178"
+      },
+      "value": "Veyra Halo"
+     }
+    ],
+    "canonical": {
+     "cite": {
+      "quote": "Veyra Labs",
+      "span": "EX-0177"
+     },
+     "value": "Veyra Labs"
+    },
+    "key": "c04-veyra-labs",
+    "merge_evidence": [],
+    "pages": [
+     {
+      "published": "2026-09-30",
+      "record": "web/veyra.example/product",
+      "url": "https://veyra.example/product",
+      "version": "sha256:b05fea873a799d0c9cb085464fd490da9ce7fc313cd09ba3e989bccd76b8642d"
+     }
+    ]
+   },
+   {
+    "aliases": [
+     {
+      "cite": {
+       "quote": "Tallyway Beam",
+       "span": "EX-0214"
+      },
+      "value": "Tallyway Beam"
+     }
+    ],
+    "canonical": {
+     "cite": {
+      "quote": "Tallyway",
+      "span": "EX-0213"
+     },
+     "value": "Tallyway"
+    },
+    "key": "c05-tallyway",
+    "merge_evidence": [],
+    "pages": [
+     {
+      "published": "2026-08-21",
+      "record": "web/tallyway.example/product",
+      "url": "https://tallyway.example/product",
+      "version": "sha256:babd2c62d03529e763af01301a1b9585566967dc75625be8a7cd2bd54316c4b7"
+     }
+    ]
+   }
+  ],
+  "dimensions": [
+   {
+    "basis": "request",
+    "id": "power",
+    "name": "power",
+    "terms": [
+     "PoE",
+     "Ethernet",
+     "mains",
+     "USB-C",
+     "battery powered",
+     "battery thermal",
+     "AA"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "battery_life",
+    "name": "battery life",
+    "terms": [
+     "battery life",
+     "years of battery",
+     "months at"
+    ]
+   },
+   {
+    "basis": "request",
+    "id": "privacy",
+    "name": "privacy",
+    "terms": [
+     "privacy",
+     "camera",
+     "faces",
+     "identities",
+     "image"
+    ]
+   }
+  ],
+  "manual_alternatives": {
+   "unknown": {
+    "checked": [
+     "query:research.search_inputs?{\"formats\":[\"html\",\"markdown\",\"text\",\"email\"],\"terms\":[\"spreadsheet\",\"manual count\",\"by hand\",\"walk-round\",\"clipboard\",\"paper log\"]}@q-e3b0c44298fc1c14"
+    ],
+    "question": "Which manual ways (counts by hand, spreadsheets, paper logs) do buyers use today, and what do they cost?",
+    "reason": "not_found"
+   }
+  },
+  "pages_found": 6,
+  "resolved": 5,
+  "searched": [
+   {
+    "coverage": {
+     "count": 0,
+     "scope": {
+      "query": "research.search_inputs?{\"formats\":[\"html\",\"markdown\",\"text\",\"email\"],\"terms\":[\"spreadsheet\",\"manual count\",\"by hand\",\"walk-round\",\"clipboard\",\"paper log\"]}"
+     },
+     "statement": "inputs that mention one of: spreadsheet, manual count, by hand, walk-round, clipboard, paper log"
+    }
+   }
+  ],
+  "searches": [
+   {
+    "hits": [],
+    "terms": [
+     "spreadsheet",
+     "manual count",
+     "by hand",
+     "walk-round",
+     "clipboard",
+     "paper log"
+    ]
+   }
+  ],
+  "tables": [],
+  "unfetched": [],
+  "web": {
+   "fetched": [
+    "https://patentmirror.example/SYN-PUB-0001",
+    "https://buildingwords.example/glossary/occupancy-sensor",
+    "https://kelvra.example/product",
+    "https://noctra.example/product",
+    "https://hotelpulse.example/occupancy-report",
+    "https://brightfield.example/product",
+    "https://corvane.example/product",
+    "https://veyra.example/product",
+    "https://tallyway.example/product"
+   ],
+   "not_selling": [
+    "https://patentmirror.example/SYN-PUB-0001",
+    "https://buildingwords.example/glossary/occupancy-sensor",
+    "https://hotelpulse.example/occupancy-report"
+   ],
+   "queries": [
+    "camera-free occupancy sensing",
+    "occupancy sensor",
+    "presence sensor people counter price"
+   ],
+   "skipped": [
+    {
+     "url": "https://sensorindex.example/listing/kelvra-ts-32",
+     "why": "a copy of a page already chosen"
+    },
+    {
+     "url": "https://sensor-deals.example/occupancy",
+     "why": "an advert"
+    },
+    {
+     "url": "https://ip-fast.example/file-a-patent",
+     "why": "an advert"
+    },
+    {
+     "url": "https://kelvra.example/archive/kelvra-ts-32-2025",
+     "why": "an older version of a page on the same site"
+    }
+   ]
+  }
+ },
+ "freshness": "current",
+ "ref": "research.competitors@v1"
+}

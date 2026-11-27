@@ -43,7 +43,7 @@ As of 27 Nov 2026:
 
 ## What comes next
 
-The status of each roadmap item is in the [README](../README.md#roadmap).
+The status of each roadmap item is in [status.md](status.md#roadmap).
 
 [docs/design/05-future-directions.md](design/05-future-directions.md) records what an unattended software factory needs on top of the first release, each item an extension of an existing primitive: a stronger isolation tier for untrusted code (X-1), a halt-everything stop (X-2), repeated denials that ask a person (X-3), per-agent identity and credentials (X-4), an untrusted-origin mark that follows lineage (X-5), a conversation view and a cross-run approval inbox (X-6), and runs started by incoming events (X-7). X-1 to X-7 are designed and not built; X-8, the hash-chained event store, is built, with external anchoring next.
 

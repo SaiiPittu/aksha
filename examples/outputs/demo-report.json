@@ -1,0 +1,325 @@
+{
+ "acts": [
+  [
+   "first runs",
+   9.37
+  ],
+  [
+   "change",
+   0.93
+  ],
+  [
+   "rebuild",
+   8.34
+  ],
+  [
+   "kill and recover",
+   4.26
+  ]
+ ],
+ "runs": {
+  "R-0001": {
+   "agent": "research",
+   "cause": "request",
+   "outcome": "complete",
+   "model_calls": 23
+  },
+  "R-0002": {
+   "agent": "patent",
+   "cause": "request",
+   "outcome": "complete",
+   "model_calls": 54
+  },
+  "R-0003": {
+   "agent": "research",
+   "cause": "rebuild",
+   "outcome": "complete",
+   "model_calls": 5
+  },
+  "R-0004": {
+   "agent": "patent",
+   "cause": "rebuild",
+   "outcome": "complete",
+   "model_calls": 18
+  },
+  "R-0005": {
+   "agent": "patent",
+   "cause": "rebuild",
+   "outcome": "complete",
+   "model_calls": 3
+  }
+ },
+ "asked": [
+  "research asked geography: EU",
+  "patent asked the inventor one gap question: answered",
+  "patent asked which candidate to prepare: chose C1"
+ ],
+ "reviewed": "patent.packet/C1@v1 -> patent.packet/C1@v2",
+ "first": {
+  "research": {
+   "research.competitors": "research.competitors@v1",
+   "research.findings": "research.findings@v1",
+   "research.matrix": "research.matrix@v1",
+   "research.needs": "research.needs@v1",
+   "research.profile/c01-kelvra-systems": "research.profile/c01-kelvra-systems@v1",
+   "research.profile/c02-noctra": "research.profile/c02-noctra@v1",
+   "research.profile/c03-brightfield-analytics": "research.profile/c03-brightfield-analytics@v1",
+   "research.profile/c04-veyra-labs": "research.profile/c04-veyra-labs@v1",
+   "research.profile/c05-tallyway": "research.profile/c05-tallyway@v1",
+   "research.scope": "research.scope@v1",
+   "research.tests": "research.tests@v1"
+  },
+  "patent": {
+   "patent.comparison/C1": "patent.comparison/C1@v1",
+   "patent.comparison/C2": "patent.comparison/C2@v1",
+   "patent.comparison/C3": "patent.comparison/C3@v1",
+   "patent.comparison/C4": "patent.comparison/C4@v1",
+   "patent.extraction/C1": "patent.extraction/C1@v1",
+   "patent.extraction/C2": "patent.extraction/C2@v1",
+   "patent.extraction/C3": "patent.extraction/C3@v1",
+   "patent.extraction/C4": "patent.extraction/C4@v1",
+   "patent.form/C1~filing-information-worksheet": "patent.form/C1~filing-information-worksheet@v1",
+   "patent.form/C1~invention-disclosure-form": "patent.form/C1~invention-disclosure-form@v1",
+   "patent.handoff/C1": "patent.handoff/C1@v1",
+   "patent.packet/C1": "patent.packet/C1@v1",
+   "patent.portfolio": "patent.portfolio@v1",
+   "patent.prior_art/C1": "patent.prior_art/C1@v1",
+   "patent.prior_art/C2": "patent.prior_art/C2@v1",
+   "patent.prior_art/C3": "patent.prior_art/C3@v1",
+   "patent.prior_art/C4": "patent.prior_art/C4@v1",
+   "patent.recommendation/C1": "patent.recommendation/C1@v1",
+   "patent.recommendation/C2": "patent.recommendation/C2@v1",
+   "patent.recommendation/C3": "patent.recommendation/C3@v1",
+   "patent.recommendation/C4": "patent.recommendation/C4@v1",
+   "patent.selection": "patent.selection@v1",
+   "patent.table": "patent.table@v1"
+  }
+ },
+ "change": {
+  "added": [
+   "publications/SYN-PUB-0011.json"
+  ],
+  "edited": [
+   "disclosures/consultant-email.eml.txt",
+   "disclosures/history.csv"
+  ],
+  "uncited": "reviews/reviews.json",
+  "records_moved": [
+   "input/disclosures/consultant-email.eml.txt",
+   "input/disclosures/history.csv",
+   "input/disclosures/history.csv#where:candidate=C1",
+   "input/reviews/reviews.json"
+  ],
+  "queries_rerun": 19,
+  "queries_changed": 1,
+  "invalidated": [
+   "research.needs@v1",
+   "patent.extraction/C1@v1",
+   "patent.prior_art/C1@v1",
+   "patent.form/C1~filing-information-worksheet@v1",
+   "patent.form/C1~invention-disclosure-form@v1"
+  ],
+  "dirty": [
+   "research.matrix@v1",
+   "research.findings@v1",
+   "research.tests@v1",
+   "patent.comparison/C1@v1",
+   "patent.recommendation/C1@v1",
+   "patent.table@v1",
+   "patent.selection@v1",
+   "patent.packet/C1@v1",
+   "patent.handoff/C1@v1"
+  ],
+  "strong": [
+   {
+    "version": "research.needs@v1",
+    "why": [
+     "scoped record"
+    ]
+   },
+   {
+    "version": "patent.extraction/C1@v1",
+    "why": [
+     "cites nothing, so read-keyed"
+    ]
+   },
+   {
+    "version": "patent.prior_art/C1@v1",
+    "why": [
+     "cites nothing, so read-keyed"
+    ]
+   },
+   {
+    "version": "patent.form/C1~filing-information-worksheet@v1",
+    "why": [
+     "cites nothing, so read-keyed"
+    ]
+   },
+   {
+    "version": "patent.form/C1~invention-disclosure-form@v1",
+    "why": [
+     "cites nothing, so read-keyed"
+    ]
+   }
+  ],
+  "weak": [
+   {
+    "version": "patent.portfolio@v1",
+    "reads": [
+     "input/reviews/reviews.json"
+    ]
+   }
+  ],
+  "rechecks_open": 1,
+  "read_keyed": 27,
+  "spans_rechecked": {
+   "kept": 57,
+   "changed": 4,
+   "gone": 0
+  }
+ },
+ "after": {
+  "research": {
+   "research.competitors": "research.competitors@v1",
+   "research.findings": "research.findings@v2",
+   "research.matrix": "research.matrix@v2",
+   "research.needs": "research.needs@v2",
+   "research.profile/c01-kelvra-systems": "research.profile/c01-kelvra-systems@v1",
+   "research.profile/c02-noctra": "research.profile/c02-noctra@v1",
+   "research.profile/c03-brightfield-analytics": "research.profile/c03-brightfield-analytics@v1",
+   "research.profile/c04-veyra-labs": "research.profile/c04-veyra-labs@v1",
+   "research.profile/c05-tallyway": "research.profile/c05-tallyway@v1",
+   "research.scope": "research.scope@v1",
+   "research.tests": "research.tests@v2"
+  },
+  "patent": {
+   "patent.comparison/C1": "patent.comparison/C1@v2",
+   "patent.comparison/C2": "patent.comparison/C2@v1",
+   "patent.comparison/C3": "patent.comparison/C3@v1",
+   "patent.comparison/C4": "patent.comparison/C4@v1",
+   "patent.extraction/C1": "patent.extraction/C1@v2",
+   "patent.extraction/C2": "patent.extraction/C2@v1",
+   "patent.extraction/C3": "patent.extraction/C3@v1",
+   "patent.extraction/C4": "patent.extraction/C4@v1",
+   "patent.form/C1~filing-information-worksheet": "patent.form/C1~filing-information-worksheet@v2",
+   "patent.form/C1~invention-disclosure-form": "patent.form/C1~invention-disclosure-form@v2",
+   "patent.handoff/C1": "patent.handoff/C1@v2",
+   "patent.packet/C1": "patent.packet/C1@v2",
+   "patent.portfolio": "patent.portfolio@v1",
+   "patent.prior_art/C1": "patent.prior_art/C1@v2",
+   "patent.prior_art/C2": "patent.prior_art/C2@v1",
+   "patent.prior_art/C3": "patent.prior_art/C3@v1",
+   "patent.prior_art/C4": "patent.prior_art/C4@v1",
+   "patent.recommendation/C1": "patent.recommendation/C1@v2",
+   "patent.recommendation/C2": "patent.recommendation/C2@v1",
+   "patent.recommendation/C3": "patent.recommendation/C3@v1",
+   "patent.recommendation/C4": "patent.recommendation/C4@v1",
+   "patent.selection": "patent.selection@v2",
+   "patent.table": "patent.table@v2"
+  }
+ },
+ "rebuilt": [
+  "research.findings@v2",
+  "research.matrix@v2",
+  "research.needs@v2",
+  "research.tests@v2",
+  "patent.comparison/C1@v2",
+  "patent.extraction/C1@v2",
+  "patent.form/C1~filing-information-worksheet@v2",
+  "patent.form/C1~invention-disclosure-form@v2",
+  "patent.handoff/C1@v2",
+  "patent.packet/C1@v2",
+  "patent.prior_art/C1@v2",
+  "patent.recommendation/C1@v2",
+  "patent.selection@v2",
+  "patent.table@v2"
+ ],
+ "kept": {
+  "research": [
+   "research.competitors",
+   "research.profile/c01-kelvra-systems",
+   "research.profile/c02-noctra",
+   "research.profile/c03-brightfield-analytics",
+   "research.profile/c04-veyra-labs",
+   "research.profile/c05-tallyway",
+   "research.scope"
+  ],
+  "patent": [
+   "patent.comparison/C2",
+   "patent.comparison/C3",
+   "patent.comparison/C4",
+   "patent.extraction/C2",
+   "patent.extraction/C3",
+   "patent.extraction/C4",
+   "patent.portfolio",
+   "patent.prior_art/C2",
+   "patent.prior_art/C3",
+   "patent.prior_art/C4",
+   "patent.recommendation/C2",
+   "patent.recommendation/C3",
+   "patent.recommendation/C4"
+  ]
+ },
+ "cutoff": [],
+ "next_action": {
+  "before": "prioritize_counsel_review",
+  "after": "collect_more_evidence",
+  "key_expects": "collect_more_evidence"
+ },
+ "contributor": {
+  "person": "P-05",
+  "date": "2025-11-21",
+  "elements": [
+   "F2",
+   "F3"
+  ],
+  "before_agreement": true,
+  "status": "needs_counsel_confirmation",
+  "question": "An outside contributor suggested F2, F3 before the internal note and before their agreement's effective date. Who are the inventors, and who owns a suggestion made outside the agreement?"
+ },
+ "approvals": [
+  {
+   "approval": "A-0001",
+   "run": "R-0002",
+   "targets": [
+    "patent.packet/C1@v1"
+   ],
+   "by": "demo-script"
+  },
+  {
+   "approval": "A-0002",
+   "run": "R-0005",
+   "targets": [
+    "patent.packet/C1@v2"
+   ],
+   "by": "demo-script"
+  }
+ ],
+ "kill": {
+  "returncode": -9,
+  "killed": true,
+  "rows_at_kill": 2,
+  "outbox_open_at_restart": 1,
+  "recovery_lookups": 1,
+  "recovery_applies": 0,
+  "resumed": [
+   "R-0005"
+  ]
+ },
+ "mailbox": {
+  "deliveries": 2,
+  "packets": [
+   "patent.packet/C1@v1",
+   "patent.packet/C1@v2"
+  ],
+  "keys": 2,
+  "outbox_completed": 2
+ },
+ "chain": {
+  "ok": true,
+  "events": 1833,
+  "head": "sha256:42ad2cc00c18902d4cf3a458da60747cac580bd5ba29c69559a6e832834c1eb2",
+  "break": null
+ },
+ "seconds": 23.94
+}
