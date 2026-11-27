@@ -25,7 +25,8 @@ What an agent or extension declares, grouped by the primitive that owns it:
    What a body's handles answer: ``ExecOutcome`` (``ToolContext.exec``, P12),
    ``HttpResponse`` and ``EgressRefused`` (``ToolContext.http``, P26).
 6. Stop policies (P16): ``StopPolicyOptIn``, ``Goal``, ``Plan``, ``ForcedTool``,
-   ``TodoReminder``. Interrupts (P17): ``DeclaredInterrupt``.
+   ``TodoReminder``, ``Recite`` (and ``RECITATION``, the fence line above a recitation).
+   Interrupts (P17): ``DeclaredInterrupt``.
 7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``; what an alias
    declares: ``FieldSpec``, ``QuestionSpec``, ``ConfidenceThresholds``; what a rule-based
    fake adapter reads and returns: ``ModelCapabilities``, ``ExtractionRequest``,
@@ -93,6 +94,7 @@ from aksha.runtime.artifacts.types import (
     SaveRequest,
 )
 from aksha.runtime.budgets.types import Backoff, Budget, Limits
+from aksha.runtime.context.assembly import RECITATION
 from aksha.runtime.context.reentry import INSTRUCTION_FLAG, instruction_text
 from aksha.runtime.context.types import ContextPolicy, ResumePolicy, SummaryPolicy
 from aksha.runtime.definitions.types import Agent, Extension, Projection
@@ -185,7 +187,14 @@ from aksha.runtime.sandbox.types import (
     TreeManifest,
 )
 from aksha.runtime.sandbox.types import Limits as ExecLimits
-from aksha.runtime.stop_policy.types import ForcedTool, Goal, Plan, StopPolicyOptIn, TodoReminder
+from aksha.runtime.stop_policy.types import (
+    ForcedTool,
+    Goal,
+    Plan,
+    Recite,
+    StopPolicyOptIn,
+    TodoReminder,
+)
 from aksha.runtime.tasks.types import (
     Check,
     CheckResult,
@@ -232,6 +241,7 @@ __all__ = [
     "INPUT_TOOLS",
     "INSTRUCTION_FLAG",
     "OTHER_KIND",
+    "RECITATION",
     "SELF",
     "WEB_EGRESS",
     "WEB_SOURCE",
@@ -302,6 +312,7 @@ __all__ = [
     "Projection",
     "QuestionSpec",
     "Read",
+    "Recite",
     "RecordReader",
     "Reducer",
     "RelationKind",

@@ -10,15 +10,20 @@ or folder.
 1. ``scope`` lists the invention candidates and the blank forms, and reads the request
    into the ``portfolio``'s plan: which candidates, whether to search prior art, which
    forms to fill, whether to send, and how many top business priorities count as top.
-2. ``candidate[Cn]``, one instance per listed candidate, holds the per-candidate work as
-   its children, each reading what the one before saved: ``extract`` (the only Task that
-   reads the raw records; it asks the person, an ``input`` interrupt on that instance
-   only, for a value the note leaves undecided), ``prior_art`` (search the uploaded
+2. ``candidate``, the supervisor Task over the listed candidates (``portfolio.py``, the
+   portfolio kit): ``extract[Cn]`` for every candidate (the triage tier, the only Task
+   that reads the raw records; it asks the person, an ``input`` interrupt on that
+   instance only, for a value the note leaves undecided), then ``deep[Cn]``, whose
+   children each read what the one before saved: ``prior_art`` (search the uploaded
    publications and the web, fetch what matches and leave the noise, families by
    priority), ``compare`` (the element-by-family matrix) and ``recommend`` (the rule
-   table).
-3. ``table`` gathers every candidate's recommendation; ``select`` asks the person to
-   choose (a ``choice`` interrupt) and saves the selection.
+   table). With at most eight candidates every one gets deep work and the supervisor
+   takes no turn. Above that, the supervisor reads the work board and commits rounds of
+   directives: which candidates get deep work and which are dropped with a reason; code
+   caps the deep tier and its budget and gives deep work to an audit sample of the drops.
+3. ``table`` gathers every recommendation and, when the supervisor decided, the batched
+   review of its decisions, the drop list and the audit; ``select`` asks the person to
+   choose (a ``choice`` interrupt, the drop list beside the options) and saves it.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills each blank
    form the plan names (every one found, when it names none) through the form tool,
    ``packet`` assembles the counsel-review packet and ``send`` sends it when the plan
@@ -32,6 +37,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from aksha.extensions.portfolio import commit_tool, supervisor_task
+from aksha.extensions.portfolio import kinds as portfolio_kinds
 from aksha.runtime.api import (
     Agent,
     ArtifactKind,
@@ -49,7 +56,7 @@ from aksha.runtime.api import (
     kind_question,
 )
 
-from . import checks
+from . import checks, portfolio
 from .tools import build_tools
 from .world import COLLECTIONS, SOURCE_NAME, SourceWorld
 from .world import KINDS as DOC_KINDS
@@ -156,11 +163,71 @@ KINDS = (
     ArtifactKind("form", _schema("template", "candidate", "fields", "counts"), keyed=True),
     ArtifactKind("packet", PACKET, keyed=True, reviewable=True),
     ArtifactKind("handoff", _schema("candidate", "packet", "status"), keyed=True),
+    *portfolio_kinds(),
 )
 
 SAVE = "save_artifact"
-PER_CANDIDATE = artifact_keys("portfolio", "candidates")
 PER_SELECTED = artifact_keys("selection", "selected")
+
+
+EXTRACT = Task(
+    "extract",
+    extracts=True,
+    tools=("list_inputs", "search_inputs", "read_document", "todo", SAVE),
+    writes=("extraction",),
+    interrupt=DeclaredInterrupt("input", "missing detail"),
+    done=checks.extraction_saved,
+    reads=("portfolio",),
+)
+"""Triage: every candidate's extraction, the only Task that reads the raw records."""
+
+DEEP = Task(
+    "deep",
+    extracts=True,
+    tools=("search_publications", "fetch_publication", "web_search", "fetch_url", SAVE),
+    writes=("prior_art", "comparison", "recommendation"),
+    children=(
+        Task(
+            "prior_art",
+            extracts=True,
+            reads=("extraction", "portfolio"),
+            tools=(
+                "search_publications",
+                "fetch_publication",
+                "web_search",
+                "fetch_url",
+                SAVE,
+            ),
+            writes=("prior_art",),
+            done=checks.prior_art_saved,
+            turn_limit=portfolio.PRIOR_ART_TURNS,
+        ),
+        Task(
+            "compare",
+            needs=("prior_art",),
+            reads=("extraction", "prior_art"),
+            tools=(SAVE,),
+            writes=("comparison",),
+            done=checks.comparison_saved,
+            turn_limit=portfolio.SAVE_TURNS,
+        ),
+        Task(
+            "recommend",
+            needs=("compare",),
+            reads=("extraction", "comparison", "portfolio"),
+            tools=(SAVE,),
+            writes=("recommendation",),
+            done=checks.recommendation_follows_rules,
+            turn_limit=portfolio.SAVE_TURNS,
+        ),
+    ),
+)
+"""The deep tier: prior art, the matrix and the recommendation, for admitted candidates."""
+
+
+def candidates() -> Task:
+    """The supervisor over the candidates (``portfolio.py``): triage for all, deep for some."""
+    return supervisor_task(portfolio.SPEC, triage=EXTRACT, deep=DEEP, brief="prompts/supervisor.md")
 
 
 def tasks() -> tuple[Task, ...]:
@@ -173,69 +240,16 @@ def tasks() -> tuple[Task, ...]:
             writes=("portfolio",),
             done=checks.portfolio_saved,
         ),
-        Task(
-            "candidate",
-            per=PER_CANDIDATE,
-            extracts=True,
-            tools=(
-                "list_inputs",
-                "search_inputs",
-                "read_document",
-                "search_publications",
-                "fetch_publication",
-                "web_search",
-                "fetch_url",
-                "todo",
-                SAVE,
-            ),
-            writes=("extraction", "prior_art", "comparison", "recommendation"),
-            children=(
-                Task(
-                    "extract",
-                    extracts=True,
-                    tools=("list_inputs", "search_inputs", "read_document", "todo", SAVE),
-                    writes=("extraction",),
-                    interrupt=DeclaredInterrupt("input", "missing detail"),
-                    done=checks.extraction_saved,
-                    reads=("portfolio",),
-                ),
-                Task(
-                    "prior_art",
-                    extracts=True,
-                    needs=("extract",),
-                    reads=("extraction", "portfolio"),
-                    tools=(
-                        "search_publications",
-                        "fetch_publication",
-                        "web_search",
-                        "fetch_url",
-                        SAVE,
-                    ),
-                    writes=("prior_art",),
-                    done=checks.prior_art_saved,
-                ),
-                Task(
-                    "compare",
-                    needs=("prior_art",),
-                    reads=("extraction", "prior_art"),
-                    tools=(SAVE,),
-                    writes=("comparison",),
-                    done=checks.comparison_saved,
-                ),
-                Task(
-                    "recommend",
-                    needs=("compare",),
-                    reads=("extraction", "comparison"),
-                    tools=(SAVE,),
-                    writes=("recommendation",),
-                    done=checks.recommendation_follows_rules,
-                ),
-            ),
-        ),
+        candidates(),
         Task(
             "table",
             needs=("candidate",),
-            reads=(Read("patent.recommendation", keys="all"),),
+            reads=(
+                Read("patent.recommendation", keys="all"),
+                Read("patent.extraction", keys="all"),
+                Read("patent.directive", keys="all"),
+                "round",
+            ),
             tools=(SAVE,),
             writes=("table",),
             done=checks.table_saved,
@@ -418,9 +432,14 @@ def build_agent(world: SourceWorld) -> Agent:
         invalidation_keys="citations",
         reads=tuple(f"record:{c}" for c in COLLECTIONS),
         artifacts=KINDS,
-        tools=(*build_tools(world), ToolUse(SAVE)),
+        tools=(*build_tools(world), commit_tool(portfolio.SPEC), ToolUse(SAVE)),
         tasks=tasks(),
-        budget=Budget(model_turns=120, tool_calls=240),
+        # Sized for a portfolio of about twenty candidates under the supervisor: triage for
+        # every one and deep work for about ten (measured on the twenty-candidate portfolio
+        # world: 104 turns and about 250 calls to the packet). Running the deep tier for all
+        # twenty would need about 160 turns; the supervisor's deep budget
+        # (portfolio.DEEP_BUDGET) keeps it inside this.
+        budget=Budget(model_turns=160, tool_calls=400),
         model_aliases=MODEL_ALIASES,
         limits=Limits(turn_limit=8),
         context_policy=ContextPolicy(
@@ -432,6 +451,7 @@ def build_agent(world: SourceWorld) -> Agent:
             low_water_chars=300_000,
         ),
         sources=(VersionedSourceSpec(SOURCE_NAME, collections=COLLECTIONS),),
+        extensions=("portfolio",),
     )
 
 

@@ -135,9 +135,12 @@ FinishVerdict = Literal["done", "veto", "fail"]
 class InstanceRef:
     """One tracked Task instance: its run, its Task path and its key (None when not keyed).
 
-    ``instance`` is the instance ID the step-ID grammar uses: the key rides on the keyed
-    segment and its un-keyed children share it, ``collect[n1]/write`` (v1 keys only the
-    top level, ``keyed_child_unsupported``).
+    ``instance`` is the instance ID the step-ID grammar uses: the key rides on the top
+    segment and the un-keyed children of a keyed Task share it, ``collect[n1]/write``. A
+    path holds at most one keyed Task (``keyed_child_unsupported`` refuses a second), so
+    the ID needs no tree to be read back: a keyed child of an un-keyed parent, such as a
+    supervisor's worker ``lead/work`` for key ``a``, is ``lead[a]/work``, and its steps
+    never fall under the parent's own ``lead/`` step prefix (ADR-P15 D7 amendment).
     """
 
     run: str

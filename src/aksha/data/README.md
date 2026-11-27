@@ -43,6 +43,7 @@ src/aksha/data/
     vantlow/              a held-out research-only world (log management), written blind to the agent code
     pulvane/              a held-out medical-device world for the patent agent, authored without reading the agent
     quillmere/            a held-out patent world, written without reading the agent code
+    coldwick/             a portfolio of twenty invention candidates, for the supervisor Task
 ```
 
 ## The base world, `stillroom`
@@ -128,6 +129,12 @@ Quillmere Soil Systems makes a capacitance soil-moisture probe whose firmware fi
 | Form | counsel's HTML questionnaire (`label` and `input` pairs, a disabled counsel-only fieldset) |
 | Publications | four in three families: two XML documents, a PDF-text grant with INID codes, a Markdown file with front matter |
 Its traps: two candidates whose steps are each found, but split across two families (one is business priority 2 and its author calls it the strongest; the other the venture already described in public release notes); a university adviser labelled "not an inventor" who suggested the key step, under a joint-ownership clause and a filing-notice duty, beside a contractor with no IP clause; the university group's public poster showing the key step four months before the notebook's first entry; a step added later in the notebook margin, in an unwitnessed entry; and the same threshold written in other units in the poster. Two trap IDs reuse a registered check (`T-CONSULT`, `T-GRACE`) for a new kind of situation; `T-OBVIOUS-4`, `T-OBVIOUS-5`, `T-NOTEBOOK` and `T-UNITS` have no trap check yet, so their cases grade through the matrix, next-action, extraction and citation criteria.
+
+## The portfolio world, `coldwick`
+
+Coldwick makes cold-chain temperature loggers and reusable shippers for pharmacy and chilled-food logistics. It holds twenty invention candidates (`CW-01` to `CW-20`), one design note each in tilldew's layout, so the patent agent runs them under its supervisor Task (more than eight candidates; ADR-P15 S5) and the `portfolio` suite (`src/aksha/data/suites/portfolio/`) measures the supervisor. Its publications are `SYN-PUB-0201` to `SYN-PUB-0220`: two restate a candidate's every step, the rest share only a title word with one.
+
+The key's `portfolio` section holds each candidate's profile (how far it is built, its priority rank, any public disclosure, a missing document, whether a publication shows every step), the triage score and next action they imply, which candidates the deep work would keep (`should_admit`) and which it would not (`should_drop`), and one planted wrong drop: `CW-15` is built, a top-eight priority and shows an element no publication has, so the rule table puts it first, but a public trade-fair photo costs it two points of triage score, so a cut on the score drops it. It sits on a key the seeded audit samples, on purpose: a sample cannot catch a miss outside itself, which is why the miss rate is reported.
 
 ## How the keys are used
 

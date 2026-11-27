@@ -48,7 +48,11 @@ def test_unknown_path_is_refused() -> None:
 
 def test_compile_refuses_every_problem_not_the_first() -> None:
     tasks = (
-        Task("a", children=(Task("b", per=source_keys("notes"), done=has("x")),)),
+        Task(
+            "a",
+            per=source_keys("notes"),
+            children=(Task("b", per=source_keys("notes"), done=has("x")),),
+        ),
         Task("c"),
     )
     with pytest.raises(TreeInvalid) as e:

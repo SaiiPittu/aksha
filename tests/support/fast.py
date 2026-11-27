@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
+from aksha.app import DEFAULT_EXTENSIONS
 from aksha.runtime.definitions.loader import load_agents
 from aksha.runtime.models.calls import ToolModelCalls
 from aksha.runtime.models.routing import bind_aliases
@@ -19,7 +20,7 @@ from aksha.runtime.tools.types import ToolDecl
 
 def models_for(agent_dir: Path, adapters: Mapping[str, object], tool: str) -> ToolModelCalls:
     """The fake-mode ``ToolContext.models`` of ``tool`` (module doc)."""
-    (loaded,) = load_agents([agent_dir], [])
+    (loaded,) = load_agents([agent_dir], [DEFAULT_EXTENSIONS])
     table = bind_aliases(loaded.agent.model_aliases, "fake", adapters)
     spec = next(
         t.spec for t in loaded.agent.tools if isinstance(t, ToolDecl) and t.spec.name == tool

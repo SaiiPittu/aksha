@@ -1,0 +1,37 @@
+{
+  "synthetic": true,
+  "notice": "Synthetic patent-publication fixture. Invented for testing; not a real patent or application.",
+  "publication_number": "SYN-PUB-0213",
+  "office": "SYN-Office-1",
+  "kind_code": "A1",
+  "title": "Shelf-life countdown on an e-ink label",
+  "applicant": "Northdeck Logistics Systems",
+  "dates": {
+    "priority": "2022-03-05",
+    "filing": "2023-03-05",
+    "publication": "2023-09-13"
+  },
+  "priority_claims": [
+    {
+      "number": "SYN-PRI-2022-0305",
+      "date": "2022-03-05"
+    }
+  ],
+  "source_url": "https://patents.synthetic.example/SYN-PUB-0213",
+  "status_observations": [
+    {
+      "wording": "Pending",
+      "source": "SYN-Office-1 register",
+      "as_of": "2026-09-15"
+    }
+  ],
+  "abstract": "Compute remaining shelf life from the logged temperature history with a decay model.",
+  "description": "Compute remaining shelf life from the logged temperature history with a decay model. Show the remaining days on an e-ink label printed onto the carton. Refresh the e-ink label whenever the remaining shelf life drops by a day.",
+  "claims": [
+    {
+      "number": 1,
+      "depends_on": null,
+      "text": "A method comprising: compute remaining shelf life from the logged temperature history with a decay model; show the remaining days on an e-ink label printed onto the carton; refresh the e-ink label whenever the remaining shelf life drops by a day."
+    }
+  ]
+}

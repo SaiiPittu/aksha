@@ -4,7 +4,7 @@
 
 ## Status
 
-Accepted in part, 25 Nov 2026, by the maintainer. Accepted: The stack of stop policies is an interpretation computed as a pure function over the event store (pattern P-2, which settles v2 ADR-014 towards its option E); goal condition, plan mode, forced tool choice and todo reminder are built-in stop policies beside the Run, Task and interrupt policies (decisions log item 3); an agent opts into them by configuration and never subclasses one in v1 (item 10). These carry v2 ADR-014 forward under decision 11's names. Proposed: The hold invariant (D13-4), the shared hold predicate that implements it (D6), and every sub-decision in "Decisions for the maintainer". Primitive PR-16 in the primitives catalogue, cluster D (Control). Nothing here was built as of 25 Nov 2026. Amended 25 Nov 2026 after the three-agent stress test: S1 to S3 below are new and Proposed; S1 narrows D13-4's hold invariant.
+Accepted in part, 25 Nov 2026, by the maintainer. Accepted: The stack of stop policies is an interpretation computed as a pure function over the event store (pattern P-2, which settles v2 ADR-014 towards its option E); goal condition, plan mode, forced tool choice and todo reminder are built-in stop policies beside the Run, Task and interrupt policies (decisions log item 3); an agent opts into them by configuration and never subclasses one in v1 (item 10). These carry v2 ADR-014 forward under decision 11's names. Proposed: The hold invariant (D13-4), the shared hold predicate that implements it (D6), and every sub-decision in "Decisions for the maintainer". Primitive PR-16 in the primitives catalogue, cluster D (Control). Nothing here was built as of 25 Nov 2026. Amended 25 Nov 2026 after the three-agent stress test: S1 to S3 below are new and Proposed; S1 narrows D13-4's hold invariant. Amended 27 Nov 2026 by the portfolio slice (ADR-P15 S5): the recitation policy, S4 below, is Proposed.
 
 ## Terms
 
@@ -85,6 +85,16 @@ Takeaway: one function owns the stop, it writes once per candidate, and human st
 1. S1, a hold covers the held work, not the whole agent. The Patent review's most serious finding: The product requirements' demo (select, prepare, change, restart; the product requirements) naturally leaves the approval request for `packet/C1@v1` open when the change lands. D6 counted any open interrupt for the (owner, agent) scope, so the rebuild opener opened nothing, and the founder had to decide a card for a packet already known to be dirty before anything was rechecked, which inverts the product requirements. Nothing was sent, but the order was wrong. The invariant D13-4 now reads: human state beats every automatic start of the held work. An instance's interrupt holds that instance and the rebuild entries it writes; writers upstream of it still rebuild inside the run (ADR-P02 S1); `approve` is refused `target_changing` while the target is dirty (ADR-P17 S1). The catch: a rebuild can now run while a person reads a card about the same candidate, so the card refetches on the invalidation events the stream already carries (ADR-P19 D5), and the CLI prints the target's freshness on `aksha pending`.
 2. S2, follow-up input vetoes a finish. A pending `follow_up` input (ADR-P27) turns a proposed DONE into CONTINUE with the text as the reason. The precedence stays here: The Task policy reads `pending_input`, so no second owner of the stop appears.
 3. S3, every new automatic start calls the predicate. Durable timers (ADR-P25) and the partial-result finalizer (ADR-P24) are automatic starts and call `hold_reason` first. The `partial` outcome literal, which no path reached, is now reached by ADR-P24.
+
+### Amendment from the build: the recitation policy (27 Nov 2026, S4, Proposed)
+
+D4's closed set gains a fifth opt-in, `Recite(render, max_chars)`, built for the supervisor Task's work board (ADR-P15 S5).
+
+1. `render` is a pure function over the instance's `TaskView` that returns lines. On every turn of that Task, `prepare` joins them, cuts the text at `max_chars` (default 12,000) with a line saying so, and returns it as `Prep.data`, a new trailing field. A render that raises recites one line naming the error; it never widens tools or fails the turn.
+2. Context assembly places each recitation as a `user` message after the request, under a fence line (`RECITATION`: data the runtime derived from the event store, which gives no instructions), never among the system instructions. A recitation is not recorded: it is a projection of the log as of the turn, so a restart renders it again identically.
+3. It never vetoes and sets no limit. What the supervisor may do with what it reads stays bounded by its Task's tool list (only `commit_round`) and by that tool's checks.
+
+The catch: the cap bounds characters, not reads. A board of thousands of items needs the scale path's read budget and paging, which are not built.
 
 ## Alternatives considered
 

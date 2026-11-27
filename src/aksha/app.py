@@ -1566,7 +1566,8 @@ def open_demo(
     store = sqlite.open_store(work / "aksha.sqlite", clock, writer=True)
     blobs = FilesystemBlobStore(work / "blobs")
     loaded = {
-        d.agent.name: d for d in load_agents([DEFAULT_AGENTS / n for n in DEMO_AGENT_NAMES], [])
+        d.agent.name: d
+        for d in load_agents([DEFAULT_AGENTS / n for n in DEMO_AGENT_NAMES], [DEFAULT_EXTENSIONS])
     }
     research, patent = loaded["research"], loaded["patent"]
     folder = FolderSource(INPUTS_SOURCE, sources, "input")
@@ -1637,7 +1638,9 @@ class _RuntimeAdapter:
         """Load ``adapter``'s agent once."""
         self.adapter = adapter
         catalogue = Catalogue(CORE_EVENT_TYPES)
-        (self.loaded,) = load_agents([DEFAULT_AGENTS / adapter.agent], [], catalogue=catalogue)
+        (self.loaded,) = load_agents(
+            [DEFAULT_AGENTS / adapter.agent], [DEFAULT_EXTENSIONS], catalogue=catalogue
+        )
         self.catalogue = catalogue
         self.definition_hash = self.loaded.definition_hash
         self.bound = session_agent(self.loaded, "fake", commit=runtime_commit())

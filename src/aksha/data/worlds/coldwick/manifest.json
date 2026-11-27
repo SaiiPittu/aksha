@@ -1,0 +1,234 @@
+{
+  "world": "coldwick",
+  "synthetic": true,
+  "frozen_today": "2026-11-26",
+  "tool_root": "sources/",
+  "note": "What a server would know: paths. No answers. A portfolio of twenty invention candidates, for the supervisor Task; the agents read sources/ as uploaded inputs.",
+  "records": [
+    {
+      "path": "forms/filing-sheet.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "forms/idf-blank.md",
+      "folder": "forms",
+      "synthetic": true
+    },
+    {
+      "path": "log/disclosure-log.csv",
+      "folder": "log",
+      "synthetic": true
+    },
+    {
+      "path": "notes/priorities.md",
+      "folder": "notes",
+      "synthetic": true
+    },
+    {
+      "path": "people/contributions.csv",
+      "folder": "people",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0201.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0202.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0203.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0204.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0205.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0206.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0207.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0208.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0209.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0210.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0211.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0212.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0213.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0214.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0215.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0216.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0217.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0218.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0219.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "prior-art/SYN-PUB-0220.json",
+      "folder": "prior-art",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw01-lid-opening-grace-window.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw02-gel-pack-ageing-from-the-melt-plateau.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw03-courier-custody-handover-by-badge-tap.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw04-route-ranking-from-forecast-ambient-heat.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw05-pharmacy-fridge-door-seal-check-from-com.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw06-battery-free-logging-tag-powered-by-the.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw07-probe-drift-check-against-an-ice-slurry.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw08-hottest-pallet-slot-from-corner-sensors.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw09-insurance-claim-bundle-from-a-shipment-r.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw10-compressor-duty-cycle-anomaly-score.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw11-dry-ice-sublimation-estimate-from-box-we.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw12-drone-handover-cooler-with-a-docking-lat.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw13-shelf-life-countdown-on-an-e-ink-label.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw14-solar-lid-charger.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw15-condensation-aware-humidity-alarm.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw16-hash-chain-of-readings.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw17-shock-and-vibration-log.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw18-night-setback.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw19-wash-cycle-tracking.md",
+      "folder": "rnd",
+      "synthetic": true
+    },
+    {
+      "path": "rnd/cw20-cabin-pressure-compensation.md",
+      "folder": "rnd",
+      "synthetic": true
+    }
+  ]
+}

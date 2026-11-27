@@ -3,7 +3,8 @@
 Depth first, in declaration order: sibling ids and ``needs`` first, then each Task's
 tools, reads, writes, key source, completion check, stop-policy opt-ins and model aliases,
 then its children. A child's tools narrow its parent's; a top-level Task's narrow the
-agent's list.
+agent's list, and so do a supervisor's children's: a supervisor's tools are its own turns'
+tools, and its workers' tools are never offered to it (ADR-P15 D7 amendment).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from aksha.runtime.definitions.names import resolve_kind
 from aksha.runtime.execution.types import is_reserved_segment
 from aksha.runtime.models.types import IMPLICIT_GENERATION_ALIAS
 from aksha.runtime.stop_policy.types import BUILTIN_STOP_POLICIES, StopPolicyOptIn
+from aksha.runtime.tasks.supervisor import is_supervisor
 from aksha.runtime.tasks.types import FromField, KeySource, Read, Task
 from aksha.runtime.tools.types import ToolDecl
 
@@ -66,7 +68,7 @@ def is_granted(full: str, granted: Sequence[str]) -> bool:
 def check_tree(tasks: Sequence[Task], ctx: TreeContext) -> list[LoadRefusal]:
     """Every refusal in the tree ``tasks``, in walk order."""
     out = Refusals(ctx.module)
-    _siblings(tasks, ctx, out, parent=None, prefix="", depth=1)
+    _siblings(tasks, ctx, out, parent=None, prefix="", depth=1, keyed=False)
     return out.items
 
 
@@ -78,6 +80,7 @@ def _siblings(
     parent: Task | None,
     prefix: str,
     depth: int,
+    keyed: bool,
 ) -> None:
     field = "children" if parent else "tasks"
     ids = [t.id for t in tasks]
@@ -92,13 +95,15 @@ def _siblings(
         if depth > MAX_TASK_DEPTH:
             out.add("children", "tree_too_deep", f"Tasks nest at most {MAX_TASK_DEPTH} deep", path)
             continue
-        if task.per is not None and depth > 1:
-            message = "a keyed Task below the top level is not built in v1 (ADR-P15 D1)"
+        if task.per is not None and keyed:
+            message = "a keyed Task below a keyed Task is not built (ADR-P15 D1, D7 amendment)"
             out.add("per", "keyed_child_unsupported", message, path)
-        _tools(task, path, parent, ctx, out)
+        _tools(task, path, None if parent is not None and is_supervisor(parent) else parent,
+               ctx, out)  # fmt: skip
         _reads(task, path, ctx, out)
         _rest(task, path, ctx, out)
-        _siblings(task.children, ctx, out, parent=task, prefix=path, depth=depth + 1)
+        _siblings(task.children, ctx, out, parent=task, prefix=path, depth=depth + 1,
+                  keyed=keyed or task.per is not None)  # fmt: skip
 
 
 def _needs(tasks: Sequence[Task], out: Refusals, prefix: str) -> None:

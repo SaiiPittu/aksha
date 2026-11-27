@@ -1,8 +1,8 @@
 """Stop values: the opt-ins an agent declares, and the candidates, verdicts and decisions.
 
 ADR-P16. What an agent declares (D4): ``StopPolicyName``, ``BUILTIN_STOP_POLICIES``,
-``StopPolicyOptIn`` and its four constructors ``Goal``, ``Plan``, ``ForcedTool`` and
-``TodoReminder``. The set is closed: an agent opts into a built-in stop policy with
+``StopPolicyOptIn`` and its five constructors ``Goal``, ``Plan``, ``ForcedTool``,
+``TodoReminder`` and ``Recite``. The set is closed: an agent opts into a built-in stop policy with
 parameters and can never add a stop-policy class (decision 10).
 
 What evaluation works with:
@@ -20,7 +20,7 @@ What evaluation works with:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, get_args
@@ -36,9 +36,11 @@ if TYPE_CHECKING:
     from aksha.runtime.tasks.tree import CompiledTree
     from aksha.runtime.tasks.types import Check, InstanceRef
 
-StopPolicyName = Literal["goal", "plan", "forced_tool", "todo_reminder"]
+StopPolicyName = Literal["goal", "plan", "forced_tool", "todo_reminder", "recite"]
 
-BUILTIN_STOP_POLICIES: frozenset[str] = frozenset({"goal", "plan", "forced_tool", "todo_reminder"})
+BUILTIN_STOP_POLICIES: frozenset[str] = frozenset(
+    {"goal", "plan", "forced_tool", "todo_reminder", "recite"}
+)
 """The only stop policies an agent may opt into."""
 
 
@@ -72,6 +74,25 @@ def ForcedTool(tool: str, when: Check) -> StopPolicyOptIn:
 def TodoReminder(every: int) -> StopPolicyOptIn:
     """List unmet child checks in the context every ``every`` turns; never vetoes."""
     return StopPolicyOptIn("todo_reminder", {"every": every})
+
+
+RECITE_MAX_CHARS = 12_000
+"""The default cap on one recitation: what a supervisor's work board may cost per turn."""
+
+
+Render = Callable[..., "Sequence[str] | str"]
+"""A recitation's render: a pure function of a ``TaskView`` to the lines to show."""
+
+
+def Recite(render: Render, max_chars: int = RECITE_MAX_CHARS) -> StopPolicyOptIn:
+    """Recite ``render``'s lines, a pure projection over the Task view, on every turn.
+
+    ``render`` takes the instance's ``TaskView`` and returns the lines to show (a tuple of
+    strings, or one string). The
+    runtime caps the text at ``max_chars`` and places it as data, never as instructions,
+    after the request. A supervisor reads its work board this way (ADR-P16 S4).
+    """
+    return StopPolicyOptIn("recite", {"render": render, "max_chars": max_chars})
 
 
 # --- candidates -----------------------------------------------------------------------
@@ -219,13 +240,16 @@ class Prep:
     ``tools`` None means no narrowing; otherwise the tools kept, intersected, never widened
     (``finish`` and ``ask`` always stay: the gate keeps reserved tools). ``narrowed_by``
     names the innermost policy that narrowed. ``tool_choice`` is a hint a live model
-    adapter may pass on (forced tool choice); the fake model ignores it.
+    adapter may pass on (forced tool choice); the fake model ignores it. ``data`` are
+    recitations (``Recite``): text the runtime derived from the log, placed after the
+    request inside a data fence, never among the instructions.
     """
 
     brief: tuple[str, ...] = ()
     tools: frozenset[str] | None = None
     narrowed_by: str | None = None
     tool_choice: str | None = None
+    data: tuple[str, ...] = ()
 
 
 # --- the decision ---------------------------------------------------------------------

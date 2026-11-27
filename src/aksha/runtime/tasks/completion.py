@@ -66,7 +66,7 @@ def evaluate_in(state: RunState, ref: InstanceRef) -> Evaluation:
     node = state.tree.node(ref.task_path)
     task = node.task
     if node.children:
-        children = [ref.child(c.id) for c in task.children]
+        children = list(state.children(ref))
         pending = [c.instance for c in children if not state.settled(c)]
         if pending:
             return Evaluation(

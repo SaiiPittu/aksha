@@ -25,7 +25,9 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
+from aksha.extensions.portfolio import read_board, review_of
 from aksha.runtime.api import (
+    RECITATION,
     GenerationRequest,
     GenerationResult,
     RuleGenerationModel,
@@ -33,7 +35,7 @@ from aksha.runtime.api import (
     find_dates,
 )
 
-from . import fakes_stillroom, fakes_views, rules
+from . import fakes_stillroom, fakes_views, portfolio, rules
 
 Groups = list[list[str]]
 
@@ -192,6 +194,7 @@ class Context:
     answers: list[str] = field(default_factory=list)
     rebuild_old: dict[str, Any] | None = None
     request: str = ""
+    recitation: str = ""
 
     def read(self, kind: str) -> tuple[str, dict[str, Any]] | None:
         """The read of local kind ``kind``: ``(ref, content)``."""
@@ -234,9 +237,13 @@ def parse(request: GenerationRequest) -> Context:
         elif (
             msg.role == "user"
             and not ctx.request
-            and not text.startswith(("Artifacts this Task reads", "Answers from", "Rebuild:"))
+            and not text.startswith(
+                ("Artifacts this Task reads", "Answers from", "Rebuild:", RECITATION)
+            )
         ):
             ctx.request = text.split("\n\nTask: ", 1)[0]
+        if msg.role == "user" and text.startswith(RECITATION):
+            ctx.recitation = text
         if msg.role == "user" and text.startswith("Rebuild: your earlier version"):
             body = text.split("\n", 2)[1]
             try:
@@ -447,6 +454,53 @@ class PatentFake(RuleGenerationModel):
             _call("finish", 1, summary=f"{len(rows)} candidates listed"),
         )
 
+    def _candidate(self, ctx: Context) -> GenerationResult:
+        """The supervisor's turn: decide from the work board alone (``portfolio.py``).
+
+        It admits the highest-scoring undecided candidates that fit the deep tier's cap and
+        budget beside the audit sample, drops the rest with a reason, and re-opens the
+        drops the audit found worth the deep work when the goal says so.
+        """
+        board = read_board(ctx.recitation)
+        rows, bounds = board["rows"], board["bounds"]
+        notes = {"questions": [], "entries": [], "hypotheses": (
+            "The score orders work only; the audit checks what it cuts.")}  # fmt: skip
+        plan = {
+            "goal": "every candidate extracted, then admitted to the deep tier or dropped "
+                    "with a reason; the audit's misses re-opened",
+            "tier_rule": "the highest scores that fit the deep cap and budget",
+            "budget_split": f"deep tier: {bounds.get('deep_budget_turns')} turns",
+        }  # fmt: skip
+        undecided = [r for r in rows if r.get("state") == "undecided"]
+        if undecided:
+            effort = max(1, int(bounds.get("deep_effort", 1)))
+            room = int(bounds.get("deep_budget_turns", 0)) // effort - int(
+                bounds.get("audit_sample", 0)
+            )
+            n = max(0, min(int(bounds.get("deep_cap", 0)), room))
+            top = [r["key"] for r in undecided[:n]]
+            rest = [r["key"] for r in undecided[n:]]
+            changes = []
+            if top:
+                changes.append({"keys": top, "state": "admitted", "tier": "deep",
+                                "reason": "highest triage score"})  # fmt: skip
+            if rest:
+                changes.append({"keys": rest, "state": "dropped",
+                                "reason": "triage score below the deep tier's cut"})  # fmt: skip
+            return _reply(
+                _call("commit_round", 1, notes=notes, plan=plan, directives=changes),
+                _call("finish", 1, summary=f"{len(top)} admitted, {len(rest)} dropped"),
+            )
+        if board["goal"].startswith("[supervisor] re-open drops"):
+            misses = [str(k) for k in board["audit"].get("open_misses", [])]
+            changes = [{"keys": misses, "state": "admitted", "tier": "deep",
+                        "reason": "the audit found it worth the deep work"}]  # fmt: skip
+            return _reply(
+                _call("commit_round", 1, notes=notes, directives=changes),
+                _call("finish", 1, summary=f"{len(misses)} drops re-opened"),
+            )
+        return _reply(_call("finish", 1, summary="every candidate decided"))
+
     # --- per candidate ------------------------------------------------------------------
 
     def _extract(self, ctx: Context) -> GenerationResult:
@@ -559,7 +613,9 @@ class PatentFake(RuleGenerationModel):
         c = str(ctx.key)
         ext, cmp_ = ctx.read("extraction"), ctx.read("comparison")
         assert ext is not None and cmp_ is not None
-        content = recommendation(c, ext, cmp_)
+        plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
+        content = recommendation(c, ext, cmp_, int(plan.get("priority_cutoff",
+                                                            rules.TOP_PRIORITIES)))  # fmt: skip
         return _reply(
             _call("save_artifact", 1, kind="recommendation", key=c, content=content),
             _call("finish", 1, summary=content["next_action"]),
@@ -579,10 +635,24 @@ class PatentFake(RuleGenerationModel):
                     "recommendation": ref,
                 }
             )
-        content = {
+        content: dict[str, Any] = {
             "rows": rows,
             "note": "Next actions order work for counsel; none is a legal view.",
         }
+        found = {ref.rsplit("/", 1)[-1].split("@")[0]: d for ref, d in ctx.all_reads("directive")}
+        if found:
+            round_ = ctx.read("round")
+            cutoff = int((ctx.read("portfolio") or ("", {}))[1].get("plan", {}).get(
+                "priority_cutoff", rules.TOP_PRIORITIES))  # fmt: skip
+            scores = {
+                ref.rsplit("/", 1)[-1].split("@")[0]: portfolio.columns(e, cutoff)["score"]
+                for ref, e in ctx.all_reads("extraction")
+            }
+            worth = {
+                str(rec["candidate"]): rec["next_action"] == rules.NEXT_ACTIONS[0]
+                for _, rec in ctx.all_reads("recommendation")
+            }
+            content["review"] = review_of(found, round_[1] if round_ else None, scores, worth)
         return _reply(
             _call("save_artifact", 1, kind="table", content=content),
             _call("finish", 1, summary="table saved"),
@@ -605,6 +675,14 @@ class PatentFake(RuleGenerationModel):
         if not chosen:
             lines = "; ".join(f"{r['candidate']}: {r['next_action']}" for r in table[1]["rows"])
             q = f"Which candidate should be prepared for counsel review? {lines}"
+            review = table[1].get("review")
+            if review:  # the batched review: the drop list and the audit beside the choice
+                drops = ", ".join(f"{d['key']} ({d['reason']})" for d in review["dropped"])
+                audit = review["audit"]
+                misses = ", ".join(audit["misses"])
+                q += (f". Dropped after triage: {drops or 'none'}. Audit of the drops: "
+                      f"{audit['miss_rate'] or 'none'} sampled were worth the deep work"
+                      + (f" ({misses}, re-opened)." if misses else "."))  # fmt: skip
             return _reply(_call("ask", 1, question=q, options=options))
         based = {r["candidate"]: r["recommendation"] for r in table[1]["rows"]}
         content = {
@@ -1248,9 +1326,14 @@ def comparison(c: str, ext: Mapping[str, Any], art: Mapping[str, Any]) -> dict[s
     }
 
 
-def recommendation(c: str, ext: tuple[str, Any], cmp_: tuple[str, Any]) -> dict[str, Any]:
-    """The rule table's next action, and the model's explanation of it."""
-    action, rule = rules.next_action(ext[1], cmp_[1])
+def recommendation(
+    c: str, ext: tuple[str, Any], cmp_: tuple[str, Any], top_n: int = rules.TOP_PRIORITIES
+) -> dict[str, Any]:
+    """The rule table's next action, and the model's explanation of it.
+
+    ``top_n`` is how many business priorities count as top: the plan's, as the request said.
+    """
+    action, rule = rules.next_action(ext[1], cmp_[1], top_n=top_n)
     states = rules.element_states(cmp_[1])
     unseen = sorted(e for e, s in states.items() if s and all(x == "not_found" for x in s))
     shown: dict[str, list[str]] = {}

@@ -36,7 +36,12 @@ def test_every_gradeable_criterion_is_killed_by_a_mutant(
     # are key gaps here; tests/unit/evals/test_change_criteria.py kills each with a mutant.
     change = ["change.stale_set", "change.unchanged_set", "research.scope_change"]
     unkeyed = [c for c in REGISTRY if c.startswith("trap.") and c[5:] not in key(name).traps]
-    assert report.key_gaps == sorted(["precision.abstention_count", *change, *unkeyed])
+    # The portfolio checks read a portfolio world's key section, which these worlds lack;
+    # tests/unit/evals/test_portfolio_criteria.py kills each with a mutant.
+    portfolio = [c for c in REGISTRY if c.startswith("portfolio.")]
+    assert report.key_gaps == sorted(
+        ["precision.abstention_count", *change, *unkeyed, *portfolio]
+    )
     gaps = len(report.key_gaps)
     assert (killed, total) == (len(REGISTRY) - gaps, len(REGISTRY) - gaps)
 

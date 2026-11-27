@@ -40,6 +40,7 @@ from aksha.runtime.finalization.types import Finalizing
 from aksha.runtime.interrupts.reducers import CLOSING, INTERRUPT_RAISED, detached
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.checks import run_check
+from aksha.runtime.tasks.errors import TaskUnknown
 from aksha.runtime.tasks.keys import keys_of
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import SETTLED, InstanceRef, InstanceStatus
@@ -108,7 +109,7 @@ class RunState:
 
     def keys(self, path: str) -> tuple[str | None, ...] | None:
         """The keys the Task at ``path`` has now: ``(None,)`` when un-keyed (module doc)."""
-        top = self.tree.node(path).top
+        top = self.tree.key_node(path)
         if top not in self._keys:
             self._keys[top] = instance_keys(self.view, self.tree, self.run, top)
         return self._keys[top]
@@ -119,8 +120,22 @@ class RunState:
         if now == (None,):
             return (InstanceRef(self.run, path, None),)
         found = {k for k in now or () if k is not None}
-        found |= set(self.seen_keys.get(self.tree.node(path).top, ()))
+        found |= set(self.seen_keys.get(self.tree.key_node(path), ()))
         return tuple(InstanceRef(self.run, path, k) for k in sorted(found))
+
+    def children(self, ref: InstanceRef) -> tuple[InstanceRef, ...]:
+        """Every instance of ``ref``'s child Tasks, in declaration order.
+
+        A child shares ``ref``'s key, except a keyed child of an un-keyed parent (a
+        supervisor's workers), which has one instance per key of its own source.
+        """
+        out: list[InstanceRef] = []
+        for path in self.tree.node(ref.task_path).children:
+            if ref.key is None and self.tree.node(path).task.per is not None:
+                out.extend(self.refs(path))
+            else:
+                out.append(InstanceRef(self.run, path, ref.key))
+        return tuple(out)
 
     def status(self, ref: InstanceRef) -> InstanceStatus:
         """The instance's status (module doc)."""
@@ -215,7 +230,7 @@ def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
             last_seq[instance] = e.seq
             ref = InstanceRef.parse(run, instance)
             if ref.key is not None:
-                seen.setdefault(ref.task_path.split("/", 1)[0], set()).add(ref.key)
+                seen.setdefault(_key_node(tree, ref.task_path), set()).add(ref.key)
     open_by: dict[str, list[str]] = {}
     for ident, instance in raised.items():
         if ident not in closed:
@@ -232,6 +247,14 @@ def run_state(view: LogView, tree: CompiledTree, run: str) -> RunState:
     )
 
 
+def _key_node(tree: CompiledTree, path: str) -> str:
+    """The keyed Task binding ``path``; the first segment for a path the tree lacks."""
+    try:
+        return tree.key_node(path)
+    except TaskUnknown:
+        return path.split("/", 1)[0]
+
+
 def instance_keys(
     view: LogView, tree: CompiledTree, run: str, path: str
 ) -> tuple[str | None, ...] | None:
@@ -242,7 +265,7 @@ def instance_keys(
     """
     from aksha.runtime.tasks.view import TaskView  # deferred: the view reads statuses
 
-    node = tree.node(tree.node(path).top)
+    node = tree.node(tree.key_node(path))
     source = node.task.per
     if source is None:
         return (None,)
@@ -269,14 +292,13 @@ def instance_status(view: LogView, tree: CompiledTree, ref: InstanceRef) -> Inst
 def all_instances(state: RunState) -> Iterator[InstanceRef]:
     """Every instance of the run, in pick order: declared order, depth first per key."""
 
-    def under(paths: tuple[str, ...], key: str | None, keyed_parent: bool) -> Iterator[InstanceRef]:
-        for path in paths:
-            refs = (InstanceRef(state.run, path, key),) if keyed_parent else state.refs(path)
-            for ref in refs:
-                yield ref
-                yield from under(state.tree.node(path).children, ref.key, True)
+    def under(refs: tuple[InstanceRef, ...]) -> Iterator[InstanceRef]:
+        for ref in refs:
+            yield ref
+            yield from under(state.children(ref))
 
-    yield from under(state.tree.roots, None, False)
+    for root in state.tree.roots:
+        yield from under(state.refs(root))
 
 
 def statuses(view: LogView, tree: CompiledTree, run: str) -> Mapping[str, InstanceStatus]:

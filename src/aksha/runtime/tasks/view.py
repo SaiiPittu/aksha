@@ -9,7 +9,9 @@ tree and the instance; it has no clock, no model and no network. Its readers:
    readers see now, never on a stale or proposed version.
 2. ``all_latest(kind)``: the current version of every key of a keyed kind.
 3. ``answers()``: the resolved interrupts this instance raised (ADR-P17).
-4. ``child_status(task_id)``: the statuses of a child Task's instances, by key.
+4. ``child_status(task_id)``: the statuses of a child Task's instances, by key (every key
+   of a keyed child below an un-keyed parent); ``spent(key)``: the model turns and tool
+   calls spent below this instance on one key (a supervisor's cost per item).
 5. ``freshness(ref)``: a version's state in the invalidation view (ADR-P05), so a check
    that reads a tool's report can refuse a report the files moved past (D4).
 6. ``called(tool)``: how many calls of ``tool`` this instance completed, so a forced
@@ -112,9 +114,42 @@ class TaskView:
         from aksha.runtime.tasks.status import run_state  # deferred: status builds views
 
         state = run_state(self.log, self.tree, self.instance.run)
-        child = self.instance.child(task_id)
-        self.tree.node(child.task_path)
-        return MappingProxyType({child.key: state.status(child)})
+        path = self.instance.child(task_id).task_path
+        self.tree.node(path)
+        refs = [r for r in state.children(self.instance) if r.task_path == path]
+        return MappingProxyType({r.key: state.status(r) for r in refs})
+
+    def spent(self, key: str | None = None) -> Mapping[str, int]:
+        """Model turns and tool calls this run spent below this instance, on ``key``.
+
+        Counted from the records every budget reads (``budgets.records``): a turn once per
+        (instance, turn), a tool call once per counted call. ``key`` None counts every
+        instance below this one; a key counts the instances that carry it (an item's
+        whole cost across the Tasks that work on it).
+        """
+        from aksha.runtime.budgets.records import charged_turn  # deferred: budgets read tasks
+        from aksha.runtime.policy.events import is_counted_tool_call
+
+        run = self.instance.run
+        own = self.instance.instance
+        turns: set[tuple[str, ...]] = set()
+        calls = 0
+        for e in self.log.events:
+            if e.run != run or e.instance is None or e.instance == own:
+                continue
+            below = InstanceRef.parse(run, e.instance)
+            if not below.task_path.startswith(f"{self.instance.task_path}/"):
+                continue
+            if self.instance.key is not None and below.key != self.instance.key:
+                continue  # a keyed instance's children carry its key; other keys are not below
+            if key is not None and below.key != key:
+                continue
+            charged = charged_turn(e)
+            if charged is not None:
+                turns.add(charged)
+            elif is_counted_tool_call(e):
+                calls += 1
+        return MappingProxyType({"model_turns": len(turns), "tool_calls": calls})
 
     def entries(self, kind: str) -> Mapping[str | None, ArtifactVersion | Unknown]:
         """Every key of ``kind``: its current version, or its explicit unknown (ADR-P24)."""

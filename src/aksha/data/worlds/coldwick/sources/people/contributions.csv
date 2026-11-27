@@ -1,0 +1,21 @@
+row_id,person,full_name,affiliation,position,invention,contribution,date,ip_terms,evidence,synthetic
+SYN-CR-01,SYN-P-02,Jonas Petrov,Coldwick,hardware engineer,CW-01,Designed it and wrote the design note,2026-01-10,"employment, IP assignment",SYN-CW-NOTE-01,true
+SYN-CR-02,SYN-P-03,Lucia Ferreira,Coldwick,data engineer,CW-02,Designed it and wrote the design note,2026-02-11,"employment, IP assignment",SYN-CW-NOTE-02,true
+SYN-CR-03,SYN-P-04,Tariq Haddad,Coldwick,operations lead,CW-03,Designed it and wrote the design note,2026-03-12,"employment, IP assignment",SYN-CW-NOTE-03,true
+SYN-CR-04,SYN-P-01,Mira Okafor,Coldwick,firmware lead,CW-04,Designed it and wrote the design note,2026-04-13,"employment, IP assignment",SYN-CW-NOTE-04,true
+SYN-CR-05,SYN-P-02,Jonas Petrov,Coldwick,hardware engineer,CW-05,Designed it and wrote the design note,2026-05-14,"employment, IP assignment",SYN-CW-NOTE-05,true
+SYN-CR-06,SYN-P-03,Lucia Ferreira,Coldwick,data engineer,CW-06,Designed it and wrote the design note,2026-06-15,"employment, IP assignment",SYN-CW-NOTE-06,true
+SYN-CR-07,SYN-P-04,Tariq Haddad,Coldwick,operations lead,CW-07,Designed it and wrote the design note,2026-01-16,"employment, IP assignment",SYN-CW-NOTE-07,true
+SYN-CR-08,SYN-P-01,Mira Okafor,Coldwick,firmware lead,CW-08,Designed it and wrote the design note,2026-02-17,"employment, IP assignment",SYN-CW-NOTE-08,true
+SYN-CR-09,SYN-P-02,Jonas Petrov,Coldwick,hardware engineer,CW-09,Designed it and wrote the design note,2026-03-18,"employment, IP assignment",SYN-CW-NOTE-09,true
+SYN-CR-10,SYN-P-03,Lucia Ferreira,Coldwick,data engineer,CW-10,Designed it and wrote the design note,2026-04-19,"employment, IP assignment",SYN-CW-NOTE-10,true
+SYN-CR-11,SYN-P-04,Tariq Haddad,Coldwick,operations lead,CW-11,Designed it and wrote the design note,2026-05-20,"employment, IP assignment",SYN-CW-NOTE-11,true
+SYN-CR-12,SYN-P-01,Mira Okafor,Coldwick,firmware lead,CW-12,Designed it and wrote the design note,2026-06-21,"employment, IP assignment",SYN-CW-NOTE-12,true
+SYN-CR-13,SYN-P-02,Jonas Petrov,Coldwick,hardware engineer,CW-13,Designed it and wrote the design note,2026-01-22,"employment, IP assignment",SYN-CW-NOTE-13,true
+SYN-CR-14,SYN-P-03,Lucia Ferreira,Coldwick,data engineer,CW-14,Designed it and wrote the design note,2026-02-23,"employment, IP assignment",SYN-CW-NOTE-14,true
+SYN-CR-15,SYN-P-04,Tariq Haddad,Coldwick,operations lead,CW-15,Designed it and wrote the design note,2026-03-24,"employment, IP assignment",SYN-CW-NOTE-15,true
+SYN-CR-16,SYN-P-01,Mira Okafor,Coldwick,firmware lead,CW-16,Designed it and wrote the design note,2026-04-25,"employment, IP assignment",SYN-CW-NOTE-16,true
+SYN-CR-17,SYN-P-02,Jonas Petrov,Coldwick,hardware engineer,CW-17,Designed it and wrote the design note,2026-05-26,"employment, IP assignment",SYN-CW-NOTE-17,true
+SYN-CR-18,SYN-P-03,Lucia Ferreira,Coldwick,data engineer,CW-18,Designed it and wrote the design note,2026-06-27,"employment, IP assignment",SYN-CW-NOTE-18,true
+SYN-CR-19,SYN-P-04,Tariq Haddad,Coldwick,operations lead,CW-19,Designed it and wrote the design note,2026-01-28,"employment, IP assignment",SYN-CW-NOTE-19,true
+SYN-CR-20,SYN-P-01,Mira Okafor,Coldwick,firmware lead,CW-20,Designed it and wrote the design note,2026-02-29,"employment, IP assignment",SYN-CW-NOTE-20,true

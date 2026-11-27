@@ -8,12 +8,13 @@ in place of the board extension's file ledger, so a test can read its rows.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from aksha.adapters.clock.fake import FakeClock
-from aksha.app import RuntimeConfig, StorageConfig, open_session
+from aksha.app import DEFAULT_EXTENSIONS, RuntimeConfig, StorageConfig, open_session
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.session.service import Session
 from tests.support.events import START
@@ -42,7 +43,9 @@ def config(tmp: Path, **changes: Any) -> RuntimeConfig:
     values: dict[str, Any] = {
         "storage": storage,
         "agent_paths": (scribe_only(tmp),),
-        "extension_paths": (EXTENSIONS,),
+        # The shipped extensions too: a test that loads the shipped agents needs the ones
+        # they name (the patent agent's portfolio kit).
+        "extension_paths": (EXTENSIONS, DEFAULT_EXTENSIONS),
     }
     values.update(changes)
     return RuntimeConfig(**values)
@@ -54,7 +57,7 @@ def env(tmp: Path, **extra: str) -> dict[str, str]:
         "AKSHA_SQLITE_PATH": str(tmp / "var" / "aksha.sqlite"),
         "AKSHA_BLOB_PATH": str(tmp / "var" / "b"),
         "AKSHA_AGENTS": str(scribe_only(tmp)),
-        "AKSHA_EXTENSIONS": str(EXTENSIONS),
+        "AKSHA_EXTENSIONS": os.pathsep.join((str(EXTENSIONS), str(DEFAULT_EXTENSIONS))),
     }
     out.update(extra)
     return out

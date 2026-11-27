@@ -346,7 +346,7 @@ def test_the_definition_loads_and_declares_its_source() -> None:
     from aksha.runtime.definitions.loader import load_agents
 
     root = Path(__file__).resolve().parents[2] / "src" / "aksha" / "agents"
-    (loaded,) = load_agents([root / "patent"], [])
+    (loaded,) = load_agents([root / "patent"], [root.parent / "extensions"])
     assert loaded.agent.name == AGENT.name == "patent"
     assert [(s.name, s.collections) for s in AGENT.sources] == [("inputs", ("input",))]
     assert "patent.packet" in loaded.kinds and loaded.kinds["patent.packet"].reviewable

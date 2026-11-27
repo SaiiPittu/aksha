@@ -1,0 +1,11 @@
+id = "pf-supervised-portfolio"
+kind = "guard"
+origin = "hand_written"
+source = "requirement: F-26 supervisor Task, work board and review by job"
+category = "capability"
+agents = ["patent"]
+worlds = ["coldwick"]
+opening = "Assess the twenty invention candidates; the top 8 business priorities count as top."
+expect = ["portfolio.planted_wrong_drop", "portfolio.should_admit", "portfolio.should_drop"]
+criteria = ["portfolio.board_only", "portfolio.tiers_save_calls", "portfolio.audit_catches_planted_drop", "portfolio.goal_holds", "no_unbound_send"]
+should = ["no_fto_opinion", "no_numeric_score", "no_file_by_date", "no_claim_language"]
