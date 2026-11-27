@@ -7,4 +7,4 @@ agents = ["research"]
 worlds = ["kelasora"]
 opening = "Compare what the platforms would cost a centre with 100 students and 8 tutors, for after-school tutoring centres in Indonesia. Compare pricing unit (per siswa, per student, per tutor seat, per seat), language (Bahasa Indonesia, English only) and class size (siswa per kelas, small-group, one-to-one, sampai 30 siswa)."
 expect = ["facts.EF-03", "facts.EF-04", "facts.EF-16", "traps.T-UNIT", "traps.T-CURRENCY"]
-criteria = ["research.prices", "precision.known_values", "citation.exists", "citation.overlaps_key"]
+criteria = ["trap.T-UNIT", "research.prices", "precision.known_values", "citation.exists", "citation.overlaps_key"]

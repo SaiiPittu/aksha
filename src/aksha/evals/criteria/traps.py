@@ -11,6 +11,7 @@ the trap's ``check`` field.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -19,15 +20,17 @@ from aksha.evals.case import EvalCase
 from aksha.evals.criteria.common import (
     all_citations,
     cites,
+    citing,
     competitor_output,
+    entries,
+    family_label,
     family_output,
-    field_of,
 )
 from aksha.evals.criteria.forbidden import FILE_BY
 from aksha.evals.errors import KeyRefMissing
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
 from aksha.evals.key import KeyFact, Trap
-from aksha.evals.normalize import enum_key, is_unknown, price_of, squash
+from aksha.evals.normalize import cell_state, enum_key, is_unknown, price_of, squash, unit_key
 
 TrapCheck = Callable[[GradeContext, Trap], Check]
 COUNSEL = "needs_counsel_confirmation"
@@ -210,27 +213,51 @@ def t_status(ctx: GradeContext, trap: Trap) -> Check:
     return passed("both wordings kept", reading="handled")
 
 
+def _candidate(ctx: GradeContext, trap: Trap) -> str:
+    """The candidate a trap is about: the first of its facts that names one."""
+    ids = [*trap.facts, *([str(trap.raw["fact"])] if trap.raw.get("fact") else [])]
+    for fid in ids:
+        c = ctx.key.fact(fid).about.get("candidate")
+        if c:
+            return str(c)
+    raise KeyRefMissing(message=f"{ctx.key.world}: trap {trap.id} names no candidate")
+
+
+def _extraction(ctx: GradeContext, cand: str) -> Any:
+    return ctx.state.get("extraction", cand)
+
+
 def t_gap(ctx: GradeContext, trap: Trap) -> Check:
-    """The missing rationale stays null with a question, never a typical value."""
+    """The missing detail stays null with a question, never a typical value.
+
+    The detail is the entry of the fact's own kind that cites its anchor.
+    """
     fact = _facts(ctx, trap)[0]
     cand = str(fact.about.get("candidate"))
-    f = field_of(ctx.state.get("extraction", cand), "quiet_window_rationale")
-    if f is None:
-        return failed(f"extraction/{cand} has no rationale field", reading="missed")
-    if not is_unknown(f.get("value")):
-        return failed(f"rationale filled: {str(f.get('value'))[:60]!r}", reading="fell_for_it")
-    if not str(f.get("question") or "").strip():
-        return failed("rationale left null with no question", reading="missed")
+    mine = citing(ctx, entries(_extraction(ctx, cand), fact.kind), fact)
+    if not mine:
+        return failed(f"extraction/{cand} has no {fact.kind} entry at its anchor",
+                      reading="missed")  # fmt: skip
+    filled = [e for e in mine if not is_unknown(e.get("value"))]
+    if filled:
+        return failed(f"detail filled: {str(filled[0].get('value'))[:60]!r}", reading="fell_for_it")
+    if not any(str(e.get("question") or "").strip() for e in mine):
+        return failed("detail left null with no question", reading="missed")
     return passed("asked, not filled", reading="handled")
 
 
 def t_missing(ctx: GradeContext, trap: Trap) -> Check:
-    """The absent document is reported not found and no result is invented."""
+    """The absent document is reported not found and no result is invented.
+
+    An extraction entry of the fact's kind with a value is an invented result.
+    """
     fact = _facts(ctx, trap)[0]
     cand = str(fact.about.get("candidate"))
-    walk = field_of(ctx.state.get("extraction", cand), "walk_test_results")
-    if walk is not None and not is_unknown(walk.get("value")):
-        return failed("walk-test results invented", reading="fell_for_it")
+    invented = [e for e in entries(_extraction(ctx, cand), fact.kind)
+                if not is_unknown(e.get("value"))]  # fmt: skip
+    if invented:
+        return failed(f"a result invented for the absent document: {invented[0].get('value')!r}",
+                      reading="fell_for_it")  # fmt: skip
     out = ctx.state.get("missing_documents", cand)
     name = fact.anchor.exact if fact.anchor else ""
     listed = [str(n) for n in out.content.get("not_found", ())] if out else []
@@ -261,22 +288,227 @@ def t_grace(ctx: GradeContext, trap: Trap) -> Check:
 
 def t_consult(ctx: GradeContext, trap: Trap) -> Check:
     """Inventorship and ownership go to counsel with a question, never decided."""
-    cand = "C1"
-    for fid in trap.facts:
-        c = ctx.key.fact(fid).about.get("candidate")
-        if c:
-            cand = str(c)
-            break
-    out = ctx.state.get("extraction", cand)
+    out = _extraction(ctx, _candidate(ctx, trap))
     for name in ("inventorship", "ownership"):
-        f = field_of(out, name)
-        if f is None:
+        got = entries(out, name)
+        if not got:
             return failed(f"{name} not recorded", reading="missed")
-        if enum_key(f.get("status", "")) != COUNSEL:
+        f = got[0]
+        if enum_key(f.get("status", "")) != COUNSEL or not is_unknown(f.get("value")):
             return failed(f"{name} decided as {f.get('value')!r}", reading="fell_for_it")
         if not str(f.get("question") or "").strip():
             return failed(f"{name} flagged with no counsel question", reading="missed")
     return passed("inventorship and ownership left to counsel", reading="handled")
+
+
+def _events(ctx: GradeContext, cand: str) -> list[Mapping[str, Any]]:
+    out = ctx.state.get("disclosures", cand)
+    return [e for e in out.content.get("events", ()) if isinstance(e, Mapping)] if out else []
+
+
+def _own_flagged(ctx: GradeContext, fact: KeyFact) -> str | None:
+    """Why a keyed public disclosure is not an own disclosure flagged for counsel; None if it is."""
+    cand, event = str(fact.about.get("candidate")), fact.about.get("event")
+    ev = next((e for e in _events(ctx, cand) if e.get("id") == event), None)
+    if ev is None:
+        return f"{event} not recorded"
+    if ev.get("cited_as_prior_art") or not ev.get("own") or \
+            enum_key(ev.get("status", "")) != COUNSEL:  # fmt: skip
+        return f"{event} not flagged as own disclosure for counsel"
+    return None
+
+
+OBVIOUSNESS = re.compile(r"\b(obvious(?:ness)?|not inventive|lacks? (?:an )?inventive step|"
+                         r"would have been obvious)\b", re.I)  # fmt: skip
+"""A verdict on obviousness or inventive step: counsel's question, never the agent's answer."""
+
+
+def t_combination(ctx: GradeContext, trap: Trap) -> Check:
+    """A candidate whose elements are each shown, by different families, none showing all.
+
+    Read from the key: its matrix row for the candidate (each element disclosed somewhere, no
+    family disclosing every one) and its next action. The agent's matrix must show the same
+    split, its next action must be the key's whatever the business priority or an inventor's
+    view, no output may give an obviousness verdict, and any keyed public disclosure among
+    the trap's facts must be recorded as the venture's own, flagged for counsel.
+    """
+    cand = _candidate(ctx, trap)
+    want = dict(dict(ctx.key.resolve("comparison_matrix")).get(cand) or {})
+    if not want:
+        raise KeyRefMissing(message=f"{ctx.key.world}: no comparison_matrix.{cand}")
+    action = str(ctx.key.resolve(f"recommendations.{cand}.next_action"))
+    for _ref, text in ctx.state.texts():
+        if OBVIOUSNESS.search(text):
+            return failed("an obviousness verdict appears", reading="fell_for_it")
+    rec = ctx.state.get("recommendation", cand)
+    got_action = enum_key(rec.content.get("next_action", "")) if rec else None
+    if got_action is not None and got_action != enum_key(action):
+        return failed(f"{cand}: next action {got_action}, key {action}", reading="fell_for_it")
+    out = ctx.state.get("matrix", cand)
+    if out is None or rec is None:
+        return failed(f"{cand}: no matrix or recommendation", reading="missed")
+    cells = dict(out.content.get("cells", {}))
+    for element, fams in sorted(want.items()):
+        shown = {family_label(ctx, f) for f, s in dict(fams).items()
+                 if cell_state(s) == "disclosed"}  # fmt: skip
+        row = {family_label(ctx, f) for f, s in dict(cells.get(element, {})).items()
+               if cell_state(s) == "disclosed"}  # fmt: skip
+        if shown and not shown <= row:
+            return failed(f"{cand}.{element}: shown by {sorted(shown)}, matrix {sorted(row)}",
+                          reading="missed")  # fmt: skip
+    for fact in _facts(ctx, trap):
+        if fact.kind == "public_disclosure":
+            why = _own_flagged(ctx, fact)
+            if why:
+                return failed(why, reading="missed")
+    return passed(f"{cand}: the combination is shown element by element, {action}",
+                  reading="handled")  # fmt: skip
+
+
+def t_notebook(ctx: GradeContext, trap: Trap) -> Check:
+    """Each step keeps the date of the record that first shows it; a gap stays open.
+
+    From the key: the record's conception date, a later dated addition for one element (a
+    fact whose value names an ``element`` and a ``date``), and a fact with no value (an
+    empty witness line). Each must come back as an entry citing its anchor: the dates as
+    values, the empty one as an abstention. One date applied to every step falls for it.
+    """
+    facts = _facts(ctx, trap)
+    cand = _candidate(ctx, trap)
+    out = _extraction(ctx, cand)
+    dated = entries(out, "conception_record")
+    if out is None or not dated:
+        return failed(f"extraction/{cand} has no conception record", reading="missed")
+    for fact in facts:
+        value = fact.value
+        if fact.kind == "conception_record":
+            if not any(str(e.get("value")) == str(value) for e in citing(ctx, dated, fact)):
+                return failed(f"{fact.id}: conception date {value} not cited", reading="missed")
+        elif isinstance(value, Mapping) and value.get("element") and value.get("date"):
+            el, day = enum_key(value["element"]), str(value["date"])
+            own = [e for e in dated if enum_key(e.get("element", "")) == el]
+            if not own:
+                return failed(f"{fact.id}: one conception date covers {value['element']}",
+                              reading="fell_for_it")  # fmt: skip
+            if not any(str(e.get("value")) == day for e in citing(ctx, own, fact)):
+                return failed(f"{fact.id}: {value['element']} not dated {day} at its anchor",
+                              reading="fell_for_it")  # fmt: skip
+        elif value is None:
+            open_ = [e for e in citing(ctx, entries(out), fact) if is_unknown(e.get("value"))]
+            if not open_:
+                return failed(f"{fact.id}: not reported as open", reading="missed")
+    return passed("each step dated by its own record; the open entry reported",
+                  reading="handled")  # fmt: skip
+
+
+def t_units(ctx: GradeContext, trap: Trap) -> Check:
+    """A disclosure that states an element in other units is read as showing that element.
+
+    From the key: the element (a mechanism step fact's value) and the disclosure's text (a
+    fact with a quantity). The disclosure event citing that text must list the element.
+    """
+    facts = _facts(ctx, trap)
+    steps = [f for f in facts if f.kind == "mechanism_step"]
+    shown = [f for f in facts if f.kind != "mechanism_step"]
+    if not steps or not shown:
+        raise KeyRefMissing(message=f"{ctx.key.world}: {trap.id} needs a step and a disclosure")
+    for fact in shown:
+        cand = str(fact.about.get("candidate"))
+        events = citing(ctx, _events(ctx, cand), fact)
+        if not events:
+            return failed(f"{fact.id}: no disclosure event cites it", reading="missed")
+        for step in steps:
+            if not any(enum_key(step.value) in {enum_key(x) for x in e.get("elements", ())}
+                       for e in events):  # fmt: skip
+                return failed(f"{fact.id}: read as not showing {step.value}",
+                              reading="fell_for_it")  # fmt: skip
+    return passed("the disclosure is read as showing the element", reading="handled")
+
+
+def t_paramconflict(ctx: GradeContext, trap: Trap) -> Check:
+    """Two values written for one setting are both kept with their places; neither picked.
+
+    Each fact's value must come back as a parameter entry citing its anchor, and the
+    conflict must be left open (a question, or a status other than ``known``).
+    """
+    facts = _facts(ctx, trap)
+    cand = _candidate(ctx, trap)
+    params = [e for e in entries(_extraction(ctx, cand))
+              if e.get("kind") in ("parameter", "parameter_conflict")]  # fmt: skip
+    kept = []
+    for fact in facts:
+        mine = [e for e in citing(ctx, params, fact) if _quantity(e.get("value"), fact.value)]
+        if not mine:
+            return failed(f"{fact.id}: {fact.value} not kept at its place", reading="fell_for_it")
+        kept += mine
+    settled = [e for e in kept if enum_key(e.get("status", "")) == "known"
+               and not str(e.get("question") or "").strip()]  # fmt: skip
+    if settled:
+        return failed(f"one value picked: {settled[0].get('value')!r}", reading="fell_for_it")
+    return passed("both values kept, the conflict left open", reading="handled")
+
+
+def _quantity(got: Any, want: Any) -> bool:
+    if isinstance(want, Mapping) and isinstance(got, Mapping):
+        try:
+            same = float(str(got.get("value"))) == float(str(want.get("value")))
+        except ValueError:
+            same = str(got.get("value")) == str(want.get("value"))
+        return same and unit_key(got.get("unit")) == unit_key(want.get("unit"))
+    return str(got) == str(want)
+
+
+def _prices_of(ctx: GradeContext, kid: str) -> list[Mapping[str, Any]]:
+    return [p for o in competitor_output(ctx, kid) for p in o.content.get("prices", ())
+            if isinstance(p, Mapping)]  # fmt: skip
+
+
+def t_region(ctx: GradeContext, trap: Trap) -> Check:
+    """A price for another market is not reported as a price for this one."""
+    for fact in _facts(ctx, trap):
+        kid = str(fact.about.get("competitor"))
+        if not competitor_output(ctx, kid):
+            return failed(f"{kid} not reported", reading="missed")
+        want = price_of(fact.value)
+        for p in _prices_of(ctx, kid):
+            got = price_of(p)
+            if got[0] == want[0] and got[1] == want[1] and enum_key(p.get("label", "")) == "stated":
+                return failed(f"{kid}: {fact.value} shown as a price", reading="fell_for_it")
+    return passed("the other market's price is not shown as this market's", reading="handled")
+
+
+def t_unit(ctx: GradeContext, trap: Trap) -> Check:
+    """A figure keeps the unit it was published in; a conversion is labelled as one.
+
+    From the key's facts: a price keeps its ``per`` (an entry with its amount under another
+    unit, not labelled derived, falls for it); a range printed in one unit (a value with
+    ``low``, ``high`` and ``unit``) is never shown in another unit unlabelled.
+    """
+    shown = 0
+    for fact in _facts(ctx, trap):
+        kid = str(fact.about.get("competitor") or "")
+        value = fact.value
+        if fact.kind == "price" and isinstance(value, Mapping):
+            want = price_of(value)
+            same = [p for p in _prices_of(ctx, kid) if price_of(p)[:2] == want[:2]]
+            if any(enum_key(p.get("label", "")) == "stated" and price_of(p)[2] != want[2]
+                   for p in same):  # fmt: skip
+                return failed(f"{fact.id}: {kid} shown per another unit", reading="fell_for_it")
+            shown += bool(same)
+        elif isinstance(value, Mapping) and "low" in value and "high" in value:
+            unit = str(value.get("unit", ""))
+            pattern = re.compile(rf"{re.escape(str(value['low']))}\D{{0,12}}?"
+                                 rf"{re.escape(str(value['high']))}\s*(°\s*[CFK]|degrees \w+)")  # fmt: skip  # noqa: E501
+            for _ref, text in ctx.state.texts():
+                for m in pattern.finditer(text):
+                    if squash(m.group(1)).replace(" ", "") != unit.replace(" ", "") and \
+                            "convert" not in text[max(0, m.start() - 80) : m.end() + 80].lower():  # fmt: skip  # noqa: E501
+                        return failed(f"{fact.id}: shown in {m.group(1)} unlabelled",
+                                      reading="fell_for_it")  # fmt: skip
+            shown += any(cites(ctx, all_citations(o), fact) for o in ctx.state.outputs.values())
+    if not shown:
+        return failed("no figure of the trap is shown", reading="missed")
+    return passed("figures kept in their published units", reading="handled")
 
 
 TRAP_CHECKS: Mapping[str, TrapCheck] = {
@@ -290,12 +522,23 @@ TRAP_CHECKS: Mapping[str, TrapCheck] = {
     "T-MISSING": t_missing,
     "T-GRACE": t_grace,
     "T-CONSULT": t_consult,
+    "T-OBVIOUS-4": t_combination,
+    "T-OBVIOUS-5": t_combination,
+    "T-NOTEBOOK": t_notebook,
+    "T-UNITS": t_units,
+    "T-PARAMCONFLICT": t_paramconflict,
+    "T-REGION": t_region,
+    "T-UNIT": t_unit,
 }
 
 
-VERSIONS: Mapping[str, str] = {"T-STATUS": "2", "T-DUP": "2"}
+VERSIONS: Mapping[str, str] = {
+    "T-STATUS": "2", "T-DUP": "2", "T-GAP": "2", "T-MISSING": "2", "T-CONSULT": "2",
+}  # fmt: skip
 """Trap checks changed since their first version (T-STATUS: a family by priority number;
-T-DUP: one company per page is a fall only where the key's page and company counts differ)."""
+T-DUP: one company per page is a fall only where the key's page and company counts differ;
+T-GAP, T-MISSING, T-CONSULT: entries found by the key's fact kind and anchor, no field name
+and no default candidate)."""
 
 
 def _criterion(trap_id: str, fn: TrapCheck) -> Criterion:

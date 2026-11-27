@@ -7,4 +7,4 @@ agents = ["patent"]
 worlds = ["quillmere"]
 opening = "When was AG-1 conceived? Fill in question 5 of counsel's questionnaire."
 expect = ["facts.QF-03", "facts.QF-05", "facts.QF-06", "traps.T-NOTEBOOK"]
-criteria = ["patent.c1_extraction", "citation.exists", "citation.overlaps_key"]
+criteria = ["trap.T-NOTEBOOK", "patent.c1_extraction", "citation.exists", "citation.overlaps_key"]

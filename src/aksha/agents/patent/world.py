@@ -46,6 +46,7 @@ the runtime mints it and a completion check verifies every quote an artifact sav
 from __future__ import annotations
 
 import hashlib
+import itertools
 import json
 import re
 from collections.abc import Mapping, Sequence
@@ -68,6 +69,7 @@ from aksha.runtime.api import (
     find_dates,
     parse_date,
     read_rows,
+    record_sections,
     segment,
     sniff_format,
     span_draft,
@@ -189,6 +191,37 @@ def slug(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-")
 
 
+UNIT_WORDS = (
+    "ms", "milliseconds?", "s", "secs?", "seconds?", "min", "mins?", "minutes?", "h", "hrs?",
+    "hours?", "days?", "nights?", "weeks?", "months?", "years?", "mm", "cm", "m", "km", "µm",
+    "mg", "g", "kg", "N·m", "Nm", "N", "kN", "mA", "A", "mV", "V", "W", "kW", "mW", "Hz", "kHz",
+    "MHz", "dB", "%", "°C", "°F", "K", "bpm", "rpm", "Pa", "kPa", "bar", "L", "ml", "mL",
+    "degrees?", "percent", "g RMS", "% VWC", "VWC", "m3/m3",
+)  # fmt: skip
+"""Units of measure as specifications write them (SI symbols, time words, percentages)."""
+_QTY = re.compile(
+    r"(?<![\w.])(-?\d+(?:[.,]\d+)?)(?:-|\s*)(?:(?:consecutive|full|whole|more|extra|"
+    r"additional)\s+)?(" + "|".join(sorted(UNIT_WORDS, key=len, reverse=True)) + r")(?![\w])"
+)  # fmt: skip
+
+
+def quantity(text: str) -> tuple[int, str, str] | None:
+    """The first number in ``text`` written with a unit: where it starts, its value, its unit.
+
+    The unit is a unit of measure (:data:`UNIT_WORDS`), with a word between allowed
+    (``6 consecutive hours``); a date's day (``2 June``) or a count of things is no quantity.
+    """
+    m = _QTY.search(text)
+    if m is None:
+        return None
+    return m.start(), m.group(1), m.group(2)
+
+
+def quantities(text: str) -> list[tuple[int, int]]:
+    """Every quantity's range in ``text`` (:func:`quantity`)."""
+    return [m.span() for m in _QTY.finditer(text)]
+
+
 def _line_of(raw: str, start: int, end: int) -> tuple[int, int]:
     s = raw.rfind("\n", 0, start) + 1
     e = raw.find("\n", end)
@@ -199,17 +232,194 @@ def passages(found: ReturnedText, fmt: str) -> tuple[list[Segment], list[SpanDra
     """The record's segments, and one draft per segment widened to its whole lines.
 
     A text's heading or list item is shown with its marks (``## Mechanism``, ``1. ...``),
-    as a reader sees the document; an HTML block or a JSON record is shown as it is.
+    as a reader sees the document; an HTML block or a JSON record is shown as it is (a
+    unit of a JSON record of records, :func:`record_units`, as its own text).
     """
     raw = found.text
     segs = [Segment("data", 0, len(raw), raw)] if fmt == "json" else list(segment(raw, fmt))
     out = []
     for s in segs:
         a, b = (s.start, s.end) if fmt in ("html", "json") else _line_of(raw, s.start, s.end)
+        if fmt == "xml" and s.attrs.get("key"):  # an element's text, shown with its tag
+            tag = raw.rfind("<" + s.attrs["key"], max(0, a - 200), s.start)
+            a = _line_of(raw, tag, tag)[0] if tag >= 0 else a
         if s.kind == "paragraph" and fmt not in ("html", "json"):
             a, b = _line_of(raw, s.start, s.start)[0], _line_of(raw, s.end - 1, s.end)[1]
         out.append(SpanDraft(found.source, found.record_id, found.version, a, b))
     return segs, out
+
+
+_LABEL = re.compile(r"^[A-Z]{1,3}\d{1,3}$")
+"""An element label a document gives a step itself (``E2``, ``G1``)."""
+_MARK_BEFORE = re.compile(
+    r"(\(\w{1,3}\)|\b[A-Za-z]{1,3}\d{0,3}[.)]|\b\d{1,3}[.)]|\b[A-Z]{1,3}\d{1,3}:?)\s*$"
+)
+_LEADING_LABEL = re.compile(r"^([A-Z]{1,3}\d{1,3})(?::|\.|\s{2,})\s*")
+
+
+def step_marker(raw: str, segs: Sequence[Segment], start: int, text: str) -> str:
+    """The mark a step is written with: its list marker, or the label right before it.
+
+    ``(b2)``, ``E2.``, ``3)``, or a label leading its own text (``A1: ...``); "" when the
+    step is written as plain sentences.
+    """
+    seg = next((g for g in segs if g.start <= start < g.end or g.start == start), None)
+    mark = seg.attrs.get("marker", "") if seg is not None else ""
+    if not mark or mark in "-*+•▪◦":
+        line_start = raw.rfind("\n", 0, start) + 1
+        before = _MARK_BEFORE.search(raw[line_start:start])
+        mark = before.group(1) if before else ""
+    if not mark or mark in "-*+•▪◦":
+        lead = _LEADING_LABEL.match(text.strip())
+        mark = lead.group(1) if lead else ""
+    return mark.strip().strip("().:").strip()
+
+
+def _mark_key(mark: str) -> tuple[int, str, int]:
+    m = re.fullmatch(r"([A-Za-z]*)(\d*)", mark)
+    if m is None:
+        return (2, mark, 0)
+    letters, digits = m.group(1).lower(), m.group(2)
+    if letters and not digits:
+        return (0, letters, 0)
+    if letters:
+        return (0, letters, int(digits))
+    return (1, "", int(digits or 0))
+
+
+def label_steps(steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Give each step its element label, in place: the document's own, else ``S1``...
+
+    A step written with its own label (``E2``, ``G1``) keeps it. Steps written with list
+    marks are numbered in the order of their marks, so a step added later between two
+    others (``(b2)`` after ``(b)``) takes its place in the sequence; plain steps are
+    numbered in the order they are written.
+    """
+    marks = [str(s.get("marker", "")) for s in steps]
+    if marks and all(_LABEL.match(m) for m in marks) and len(set(marks)) == len(marks):
+        for s, m in zip(steps, marks, strict=True):
+            s["label"] = m
+        return steps
+    if all(marks) and len(set(marks)) == len(marks):
+        order = sorted(range(len(steps)), key=lambda i: _mark_key(marks[i]))
+    else:
+        order = list(range(len(steps)))
+    for rank, i in enumerate(order, start=1):
+        steps[i]["label"] = f"S{rank}"
+    steps.sort(key=lambda s: int(str(s["label"])[1:]) if str(s["label"])[1:].isdigit() else 0)
+    return steps
+
+
+def step_date(raw: str, start: int, end: int, record_date: Any) -> dict[str, Any] | None:
+    """A date written on a step's own line, when it differs from the record's date.
+
+    A notebook's margin note (``[margin, added 2 Apr 2026]``) dates the step it adds;
+    the step keeps that date as its own record, never the page's.
+    """
+    a = raw.rfind("\n", 0, start) + 1
+    b = raw.find("\n", end)
+    line = raw[a : len(raw) if b < 0 else b]
+    found = find_dates(line, "dmy")
+    if not found:
+        return None
+    iso, ds, de = found[0]
+    if record_date is not None and iso == str(record_date):
+        return None
+    note = line.strip()
+    for m in re.finditer(r"\[[^\[\]]*\]|\([^()]*\)", line):
+        if m.start() <= ds and de <= m.end():
+            note = m.group(0)  # the bracketed note that dates it
+            break
+    return {"date": iso, "date_as_written": line[ds:de], "line": note}
+
+
+def _iso_dates(text: str) -> set[str]:
+    """Every date ``text`` writes, as ISO."""
+    return {iso for iso, _, _ in find_dates(text, "dmy")}
+
+
+def _section_after(raw: str, segs: Sequence[Segment], at: int) -> str:
+    """The text under the heading at ``at``, up to the next heading of its level or above."""
+    head = next((g for g in segs if g.kind == "heading" and g.start <= at < g.end + 1), None)
+    if head is None:
+        return ""
+    nxt = next((g.start for g in segs if g.kind == "heading" and g.start > head.end
+                and g.level <= head.level), len(raw))  # fmt: skip
+    return raw[head.end : nxt]
+
+
+_ID_TOKEN = re.compile(r"(?<![\w-])([A-Z][A-Z0-9]{0,7}(?:-[A-Z][A-Z0-9]{0,7})*-\d{1,6})(?![\w-])")
+"""An identifier as ventures write one for an idea or a record (``XX-123``, ``SYN-XX-12``)."""
+
+
+def id_tokens(text: str) -> list[str]:
+    """The identifiers ``text`` names, in order, each once."""
+    return list(dict.fromkeys(_ID_TOKEN.findall(text)))
+
+
+def _brackets(raw: str) -> dict[int, tuple[int, int]]:
+    """Each JSON object's ``{`` offset: its end and its parent container's ``{`` or ``[``."""
+    out: dict[int, tuple[int, int]] = {}
+    stack: list[int] = []
+    i, n = 0, len(raw)
+    while i < n:
+        ch = raw[i]
+        if ch == '"':
+            i += 1
+            while i < n and raw[i] != '"':
+                i += 2 if raw[i] == "\\" else 1
+        elif ch in "{[":
+            stack.append(i)
+        elif ch in "}]" and stack:
+            opened = stack.pop()
+            if raw[opened] == "{":
+                out[opened] = (i + 1, stack[-1] if stack else -1)
+        i += 1
+    return out
+
+
+def record_units(
+    raw: str, fmt: str, segs: Sequence[Segment], sections: bool = True
+) -> list[tuple[int, int]]:
+    """The units a record may hold one thing each in, as raw ranges, by structure alone.
+
+    A JSON value: each object of its largest list of objects (a search export's hits, a
+    tracker's issues). XML: each element that repeats under one parent. A text: its parts
+    between rule lines when it has two or more, else its sections (``record_sections``).
+    A record with fewer than two units is one unit. With ``sections`` false a text's
+    headings do not cut it: a note's sections are parts of one thing, its rule lines are
+    not. What a unit holds is the extraction's answer; which units are one thing is
+    :meth:`SourceWorld.candidates`' join.
+    """
+    whole = [(0, len(raw))]
+    if fmt in ("json", "jsonl"):
+        objs = _brackets(raw)
+        by_parent: dict[int, list[tuple[int, int]]] = {}
+        for start, (end, parent) in objs.items():
+            if (parent >= 0 and raw[parent] == "[") or (fmt == "jsonl" and parent < 0):
+                by_parent.setdefault(parent, []).append((start, end))
+        best = max(by_parent.values(), key=len, default=[])
+        return sorted(best) if len(best) >= 2 else whole
+    if fmt == "xml":
+        heads = [g for g in segs if g.kind == "heading"]
+        levels = [g.level for g in heads]
+        level = next((lv for lv in sorted(set(levels)) if levels.count(lv) >= 2), None)
+        starts = [raw.rfind("\n", 0, g.start) + 1 for g in heads if g.level == level]
+        if len(starts) < 2:
+            return whole
+        ends = [*starts[1:], len(raw)]
+        return list(zip(starts, ends, strict=True))
+    rules = [raw.rfind("\n", 0, g.start) + 1 for g in segs if g.kind == "rule"]
+    if len(rules) >= 2:
+        bounds = [0, *rules, len(raw)]
+        return [(a, b) for a, b in itertools.pairwise(bounds) if raw[a:b].strip()]
+    parts = record_sections(list(segs)) if sections else []
+    if len(parts) < 2:
+        return whole
+    starts = [raw.rfind("\n", 0, segs[a].start) + 1 if a < len(segs) else len(raw)
+              for a, _ in parts]  # fmt: skip
+    starts[0] = 0
+    return list(zip(starts, [*starts[1:], len(raw)], strict=True))
 
 
 @dataclass(frozen=True)
@@ -294,6 +504,52 @@ def _pipe_tables(found: ReturnedText) -> list[tuple[list[str], list[dict[str, An
     return out
 
 
+_YES = frozenset({"yes", "y", "true", "public", "1"})
+_NO = frozenset({"no", "n", "false", "private", "0"})
+
+
+def yes_no(value: str) -> str:
+    """A yes-or-no cell as ``yes`` or ``no`` (``true``, ``Y``, ``public``); else as written."""
+    v = value.strip().lower()
+    return "yes" if v in _YES else "no" if v in _NO else value.strip()
+
+
+_KV_LINE = re.compile(r"^([A-Z][A-Za-z][A-Za-z ]{0,24}):[ \t]*(.*?)[ \t]*$")
+
+
+def _key_value_tables(raw: str) -> list[tuple[list[str], list[dict[str, Any]]]]:
+    """Records written as blocks of ``Key: value`` lines, one block per record.
+
+    A register kept as text (``Event: ...``, ``Date: ...``, a blank line, the next block):
+    a table when two or more blocks share at least three keys. An empty value stays empty.
+    """
+    blocks: list[list[tuple[str, int, int, int]]] = [[]]
+    at = 0
+    for line in raw.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        m = _KV_LINE.match(body)
+        if m:
+            blocks[-1].append((m.group(1).strip(), at + m.start(2), at + m.end(2), at))
+        elif blocks[-1]:
+            blocks.append([])
+        at += len(line)
+    blocks = [b for b in blocks if len(b) >= 2]
+    if len(blocks) < 2:
+        return []
+    keys = [k for b in blocks for k, *_ in b]
+    shared = [k for k in dict.fromkeys(keys) if keys.count(k) >= 2]
+    if len(shared) < 3:
+        return []
+    shared = list(dict.fromkeys(keys))  # every key a block holds is a column
+    rows = []
+    for b in blocks:
+        row: dict[str, Any] = {k: raw[s:e] for k, s, e, _ in b}
+        row["_start"], row["_end"] = b[0][3], b[-1][2]
+        row["_cells"] = {k: (s, e) for k, s, e, _ in b}
+        rows.append(row)
+    return [(shared, rows)]
+
+
 class OneRecord:
     """A record reader holding one text: a fetched web page, read as the inputs are.
 
@@ -334,7 +590,7 @@ class SourceWorld:
     """Every input's record ID, when the reader holds only some of them (a model that read
     some inputs knows the others' names from a listing): what a reference is matched against."""
     _cache: dict[str, ReturnedText] = field(default_factory=dict)
-    _asked: dict[tuple[str, str], Any] = field(default_factory=dict)
+    _asked: dict[tuple[Any, ...], Any] = field(default_factory=dict)
 
     def over(
         self,
@@ -396,6 +652,17 @@ class SourceWorld:
         key = name_key(name)
         return bool(key) and any(name_key(r) == key for r in self.all_names())
 
+    def holding(self, ref: str, besides: str) -> str | None:
+        """The one other input whose text names ``ref`` in its head (a document's own reference).
+
+        An agreement exported from a word processor carries its reference in its title
+        line, not in its file name.
+        """
+        pattern = re.compile(rf"(?<![\w-]){re.escape(ref)}(?![\w-])")
+        found = [r for r in self.records() if r != besides
+                 and pattern.search("\n".join(self.raw(r).splitlines()[:8]))]  # fmt: skip
+        return found[0] if len(found) == 1 else None
+
     def file_naming(self, ref: str) -> bool:
         """Whether any input's name holds ``ref``'s words (a referenced document)."""
         key = name_key(ref)
@@ -425,12 +692,20 @@ class SourceWorld:
         """Every input with its format and kind."""
         return [{"record": r, "format": self.fmt(r), "kind": self.kind(r)} for r in self.records()]
 
-    def _extract(self, alias: str, record: str) -> tuple[Read, list[Segment]]:
-        slot = (alias, record)
+    def _extract(
+        self, alias: str, record: str, unit: tuple[tuple[int, int], ...] | None = None
+    ) -> tuple[Read, list[Segment]]:
+        """``alias``'s reading of ``record``, or of the passages inside ``unit``'s ranges."""
+        slot = (alias, record) if unit is None else (alias, record, unit)
         if slot not in self._asked:
             found = self.found(record)
             fmt = self.fmt(record)
             segs, drafts = passages(found, fmt)
+            if unit is not None and fmt == "json":  # a record of records: each its own text
+                drafts = [SpanDraft(found.source, found.record_id, found.version, a, b)
+                          for a, b in unit]  # fmt: skip
+            elif unit is not None:
+                drafts = [d for d in drafts if any(a <= d.start < b for a, b in unit)]
             judged = (
                 self.models.extract(alias, found, drafts)
                 if self.models is not None and drafts
@@ -484,6 +759,11 @@ class SourceWorld:
             role = got.get(f"c{i}")
             if role and role != "other" and role not in out:
                 out[role] = c
+        people = "name" in out or "person_id" in out
+        if people and "contributed" not in out and "content_shown" in out and "date" not in out:
+            out["contributed"] = out.pop("content_shown")  # what a person did, in a people table
+        if "name" in out and "person_id" not in out and "record_id" in out:
+            out["person_id"] = out.pop("record_id")  # a table of people: its ID is the person's
         return out
 
     def _tables(self) -> list[Table]:
@@ -493,7 +773,7 @@ class SourceWorld:
                 continue
             found = self.found(r)
             fmt = self.fmt(r)
-            if fmt in ("csv", "json"):
+            if fmt in ("csv", "json", "jsonl", "yaml"):
                 try:
                     rows_ = read_rows(found.text, fmt)
                 except ValueError:
@@ -508,7 +788,7 @@ class SourceWorld:
                 out.append(Table(r, found.version, found.text, header, self._roles(header, rows),
                                  rows))  # fmt: skip
             elif fmt in ("markdown", "text", "email", "html"):
-                for header, rows in _pipe_tables(found):
+                for header, rows in [*_pipe_tables(found), *_key_value_tables(found.text)]:
                     out.append(Table(r, found.version, found.text, header,
                                      self._roles(header, rows), rows))  # fmt: skip
         return out
@@ -553,34 +833,106 @@ class SourceWorld:
 
     # --- invention notes ----------------------------------------------------------------
 
-    def _note(self, record: str) -> tuple[Read, list[Segment]] | None:
-        """The record's invention reading, when it describes an invention.
+    def _units(self, record: str, sections: bool = True) -> list[tuple[int, int]]:
+        found = self.found(record)
+        fmt = self.fmt(record)
+        segs, _ = passages(found, fmt)
+        return record_units(found.text, fmt, segs, sections)
+
+    def _groups(self, record: str) -> list[tuple[tuple[int, int], ...]]:
+        """The record's units joined into one group per thing they are about.
+
+        A unit whose head (its first lines) names an identifier starts a group, or joins
+        the group of the same identifier (a notebook's later page on the same idea); a unit
+        whose head names none continues the group above it. With one group, the record is
+        read whole.
+        """
+        raw = self.raw(record)
+        groups: dict[str, list[tuple[int, int]]] = {}
+        order: list[str] = []
+        current = ""
+        for a, b in self._units(record, sections=False):
+            head = "\n".join(ln for ln in raw[a:b].splitlines() if ln.strip())
+            head = "\n".join(head.splitlines()[:3])
+            ids = id_tokens(head)
+            key = ids[0] if ids else (current or f"@{a}")
+            if key not in groups:
+                groups[key], current = [], key
+                order.append(key)
+            elif ids:
+                current = key
+            groups[key].append((a, b))
+        if len(order) < 2:
+            return [((0, len(raw)),)]
+        return [tuple(groups[k]) for k in order]
+
+    def _named_elsewhere(self, token: str, record: str) -> int:
+        """How many other inputs name ``token``."""
+        pattern = re.compile(rf"(?<![\w-]){re.escape(token)}(?![\w-])")
+        return sum(1 for r in self.records() if r != record and pattern.search(self.raw(r)))
+
+    def _note(
+        self, record: str, unit: tuple[tuple[int, int], ...] | None = None
+    ) -> tuple[Read, list[Segment]] | None:
+        """The record's (or one unit group's) invention reading, when it describes one.
 
         At least one step of how it works is enough (one paragraph of a plain note).
         """
         kind = self.kind(record)
-        if kind not in READ_AS_NOTE or (kind == OTHER_KIND and self.fmt(record) in ("csv", "json")):
+        tabular = self.fmt(record) in ("csv", "json", "jsonl", "yaml")
+        if kind not in READ_AS_NOTE or (kind == OTHER_KIND and tabular):
             return None  # a table no kind fits (an export) is no invention note
-        read, segs = self._extract("note_structure", record)
+        whole = unit is None or unit == ((0, len(self.raw(record))),)
+        read, segs = self._extract("note_structure", record, None if whole else unit)
         if not read.values.get("mechanism_steps"):
             return None
         return read, segs
 
+    def _candidate_id(self, record: str, unit: tuple[tuple[int, int], ...], read: Read) -> str:
+        """The candidate's ID: the one the extraction read, or one other inputs also use.
+
+        A tracker export gives an idea its own ticket key beside the ID the venture uses
+        everywhere else; when the extracted ID is named by no other input and another ID in
+        the same text is, the shared one names the candidate.
+        """
+        raw = self.raw(record)
+        given = read.text(raw, "candidate_id").strip().strip(",.")
+        text = "\n".join(raw[a:b] for a, b in unit)
+        tokens = id_tokens(text)
+        if given and given not in tokens:
+            tokens.insert(0, given)
+        counted = [(self._named_elsewhere(t, record), -i, t) for i, t in enumerate(tokens)]
+        best = max(counted, default=(0, 0, ""))
+        if given and (self._named_elsewhere(given, record) or best[0] == 0):
+            return given
+        return best[2] if best[0] > 0 else given
+
     def candidates(self) -> dict[str, Any]:
-        """Every invention note's candidate ID, record and title (the portfolio)."""
+        """Every invention candidate's ID, record and title (the portfolio).
+
+        A record may hold several candidates (a notebook's pages, a tracker's ideas): each
+        unit group (:meth:`_groups`) is read on its own.
+        """
         if ("candidates", "") in self._asked:
             cached: dict[str, Any] = self._asked[("candidates", "")]
             return cached
         out = []
         for r in self.records():
-            got = self._note(r)
-            if got is None:
+            if self.kind(r) not in READ_AS_NOTE:
                 continue
-            read, _ = got
-            raw = self.raw(r)
-            cid = read.text(raw, "candidate_id").strip().strip(",.") or slug(stem(r))
-            title = read.text(raw, "title").strip() or stem(r)
-            out.append({"candidate": cid, "note": r, "title": title})
+            groups = self._groups(r)
+            for unit in groups:
+                got = self._note(r, unit)
+                if got is None:
+                    continue
+                read, _ = got
+                raw = self.raw(r)
+                cid = self._candidate_id(r, unit, read) or slug(stem(r))
+                title = read.text(raw, "title").strip() or stem(r)
+                row: dict[str, Any] = {"candidate": cid, "note": r, "title": title}
+                if len(groups) > 1:
+                    row["unit"] = [list(u) for u in unit]
+                out.append(row)
         noted = {c["note"] for c in out}
         unread = [r for r in self.records() if r not in noted and self.kind(r) == OTHER_KIND]
         result = {"candidates": sorted(out, key=lambda c: (c["candidate"], c["note"])),
@@ -590,9 +942,12 @@ class SourceWorld:
 
     def note_path(self, candidate: str) -> str:
         """The invention note of ``candidate``."""
+        return str(self._candidate_row(candidate)["note"])
+
+    def _candidate_row(self, candidate: str) -> dict[str, Any]:
         for row in self.candidates()["candidates"]:
             if row["candidate"] == candidate:
-                return str(row["note"])
+                return dict(row)
         raise NotInWorld(f"no invention note for {candidate}")
 
     def _param(self, raw: str, segs: Sequence[Segment], s: int, e: int) -> dict[str, Any]:
@@ -617,11 +972,16 @@ class SourceWorld:
             unit = next((by[k] for k in by if k in ("unit", "units")), "")
             return {**row, "Parameter": name, "Value": value, "Unit": unit, "row_text": row_text}
         text = raw[s:e]
-        parts = re.split(r"\s*(?::|=|\s\u2013\s|\s\u2014\s|\s-\s)\s*", text, maxsplit=1)
-        name = parts[0].strip(" *")
-        rest = parts[1].strip() if len(parts) > 1 else ""
+        parts = re.split(r"\s*(?::|=|\||\.{3,}|\s\u2013\s|\s\u2014\s|\s-\s)\s*", text, maxsplit=1)
+        name = parts[0].strip(" *.")
+        rest = parts[1].strip(" .") if len(parts) > 1 else ""
         m = re.match(r"^([\d.,]+)\s*([^\d\s][^,;(]*)?", rest)
         value, unit = (m.group(1), (m.group(2) or "").strip()) if m else (rest, "")
+        if len(parts) == 1 or not m:
+            q = quantity(text)
+            if q is not None:  # "window length 30 seconds", "cap the current at 6 mA, not 8"
+                at, value, unit = q
+                name = text[:at].strip(" ,:") if len(text.split()) <= 8 else name
         return {"Parameter": name, "Value": value, "Unit": unit, "row_text": text}
 
     def note(self, candidate: str) -> dict[str, Any]:
@@ -629,8 +989,10 @@ class SourceWorld:
 
         Who contributed comes from the contributor records, never the note's author line.
         """
-        rel = self.note_path(candidate)
-        got = self._note(rel)
+        row = self._candidate_row(candidate)
+        rel = str(row["note"])
+        unit = tuple((int(a), int(b)) for a, b in row.get("unit", ())) or None
+        got = self._note(rel, unit)
         assert got is not None
         read, segs = got
         raw = self.raw(rel)
@@ -649,14 +1011,15 @@ class SourceWorld:
             heading = next((g.text for g in reversed(segs) if g.kind == "heading"
                             and g.start < first), "Mechanism")  # fmt: skip
         mechanism = []
-        for i, (text, s, _e) in enumerate(steps, start=1):
-            seg = next((g for g in segs if g.start <= s <= g.end), None)
-            marker = (seg.attrs.get("marker", "") if seg is not None else "").rstrip(".)")
+        for i, (text, s, e) in enumerate(steps, start=1):
+            marker = step_marker(raw, segs, s, text)
             n = int(marker) if marker.isdigit() else i
-            step: dict[str, Any] = {"n": n, "text": text.strip()}
-            if re.fullmatch(r"[A-Z]{1,2}\d{1,2}", marker):
-                step["label"] = marker  # a step the note labels itself ("E2") keeps its label
+            step: dict[str, Any] = {"n": n, "text": text.strip(), "marker": marker}
+            own = step_date(raw, s, e, read.values.get("date"))
+            if own is not None:
+                step["dated"] = own
             mechanism.append(step)
+        mechanism = label_steps(mechanism)
         refs = sorted({t.strip() for t, _, _ in read.items(raw, "references")})
         return {
             "file": rel,
@@ -671,6 +1034,7 @@ class SourceWorld:
             "candidate": candidate,
             "title": read.text(raw, "title").strip() or stem(rel),
             "date_line": date_line,
+            "date_as_written": read.text(raw, "date").strip() or None,
             "date": read.values.get("date"),
             "problem": read.text(raw, "problem").strip(),
             "mechanism_heading": heading,
@@ -682,6 +1046,7 @@ class SourceWorld:
             "evidence": read.text(raw, "evidence").strip(),
             "implementation_status": str(read.values.get("implementation_status") or "unknown"),
             "open_points": [t.strip() for t, _, _ in read.items(raw, "open_points")],
+            "opinions": [t.strip() for t, _, _ in read.items(raw, "opinions")],
             "references": [{"name": n, "found": self.exists_anywhere(n)} for n in refs],
         }
 
@@ -699,7 +1064,11 @@ class SourceWorld:
                 agreement = t.get(r, "agreement")
                 refs = sorted(set(re.findall(r"\b[A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+)*[-/]\d+\b",
                                              agreement)))  # fmt: skip
-                documents = [{"ref": ref, "found": self.file_naming(ref)} for ref in refs]
+                documents = []
+                for ref in refs:
+                    held = self.holding(ref, t.record)
+                    documents.append({"ref": ref, "found": self.file_naming(ref) or bool(held),
+                                      **({"file": held} if held else {})})  # fmt: skip
                 row = {k: t.get(r, k) for k in keep}
                 row["person_id"] = self._person_id(t, r)
                 row["candidate"] = row["candidate"] or candidate
@@ -745,20 +1114,49 @@ class SourceWorld:
                 row_start = t.text[start : max(ends)] if ends else t.text[start : int(r["_end"])]
                 out.append(
                     {
-                        "disclosure_id": t.get(r, "disclosure_id") or f"{slug(stem(t.record))}-{n}",
+                        "disclosure_id": t.get(r, "disclosure_id")
+                        or t.get(r, "record_id")
+                        or f"{slug(stem(t.record))}-{n}",
                         "date": day_first(when) if when else None,
                         "date_as_written": when or None,
                         "event_type": t.get(r, "event_type"),
                         "content_shown": t.get(r, "content_shown"),
-                        "public": t.get(r, "public"),
+                        "public": yes_no(t.get(r, "public")),
                         "by": t.get(r, "by"),
                         "linked_file": self.resolve(t.get(r, "source")),
                         "file": t.record,
                         "row_start": row_start,
                     }
                 )
+        self._link_write_ups(out)
         out.extend(self._written_events(candidate, parts))
         return {"file": parts[0][0] if parts else None, "rows": out, "parts": parts}
+
+    def _linked_rows(self) -> list[dict[str, Any]]:
+        """Every history row's date, as :meth:`_link_write_ups` links write-ups to them."""
+        rows = [{"date": day_first(t.get(r, "date")) if t.get(r, "date") else None,
+                 "linked_file": self.resolve(t.get(r, "source"))}
+                for t in self.history_tables() for r in t.rows]  # fmt: skip
+        self._link_write_ups(rows)
+        return rows
+
+    def _link_write_ups(self, rows: list[dict[str, Any]]) -> None:
+        """A row with no linked file gets the disclosure write-up that is its own, if one is.
+
+        A poster or a talk saved as its own input is the write-up of the register row it
+        dates: a disclosure record no row links, whose text holds the row's date. One such
+        document per row, never two.
+        """
+        linked = {self.resolve(t.get(r, "source")) for t in self.history_tables() for r in t.rows}
+        tabled = {t.record for t in self._tables()}
+        loose = [r for r in self.records() if self.kind(r) == "disclosure_record"
+                 and r not in linked and r not in tabled]  # fmt: skip
+        for row in rows:
+            if row.get("linked_file") or not row.get("date"):
+                continue
+            dated = [r for r in loose if row["date"] in _iso_dates(self.raw(r))]
+            if len(dated) == 1:
+                row["linked_file"] = dated[0]
 
     def _written_events(self, candidate: str, parts: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
         """Disclosure events written as prose.
@@ -770,6 +1168,7 @@ class SourceWorld:
         decided here.
         """
         linked = {self.resolve(t.get(r, "source")) for t in self.history_tables() for r in t.rows}
+        linked |= {r.get("linked_file") for r in self._linked_rows()}
         tabled = {t.record for t in self._tables()}
         cands = self.candidates()["candidates"]
         out: list[dict[str, Any]] = []
@@ -853,12 +1252,15 @@ class SourceWorld:
             if not items:
                 continue
             out = []
-            for n, (text, _s, _e) in enumerate(items, start=1):
+            segs = list(segment(raw, self.fmt(rel)))
+            for n, (text, s0, _e) in enumerate(items, start=1):
                 lead = re.match(r"^\s*(\d+)[.)]?\s", text)
                 said = re.search(r"\b(?:relates to|for|candidate)\s+([\w.-]+)", text, re.I)
                 ids = {str(c["candidate"]) for c in cands}
                 rel_to = said.group(1).rstrip(".") if said and said.group(1).rstrip(".") in ids \
                     else self.candidate_of(text, cands)  # fmt: skip
+                if rel_to is None:  # a ranked heading: the candidate its section names
+                    rel_to = self.candidate_of(_section_after(raw, segs, s0), cands)
                 body = text.strip()
                 bold = re.match(r"^(\*\*.+?\*\*|__.+?__)", body)
                 first = re.match(r"^(.+?[.!?])(?=\s|$)", body)
@@ -917,21 +1319,41 @@ class SourceWorld:
 
     # --- publications -------------------------------------------------------------------
 
-    def _publication(self, rel: str) -> Read | None:
+    def _publication(
+        self, rel: str, unit: tuple[tuple[int, int], ...] | None = None
+    ) -> Read | None:
         if self.kind(rel) != "prior_art_publication":
             return None
-        read, _ = self._extract("publication_biblio", rel)
+        read, _ = self._extract("publication_biblio", rel, unit)
         return read if read.values.get("number") else None
 
-    def _publication_records(self) -> dict[str, str]:
+    def _publication_records(self) -> dict[str, tuple[str, tuple[tuple[int, int], ...] | None]]:
+        """Each publication's record, and its unit when one record holds several.
+
+        A search export or a search report lists its hits as records or sections: each unit
+        of the record (:func:`record_units`) that states a publication number is one.
+        """
         if ("publications", "") in self._asked:
-            cached: dict[str, str] = self._asked[("publications", "")]
+            cached: dict[str, Any] = self._asked[("publications", "")]
             return cached
-        out: dict[str, str] = {}
+        out: dict[str, tuple[str, tuple[tuple[int, int], ...] | None]] = {}
         for rel in self.records():
+            if self.kind(rel) != "prior_art_publication":
+                continue
+            units = self._units(rel)
+            if len(units) > 1:
+                each: dict[str, tuple[str, tuple[tuple[int, int], ...] | None]] = {}
+                for u in units:
+                    read = self._publication(rel, (u,))
+                    if read is not None:
+                        each.setdefault(read.text(self.raw(rel), "number").strip(), (rel, (u,)))
+                if len(each) >= 2:  # several publications in one record, one per unit
+                    for k, v in each.items():
+                        out.setdefault(k, v)
+                    continue
             read = self._publication(rel)
             if read is not None:
-                out.setdefault(read.text(self.raw(rel), "number").strip(), rel)
+                out.setdefault(read.text(self.raw(rel), "number").strip(), (rel, None))
         self._asked[("publications", "")] = out
         return out
 
@@ -944,15 +1366,18 @@ class SourceWorld:
         found = self._publication_records().get(pub)
         if found is None:
             raise NotInWorld(f"no publication {pub}")
-        return found
+        return found[0]
 
     def publication(self, pub: str) -> dict[str, Any]:
         """One publication: numbers, dates, URL, status wordings verbatim, claims, text.
 
         The applicant is not part of the view. A field the source does not state is None.
         """
-        rel = self.publication_path(pub)
-        read = self._publication(rel)
+        found = self._publication_records().get(pub)
+        if found is None:
+            raise NotInWorld(f"no publication {pub}")
+        rel, unit = found
+        read = self._publication(rel, unit)
         assert read is not None
         raw = self.raw(rel)
         dates = {
@@ -1014,7 +1439,11 @@ class SourceWorld:
         }
 
     def search(self, groups: Sequence[Sequence[str]]) -> list[dict[str, Any]]:
-        """Publications whose text matches every group (any one term of a group)."""
+        """Publications whose text matches every group (any one term of a group).
+
+        The text is the title, abstract, description and claims, and the numbers of the
+        priorities it claims: a search by a priority number finds that family's members.
+        """
         hits = []
         for pub in self.publication_ids():
             p = self.publication(pub)
@@ -1024,6 +1453,7 @@ class SourceWorld:
                     p["abstract"],
                     p["description"],
                     *(c["text"] for c in p["claims"]),
+                    *(str(c["number"]) for c in p["priority_claims"]),
                 ]
             ).casefold()
             if all(any(t.casefold() in hay for t in g) for g in groups):

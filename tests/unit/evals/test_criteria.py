@@ -149,17 +149,37 @@ def test_a_family_named_by_its_priority_number_grades_as_the_keys_family(tmp_pat
     assert _outcome(tmp_path / "b", status, "trap.T-STATUS") == "pass"
 
 
+def _anchor(fact: Any) -> dict[str, Any]:
+    a = fact.anchor
+    return {"file": a.file, "exact": a.exact, "start": a.start, "end": a.end}
+
+
 def test_known_values_with_no_listed_value_reads_the_cases_own_domain(tmp_path: Path) -> None:
     """A patent case that lists only a gap is not failed for the research prices."""
     k = key()
-    window = k.facts["KF-02"].value
-    fields = {
-        "quiet_window": {"value": dict(window), "status": "known"},
-        "conception_date": {"value": k.facts["KF-03"].value, "status": "known"},
-    }
-    steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"fields": fields})]
+    window, conceived = k.facts["KF-02"], k.facts["KF-03"]
+    entries = [
+        {"kind": "parameter", "value": dict(window.value), "status": "known",
+         "citations": [_anchor(window)]},
+        {"kind": "conception_record", "value": conceived.value, "status": "known",
+         "citations": [_anchor(conceived)]},
+    ]  # fmt: skip
+    steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"entries": entries})]
     got = _outcome(tmp_path, steps, "precision.known_values", expect=("facts.KF-05",))
     assert got == "pass"
+
+
+def test_an_entry_is_found_by_its_fact_kind_and_anchor_not_a_field_name(tmp_path: Path) -> None:
+    """The extraction check reads the key's fact kind and anchor; an uncited value fails."""
+    k = key()
+    window = k.facts["KF-02"]
+    cited = [{"kind": "parameter", "value": dict(window.value), "status": "known",
+              "citations": [_anchor(window)]}]  # fmt: skip
+    uncited = [{**cited[0], "citations": []}]
+    for name, entries, want in (("a", cited, "pass"), ("b", uncited, "fail")):
+        steps: list[tuple[Any, ...]] = [("save", "extraction", "C1", {"entries": entries})]
+        got = _outcome(tmp_path / name, steps, "precision.known_values", expect=("facts.KF-02",))
+        assert got == want, name
 
 
 def test_a_family_the_variant_adds_is_changed_under_its_priority_number_too() -> None:

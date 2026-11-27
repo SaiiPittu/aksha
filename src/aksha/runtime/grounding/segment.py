@@ -169,19 +169,26 @@ def sniff_format(record_id: str, raw: str) -> str:
     """The format ``raw`` is in (module doc, item 1)."""
     head = raw.lstrip()[:4000]
     name = record_id.rsplit("/", 1)[-1].lower()
+    if head.startswith("WEBVTT"):
+        return "vtt"
     if _HTML_HEAD.match(head) or len(_HTML_TAGS.findall(head)) >= 3:
         return "html"
+    if head.startswith("<?xml") or re.match(r"<[A-Za-z][\w.-]*(\s[^<>]*)?>", head):
+        return "xml"
     if head[:1] in "[{":
         try:
             json.loads(raw)
             return "json"
         except ValueError:
-            pass
+            if _json_lines(raw):
+                return "jsonl"
     first = head.split("\n\n", 1)[0]
     if len(_EMAIL_HEAD.findall(first)) >= 2:
         return "email"
     if name.endswith((".md", ".markdown")):
         return "markdown"
+    if _yaml_like(raw):
+        return "yaml"
     lines = head.splitlines()
     if name.endswith((".csv", ".tsv")) or (
         _delimiter(lines) is not None and not head.startswith(("#", "---", "|"))
@@ -191,6 +198,33 @@ def sniff_format(record_id: str, raw: str) -> str:
     if head.startswith("---\n") or re.search(r"^#{1,6} |^\|.*\|\s*$", head, re.M):
         return "markdown"
     return "text"
+
+
+def _json_lines(raw: str) -> bool:
+    """Whether every non-blank line of ``raw`` is a JSON object, at least two of them."""
+    lines = [ln for ln in raw.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return False
+    try:
+        return all(isinstance(json.loads(ln), dict) for ln in lines)
+    except ValueError:
+        return False
+
+
+_YAML_LINE = re.compile(r"^(\s*)(?:-\s+)?([A-Za-z_][\w .-]{0,40}):(?:\s+(.*?))?\s*$")
+_YAML_ITEM = re.compile(r"^(\s*)-\s+(\S.*?)\s*$")
+
+
+def _yaml_like(raw: str) -> bool:
+    """Whether ``raw`` reads as YAML: keyed lines and list items, some nested, no prose."""
+    lines = [ln for ln in raw.splitlines()
+             if ln.strip() and not ln.lstrip().startswith("#") and ln.strip() != "---"]  # fmt: skip
+    if len(lines) < 4:
+        return False
+    keyed = [ln for ln in lines if _YAML_LINE.match(ln)]
+    shaped = [ln for ln in lines if _YAML_LINE.match(ln) or _YAML_ITEM.match(ln)]
+    nested = any(ln[:1] in " -" for ln in lines)
+    return len(keyed) >= 3 and nested and len(shaped) >= 0.9 * len(lines)
 
 
 # --- HTML ---------------------------------------------------------------------------------
@@ -403,6 +437,12 @@ _BOLD_LINE = re.compile(r"^(\*\*|__)([^*_]{2,80}?)(\1)\s*:?\s*$")
 _SLIDE = re.compile(r"^(slide|page)\s+\d+\s*[:.\-\u2013\u2014]\s*(.+)$", re.I)
 _COLON_HEAD = re.compile(r"^([A-Z][^.!?:]{1,60}):\s*$")
 _META_LINE = re.compile(r"^([A-Za-z][A-Za-z _-]{0,30}):[ \t]*(.*?)[ \t]*$")
+_RULE = re.compile(r"^(?:[-=_*~]{3,})\s*(?:((?:page|slide)\s+(\d+))\s*[-=_*~]{3,})?\s*$", re.I)
+"""A thematic break (a rule line), or a page separator such as ``--- page 3 ---``."""
+_TURN = re.compile(r"^\[?(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\]?\s+([^:\n\[\]]{1,40}?):\s+(?=\S)")
+"""A speaker turn of a call transcript: ``[00:01:20] Speaker 1: ...``."""
+_LABEL_LINE = re.compile(r"^\[[A-Za-z][^\[\]]{0,38}\]$")
+"""A line that is only a bracketed label (``[speaker notes]``)."""
 
 
 def front_matter_end(raw: str) -> int:
@@ -472,6 +512,7 @@ def _text(raw: str, fmt: str) -> list[Segment]:
     section = ""
     para: list[tuple[int, int]] = []
     open_item = False
+    page_title = False  # the first short line after a page separator is the page's title
 
     def flush() -> None:
         if not para:
@@ -495,6 +536,42 @@ def _text(raw: str, fmt: str) -> list[Segment]:
                 flush()
                 continue
             s0 = s + line.index(text[0]) if text else s0
+        rule = _RULE.match(text)
+        if rule:
+            if len(para) == 1 and text[:1] in "=-" and not rule.group(1):
+                ps, pe = para.pop()  # a setext underline: the line above is a heading
+                level = 1 if text[:1] == "=" else 2
+                if level >= 2:
+                    section = raw[ps:pe]
+                out.append(Segment("heading", ps, pe, raw[ps:pe], section, level))
+                continue
+            flush()
+            open_item = False
+            attrs = {"page": rule.group(2)} if rule.group(2) else {}
+            out.append(Segment("rule", s0, s0 + len(text), "", section, attrs=attrs))
+            page_title = bool(rule.group(2))
+            continue
+        if page_title and not para:
+            page_title = False
+            if len(text) <= 60 and text[-1:] not in ".!?" and not _ITEM.match(text) \
+                    and "|" not in text:  # fmt: skip
+                section = text
+                out.append(Segment("heading", s0, s0 + len(text), text, section, 2))
+                continue
+        if _LABEL_LINE.match(text):  # "[speaker notes]": a label that starts a part of the page
+            flush()
+            open_item = False
+            out.append(Segment("heading", s0, s0 + len(text), text.strip("[] "), section, 3))
+            continue
+        turn = _TURN.match(text)
+        if turn:
+            flush()
+            open_item = False
+            ts = s0 + turn.end()
+            out.append(Segment("paragraph", ts, s0 + len(text), raw[ts : s0 + len(text)], section,
+                               attrs={"speaker": turn.group(2).strip(),
+                                      "time": turn.group(1)}))  # fmt: skip
+            continue
         m = _HEADING_MD.match(text)
         b = _BOLD_LINE.match(text)
         sl = _SLIDE.match(text)
@@ -561,6 +638,19 @@ def segment(raw: str, fmt: str) -> tuple[Segment, ...]:
     """``raw`` cut into segments by structure (module doc, item 2). Tables are rows."""
     if fmt == "html":
         return tuple(_html(raw))
+    if fmt == "vtt":
+        return tuple(_vtt(raw))
+    if fmt == "xml":
+        return tuple(_xml(raw))
+    if fmt == "yaml":
+        return tuple(_yaml_segments(raw))
+    if fmt == "jsonl":
+        rows = read_rows(raw, fmt).rows
+        return tuple(
+            Segment("row", r.start, r.end, " | ".join(v for v, _, _ in r.cells.values()),
+                    cells=tuple(r.cells.values()))
+            for r in rows
+        )  # fmt: skip
     if fmt in ("csv", "json"):
         table = read_rows(raw, fmt)
         head: list[Segment] = []
@@ -599,6 +689,279 @@ def segment(raw: str, fmt: str) -> tuple[Segment, ...]:
             ),
         )
     return tuple(_text(raw, fmt))
+
+
+# --- transcripts, XML and YAML --------------------------------------------------------------
+
+_CUE_TIME = re.compile(r"^\s*(\d{1,2}:)?\d{2}:\d{2}[.,]\d{3}\s+-->\s+")
+_VOICE = re.compile(r"<v(?:\.[\w.]+)?\s+([^>]+)>")
+
+
+def _vtt(raw: str) -> list[Segment]:
+    """A WebVTT transcript: each cue a ``paragraph`` with its ``speaker`` and ``time``.
+
+    A cue's range is its spoken text alone (the voice tag left out), so a quote of what a
+    speaker said cites only their words. ``NOTE`` blocks are read as text: a ``key: value``
+    line is ``meta``, any other line a ``paragraph``.
+    """
+    out: list[Segment] = []
+    blocks: list[list[tuple[int, int]]] = [[]]
+    for s, e in _lines(raw, 0, len(raw)):
+        if raw[s:e].strip():
+            blocks[-1].append((s, e))
+        elif blocks[-1]:
+            blocks.append([])
+    for block in blocks:
+        if not block:
+            continue
+        first = raw[block[0][0] : block[0][1]].strip()
+        if first.startswith("WEBVTT"):
+            continue
+        if first.startswith("NOTE"):
+            lines = block[1:] if first == "NOTE" else [(block[0][0] + 4, block[0][1]), *block[1:]]
+            for ls, le in lines:
+                while ls < le and raw[ls].isspace():
+                    ls += 1
+                metas = _meta_lines(raw, ls, le)
+                out.extend(metas or [Segment("paragraph", ls, le, " ".join(raw[ls:le].split()))])
+            continue
+        at = next((i for i, (ls, le) in enumerate(block) if _CUE_TIME.match(raw[ls:le])), None)
+        if at is None:
+            continue
+        time = raw[block[at][0] : block[at][1]].split("-->")[0].strip()
+        payload = block[at + 1 :]
+        if not payload:
+            continue
+        ps, pe = payload[0][0], payload[-1][1]
+        speaker = ""
+        voice = _VOICE.match(raw, ps)
+        if voice:
+            speaker, ps = voice.group(1).strip(), voice.end()
+        text = re.sub(r"</?[^>]+>", "", raw[ps:pe])
+        out.append(Segment("paragraph", ps, pe, " ".join(text.split()),
+                           attrs={"speaker": speaker, "time": time}))  # fmt: skip
+    return out
+
+
+_XML_TAG = re.compile(
+    r"<(/?)([A-Za-z_][\w.:-]*)((?:\s+[\w.:-]+\s*=\s*(?:\"[^\"]*\"|'[^']*'))*)\s*(/?)>"
+)
+_XML_ATTR = re.compile(r"([\w.:-]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
+
+
+def _xml(raw: str) -> list[Segment]:
+    """An XML document: each element that holds text, and each element with attributes.
+
+    An element holding only text is ``meta`` (``attrs["key"]`` its tag, each attribute as
+    ``@name``), or an ``item`` when its parent holds several of the same tag (a list of
+    steps); its range is its text alone. An element holding other elements is a
+    ``heading`` at its depth, its text its attributes, so a record of repeated elements
+    is cut into sections by them (``record_sections``). Comments and declarations are
+    left out.
+    """
+    clean = re.sub(r"<!--.*?-->|<\?.*?\?>|<!\[CDATA\[|\]\]>", lambda m: " " * len(m.group(0)),
+                   raw, flags=re.S)  # fmt: skip
+    stack: list[tuple[str, dict[str, str], int, int, list[str]]] = []
+    out: list[tuple[int, Segment]] = []
+    for m in _XML_TAG.finditer(clean):
+        closing, tag, attr_text, empty = m.group(1), m.group(2), m.group(3), m.group(4)
+        attrs = {"@" + a.group(1): a.group(2) if a.group(2) is not None else a.group(3) or ""
+                 for a in _XML_ATTR.finditer(attr_text)}  # fmt: skip
+        if not closing:
+            if stack:
+                stack[-1][4].append(tag)
+            if empty:
+                if attrs:
+                    text = " ".join(f"{k[1:]}={v}" for k, v in attrs.items())
+                    at = stack[-1][2] if stack else -1
+                    seg = Segment("meta", m.start(), m.end(), text, level=len(stack),
+                                  attrs={"key": tag, **attrs})  # fmt: skip
+                    out.append((at, seg))
+                continue
+            stack.append((tag, attrs, m.start(), m.end(), []))
+            continue
+        while stack and stack[-1][0] != tag:
+            stack.pop()
+        if not stack:
+            continue
+        name, own, open_at, body_at, children = stack.pop()
+        depth = len(stack)
+        parent = stack[-1][2] if stack else -1
+        if children:
+            text = " ".join(f"{k[1:]}={v}" for k, v in own.items()) or name
+            out.append((parent, Segment("heading", open_at, body_at, text, level=depth + 1,
+                                         attrs={"tag": name, **own})))  # fmt: skip
+            continue
+        bs, be = body_at, m.start()
+        while bs < be and clean[bs].isspace():
+            bs += 1
+        while be > bs and clean[be - 1].isspace():
+            be -= 1
+        if be <= bs and not own:
+            continue
+        out.append((parent, Segment("meta", bs, be, " ".join(raw[bs:be].split()), level=depth + 1,
+                                     attrs={"key": name, **own, "value": raw[bs:be]})))  # fmt: skip
+    # A leaf is an item when its parent holds several of its tag: count them now, at the end.
+    counts: dict[tuple[int, str], int] = {}
+    for parent, seg in out:
+        if seg.kind == "meta":
+            k = (parent, seg.attrs.get("key", ""))
+            counts[k] = counts.get(k, 0) + 1
+    fixed = []
+    for parent, seg in sorted(out, key=lambda x: x[1].start):
+        if seg.kind == "meta" and counts.get((parent, seg.attrs.get("key", "")), 0) > 1:
+            seg = Segment("item", seg.start, seg.end, seg.text, seg.section, seg.level,
+                          attrs=seg.attrs)  # fmt: skip
+        fixed.append(seg)
+    return fixed
+
+
+def _yaml_segments(raw: str) -> list[Segment]:
+    """A YAML document line by line: ``key: value`` is ``meta``, ``- key: value`` an ``item``.
+
+    ``attrs["key"]`` is the key, ``attrs["value"]`` its value (quotes left out) and the
+    value's own range; a key opening a block (``credited:``) is a ``heading`` at its
+    indentation, a ``- value`` item a plain ``item``. Comments are left out.
+    """
+    out: list[Segment] = []
+    for s, e in _lines(raw, 0, len(raw)):
+        line = raw[s:e]
+        if not line.strip() or line.lstrip().startswith("#") or line.strip() == "---":
+            continue
+        m = _YAML_LINE.match(line)
+        indent = len(line) - len(line.lstrip(" -"))
+        if m:
+            key = m.group(2).strip()
+            if m.group(3) is None or m.group(3) == "":
+                out.append(Segment("heading", s + m.start(2), s + m.end(2), key,
+                                   level=indent // 2 + 1, attrs={"key": key}))  # fmt: skip
+                continue
+            vs, ve = s + m.start(3), s + m.end(3)
+            if ve - vs >= 2 and raw[vs] == raw[ve - 1] and raw[vs] in "'\"":
+                vs, ve = vs + 1, ve - 1
+            kind = "item" if line.lstrip().startswith("-") else "meta"
+            out.append(Segment(kind, s + len(line) - len(line.lstrip()), e, raw[vs:ve],
+                               level=indent // 2 + 1,
+                               attrs={"key": key, "value": raw[vs:ve], "value_start": str(vs),
+                                      "value_end": str(ve)}))  # fmt: skip
+            continue
+        item = _YAML_ITEM.match(line)
+        if item:
+            vs, ve = s + item.start(2), s + item.end(2)
+            out.append(Segment("item", vs, ve, raw[vs:ve], level=indent // 2 + 1,
+                               attrs={"marker": "-"}))  # fmt: skip
+        else:
+            ls = s + len(line) - len(line.lstrip())
+            out.append(Segment("paragraph", ls, e, " ".join(line.split())))
+    return out
+
+
+def _yaml_tree(raw: str) -> Any:
+    """A YAML document's mappings and lists, each scalar ``(text, start, end)``.
+
+    The block subset exports use: ``key: value``, ``key:`` opening a nested block, ``- ``
+    list items (scalars or mappings), comments and quoted scalars. Flow collections and
+    multi-line scalars are read as text.
+    """
+    lines = []
+    for s, e in _lines(raw, 0, len(raw)):
+        line = raw[s:e]
+        if line.strip() and not line.lstrip().startswith("#") and line.strip() != "---":
+            lines.append((s, e))
+
+    def scalar(vs: int, ve: int) -> Any:
+        if ve - vs >= 2 and raw[vs] == "{" and raw[ve - 1] == "}":
+            return flow(vs + 1, ve - 1)
+        if ve - vs >= 2 and raw[vs] == raw[ve - 1] and raw[vs] in "'\"":
+            vs, ve = vs + 1, ve - 1
+        return raw[vs:ve], vs, ve
+
+    def flow(vs: int, ve: int) -> dict[str, Any]:
+        """A flow mapping's ``key: value`` pairs (``{idea: X-1, what: "..."}``)."""
+        out: dict[str, Any] = {}
+        i = vs
+        while i < ve:
+            while i < ve and raw[i] in " ,":
+                i += 1
+            colon = raw.find(":", i, ve)
+            if colon < 0:
+                break
+            key = raw[i:colon].strip()
+            j = colon + 1
+            while j < ve and raw[j] == " ":
+                j += 1
+            if j < ve and raw[j] in "'\"":
+                end = raw.find(raw[j], j + 1, ve)
+                end = ve if end < 0 else end + 1
+            else:
+                end = raw.find(",", j, ve)
+                end = ve if end < 0 else end
+            e = end
+            while e > j and raw[e - 1] == " ":
+                e -= 1
+            out[key] = scalar(j, e)
+            i = end
+        return out
+
+    def block(i: int, indent: int) -> tuple[Any, int]:
+        if i >= len(lines):
+            return {}, i
+        s, e = lines[i]
+        first = raw[s:e]
+        lead = len(first) - len(first.lstrip())
+        if first.lstrip().startswith("- ") or first.strip() == "-":
+            items: list[Any] = []
+            while i < len(lines):
+                s, e = lines[i]
+                line = raw[s:e]
+                lead = len(line) - len(line.lstrip())
+                if lead != indent or not line.lstrip().startswith("-"):
+                    break
+                body = s + lead + 1
+                while body < e and raw[body] == " ":
+                    body += 1
+                if _YAML_LINE.match(" " * (body - s) + raw[body:e]):
+                    sub = body - s  # a mapping item: its first key sits after the dash
+                    lines[i] = (body, e)
+                    value, i = mapping(i, sub, s0=body)
+                    items.append(value)
+                else:
+                    items.append(scalar(body, e))
+                    i += 1
+            return items, i
+        return mapping(i, lead)
+
+    def mapping(i: int, indent: int, s0: int | None = None) -> tuple[Any, int]:
+        out: dict[str, Any] = {}
+        while i < len(lines):
+            s, e = lines[i]
+            line = raw[s:e]
+            lead = (s0 - s if s0 is not None and s == s0 else 0) + len(line) - len(line.lstrip())
+            if s0 is not None and s == s0:
+                lead = indent
+            if lead != indent or line.lstrip().startswith("- "):
+                break
+            m = _YAML_LINE.match(line)
+            if m is None:
+                break
+            key = m.group(2).strip()
+            if m.group(3):
+                out[key] = scalar(s + m.start(3), s + m.end(3))
+                i += 1
+                continue
+            i += 1
+            if i < len(lines):
+                ns, ne = lines[i]
+                nxt = raw[ns:ne]
+                nlead = len(nxt) - len(nxt.lstrip())
+                if nlead > indent or (nlead == indent and nxt.lstrip().startswith("- ")):
+                    out[key], i = block(i, nlead)
+                    continue
+            out[key] = ("", e, e)
+        return out, i
+
+    tree, _ = block(0, 0)
+    return tree
 
 
 # --- tables -------------------------------------------------------------------------------
@@ -779,6 +1142,11 @@ def _records(obj: dict[str, Any]) -> list[tuple[dict[str, Any], dict[str, Any]]]
 
 def _json_rows(raw: str) -> Rows:
     data, _ = _json_value(raw, 0)
+    return _tree_rows(data, "json")
+
+
+def _tree_rows(data: Any, delimiter: str) -> Rows:
+    """The records of a parsed tree (JSON, JSON Lines, YAML): its largest list of objects."""
     lists = list(_lists(data))
     if not lists:
         return Rows((), ())
@@ -802,7 +1170,7 @@ def _json_rows(raw: str) -> Rows:
             elif isinstance(v, dict) and not k.startswith("_"):
                 for sub, cell in _flatten(v, k + ".").items():
                     header[sub] = cell[0]
-    return Rows(columns, tuple(rows), header, "json")
+    return Rows(columns, tuple(rows), header, delimiter)
 
 
 def json_header_cells(raw: str) -> list[tuple[str, tuple[str, int, int]]]:
@@ -849,6 +1217,14 @@ def read_rows(raw: str, fmt: str = "csv") -> Rows:
             return _json_rows(raw)
         except (IndexError, KeyError) as e:
             raise ValueError("the JSON does not parse") from e
+    if fmt == "jsonl":
+        try:
+            data = [_json_value(raw, m.start())[0] for m in re.finditer(r"(?m)^[ \t]*\{", raw)]
+        except (IndexError, KeyError) as e:
+            raise ValueError("a JSON line does not parse") from e
+        return _tree_rows(data, "jsonl")
+    if fmt == "yaml":
+        return _tree_rows(_yaml_tree(raw), "yaml")
     delimiter = _delimiter(raw.splitlines()) or ","
     all_rows = list(delimited_cells(raw, delimiter))
     if not all_rows:

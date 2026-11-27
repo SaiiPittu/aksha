@@ -331,6 +331,12 @@ MODEL_ALIASES = (
             ),
             ("open_points", "list", "each question or point the document leaves open"),
             ("references", "list", "each other document the text names by file name"),
+            (
+                "opinions",
+                "list",
+                "each view a person gives of the idea itself (how strong or new they think "
+                "it is), as written: an opinion to report, never a finding",
+            ),
         ),
     ),
     ModelAlias(

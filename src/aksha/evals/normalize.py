@@ -87,3 +87,21 @@ def is_unknown(value: object) -> bool:
         "missing",
         "n_a",
     }
+
+
+_UNITS = {
+    "s": "seconds", "sec": "seconds", "secs": "seconds", "second": "seconds",
+    "ms": "milliseconds", "msec": "milliseconds", "millisecond": "milliseconds",
+    "min": "minutes", "mins": "minutes", "minute": "minutes",
+    "h": "hours", "hr": "hours", "hrs": "hours", "hour": "hours",
+    "d": "days", "day": "days",
+    "m": "metres", "meter": "metres", "meters": "metres", "metre": "metres",
+    "cm": "centimetres", "mm": "millimetres",
+}  # fmt: skip
+"""Spellings of a unit that name the same unit (SI symbols and their words)."""
+
+
+def unit_key(value: object) -> str:
+    """A unit for matching: ``s``, ``sec`` and ``Seconds`` agree; other units as ``enum_key``."""
+    key = enum_key(value or "")
+    return _UNITS.get(key, key)

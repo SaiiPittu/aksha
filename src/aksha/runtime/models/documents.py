@@ -91,6 +91,21 @@ def kind_question(
     )
 
 
+def _structure(fmt: str, segments: Sequence[Segment]) -> str:
+    """How a structured text is built: its repeated elements or keys, its speakers' turns."""
+    if fmt == "vtt":
+        turns = [s for s in segments if s.attrs.get("speaker")]
+        speakers = sorted({s.attrs["speaker"] for s in turns})
+        return f"{len(turns)} speaker turns; speakers: {', '.join(speakers)}"
+    counts: dict[str, int] = {}
+    for s in segments:
+        key = s.attrs.get("key") or s.attrs.get("tag") or ""
+        if key:
+            counts[f"{s.kind} {key}"] = counts.get(f"{s.kind} {key}", 0) + 1
+    shown = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:16]
+    return "; ".join(f"{k} x{n}" for k, n in shown)
+
+
 def document_preview(record_id: str, fmt: str, text: str, segments: Sequence[Segment]) -> str:
     """The decide step's state: the record as structure shows it, never what it means.
 
@@ -100,7 +115,9 @@ def document_preview(record_id: str, fmt: str, text: str, segments: Sequence[Seg
     declares, and the first :data:`PREVIEW_CHARS` characters a reader would see.
     """
     lines = [f"record: {record_id}", f"format: {fmt}"]
-    if fmt in ("csv", "json"):
+    if fmt in ("xml", "vtt", "yaml"):
+        lines.append("structure: " + _structure(fmt, segments))
+    if fmt in ("csv", "json", "jsonl", "yaml"):
         try:
             table = read_rows(text, fmt)
         except ValueError:

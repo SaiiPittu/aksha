@@ -13,30 +13,27 @@ here.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase
 from aksha.evals.criteria.common import (
-    all_citations,
     cites,
+    citing,
     competitor_output,
+    entries,
     family_label,
-    field_of,
 )
+from aksha.evals.errors import KeyRefMissing
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
 from aksha.evals.key import KeyFact
-from aksha.evals.normalize import cell_state, enum_key, is_unknown, name_key, price_of
+from aksha.evals.normalize import cell_state, enum_key, is_unknown, name_key, price_of, unit_key
 
-FIELD_FOR_KIND: Mapping[str, str] = {
-    "mechanism_step": "gates",
-    "parameter": "quiet_window",
-    "conception_record": "conception_date",
-    "alternative_rejected": "rejected_alternative",
-    "missing_detail": "quiet_window_rationale",
-}
-"""The extraction field each patent fact kind is saved under (provisional schema)."""
+EXTRACTED_KINDS = frozenset(
+    {"mechanism_step", "parameter", "conception_record", "alternative_rejected"}
+)
+"""The key's fact kinds an extraction states as values, each an entry of that kind."""
 ABSTAINING = frozenset({"missing", "unknown", "needs_counsel_confirmation", "not_found"})
 PRICE_KINDS = frozenset({"price", "price_conflict"})
 KNOWN_VALUE_KINDS = frozenset({"price", "parameter", "conception_record"})
@@ -199,14 +196,18 @@ def families_are_edges(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) ->
 
 
 def matrix(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
-    """Every comparison cell's state equals the key's, with no extra families.
+    """Every comparison cell's state equals the key's; no other family shows anything.
 
     A family is named by the key's label or by one of its priority numbers
-    (:func:`~aksha.evals.criteria.common.family_label`).
+    (:func:`~aksha.evals.criteria.common.family_label`). ``not_found`` means the search
+    showed no reference for the element, so a family the agent did not compare reads as
+    ``not_found`` for every element, and a family the key leaves out may stand in the
+    agent's matrix only with every cell ``not_found``.
     """
     want = dict(ctx.key.resolve("comparison_matrix"))
     bad: list[str] = []
     cells = 0
+    absent = cell_state("not_found")
     for cand, features in sorted(want.items()):
         out = ctx.state.get("matrix", cand)
         if out is None:
@@ -217,11 +218,13 @@ def matrix(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
             row = {family_label(ctx, k): v for k, v in dict(got.get(feat, {})).items()}
             for fam, state in sorted(dict(fams).items()):
                 cells += 1
-                if cell_state(row.get(fam, "")) != cell_state(state):
+                have = cell_state(row[fam]) if fam in row else absent
+                if have != cell_state(state):
                     bad.append(f"{cand}.{feat}.{fam}: {row.get(fam)!r}, key {cell_state(state)}")
-            extra = sorted(set(row) - {str(f).upper() for f in dict(fams)})
+            keyed = {str(f).upper() for f in dict(fams)}
+            extra = sorted(f for f in set(row) - keyed if cell_state(row[f]) != absent)
             if extra:
-                bad.append(f"{cand}.{feat}: extra families {extra}")
+                bad.append(f"{cand}.{feat}: extra families {extra} show it")
     return failed(*bad) if bad else passed(f"{cells} cells match")
 
 
@@ -243,47 +246,94 @@ def _candidate_facts(ctx: GradeContext, cand: str, kinds: frozenset[str]) -> lis
     ]
 
 
-def c1_extraction(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
-    """The first keyed candidate's gates, window, conception date and rejected alternative.
+def _extraction_facts(ctx: GradeContext, case: EvalCase) -> list[KeyFact]:
+    """The stated facts a case checks: those it lists, else the first keyed candidate's."""
+    facts = [f for f in ctx.key.facts.values() if f.kind in EXTRACTED_KINDS
+             and f.about.get("candidate")]  # fmt: skip
+    listed = [f for f in facts if f.id in case.facts]
+    if listed:
+        return listed
+    if not facts:
+        raise KeyRefMissing(message=f"{ctx.key.world}: no stated fact about a candidate")
+    first = str(facts[0].about["candidate"])
+    return [f for f in facts if f.about["candidate"] == first]
 
-    The candidate is the one the key's first mechanism-step fact is about (``C1`` in the
-    stillroom worlds); each of its stated facts must come back as a cited value.
+
+def matching_entry(ctx: GradeContext, fact: KeyFact) -> tuple[Mapping[str, Any] | None, str]:
+    """The extraction entry ``fact`` stands for, or None and why not.
+
+    An entry of the fact's kind for its candidate that cites the fact's anchor and states its
+    value: a mechanism step's element label, a parameter's quantity, a record's date.
     """
-    kinds = frozenset({"mechanism_step", "parameter", "conception_record", "alternative_rejected"})
-    first = next(
-        (
-            f
-            for f in ctx.key.facts.values()
-            if f.kind == "mechanism_step" and f.about.get("candidate")
-        ),
-        None,
-    )
-    cand = str(first.about["candidate"]) if first is not None else "C1"
-    out = ctx.state.get("extraction", cand)
+    out = ctx.state.get("extraction", str(fact.about.get("candidate")))
     if out is None:
-        return failed(f"no extraction/{cand} output")
+        return None, f"no extraction/{fact.about.get('candidate')} output"
+    mine = entries(out, fact.kind)
+    if not mine:
+        return None, f"no {fact.kind} entry"
+    cited = citing(ctx, mine, fact)
+    if not cited:
+        return None, f"no {fact.kind} entry cites its anchor"
+    labels = set(dict(dict(ctx.key.data.get("comparison_matrix", {})).get(
+        str(fact.about.get("candidate")), {})))  # fmt: skip
+    for e in cited:
+        if _states(e, fact, labels):
+            return e, ""
+    got = cited[0].get("element") if fact.kind == "mechanism_step" else cited[0].get("value")
+    return None, f"{fact.kind} is {got!r}, key {fact.value}"
+
+
+def _states(entry: Mapping[str, Any], fact: KeyFact, labels: Collection[str] = ()) -> bool:
+    """Whether a cited entry states the fact: its element when the key names one, else a value.
+
+    A mechanism step's value is the element label when it is one of the key's matrix rows
+    for the candidate (``S2``); a key that describes the step in words instead asks only
+    for a cited, stated step.
+    """
+    if fact.kind == "mechanism_step":
+        if str(fact.value) in labels:
+            return enum_key(entry.get("element", "")) == enum_key(fact.value)
+        return not is_unknown(entry.get("value"))
+    if is_unknown(entry.get("value")) or enum_key(entry.get("status", "")) in ABSTAINING:
+        return False
+    if fact.kind == "parameter":
+        return _same_quantity(entry.get("value"), fact.value)
+    if fact.kind == "conception_record":
+        return str(entry.get("value")) == str(fact.value)
+    return True
+
+
+def c1_extraction(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
+    """Each stated fact of a candidate comes back as a cited entry of its kind, with its value.
+
+    The facts are the mechanism steps, parameters, conception records and rejected
+    alternatives the case lists (else the first keyed candidate's): each must be an entry of
+    the fact's own kind that cites its anchor and states the key's element label, quantity
+    or date. Nothing here names a field one world used.
+    """
+    facts = _extraction_facts(ctx, case)
     bad = []
-    for fact in _candidate_facts(ctx, cand, kinds):
-        name = FIELD_FOR_KIND[fact.kind]
-        f = field_of(out, name)
-        if f is None or is_unknown(f.get("value")):
-            bad.append(f"{fact.id}: field {name} has no value")
-            continue
-        if fact.kind == "parameter" and not _same_quantity(f.get("value"), fact.value):
-            bad.append(f"{fact.id}: {name} is {f.get('value')!r}, key {fact.value}")
-        if fact.kind == "conception_record" and str(f.get("value")) != str(fact.value):
-            bad.append(f"{fact.id}: {name} is {f.get('value')!r}, key {fact.value}")
-        if not cites(ctx, list(f.get("citations", ())) + list(all_citations(out)), fact):
-            bad.append(f"{fact.id}: {name} not cited at its anchor")
-    return failed(*bad) if bad else passed(f"{cand} extraction matches")
+    for fact in facts:
+        entry, why = matching_entry(ctx, fact)
+        if entry is None:
+            bad.append(f"{fact.id}: {why}")
+    cands = sorted({str(f.about["candidate"]) for f in facts})
+    return failed(*bad) if bad else passed(f"{', '.join(cands)}: {len(facts)} stated facts match")
 
 
 def _same_quantity(got: Any, want: Any) -> bool:
     if isinstance(got, Mapping) and isinstance(want, Mapping):
-        return got.get("value") == want.get("value") and enum_key(got.get("unit")) == enum_key(
-            want.get("unit")
-        )
+        return _number(got.get("value")) == _number(want.get("value")) and unit_key(
+            got.get("unit")
+        ) == unit_key(want.get("unit"))
     return bool(got == want)
+
+
+def _number(value: Any) -> Any:
+    try:
+        return float(str(value).replace(",", ""))
+    except ValueError:
+        return value
 
 
 def priority_ranks(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
@@ -351,11 +401,9 @@ def known_values(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check
             ):
                 bad.append(f"{fact.id}: stated price not returned as a value")
             continue
-        f = field_of(
-            ctx.state.get("extraction", str(fact.about.get("candidate"))), FIELD_FOR_KIND[fact.kind]
-        )
-        if f is None or is_unknown(f.get("value")) or enum_key(f.get("status", "")) in ABSTAINING:
-            bad.append(f"{fact.id}: stated value came back as an abstention")
+        entry, why = matching_entry(ctx, fact)
+        if entry is None:
+            bad.append(f"{fact.id}: stated value came back as an abstention ({why})")
     return failed(*bad) if bad else passed(f"{len(facts)} known values returned")
 
 
@@ -365,8 +413,8 @@ def abstention_count(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> C
     slack = int(ctx.key.counts.get("abstention_slack", 2))
     n = 0
     for out in ctx.state.outputs.values():
-        for f in dict(out.content.get("fields", {})).values():
-            if isinstance(f, Mapping) and (is_unknown(f.get("value")) or f.get("question")):
+        for f in entries(out):
+            if is_unknown(f.get("value")) or f.get("question"):
                 n += 1
         n += sum(
             1
@@ -387,11 +435,11 @@ CRITERIA = (
     Criterion("research.unique_reviews", "state", unique_reviews),
     Criterion("research.theme_counts", "state", theme_counts),
     Criterion("patent.families_are_edges", "state", families_are_edges),
-    Criterion("patent.matrix", "state", matrix, version="2"),
+    Criterion("patent.matrix", "state", matrix, version="3"),
     Criterion("patent.next_action", "state", next_action),
-    Criterion("patent.c1_extraction", "state", c1_extraction),
+    Criterion("patent.c1_extraction", "state", c1_extraction, version="2"),
     Criterion("patent.priority_ranks", "state", priority_ranks),
     Criterion("patent.undated_disclosure", "state", undated_disclosure),
-    Criterion("precision.known_values", "state", known_values, version="2"),
+    Criterion("precision.known_values", "state", known_values, version="3"),
     Criterion("precision.abstention_count", "state", abstention_count),
 )

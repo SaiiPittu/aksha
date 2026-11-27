@@ -308,20 +308,28 @@ def _pub_text(p: Mapping[str, Any]) -> str:
 
 
 def _evidence(p: Mapping[str, Any], groups: Groups) -> dict[str, Any] | None:
-    """The first claim (else the description) of ``p`` holding a matched term."""
-    terms = [t for g in groups for t in g]
+    """The passage of ``p`` that shows most of the element: a claim or one sentence.
+
+    Each claim, and each sentence of the abstract and the description, is scored by how
+    many of the element's term groups it holds; the best one is quoted (a claim before a
+    sentence on a tie, then the shorter), so the evidence is the words that show it.
+    """
+    options: list[tuple[int, int, int, str, str]] = []
     for c in p.get("claims", ()):
-        if _find(c["text"], terms):
-            return {
-                "publication": p["id"],
-                "file": p["file"],
-                "where": f"claim {c['number']}",
-                "quote": c["text"],
-            }
-    for part in ("description", "abstract"):
-        if p.get(part) and _find(p[part], terms):
-            return {"publication": p["id"], "file": p["file"], "where": part, "quote": p[part]}
-    return None
+        options.append((_hits(c["text"], groups), 0, len(c["text"]), f"claim {c['number']}",
+                        c["text"]))  # fmt: skip
+    for part in ("abstract", "description"):
+        for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z(\[])", str(p.get(part) or "")):
+            if sent.strip():
+                options.append((_hits(sent, groups), 1, len(sent), part, sent.strip()))
+    best = max(options, key=lambda o: (o[0], -o[1], -o[2]), default=None)
+    if best is None or best[0] == 0:
+        return None
+    return {"publication": p["id"], "file": p["file"], "where": best[3], "quote": best[4]}
+
+
+def _hits(text: str, groups: Groups) -> int:
+    return sum(1 for g in groups if _find(text, g))
 
 
 _NUMBERS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
@@ -452,6 +460,10 @@ class PatentFake(RuleGenerationModel):
             )
         history = ctx.ok("read_disclosures")[-1][1]
         linked = sorted({r["linked_file"] for r in history["rows"] if r["linked_file"]})
+        contrib = ctx.ok("read_contributors")[-1][1]
+        terms = [d["file"] for r in contrib["rows"] for d in r.get("agreement_documents", ())
+                 if d.get("file")]  # fmt: skip
+        linked = sorted({*linked, *terms})
         done = {a["path"] for a, _ in ctx.ok("read_linked")}
         todo = [p for p in linked if p not in done]
         if todo and not ctx.called("read_linked"):
@@ -491,7 +503,7 @@ class PatentFake(RuleGenerationModel):
                 _call("search_publications", 1, all_of=groups),
                 _call("web_search", 1, query=web_query(groups), limit=WEB_LIMIT),
             )
-        search = ctx.ok("search_publications")[-1][1]
+        search = next(d for a, d in ctx.ok("search_publications") if a.get("all_of") == groups)
         if not ctx.called("fetch_publication") and not ctx.called("fetch_url"):
             known = {_norm(str(h.get("title") or "")).lower() for h in search["hits"]}
             urls = choose_results([d for _, d in ctx.ok("web_search")], known)
@@ -501,6 +513,17 @@ class PatentFake(RuleGenerationModel):
             if calls:
                 return _reply(*calls)
         pubs = [d for _, d in ctx.ok("fetch_publication")]
+        numbers = sorted({str(cl["number"]) for p in pubs for cl in p.get("priority_claims", ())})
+        asked = [a for a, _ in ctx.ok("search_publications") if a.get("all_of") != groups]
+        if numbers and not asked:  # a family's other members: searched by its priority number
+            return _reply(*(_call("search_publications", i + 2, all_of=[[n]])
+                            for i, n in enumerate(numbers)))  # fmt: skip
+        fetched = {p["id"] for p in pubs}
+        siblings = sorted({h["id"] for a, d in ctx.ok("search_publications")
+                           if a.get("all_of") != groups for h in d["hits"]} - fetched)  # fmt: skip
+        if siblings and not any(a.get("id") in siblings for a, _ in ctx.ok("fetch_publication")):
+            return _reply(*(_call("fetch_publication", 100 + i, id=x)
+                            for i, x in enumerate(siblings)))  # fmt: skip
         have = {p["id"] for p in pubs}
         web = [d for _, d in ctx.ok("fetch_url")
                if d.get("kind") == "publication" and d.get("id") not in have
@@ -701,6 +724,9 @@ def _implementation(note: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+IP_TERMS = re.compile(r"\b(own(?:ed|s|ership)?|assign\w*|notify|invention|intellectual property)\b",
+                      re.I)  # fmt: skip
+"""A clause of an agreement about who owns or must be told of an invention."""
 OUTSIDE = re.compile(
     r"\b(outside|external|consultant|advisor|adviser|contractor|university)\b", re.I
 )
@@ -713,6 +739,46 @@ FULL = re.compile(r"\b(full description|in full|described fully|complete descrip
 
 def _undecided(param: Mapping[str, Any]) -> bool:
     return param.get("Value", "") in ("not decided", "")
+
+
+def _date_quote(note: Mapping[str, Any]) -> str:
+    """What a conception date cites: its short line (``Date: 14 Jan 2026``), else the date."""
+    line = str(note.get("date_line") or "")
+    written = note.get("date_as_written")
+    return line if not written or len(line) <= 40 else str(written)
+
+
+def _words_of(text: Any) -> set[str]:
+    return set(re.findall(r"[a-z]{3,}", str(text or "").lower())) - {"the", "and", "for", "not"}
+
+
+def _mark_conflicts(params: list[dict[str, Any]]) -> None:
+    """Two values written for one setting: both kept where they stand, neither chosen.
+
+    A setting written twice with the same unit and another value (a slide's table and its
+    speaker notes) is one setting whose sources disagree: each entry stays, marked a
+    conflict, with a question for whoever wrote them.
+    """
+    for i, a in enumerate(params):
+        for b in params[i + 1 :]:
+            if a.get("value") in (None, "") or b.get("value") in (None, "") or not a.get("unit"):
+                continue
+            if str(a["unit"]).casefold() != str(b.get("unit", "")).casefold():
+                continue
+            if str(a["value"]) == str(b["value"]):
+                continue
+            if not _words_of(a.get("name")) & _words_of(f"{b.get('name')} {b.get('quote')}"):
+                continue
+            q = (f"The sources give {a['value']} {a['unit']} and {b['value']} {b['unit']} for "
+                 f"{a.get('name')}: which holds?")  # fmt: skip
+            for x in (a, b):
+                x["status"], x["question"] = "conflict", q
+
+
+def _overlap(lex: Mapping[str, Any], text: str) -> tuple[int, int]:
+    """How much of the candidate ``text`` shows: elements shown, then step words it holds."""
+    words = {w for label, _, _ in lex["elements"].values() for w in content_words(str(label), 40)}
+    return len(_shown_elements(lex, text)), sum(1 for w in words if _find(text, [w]))
 
 
 def _clause(text: str, terms: Sequence[str]) -> str | None:
@@ -736,15 +802,18 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
     nf = note["file"]
     lex = lexicon_for(c, note)
     steps = [{"n": s["n"], "text": s["text"], **_q(nf, s["text"])} for s in note["mechanism_steps"]]
+    dated = {s["text"]: s["dated"] for s in note["mechanism_steps"] if s.get("dated")}
     elements = []
     for eid, (label, step_terms, _groups) in lex["elements"].items():
         step = next((s for s in steps if _find(s["text"], step_terms)), None)
+        own = dated.get(step["text"]) if step else None
         elements.append(
             {
                 "id": eid,
                 "label": label,
                 "terms": lex["elements"][eid][2],
                 "step": step["n"] if step else None,
+                **({"conceived": {"date": own["date"], **_q(nf, own["line"])}} if own else {}),
                 **(
                     _q(nf, step["text"])
                     if step
@@ -789,6 +858,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             row["value"] = value
             row["status"] = "complete"
         params.append(row)
+    _mark_conflicts(params)
     for op in note["open_points"]:
         gaps.append(
             {
@@ -838,6 +908,19 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
                     **_q(contrib["file"], r["agreement"]),
                 }
             )
+    terms = []  # what each person's role and agreement say, as written: counsel reads them
+    for r in contrib["rows"]:
+        for cell in (r.get("role"), r.get("agreement")):
+            if cell:
+                terms.append(_q(contrib["file"], cell))
+        for d in r.get("agreement_documents", ()):
+            doc = docs.get(d.get("file") or "")
+            if doc is None:
+                continue
+            for clause in doc.get("body", "").split("\n"):  # each clause as its line reads
+                clause = clause.strip()
+                if IP_TERMS.search(clause) and len(clause) < 400:
+                    terms.append(_q(doc["file"], clause))
     disclosures, outside = [], []
     conceived = note["date"]
     roles = {r["person_id"]: r["role"] for r in contrib["rows"]}
@@ -887,9 +970,14 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
             if "public_terms" in lex:
                 clause = _clause(shown_text, [t[0] for t in lex["public_terms"].values()])
             else:
-                sentences = re.findall(r"[^.?!\n]+[.?!]", shown_text)
-                clause = max(sentences, key=lambda x: len(_shown_elements(lex, x)), default="")
-                clause = clause.strip() if clause and _shown_elements(lex, clause) else None
+                sentences = [x.strip() for x in re.split(r"(?<=[.!?])\s+(?=[A-Z(])|\n", shown_text)
+                             if x.strip()]  # fmt: skip
+                ranked = [(_overlap(lex, x), x) for x in sentences]
+                best = max(ranked, key=lambda r: r[0], default=((0, 0), ""))
+                clause = best[1] if best[1] and (best[0][0] or best[0][1] >= 2) else None
+                kept = sorted((r for r in ranked if r[0][0] or r[0][1] >= 2), key=lambda r: r[0],
+                              reverse=True)[:4]  # fmt: skip
+                row["shown_quotes"] = [_q(doc["file"], x) for _, x in kept]
             row["elements_shown"] = shown
             if clause:
                 row["shown_quote"] = _q(doc["file"], clause)
@@ -960,7 +1048,7 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         "note": nf,
         "search": lex["search"],
         "sources": {"contributors": contrib.get("file"), "disclosures": history.get("file")},
-        "conception": {"date": conceived, **_q(nf, note["date_line"])},
+        "conception": {"date": conceived, **_q(nf, _date_quote(note))},
         "problem": _q(nf, note["problem"]),
         "mechanism": steps,
         "elements": elements,
@@ -968,9 +1056,11 @@ def extraction(c: str, ctx: Context) -> dict[str, Any]:
         "alternatives": [_q(nf, a) for a in note["alternatives"]],
         "implementation": {"status": _implementation(note), **_q(nf, note["evidence"])},
         "missing_details": gaps,
+        "opinions": [_q(nf, o) for o in note.get("opinions", ())],
         "missing_documents": missing_docs,
         "contributors": contributors,
         "agreements": agreements,
+        "people_terms": terms,
         "outside_contributions": outside,
         "disclosures": disclosures,
         "business_priority": (

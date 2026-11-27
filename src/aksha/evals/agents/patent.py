@@ -10,18 +10,19 @@ bound to the episode approval for ``packet/<C>``.
 =============================  =============================================================
 Bundle output                  From the run's artifacts
 =============================  =============================================================
-``extraction/<C>``             ``extraction``: ``gates`` (the mechanism's elements),
-                               ``quiet_window`` (the first parameter of the note's table),
-                               ``conception_date``, ``rejected_alternative`` (the first),
-                               ``quiet_window_rationale`` (an open point: null, a question),
-                               ``inventorship`` and ``ownership`` (the counsel questions,
-                               status ``needs_counsel_confirmation``), ``walk_test_results``
-                               (``not_found`` when a referenced document is missing)
+``extraction/<C>``             ``extraction`` as ``entries``, each named by the key's fact
+                               kind: ``mechanism_step`` (one per element, its ``element``
+                               label), ``parameter`` (each, its quantity), ``conception_record``
+                               (the record's date, and an element's own when a later entry
+                               dates it), ``alternative_rejected``, ``missing_detail`` (an
+                               open point: null, a question), ``missing_document``, ``opinion``,
+                               and ``inventorship`` and ``ownership`` (the counsel questions,
+                               status ``needs_counsel_confirmation``)
 ``missing_documents/<C>``      ``extraction.missing_documents``
 ``disclosures/<C>``            ``extraction.disclosures``: own and third-party events, a
-                               null date kept null
+                               null date kept null, the elements each shows
 ``matrix/<C>``                 ``comparison.cells``: element to family to state, each
-                               family named by its priority number
+                               family named by its priority number, citing the evidence
 ``recommendation/<C>``         ``recommendation``: next action and why
 ``priorities/all``             each extraction's ``business_priority`` rank
 ``family/<F>``                 ``prior_art.families``: members and differences
@@ -129,10 +130,12 @@ class PatentUnderTest(RuntimeUnderTest):
             comp = content("comparison", cand)
             if comp:
                 cells: dict[str, dict[str, str]] = {}
+                evidence: list[Any] = []
                 for cell in comp.get("cells", ()):
                     row = cells.setdefault(str(cell.get("element")), {})
                     row[str(cell.get("family"))] = str(cell.get("state"))
-                episode.save("matrix", cand, {"cells": cells})
+                    evidence.extend(e for e in cell.get("evidence", ()) if isinstance(e, Mapping))
+                episode.save("matrix", cand, {"cells": cells}, _cites(reader, evidence))
             rec = content("recommendation", cand)
             if rec:
                 chosen = {"next_action": rec.get("next_action"), "why": rec.get("why")}
@@ -154,45 +157,63 @@ class PatentUnderTest(RuntimeUnderTest):
     def _extraction(
         self, ep: Episode, reader: EpisodeReader, cand: str, ext: Mapping[str, Any]
     ) -> None:
-        fields: dict[str, Any] = {}
-        elements = [e for e in ext.get("elements", ()) if isinstance(e, Mapping)]
-        if elements:
-            fields["gates"] = _known([e.get("label") for e in elements], _cites(reader, elements))
-        params = [p for p in ext.get("parameters", ()) if isinstance(p, Mapping)]
-        if params:
-            p = params[0]
-            value = {"name": p.get("name"), "value": _number(p.get("value")), "unit": p.get("unit")}
-            fields["quiet_window"] = _known(value, _cites(reader, [p]))
+        out: list[dict[str, Any]] = []
+
+        def add(kind: str, value: Any, items: Iterable[object], **extra: Any) -> None:
+            status = extra.pop("status", None) or ("known" if value is not None else "missing")
+            out.append({"kind": kind, **extra, "value": value, "status": status,
+                        "question": extra.pop("question", None),
+                        "citations": _cites(reader, items)})  # fmt: skip
+
+        for e in ext.get("elements", ()):
+            if isinstance(e, Mapping):
+                add("mechanism_step", e.get("quote") or e.get("label"), [e], element=e.get("id"))
+                conceived = e.get("conceived")
+                if isinstance(conceived, Mapping) and conceived.get("date"):
+                    add("conception_record", conceived.get("date"), [conceived],
+                        element=e.get("id"))  # fmt: skip
+        for p in ext.get("parameters", ()):
+            if not isinstance(p, Mapping):
+                continue
+            value = (
+                None
+                if p.get("value") is None
+                else {
+                    "name": p.get("name"),
+                    "value": _number(p.get("value")),
+                    "unit": p.get("unit"),
+                }
+            )
+            status = {"complete": "known"}.get(str(p.get("status")), p.get("status"))
+            add("parameter", value, [p], status=status, question=p.get("question"))
         conception = ext.get("conception")
         if isinstance(conception, Mapping) and conception.get("date"):
-            fields["conception_date"] = _known(conception.get("date"), _cites(reader, [conception]))
-        alternatives = [a for a in ext.get("alternatives", ()) if isinstance(a, Mapping)]
-        if alternatives:
-            a = alternatives[0]
-            fields["rejected_alternative"] = _known(a.get("quote"), _cites(reader, [a]))
+            add("conception_record", conception.get("date"), [conception])
+        for a in ext.get("alternatives", ()):
+            if isinstance(a, Mapping):
+                add("alternative_rejected", a.get("quote"), [a])
         for gap in ext.get("missing_details", ()):
             if isinstance(gap, Mapping) and gap.get("value") is None:
                 question = dict(gap.get("gap") or {}).get("question")
-                fields["quiet_window_rationale"] = {"value": None, "status": "missing",
-                                                    "question": question,
-                                                    "citations": _cites(reader, [gap])}  # fmt: skip
-                break
-        people = _cites(
-            reader,
-            [*ext.get("outside_contributions", ()), *ext.get("contributors", ()),
-             *ext.get("agreements", ())],
-        )  # fmt: skip
+                add("missing_detail", None, [gap], status="missing", question=question)
+        for o in ext.get("opinions", ()):
+            if isinstance(o, Mapping):
+                add("opinion", o.get("quote"), [o], status="opinion")
+        people = [*ext.get("outside_contributions", ()), *ext.get("contributors", ()),
+                  *ext.get("agreements", ()), *ext.get("people_terms", ())]  # fmt: skip
         for topic in ("inventorship", "ownership"):
             q = next((c for c in ext.get("counsel_questions", ()) if c.get("topic") == topic), None)
             if q is not None:
-                fields[topic] = {"value": None, "status": q.get("status", COUNSEL),
-                                 "question": q.get("question"), "citations": people}  # fmt: skip
+                add(
+                    topic, None, people, status=q.get("status", COUNSEL), question=q.get("question")
+                )
         missing = [m for m in ext.get("missing_documents", ()) if isinstance(m, Mapping)]
+        for m in missing:
+            add("missing_document", None, [m], status="not_found")
         if missing:
-            fields["walk_test_results"] = {"value": None, "status": "not_found", "question": None}
             ep.save("missing_documents", cand, {"not_found": [m.get("name") for m in missing]},
                     _cites(reader, missing))  # fmt: skip
-        ep.save("extraction", cand, {"fields": fields})
+        ep.save("extraction", cand, {"entries": out})
         events = [
             {
                 "id": d.get("disclosure_id"),
@@ -202,7 +223,10 @@ class PatentUnderTest(RuntimeUnderTest):
                 "status": d.get("status"),
                 "cited_as_prior_art": False,
                 "citation": _cite(reader, d),
-                "evidence": _cites(reader, [d.get("shown_quote"), d.get("row")]),
+                "elements": list(d.get("elements_shown", ())),
+                "evidence": _cites(
+                    reader, [d.get("shown_quote"), d.get("row"), *d.get("shown_quotes", ())]
+                ),
             }
             for d in ext.get("disclosures", ())
             if isinstance(d, Mapping)
@@ -258,6 +282,4 @@ def _number(value: Any) -> Any:
     text = str(value)
     if re.fullmatch(r"-?\d+", text):
         return int(text)
-    if re.fullmatch(r"-?\d+\.\d+", text):
-        return float(text)
-    return value
+    return value  # a decimal stays as written: the store refuses floats

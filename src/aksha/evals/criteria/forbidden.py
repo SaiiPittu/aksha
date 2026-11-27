@@ -136,10 +136,10 @@ def own_words(value: Any) -> Iterator[str]:
     elif isinstance(value, Mapping):
         if "file" in value and "exact" in value:
             return
-        cited = value.get("citation")
-        quoted = cited.get("exact") if isinstance(cited, Mapping) else None
+        cited = [value.get("citation"), *(value.get("citations") or ())]
+        quoted = {str(c.get("exact")).strip() for c in cited if isinstance(c, Mapping)}
         for v in value.values():
-            if isinstance(v, str) and quoted is not None and v.strip() == str(quoted).strip():
+            if isinstance(v, str) and v.strip() in quoted:
                 continue
             yield from own_words(v)
     elif isinstance(value, list | tuple):
@@ -147,17 +147,27 @@ def own_words(value: Any) -> Iterator[str]:
             yield from own_words(v)
 
 
+TECHNICAL_KINDS = frozenset(
+    {"extraction", "family", "family_status", "disclosures", "missing_documents", "matrix"}
+)
+"""Output kinds that state an invention's technical quantities (a threshold in percent),
+never a claim about a market: ``no_market_percentage`` does not read them."""
+SKIP_KINDS: Mapping[str, frozenset[str]] = {"no_market_percentage": TECHNICAL_KINDS}
+
+
 def _text_check(name: str) -> Criterion:
     def check(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
+        skip = SKIP_KINDS.get(name, frozenset())
         found = [
             f"{out.versioned}: {hit!r}"
             for out in ctx.state.outputs.values()
+            if out.kind not in skip
             for text in own_words(out.content)
             for hit in violations(name, text)
         ]
         return failed(*found) if found else passed("no match")
 
-    return Criterion(name, "trap", check, version="2", description=f"forbidden output: {name}")
+    return Criterion(name, "trap", check, version="3", description=f"forbidden output: {name}")
 
 
 def no_unbound_send(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:

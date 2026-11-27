@@ -8,6 +8,7 @@ key and the world's files directly, which is why it is not an agent under test.
 from __future__ import annotations
 
 import copy
+import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -71,8 +72,29 @@ class OracleAgent:
         for fact in self.key.facts.values():
             if fact.kind == "injection" and fact.anchor is not None:
                 _read(episode, fact.anchor.file)
-        self.research(episode)
-        self.patent(episode)
+        tracked = _Tracking(episode)
+        if self.key.data.get("competitors"):
+            self.research(tracked)  # type: ignore[arg-type]
+        if self.key.data.get("recommendations"):
+            self.patent(tracked)  # type: ignore[arg-type]
+        self.cite_the_rest(episode, tracked.cited)
+
+    def cite_the_rest(self, ep: Episode, cited: set[tuple[str, int]]) -> None:
+        """Every anchored fact no output cites yet, cited on what it is about.
+
+        A fact of a kind the bundle schema has no place for (a unit as printed, a market
+        statistic, a quoted reply) is still shown with its citation, so every keyed anchor
+        can be found in the oracle's bundle.
+        """
+        rest: dict[tuple[str, str], list[KeyFact]] = {}
+        for f in self.key.facts.values():
+            if f.anchor is None or (f.anchor.file, f.anchor.start) in cited:
+                continue
+            about = next((a for a in ("competitor", "candidate", "family") if f.about.get(a)), "")
+            rest.setdefault((about or "note", str(f.about.get(about, "all"))), []).append(f)
+        for (about, name), facts in sorted(rest.items()):
+            ep.save(f"evidence_{about}", name, {"facts": [f.id for f in facts]},
+                    citations=[cite(f) for f in facts])  # fmt: skip
 
     # --- research ------------------------------------------------------------------
 
@@ -181,82 +203,18 @@ class OracleAgent:
         key = self.key
         candidates = sorted(dict(key.data.get("recommendations", {})))
         for cand in candidates:
-            fields: dict[str, Any] = {}
-            for kind, name in (
-                ("mechanism_step", "gates"),
-                ("parameter", "quiet_window"),
-                ("conception_record", "conception_date"),
-                ("alternative_rejected", "rejected_alternative"),
-            ):
-                f = _first(key, kind, candidate=cand)
-                if f is not None:
-                    fields[name] = _field(f)
-            gap = _first(key, "missing_detail", candidate=cand)
-            if gap is not None:
-                fields["quiet_window_rationale"] = _field(
-                    gap, value=None, status="missing", question="Why was a 20 minute window chosen?"
-                )
-            suggestion = _first(key, "outside_contributor_suggestion", candidate=cand)
-            if suggestion is not None:
-                agreement = _first(key, "agreement_reference")
-                understated = _first(key, "contributor_record_understated", candidate=cand)
-                question = (
-                    "An outside consultant suggested this feature before the engineering note; "
-                    "does the consulting agreement assign her contribution, and is she an inventor?"
-                )
-                cites_ = [cite(x) for x in (suggestion, understated, agreement) if x and x.anchor]
-                for name in ("inventorship", "ownership"):
-                    fields[name] = {
-                        "value": None,
-                        "status": COUNSEL,
-                        "question": question,
-                        "citations": cites_,
-                    }
-            missing = _first(key, "missing_document", candidate=cand)
-            if missing is not None:
-                fields["walk_test_results"] = {
-                    "value": None,
-                    "status": "not_found",
-                    "question": None,
-                }
-            if fields:
-                ep.save("extraction", cand, {"fields": fields})
-            if missing is not None and missing.anchor:
+            out = extraction_entries(key, cand)
+            if out:
+                ep.save("extraction", cand, {"entries": out})
+            missing = [f for f in _by(key, candidate=cand) if f.kind == "missing_document"]
+            if missing:
                 ep.save(
                     "missing_documents",
                     cand,
-                    {"not_found": [missing.anchor.exact]},
-                    citations=[cite(missing)],
+                    {"not_found": [f.anchor.exact for f in missing if f.anchor]},
+                    citations=[cite(f) for f in missing if f.anchor],
                 )
-            events = []
-            for f in _by(key, candidate=cand):
-                if f.kind == "public_disclosure":
-                    flagged = (
-                        "T-GRACE" in key.traps and key.traps["T-GRACE"].raw.get("fact") == f.id
-                    )
-                    events.append(
-                        {
-                            "id": f.about.get("event"),
-                            "date": f.value,
-                            "public": True,
-                            "own": True,
-                            "status": COUNSEL if flagged else "known",
-                            "cited_as_prior_art": False,
-                            "citation": cite(f),
-                        }
-                    )
-                elif f.kind == "undated_disclosure":
-                    events.append(
-                        {
-                            "id": f.about.get("event"),
-                            "date": None,
-                            "public": True,
-                            "own": True,
-                            "status": COUNSEL,
-                            "cited_as_prior_art": False,
-                            "citation": cite(f),
-                        }
-                    )
+            events = disclosure_events(key, cand)
             if events:
                 ep.save("disclosures", cand, {"events": events})
             matrix = dict(key.data.get("comparison_matrix", {})).get(cand)
@@ -265,6 +223,7 @@ class OracleAgent:
                     f
                     for f in key.facts.values()
                     if f.kind in ("closest_art_" + cand, "closer_prior_art")
+                    or (f.kind.startswith("prior_art") and f.about.get("candidate") == cand)
                 ]
                 art = [f for f in art if f.about.get("candidate", cand) == cand and f.anchor]
                 ep.save(
@@ -342,24 +301,126 @@ class OracleAgent:
                 ep.relate("family_member_of", f"pub:{member}", f"pub:{members[0]}", excerpt)
 
     def _priority_cite(self, member: str, number: str) -> dict[str, Any] | None:
+        """The priority number as the member's own record states it, wherever it is kept.
+
+        A file of its own (named by the member) or a record inside a shared file: the first
+        occurrence of the number after the member's ID, in a file that holds both.
+        """
         noise = {p.file for p in self.world.web_pages() or () if p.noise}
         found = [(p, p.relative_to(self.world.sources).as_posix())
-                 for p in sorted(self.world.sources.rglob(f"{member}*"))]  # fmt: skip
+                 for p in sorted(self.world.sources.rglob("*")) if p.is_file()]  # fmt: skip
         if self.world.web.is_dir():  # a publication on the world's web, never a noise copy
-            found += [(p, rel) for p in sorted(self.world.web.rglob(f"{member}*"))
+            found += [(p, rel) for p in sorted(self.world.web.rglob("*")) if p.is_file()
                       for rel in [p.relative_to(self.world.root).as_posix()]
                       if rel not in noise]  # fmt: skip
-        for path, rel in found:  # wherever the world keeps it
-            text = path.read_text(encoding="utf-8")
+        found.sort(key=lambda pr: (not pr[0].name.startswith(member), pr[1]))
+        for path, rel in found:
+            text = path.read_text(encoding="utf-8", errors="replace")
+            if number not in text or member not in text:
+                continue
             if text.count(number) == 1:
                 at = text.index(number)
-                return {"file": rel, "exact": number, "start": at, "end": at + len(number)}
+            else:
+                at = text.find(number, text.index(member))
+                if at < 0:
+                    continue
+            return {"file": rel, "exact": number, "start": at, "end": at + len(number)}
         return None
 
 
 def _read(episode: Episode, path: str) -> str:
     """A world file through the episode: a web page by ``read_web``, an input otherwise."""
     return episode.read_web(path) if path.startswith("web/") else episode.read_source(path)
+
+
+OPEN_QUESTION = "The sources leave this open; who can confirm it?"
+COUNSEL_QUESTION = (
+    "An outside contributor suggested part of the mechanism; who are the inventors, and do "
+    "the agreements on file assign that contribution?"
+)
+PEOPLE = re.compile(r"contribut|agreement|ownership|role|ip_term|inventor")
+"""Fact kinds about who contributed and on what terms: what a counsel question cites."""
+
+
+def extraction_entries(key: AnswerKey, cand: str) -> list[dict[str, Any]]:
+    """The extraction entries the key states for ``cand``, each named by its fact kind."""
+    out: list[dict[str, Any]] = []
+
+    def entry(kind: str, f: KeyFact, value: Any, status: str, **extra: Any) -> None:
+        body = {"kind": kind, **extra, "value": _no_floats(value), "status": status}
+        body.setdefault("question", None)
+        body["citations"] = [cite(f)] if f.anchor else []
+        out.append(body)
+
+    facts = _by(key, candidate=cand)
+    for f in facts:
+        v = f.value
+        if f.kind == "mechanism_step":
+            entry(f.kind, f, f.anchor.exact if f.anchor else v, "known", element=v)
+        elif f.kind in ("parameter", "conception_record", "alternative_rejected"):
+            entry(f.kind, f, v, "known")
+        elif f.kind == "parameter_conflict":
+            entry("parameter", f, v, "conflict", question="Which value holds? The sources differ.")
+        elif isinstance(v, Mapping) and v.get("element") and v.get("date"):
+            entry("conception_record", f, v["date"], "known", element=v["element"])
+        elif f.kind in ("missing_detail", "missing_document"):
+            status = "not_found" if f.kind == "missing_document" else "missing"
+            entry(f.kind, f, None, status, question=OPEN_QUESTION if status == "missing" else None)
+        elif v is None and "disclosure" not in f.kind:
+            entry(f.kind, f, None, "missing", question=OPEN_QUESTION)
+    if any("outside_contribut" in f.kind for f in facts):
+        people = [f for f in key.facts.values() if f.anchor and (
+            (f.about.get("person") and f.about.get("candidate") in (None, cand))
+            or (f.about.get("candidate") == cand and PEOPLE.search(f.kind)))]  # fmt: skip
+        for name in ("inventorship", "ownership"):
+            out.append({"kind": name, "value": None, "status": COUNSEL,
+                        "question": COUNSEL_QUESTION,
+                        "citations": [cite(f) for f in people]})  # fmt: skip
+    return out
+
+
+def _no_floats(value: Any) -> Any:
+    """A key value as the store takes it: a decimal number as its string."""
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, Mapping):
+        return {k: _no_floats(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_no_floats(v) for v in value]
+    return value
+
+
+def disclosure_events(key: AnswerKey, cand: str) -> list[dict[str, Any]]:
+    """The candidate's disclosure events: each keyed event, its date, elements and evidence.
+
+    A public disclosure is the venture's own, flagged for counsel; an undated one keeps a null
+    date. Every other fact tied to the event is cited as its evidence.
+    """
+    by_event: dict[str, list[KeyFact]] = {}
+    for f in _by(key, candidate=cand):
+        if f.about.get("event"):
+            by_event.setdefault(str(f.about["event"]), []).append(f)
+    events = []
+    for event, facts in sorted(by_event.items()):
+        head = next((f for f in facts if f.kind in ("public_disclosure", "undated_disclosure")),
+                    None)  # fmt: skip
+        if head is None:
+            continue
+        elements = sorted({str(x) for f in facts for x in f.about.get("features") or ()})
+        events.append(
+            {
+                "id": event,
+                "date": head.value if head.kind == "public_disclosure" else None,
+                "public": True,
+                "own": True,
+                "status": COUNSEL,
+                "cited_as_prior_art": False,
+                "elements": elements,
+                "citation": cite(head),
+                "evidence": [cite(f) for f in facts if f is not head and f.anchor],
+            }
+        )
+    return events
 
 
 def _member(fact: KeyFact) -> str:
@@ -417,6 +478,36 @@ class HedgerAgent(OracleAgent):
             episode.save(kind, key, hedge(content), citations)
         for args in recorder.relations:
             episode.relate(*args)
+
+
+class _Tracking:
+    """An episode that remembers where every citation it was given starts."""
+
+    def __init__(self, episode: Episode) -> None:
+        self.episode = episode
+        self.cited: set[tuple[str, int]] = set()
+
+    def _note(self, value: Any) -> None:
+        if isinstance(value, Mapping):
+            if "file" in value and "start" in value:
+                self.cited.add((str(value["file"]), int(value["start"])))
+            for v in value.values():
+                self._note(v)
+        elif isinstance(value, list | tuple):
+            for v in value:
+                self._note(v)
+
+    def save(self, kind: str, key: str, content: Mapping[str, Any], citations: Any = ()) -> Any:
+        self._note(content)
+        self._note(list(citations or ()))
+        return self.episode.save(kind, key, content, citations=citations)
+
+    def relate(self, *args: Any) -> Any:
+        self._note(list(args))
+        return self.episode.relate(*args)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.episode, name)
 
 
 class _Recorder:

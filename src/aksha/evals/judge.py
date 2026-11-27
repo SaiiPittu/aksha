@@ -25,7 +25,7 @@ from typing import ClassVar
 
 from aksha.evals.bundle import EpisodeRecord
 from aksha.evals.case import EvalCase
-from aksha.evals.criteria.common import competitor_output, field_of, text_of
+from aksha.evals.criteria.common import competitor_output, entries, text_of
 from aksha.evals.errors import CaseInvalid
 from aksha.evals.grade import CriterionResult, GradeContext
 from aksha.evals.metrics import wilson
@@ -242,10 +242,13 @@ def _k4(ctx: GradeContext) -> str:
 
 
 def _consult(ctx: GradeContext) -> str:
-    out = ctx.state.get("extraction", "C1")
+    trap = ctx.key.traps.get("T-CONSULT")
+    about = [ctx.key.facts[f].about for f in (trap.facts if trap else ()) if f in ctx.key.facts]
+    cand = next((str(a["candidate"]) for a in about if a.get("candidate")), None)
+    out = ctx.state.get("extraction", cand) if cand else None
     lines = []
     for name in ("inventorship", "ownership"):
-        f = field_of(out, name) or {}
+        f = next(iter(entries(out, name)), {})
         lines.append(f"{name}: status {f.get('status')}; question: {f.get('question')}")
     return "\n".join(lines)
 
