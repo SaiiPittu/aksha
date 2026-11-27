@@ -164,8 +164,11 @@ def scope_problem(
     ``reads`` are the instance's reads as text (``query:<id>@<hash>``, whole); ``records``
     maps a record ID to the version the log last recorded for it.
     """
+    # A query ID may hold "@" in its arguments; the hash after the last "@" never does. So
+    # the read's whole ID is compared, as invalidation compares it, never a prefix.
+    read_queries = {r[len("query:") :].rpartition("@")[0] for r in reads if r.startswith("query:")}
     for query in claim.scope.queries:
-        if not any(r.startswith(f"query:{query}@") for r in reads):
+        if query not in read_queries:
             return ClaimProblem(
                 "scope_not_read", claim.pointer,
                 f"{query!r} was never run here: run the search the claim rests on",

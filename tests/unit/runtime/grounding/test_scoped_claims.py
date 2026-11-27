@@ -84,6 +84,18 @@ def test_a_scope_the_instance_never_read_or_that_moved_is_refused() -> None:
     assert codes({"x": absence({"records": ["record:pages/P-0001@2"]})}) == []
 
 
+def test_a_scoped_query_must_match_a_read_query_exactly() -> None:
+    # A query ID may hold "@" in its serialized arguments. A scope that stops just before
+    # it names a search the instance never ran, though the read text starts with it, and
+    # invalidation compares the scope's ID exactly, so the claim would never reopen.
+    full = 'syn.search?{"term":"desk@floor"}'
+    shorter = 'syn.search?{"term":"desk'
+    ev = evidence(reads=frozenset({*READS, f"query:{full}@q-2"}))
+    assert verify_content({"x": absence({"query": full})}, (), ev) == ()
+    (refused,) = verify_content({"x": absence({"query": shorter})}, (), ev)
+    assert isinstance(refused, CiteError) and refused.code == "scope_not_read"
+
+
 def test_a_coverage_claim_states_its_count_and_is_checked_in_a_declared_field() -> None:
     good = {"coverage": {"statement": "pages that name a price", "count": 2, "of": 5,
                          "scope": {"query": QUERY}}}  # fmt: skip

@@ -13,8 +13,11 @@ the one writer of source facts like any moved record, and invalidation reopens e
 values read under it; a definition read is always a strong dependency.
 
 A call that passes its own fields or questions, different from the declared ones, has its
-definition in the tool's code, which the agent definition hash covers (ADR-P20 D7); it
-records no definition read.
+definition in the tool's code, which the agent definition hash covers (ADR-P20 D7). Such a
+call records a read of :func:`code_record` (``definitions/<agent>/~code``) at that hash, so
+a changed definition reopens the values the tool's own schema produced. The read is coarse:
+any change the definition hash sees reopens them, which fails closed. A loop run with no
+definition hash records no such read.
 """
 
 from __future__ import annotations
@@ -33,6 +36,18 @@ DEFINITIONS_SOURCE = "definitions"
 def definition_record(agent: str, alias: str) -> str:
     """The record a call of ``agent``'s ``alias`` reads: ``definitions/<agent>/<alias>``."""
     return f"{DEFINITIONS_SOURCE}/{agent}/{alias}"
+
+
+CODE_RECORD = "~code"
+"""The record name of an agent's whole definition, as a tool's own schema depends on it.
+
+``~`` keeps it apart from any alias name an agent declares.
+"""
+
+
+def code_record(agent: str) -> str:
+    """The record a call with a tool's own schema reads: ``definitions/<agent>/~code``."""
+    return f"{DEFINITIONS_SOURCE}/{agent}/{CODE_RECORD}"
 
 
 def _plain(value: Any) -> Any:

@@ -15,7 +15,9 @@ reopens:
    only the unscoped search is noticed;
 4. a changed extraction schema reopens the value extracted under it, though no page byte
    moved;
-5. a ``notify`` agent is noticed strongly for a changed cited span and never reopened.
+5. a ``notify`` agent is noticed strongly for a changed cited span and never reopened;
+6. a value extracted under fields the tool passed itself, not the declared ones, reopens
+   when the agent definition (which hashes the tool's code) changes.
 """
 
 from __future__ import annotations
@@ -118,11 +120,19 @@ def hits_hash(hits: list[str]) -> str:
     return "q-" + hashlib.sha256("\n".join(sorted(hits)).encode()).hexdigest()[:16]
 
 
+OWN_FIELDS = (FieldSpec("headline", description="the headline, as the tool's code asks"),)
+"""Fields a tool passes itself (``Pages.own_fields``): its definition is the tool's code."""
+
+DEFINITION = "sha256:" + "d" * 64
+"""The synthetic agent definition hash the loop setup runs under."""
+
+
 class Pages:
     """The synthetic folder and the agent's tool bodies over it."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, own_fields: bool = False) -> None:
         self.root = root
+        self.own_fields = own_fields
         (root / "pages").mkdir(parents=True)
         self.put("pages/p1.md", P1)
         self.put("pages/p2.md", P2)
@@ -170,7 +180,8 @@ class Pages:
             SpanDraft(SOURCE, found.record_id, found.version, a, b)
             for a, b in _paragraphs(found.text)
         ]
-        (judged,) = ctx.models.extract("facts", found, drafts)
+        fields = OWN_FIELDS if self.own_fields else None
+        (judged,) = ctx.models.extract("facts", found, drafts, fields)
         assert judged.accepted and judged.spans
         n = int(judged.spans[0].span_id[1:])
         data = {"headline": judged.value, "passage": n,
@@ -269,8 +280,10 @@ def rule(request: GenerationRequest) -> GenerationResult:
 class Bench:
     """One owner's store, the pages, and the agent's loop setup."""
 
-    def __init__(self, path: Path, keys: str = "citations", mode: str = "rebuild") -> None:
-        self.pages = Pages(path.parent / "pages-root")
+    def __init__(
+        self, path: Path, keys: str = "citations", mode: str = "rebuild", own_fields: bool = False
+    ) -> None:
+        self.pages = Pages(path.parent / "pages-root", own_fields)
         self.clock = FakeClock(START)
         self.store = open_store(path, self.clock, writer=True)
         self.model = Recorder(rule=rule)
@@ -281,7 +294,7 @@ class Bench:
             registry=ToolRegistry(agent, listed, ()),
             table=bind_aliases((FACTS,), "fake", {"generate": self.model, "facts": Headlines()}),
             instructions="Keep notes.", request="Note the pages.", reader=self.pages.source,
-            artifacts=ArtifactStore(KINDS), kinds=KINDS,
+            artifacts=ArtifactStore(KINDS), kinds=KINDS, definition_hash=DEFINITION,
         )  # fmt: skip
         self.executor = StepExecutor(self.store, OWNER, self.clock)
         payload = {"agent": AGENT, "cause": "request", "invalidation": mode,
@@ -441,5 +454,30 @@ def test_notify_mode_is_noticed_strongly_and_never_reopened(tmp_path: Path) -> N
         assert by[f"{AGENT}.note@v1"].strength == "strong"
         assert by[f"{AGENT}.facts@v1"].strength == "weak"
         assert recheck_items(b.view())[0].version == f"{AGENT}.facts@v1"
+    finally:
+        b.close()
+
+
+def test_fields_the_tool_passes_itself_are_keyed_on_the_agent_definition(
+    tmp_path: Path,
+) -> None:
+    # The declared schema did not shape this value: the tool's own fields did, and they live
+    # in its code, which the agent definition hash covers. So the call reads the definition
+    # itself, and a changed definition reopens the value though no page byte and no declared
+    # alias moved.
+    b = Bench(tmp_path / "f.sqlite", own_fields=True)
+    try:
+        reads = {e.payload["input"]["id"] for e in b.events("read.recorded")}
+        assert f"definitions/{AGENT}/~code" in reads
+        assert f"definitions/{AGENT}/facts" not in reads  # the declared schema was not used
+        same = DefinitionSource({AGENT: (FACTS,)}, {AGENT: DEFINITION})
+        b.change("unchanged", same)
+        assert b.events("source.changed") == []
+        b.change("tool-code", DefinitionSource({AGENT: (FACTS,)}, {AGENT: "sha256:" + "e" * 64}))
+        iv = b.iv()
+        facts = iv.state(f"{AGENT}.facts@v1")
+        assert facts.freshness == "invalidated"
+        assert [r.input.id for r in facts.changed_reads()] == [f"definitions/{AGENT}/~code"]
+        assert iv.state(f"{AGENT}.note@v1").freshness == "current"  # no model read it
     finally:
         b.close()

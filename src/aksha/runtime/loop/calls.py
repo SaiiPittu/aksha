@@ -298,7 +298,7 @@ def run_position(
                 session = run_session(view, setup.owner, ref.run)
                 exe = exec_for(setup, spec, str(step), attempt, unit, session)
             models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner,
-                                    setup.agent.name)  # fmt: skip
+                                    setup.agent.name, setup.definition_hash or "")  # fmt: skip
             outcome = body(ctx(reader, http, exe, dates, models))
             extra = (*dates.reads, *models.reads)  # definition reads (ADR-P05 M2) after dates
             out = _dispatched(setup, ref, step, spec, outcome, reader.returned, extra)

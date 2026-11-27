@@ -385,9 +385,12 @@ class Session:
     def _definitions(self) -> VersionedSource:
         """The loaded agents' alias definitions as a source (ADR-P05 M2).
 
-        A changed schema reopens the values extracted under the old one.
+        A changed schema reopens the values extracted under the old one, and a changed
+        definition hash the values a tool's own schema produced.
         """
-        return DefinitionSource.of(a.agent for a in self.agents.values())
+        loaded = self.agents.values()
+        codes = {a.agent.name: a.definition_hash for a in loaded if a.definition_hash}
+        return DefinitionSource.of((a.agent for a in loaded), codes)
 
     def _versioned(self) -> tuple[VersionedSource, ...]:
         inputs = () if self.inputs is None else (self.inputs,)

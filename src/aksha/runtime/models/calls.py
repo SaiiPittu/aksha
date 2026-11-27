@@ -50,7 +50,7 @@ from aksha.runtime.models.codec import (
     extraction_result_json,
     judgement_json,
 )
-from aksha.runtime.models.definitions import alias_definition, definition_record
+from aksha.runtime.models.definitions import alias_definition, code_record, definition_record
 from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
 from aksha.runtime.models.routing import AliasTable, adapter_name, cascade_for
 from aksha.runtime.models.thresholds import threshold_classification, threshold_extraction
@@ -108,27 +108,41 @@ class ToolModelCalls:
         tool: str,
         owner: str = "",
         agent: str = "",
+        code_version: str = "",
     ) -> None:
-        """Ask only ``allowed`` aliases of ``table``, for ``tool``'s body (of ``agent``)."""
+        """Ask only ``allowed`` aliases of ``table``, for ``tool``'s body (of ``agent``).
+
+        ``code_version`` is the agent definition hash a call with the tool's own schema
+        depends on (``models.definitions.code_record``); empty, it records no such read.
+        """
         self._table = table
         self._allowed = allowed
         self._tool = tool
         self._owner = owner
         self._agent = agent
         self.calls: list[dict[str, Any]] = []
+        self._code_version = code_version
         self._definitions: dict[str, str] = {}
+        self._own_schema = False
 
     @property
     def reads(self) -> tuple[InputRef, ...]:
-        """The definition reads of the calls made under declared definitions (item 5)."""
-        return tuple(
+        """The definition reads of the calls (item 5): declared ones, then the tool's code."""
+        declared = tuple(
             InputRef("record", definition_record(self._agent, alias), version)
             for alias, version in sorted(self._definitions.items())
         )
+        if not self._own_schema:
+            return declared
+        return (*declared, InputRef("record", code_record(self._agent), self._code_version))
 
     def _defined(self, alias: str, declared: bool) -> None:
-        if declared and self._agent:
+        if not self._agent:
+            return
+        if declared:
             self._definitions[alias] = alias_definition(self._table.aliases[alias])
+        elif self._code_version:
+            self._own_schema = True
 
     @property
     def records(self) -> list[dict[str, Any]]:
