@@ -155,6 +155,17 @@ def test_recommendations_equal_the_key_for_all_four(sent: PatentRig) -> None:
         assert rec["why"] and rec["would_change_if"]
 
 
+def test_the_patent_agent_alone_records_business_importance_from_research_as_unknown(
+    sent: PatentRig,
+) -> None:
+    """R-36: no research output exists in this store, and the run still completes."""
+    for c in CANDIDATES:
+        part = sent.content("recommendation", c)["business_importance"]
+        assert (part["from_research"], part["research"]) == ("unknown", []), c
+        assert part["note"] == rules.RESEARCH_NOTE
+        assert "unknown" in part["summary"]
+
+
 def test_grace_period_fact_is_dates_and_days_only(sent: PatentRig) -> None:
     ext = sent.content("extraction", "C1")
     (demo,) = [d for d in ext["disclosures"] if d["disclosure_id"] == "DISC-01"]

@@ -40,6 +40,9 @@ C1_CHAIN = {
 NEEDS_CHAIN = {f"research.{kind}@v2" for kind in ("needs", "matrix", "findings", "tests")}
 """The demo's own edit, one review, reopens the theme counts it is counted in: their
 scope is the whole review export (ADR-P13 M1), and the counts' readers follow."""
+RESEARCH_READERS = {f"patent.recommendation/{c}@v2" for c in ("C2", "C3", "C4")}
+"""Every recommendation reads the research needs and findings for business importance, so
+the research rebuild reopens the other candidates' recommendations too, and nothing else."""
 
 
 @pytest.fixture(scope="module")
@@ -59,12 +62,13 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     demo: tuple[dict[str, Any], str],
 ) -> None:
     report, _ = demo
-    assert set(report["rebuilt"]) == C1_CHAIN | NEEDS_CHAIN
+    assert set(report["rebuilt"]) == C1_CHAIN | NEEDS_CHAIN | RESEARCH_READERS
     first, kept = report["first"], report["kept"]
     research = {s for s in first["research"] if f"{first['research'][s]}" not in
                 {r.replace("@v2", "@v1") for r in NEEDS_CHAIN}}  # fmt: skip
     assert set(kept["research"]) == research and research
-    others = {s for s in first["patent"] if s.split("/")[-1] in ("C2", "C3", "C4")}
+    others = {s for s in first["patent"] if s.split("/")[-1] in ("C2", "C3", "C4")
+              and not s.startswith("patent.recommendation/")}  # fmt: skip
     assert others and others <= set(kept["patent"])
     rebuilt_by = {r["agent"] for r in report["runs"].values() if r["cause"] == "rebuild"}
     assert rebuilt_by == {"patent", "research"}
@@ -91,6 +95,24 @@ def test_the_change_reopens_only_c1s_chain_and_keeps_the_rest(
     action = key["expected_after_change"]["C1_next_action"]
     assert report["next_action"]["before"] == action["before"]
     assert report["next_action"]["after"] == action["after"]
+
+
+def test_c1s_recommendation_reads_and_cites_research_by_version(
+    demo: tuple[dict[str, Any], str],
+) -> None:
+    """R-36, R-55: the recommendation's lineage holds the research versions it cites."""
+    report, stdout = demo
+    reads = report["research_reads"]
+    assert reads["first"]["lineage"] == ["research.findings@v1", "research.needs@v1"]
+    assert reads["after"]["lineage"] == ["research.findings@v2", "research.needs@v2"]
+    assert all(r["cited"] == r["lineage"] for r in reads.values())
+    # The research rebuild reopens every recommendation that read it, and only those.
+    dirty = set(report["change"]["dirty"])
+    assert {f"patent.recommendation/{c}@v1" for c in ("C2", "C3", "C4")} <= dirty
+    assert (
+        "C1 recommendation read research.findings@v1, research.needs@v1 (business "
+        "importance only)" in stdout
+    )
 
 
 def test_a_fresh_approval_is_asked_for_the_new_packet_and_scripted(
@@ -166,7 +188,8 @@ def test_the_readmes_demo_excerpt_matches_a_run(demo: tuple[dict[str, Any], str]
         f"kept {patent} patent outputs: ",
         f"kept {research} of {len(report['first']['research'])} research outputs: ",
         "weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it",
-        f"the same change would reopen {report['change']['read_keyed']} outputs, not 14",
+        f"the same change would reopen {report['change']['read_keyed']} outputs, not "
+        f"{len(report['change']['invalidated']) + len(report['change']['dirty'])}",
         f"mailbox: {deliveries} deliveries for {report['mailbox']['keys']} idempotency keys",
         "recovery asked the mailbox by key 1 time, sent 0 times",
     )

@@ -94,6 +94,7 @@ class Report:
     kept: dict[str, list[str]] = field(default_factory=dict)
     cutoff: list[str] = field(default_factory=list)
     next_action: dict[str, str] = field(default_factory=dict)
+    research_reads: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     contributor: dict[str, Any] = field(default_factory=dict)
     approvals: list[dict[str, Any]] = field(default_factory=list)
     kill: dict[str, Any] = field(default_factory=dict)
@@ -345,6 +346,13 @@ def _final(rt: DemoRuntime, work: Path, report: Report) -> None:
         "after": _content(rt, report.after["patent"], "patent.recommendation/C1")["next_action"],
         "key_expects": variant_key()["expected_after_change"]["C1_next_action"]["after"],
     }
+    for when in ("first", "after"):
+        report.research_reads[when] = _research_reads(rt, getattr(report, when)["patent"])
+    for slot in report.first["patent"]:  # the other recommendations reopened on research only
+        if slot.startswith("patent.recommendation/") and not slot.endswith("/C1"):
+            before = _content(rt, report.first["patent"], slot)["next_action"]
+            after = _content(rt, report.after["patent"], slot)["next_action"]
+            _require(before == after, f"{slot} changed its next action: {before} -> {after}")
     outside = _content(rt, report.after["patent"], "patent.extraction/C1")["outside_contributions"]
     _require(outside, "the rebuilt C1 extraction names no outside contributor")
     report.contributor = {
@@ -366,6 +374,20 @@ def _final(rt: DemoRuntime, work: Path, report: Report) -> None:
     seq, head = rt.store.head()
     report.chain = {"ok": breaks is None, "events": seq, "head": head,
                     "break": None if breaks is None else str(breaks)}  # fmt: skip
+
+
+def _research_reads(rt: DemoRuntime, refs: Mapping[str, str]) -> dict[str, list[str]]:
+    """C1's recommendation: the research versions its lineage holds, and those it cites."""
+    found = version(_view(rt), ArtifactRef.parse(refs["patent.recommendation/C1"]),
+                    blobs=rt.research.blobs)  # fmt: skip
+    if found is None:
+        raise DemoFailed(f"no version {refs['patent.recommendation/C1']}")
+    lineage = sorted(str(ArtifactRef.from_input(r)) for r in found.reads
+                     if r.kind == "artifact" and r.id.startswith("research."))  # fmt: skip
+    part = found.content.get("business_importance", {})
+    cited = sorted(str(i["cite"]["artifact"]) for i in part.get("research", ()))
+    _require(cited == lineage, f"C1's recommendation cites {cited} but read {lineage}")
+    return {"lineage": lineage, "cited": cited}
 
 
 def _content(rt: DemoRuntime, refs: Mapping[str, str], slot: str) -> Mapping[str, Any]:

@@ -63,4 +63,4 @@ On the held-out worlds the research agent passes 25 of 26 cases and the patent a
 | Unattended operation: stronger isolation, a halt-everything stop, per-agent identity, an untrusted-origin mark, an approval inbox, event-triggered runs (X-1 to X-7) | Designed, not built; see [future directions](design/05-future-directions.md) |
 
 | A web app and a terminal chat over the session API, with accounts, orgs and roles | Built ([#101](https://github.com/SaiiPittu/aksha/pull/101)); accounts are in the HTTP layer only |
-| The patent agent reading research outputs by artifact ID and version | Not built: the loader supports it, the patent agent declares no such read ([requirements R-36](requirements.md)) |
+| The patent agent reading research outputs by artifact ID and version | Built: each recommendation reads and cites `research.needs` and `research.findings` by version, for business importance only ([requirements R-36](requirements.md)) |

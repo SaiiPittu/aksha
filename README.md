@@ -26,11 +26,12 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
    edited disclosures/consultant-email.eml.txt, disclosures/history.csv (the outside suggestion, now dated earlier)
 3. Invalidation reopens only what depends on the change (6.6 s)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
-   keyed on every read instead, the same change would reopen 27 outputs, not 14
-   rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
-   kept 13 patent outputs: C2: comparison, extraction, prior_art, recommendation; ...; portfolio
+   keyed on every read instead, the same change would reopen 27 outputs, not 17
+   rebuilt 17: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; C2: recommendation; C3: recommendation; C4: recommendation; findings, matrix, needs, tests, selection, table
+   kept 10 patent outputs: C2: comparison, extraction, prior_art; ...; portfolio
    kept 7 of 11 research outputs: ...
    C1 next action: prioritize_counsel_review -> collect_more_evidence (the v2 answer key expects collect_more_evidence)
+   C1 recommendation read research.findings@v1, research.needs@v1 (business importance only), then research.findings@v2, research.needs@v2 once the research rebuilt; ...
    C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation for counsel
    A-0001 approved patent.packet/C1@v1 only, so it does not cover patent.packet/C1@v2; a fresh approval is requested
 4. SIGKILL mid-send, then recovery (3.45 s)
@@ -42,7 +43,7 @@ What this shows:
 
 - **Act 1.** The research agent maps the competitors and customer needs. The patent agent triages four invention candidates and sends an approved disclosure packet for C1.
 - **Act 2.** A new prior-art publication appears, and a consultant's suggestion turns out to predate their agreement.
-- **Act 3.** Only 14 of the 34 outputs reopen. C1 moves from counsel review to collecting more evidence, the ownership question goes to counsel, and the old approval does not cover the new packet.
+- **Act 3.** Only 17 of the 34 outputs reopen. The research needs and findings move, so every patent recommendation, which reads them for business importance only, reopens with them. C1 moves from counsel review to collecting more evidence, the ownership question goes to counsel, and the old approval does not cover the new packet.
 - **Act 4.** The process dies after the mailbox stored the packet but before the receipt was recorded. Recovery asks the mailbox by key instead of sending again, so each packet version arrives once.
 
 The whole output, act by act, is in [examples/change-and-recovery.md](examples/change-and-recovery.md). To run the test suite from a clone:
@@ -55,11 +56,11 @@ make venv && make check   # lint, type check and every test, offline; about 6 mi
 
 [docs/requirements.md](docs/requirements.md) is the one page to read. It maps 97 requirements to code paths, pytest node IDs and commands, and a test fails if any named path or test stops existing. Its summary as of 28 Nov 2026:
 
-- **89 met, 7 partly met, 1 not met.** Every row that is not fully met says why, at the top of the page.
+- **91 met, 6 partly met.** Every row that is not fully met says why, at the top of the page.
 - **One interface, routed.** The command line, an HTTP server, a web app and a terminal chat all drive one session API. A named agent skips the router; an unclear request gets a route question.
 - **One runtime.** Model calls, tools, timeouts, retries, budgets, approvals and the record are shared code. Tool permissions are checked by a deny-by-default policy gate in code.
 - **Durable.** Conversations, checkpoints, outputs and pending approvals survive a restart, and a crash mid-send never sends twice.
-- **Not met: R-36.** The patent agent does not read research outputs by artifact ID and version. The loader supports such reads, but no patent Task declares one.
+- **Research reused, never as novelty (R-36).** Each patent recommendation reads the research needs and findings by artifact ID and version, cites them for business importance only, and is refused if it names them as novelty or prior-art evidence.
 - **Partly met.** The change demo re-dates an existing contributor rather than adding a new one (R-83), and the demo restarts during the send, not before the rebuild (R-84). Held-out results are R-64.
 
 ## Two agents on one runtime
@@ -171,15 +172,14 @@ Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or
 
 ## Known limitations and what comes next
 
-The top five, as of 28 Nov 2026. The full list is in [docs/limitations.md](docs/limitations.md).
+The top four, as of 28 Nov 2026. The full list is in [docs/limitations.md](docs/limitations.md).
 
 1. **No agent has completed a task on a real model.** Every result comes from rule-based fakes, and every confidence threshold is unfitted.
-2. **The patent agent does not read research outputs.** The two agents share only the uploaded inputs (R-36).
-3. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.
-4. **A headless run sends without approval.** `aksha run --headless` is opt-in, recorded on `run.started` and needs a sandbox, but it turns the approval route into the outbox route ([trust boundary](docs/architecture/trust-boundary.md)).
-5. **Erasure is open.** `forget` hides a memory from recall but erases nothing from the append-only store (P30).
+2. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.
+3. **A headless run sends without approval.** `aksha run --headless` is opt-in, recorded on `run.started` and needs a sandbox, but it turns the approval route into the outbox route ([trust boundary](docs/architecture/trust-boundary.md)).
+4. **Erasure is open.** `forget` hides a memory from recall but erases nothing from the append-only store (P30).
 
-Next: a whole task and the evals on a real model, the patent agent citing research outputs, a real system of record behind the outbox, and a container sandbox backend. The roadmap with each item's status is in [docs/status.md](docs/status.md#roadmap).
+Next: a whole task and the evals on a real model, a real system of record behind the outbox, and a container sandbox backend. The roadmap with each item's status is in [docs/status.md](docs/status.md#roadmap).
 
 ## Development
 

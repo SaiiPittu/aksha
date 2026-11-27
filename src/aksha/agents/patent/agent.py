@@ -17,10 +17,12 @@ or folder.
    children each read what the one before saved: ``prior_art`` (search the uploaded
    publications and the web, fetch what matches and leave the noise, families by
    priority), ``compare`` (the element-by-family matrix) and ``recommend`` (the rule
-   table). With at most eight candidates every one gets deep work and the supervisor
-   takes no turn. Above that, the supervisor reads the work board and commits rounds of
-   directives: which candidates get deep work and which are dropped with a reason; code
-   caps the deep tier and its budget and gives deep work to an audit sample of the drops.
+   table, and the research outputs that bear on business importance, read by artifact ID
+   and version and cited for business importance only). With at most eight candidates
+   every one gets deep work and the supervisor takes no turn. Above that, the supervisor
+   reads the work board and commits rounds of directives: which candidates get deep work
+   and which are dropped with a reason; code caps the deep tier and its budget and gives
+   deep work to an audit sample of the drops.
 3. ``table`` gathers every recommendation and, when the supervisor decided, the batched
    review of its decisions, the drop list and the audit; ``select`` asks the person to
    choose (a ``choice`` interrupt, the drop list beside the options) and saves it.
@@ -43,6 +45,7 @@ from aksha.runtime.api import (
     Agent,
     ArtifactKind,
     Budget,
+    CitePolicy,
     ContextPolicy,
     DeclaredInterrupt,
     FieldSpec,
@@ -157,7 +160,20 @@ KINDS = (
         "prior_art", _schema("candidate", "query", "publications", "families"), keyed=True
     ),
     ArtifactKind("comparison", COMPARISON, keyed=True),
-    ArtifactKind("recommendation", _schema("candidate", "next_action", "why"), keyed=True),
+    ArtifactKind(
+        "recommendation",
+        _schema("candidate", "next_action", "why", rules.BUSINESS_PART),
+        keyed=True,
+        # Each research output read is cited by its exact version, and only here: market
+        # research bears on business importance, never on novelty (checks, rules.RESEARCH_NOTE).
+        cites=(
+            CitePolicy(
+                f"/{rules.BUSINESS_PART}/research/*",
+                forms=frozenset({"artifact"}),
+                artifact_kinds=frozenset(rules.RESEARCH_KINDS),
+            ),
+        ),
+    ),
     ArtifactKind("table", _schema("rows")),
     ArtifactKind("selection", _schema("selected", "based_on"), reviewable=True),
     ArtifactKind(
@@ -219,7 +235,14 @@ DEEP = Task(
         Task(
             "recommend",
             needs=("compare",),
-            reads=("extraction", "comparison", "portfolio"),
+            reads=(
+                "extraction",
+                "comparison",
+                "portfolio",
+                # Another agent's outputs, by kind: absent when the research agent has not
+                # run, and then business importance from research is recorded as unknown.
+                *(Read(kind) for kind in rules.RESEARCH_KINDS),
+            ),
             tools=(SAVE,),
             writes=("recommendation",),
             done=checks.recommendation_follows_rules,
@@ -435,7 +458,7 @@ def build_agent(world: SourceWorld) -> Agent:
         # A version rests on what it cites and on its scoped claims (the portfolio's
         # listings); one that cites nothing stays keyed on every read (ADR-P05 M2).
         invalidation_keys="citations",
-        reads=tuple(f"record:{c}" for c in COLLECTIONS),
+        reads=(*(f"record:{c}" for c in COLLECTIONS), *rules.RESEARCH_KINDS),
         artifacts=KINDS,
         tools=(*build_tools(world), commit_tool(portfolio.SPEC), ToolUse(SAVE)),
         tasks=tasks(),

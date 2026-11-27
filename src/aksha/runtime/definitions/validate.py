@@ -229,8 +229,15 @@ def _aliases(agent: Agent, out: Refusals) -> None:
 def cross_agent_refusals(
     agents: Sequence[tuple[Agent, str]], kinds: Iterable[str]
 ) -> list[LoadRefusal]:
-    """Reads and relation ends naming another agent's kind that no loaded agent declares."""
+    """Reads and relation ends naming another agent's kind that its agent does not declare.
+
+    A kind is checked against the agent whose namespace it names when that agent is loaded
+    (some known kind shares the namespace). When it is not loaded, the read is of outputs
+    that cannot exist in this deployment: it is granted and finds nothing, so the reader
+    runs alone and records the output as absent.
+    """
     known = set(kinds)
+    loaded = {k.split(".", 1)[0] for k in known}
     refusals: list[LoadRefusal] = []
     for agent, module in agents:
         out = Refusals(module)
@@ -238,8 +245,9 @@ def cross_agent_refusals(
 
         def unknown_foreign(ref: str, namespace: str = agent.name, local: set[str] = local) -> bool:
             full = resolve_kind(ref, namespace)
-            foreign = not full.startswith("record:") and full.split(".", 1)[0] not in local
-            return foreign and full not in known
+            namespace = full.split(".", 1)[0]
+            foreign = not full.startswith("record:") and namespace not in local
+            return foreign and namespace in loaded and full not in known
 
         for path, task in walk_tasks(agent.tasks):
             for read in reads_of(task):

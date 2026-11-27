@@ -2,19 +2,19 @@
  "acts": [
   [
    "first runs",
-   9.37
+   8.47
   ],
   [
    "change",
-   0.93
+   0.79
   ],
   [
    "rebuild",
-   8.34
+   8.17
   ],
   [
    "kill and recover",
-   4.26
+   3.68
   ]
  ],
  "runs": {
@@ -40,7 +40,7 @@
    "agent": "patent",
    "cause": "rebuild",
    "outcome": "complete",
-   "model_calls": 18
+   "model_calls": 21
   },
   "R-0005": {
    "agent": "patent",
@@ -125,6 +125,9 @@
    "research.tests@v1",
    "patent.comparison/C1@v1",
    "patent.recommendation/C1@v1",
+   "patent.recommendation/C3@v1",
+   "patent.recommendation/C4@v1",
+   "patent.recommendation/C2@v1",
    "patent.table@v1",
    "patent.selection@v1",
    "patent.packet/C1@v1",
@@ -211,9 +214,9 @@
    "patent.prior_art/C3": "patent.prior_art/C3@v1",
    "patent.prior_art/C4": "patent.prior_art/C4@v1",
    "patent.recommendation/C1": "patent.recommendation/C1@v2",
-   "patent.recommendation/C2": "patent.recommendation/C2@v1",
-   "patent.recommendation/C3": "patent.recommendation/C3@v1",
-   "patent.recommendation/C4": "patent.recommendation/C4@v1",
+   "patent.recommendation/C2": "patent.recommendation/C2@v2",
+   "patent.recommendation/C3": "patent.recommendation/C3@v2",
+   "patent.recommendation/C4": "patent.recommendation/C4@v2",
    "patent.selection": "patent.selection@v2",
    "patent.table": "patent.table@v2"
   }
@@ -231,6 +234,9 @@
   "patent.packet/C1@v2",
   "patent.prior_art/C1@v2",
   "patent.recommendation/C1@v2",
+  "patent.recommendation/C2@v2",
+  "patent.recommendation/C3@v2",
+  "patent.recommendation/C4@v2",
   "patent.selection@v2",
   "patent.table@v2"
  ],
@@ -254,10 +260,7 @@
    "patent.portfolio",
    "patent.prior_art/C2",
    "patent.prior_art/C3",
-   "patent.prior_art/C4",
-   "patent.recommendation/C2",
-   "patent.recommendation/C3",
-   "patent.recommendation/C4"
+   "patent.prior_art/C4"
   ]
  },
  "cutoff": [],
@@ -265,6 +268,28 @@
   "before": "prioritize_counsel_review",
   "after": "collect_more_evidence",
   "key_expects": "collect_more_evidence"
+ },
+ "research_reads": {
+  "first": {
+   "lineage": [
+    "research.findings@v1",
+    "research.needs@v1"
+   ],
+   "cited": [
+    "research.findings@v1",
+    "research.needs@v1"
+   ]
+  },
+  "after": {
+   "lineage": [
+    "research.findings@v2",
+    "research.needs@v2"
+   ],
+   "cited": [
+    "research.findings@v2",
+    "research.needs@v2"
+   ]
+  }
  },
  "contributor": {
   "person": "P-05",
@@ -317,9 +342,9 @@
  },
  "chain": {
   "ok": true,
-  "events": 1833,
-  "head": "sha256:42ad2cc00c18902d4cf3a458da60747cac580bd5ba29c69559a6e832834c1eb2",
+  "events": 1912,
+  "head": "sha256:0af763909b8949c23fdf990633d00d0a9432ec6835e684344aa1dd7afd99f0be",
   "break": null
  },
- "seconds": 23.94
+ "seconds": 22.13
 }

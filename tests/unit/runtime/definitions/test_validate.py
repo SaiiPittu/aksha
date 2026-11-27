@@ -349,3 +349,14 @@ def test_cross_agent_refusals_name_the_unknown_kind() -> None:
     (refusal,) = cross_agent_refusals([(reader, "reader/agent.py")], ["toy.line"])
     assert (refusal.code, refusal.task) == ("read_kind_unknown", "look")
     assert cross_agent_refusals([(reader, "reader/agent.py")], ["toy.gone"]) == []
+
+
+def test_a_read_of_an_agent_that_is_not_loaded_is_not_refused() -> None:
+    """The reader runs alone: the read finds nothing (the patent agent without research)."""
+    from aksha.runtime.definitions.validate import cross_agent_refusals
+
+    reader = replace(AGENT, name="reader", reads=("toy.line",), extensions=(),
+                     tasks=(Task("look", reads=("toy.line",), done=_ok),))  # fmt: skip
+    assert cross_agent_refusals([(reader, "reader/agent.py")], ["other.kind"]) == []
+    (refusal,) = cross_agent_refusals([(reader, "reader/agent.py")], ["toy.other"])
+    assert refusal.code == "read_kind_unknown"

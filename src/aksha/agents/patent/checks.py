@@ -121,10 +121,57 @@ def recommendation_follows_rules(view: Any) -> CheckResult:
     cutoff = int(plan_of(view).get("priority_cutoff", rules.TOP_PRIORITIES))
     want, rule = rules.next_action(ext.content, cmp_.content, top_n=cutoff)
     got = rec.content.get("next_action")
-    return CheckResult(
-        got == want, f"the rule table gives next_action {want!r} ({rule}), but the saved "
-        f"recommendation says {got!r}: save it again with next_action {want!r}",
-    )  # fmt: skip
+    if got != want:
+        return CheckResult(
+            False, f"the rule table gives next_action {want!r} ({rule}), but the saved "
+            f"recommendation says {got!r}: save it again with next_action {want!r}",
+        )  # fmt: skip
+    return research_cited(view, rec.content)
+
+
+def research_read(view: Any) -> list[str]:
+    """The current version of each research output the recommendation reads, as refs."""
+    found = (view.latest(kind) for kind in rules.RESEARCH_KINDS)
+    return [str(v.ref) for v in found if v is not None]
+
+
+def research_cited(view: Any, content: Mapping[str, Any]) -> CheckResult:
+    """Business importance cites the research read by exact version, and only there.
+
+    With research outputs present, ``business_importance.research`` cites each current
+    version (``research.needs@v2``) and ``from_research`` is ``read``; with none, it cites
+    nothing and ``from_research`` is ``unknown``. The note says plainly that research is no
+    evidence of novelty, and a research output named anywhere else is refused
+    (``rules.research_misuse``): market research never stands in for prior art.
+    """
+    misused = rules.research_misuse(content)
+    if misused:
+        return CheckResult(
+            False, f"{', '.join(misused)} name a research output: research supports business "
+            f"importance only and is not evidence of novelty or prior art; cite it only under "
+            f"{rules.BUSINESS_PART}.research", count=len(misused),
+        )  # fmt: skip
+    part = content.get(rules.BUSINESS_PART)
+    if not isinstance(part, Mapping):
+        return CheckResult(False, f"save {rules.BUSINESS_PART}: the research read, cited")
+    if part.get("note") != rules.RESEARCH_NOTE:
+        return CheckResult(False, f"{rules.BUSINESS_PART}.note says: {rules.RESEARCH_NOTE}")
+    want = research_read(view)
+    items = part.get("research")
+    cited = [
+        str(i["cite"].get("artifact"))
+        for i in (items if isinstance(items, list | tuple) else ())
+        if isinstance(i, Mapping) and isinstance(i.get("cite"), Mapping)
+    ]
+    basis = "read" if want else "unknown"
+    if sorted(cited) != sorted(want) or part.get("from_research") != basis:
+        shown = ", ".join(want) or "none: the research agent has not run"
+        return CheckResult(
+            False, f"{rules.BUSINESS_PART}.research cites {sorted(cited)}, but the research "
+            f"read is {shown}: cite each as {{\"cite\": {{\"artifact\": <ref>, \"path\": "
+            f"\"\"}}}} and set from_research to {basis!r}",
+        )  # fmt: skip
+    return CheckResult(True)
 
 
 def table_saved(view: Any) -> CheckResult:
