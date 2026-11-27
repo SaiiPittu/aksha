@@ -14,7 +14,8 @@
    (:mod:`aksha.extensions.ingest.parse`): the runtime passes a worker pool
    (:class:`~aksha.extensions.ingest.worker.ParserPool`), so they run in a separate process
    under a time, memory and CPU cap, and a parser that hits one leaves a gap ``unreadable``
-   named ``parser_timeout``, ``parser_memory`` or ``parser_crashed``. None runs them here.
+   named ``parser_timeout``, ``parser_memory``, ``parser_crashed`` or ``parser_uncontained``.
+   None runs them here.
 5. Children: each email attachment is ingested as its own document (``attachment``,
    ``parent`` set) under ``Caps.max_depth`` and ``Caps.max_children``; past either it is
    refused by name.

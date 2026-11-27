@@ -25,8 +25,10 @@ from aksha.extensions.ingest.types import Caps, Converted, Gap
 PARSER_TIMEOUT = "parser_timeout"
 PARSER_MEMORY = "parser_memory"
 PARSER_CRASHED = "parser_crashed"
-PARSER_GAPS: tuple[str, ...] = (PARSER_TIMEOUT, PARSER_MEMORY, PARSER_CRASHED)
-"""The named gaps a parser that hit a limit or died leaves (``Gap.detail`` starts with one)."""
+PARSER_UNCONTAINED = "parser_uncontained"
+PARSER_GAPS: tuple[str, ...] = (PARSER_TIMEOUT, PARSER_MEMORY, PARSER_CRASHED, PARSER_UNCONTAINED)
+"""The named gaps a parser that hit a limit, died or could not be contained leaves
+(``Gap.detail`` starts with one)."""
 
 
 @dataclass(frozen=True)

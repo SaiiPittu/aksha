@@ -7,18 +7,27 @@ parser spin, allocate without bound or crash stops that process and never the ru
 
 1. **Limits.** The worker sets its own limits before it reads any input: its address space
    (``RLIMIT_AS``) to ``Caps.parser_memory_bytes``; per job its CPU time (``RLIMIT_CPU``) to
-   what it has used plus ``Caps.parser_cpu_s``; no core files, no file writes
+   what it has used plus ``Caps.parser_cpu_s``; no core files, no growing a file
    (``RLIMIT_FSIZE`` 0) and no new processes (``RLIMIT_NPROC`` 0). The host holds the wall
    clock: no result within ``Caps.parser_time_ms`` and the worker's whole process group is
    killed (``SIGKILL``; the worker starts its own session).
+1a. **Contained, or refused.** ``RLIMIT_FSIZE`` does not stop truncating or deleting a file,
+   and ``RLIMIT_NPROC`` does not bind root or a process holding ``CAP_SYS_ADMIN`` or
+   ``CAP_SYS_RESOURCE`` (getrlimit(2)). So the worker also restricts itself with Landlock
+   (ABI 3 or later: no write, truncate, delete, create, rename or link anywhere; from ABI 4
+   no TCP bind or connect; from ABI 6 no abstract Unix socket or signal outside itself),
+   then tries to fork. It reports both in its ready frame, and the pool refuses a worker
+   whose writes are not contained (no Landlock ABI 3 and no box) or that could still fork:
+   the document is a gap ``parser_uncontained`` and no parser runs (fail closed).
 2. **No network.** The worker enters a new user and network namespace (``unshare``), which
    has only a loopback that is down, before it reads input. Where the kernel refuses
    unprivileged namespaces, it runs without one and says so in :attr:`ParserPool.isolation`.
 3. **A clean failure.** A worker that misses the deadline or goes over the CPU cap leaves a
    gap ``unreadable`` whose detail starts ``parser_timeout``; one that runs out of memory,
    ``parser_memory``; one that dies any other way or sends a reply the protocol does not
-   allow, ``parser_crashed``. The worker reports the type check before it converts, so the
-   document keeps its detected type when the converter is what failed.
+   allow, ``parser_crashed``; one that could not be contained (1a), ``parser_uncontained``.
+   The worker reports the type check before it converts, so the document keeps its
+   detected type when the converter is what failed.
 4. **A small pool.** Idle workers are kept (``size``) and reused for jobs with the same
    limits, each for at most ``max_jobs`` jobs, so the interpreter and the parser libraries
    load once. A worker that hit a limit or died is discarded, never reused. At most
@@ -37,6 +46,7 @@ own document's gap or text wrong, and only within the reply cap.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import importlib
 import json
 import math
@@ -61,6 +71,7 @@ from aksha.extensions.ingest.parse import (
     PARSER_CRASHED,
     PARSER_MEMORY,
     PARSER_TIMEOUT,
+    PARSER_UNCONTAINED,
     Parsed,
     failed,
 )
@@ -107,6 +118,81 @@ def _isolate() -> list[str]:
     except OSError as e:
         return [f"network: not isolated (unshare refused: {e.strerror or e})"]
     return ["network: own namespace, no interfaces up"]
+
+
+# Landlock (linux/landlock.h): the syscall numbers are the same on every architecture.
+_LL_CREATE, _LL_RESTRICT, _LL_VERSION, _NO_NEW_PRIVS = 444, 446, 1, 38
+_LL_FS_WRITES = sum(1 << b for b in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12))
+"""WRITE_FILE, REMOVE_DIR, REMOVE_FILE and every MAKE_* right (ABI 1)."""
+_LL_FS_REFER, _LL_FS_TRUNCATE = 1 << 13, 1 << 14  # ABI 2, ABI 3
+_LL_NET_TCP = (1 << 0) | (1 << 1)  # BIND_TCP, CONNECT_TCP (ABI 4)
+_LL_SCOPES = (1 << 0) | (1 << 1)  # ABSTRACT_UNIX_SOCKET, SIGNAL (ABI 6)
+
+
+class _RulesetAttr(ctypes.Structure):
+    _fields_ = [("fs", ctypes.c_uint64), ("net", ctypes.c_uint64), ("scoped", ctypes.c_uint64)]
+
+
+def _landlock() -> tuple[bool, list[str]]:
+    """Forbid every file write, and what else the kernel's ABI allows; whether writes are.
+
+    No rule is added, so each handled right is denied everywhere; reading is not handled
+    and stays as it was. Writes count as contained from ABI 3, which also handles truncate.
+    """
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        abi = int(libc.syscall(_LL_CREATE, None, ctypes.c_size_t(0), ctypes.c_uint32(_LL_VERSION)))
+    except (OSError, AttributeError):
+        return False, ["files: Landlock not available (no libc syscall)"]
+    if abi < 1:
+        return False, ["files: Landlock not available on this kernel"]
+    fs = _LL_FS_WRITES | (_LL_FS_REFER if abi >= 2 else 0) | (_LL_FS_TRUNCATE if abi >= 3 else 0)
+    attr = _RulesetAttr(fs, _LL_NET_TCP if abi >= 4 else 0, _LL_SCOPES if abi >= 6 else 0)
+    fd = int(libc.syscall(_LL_CREATE, ctypes.byref(attr), ctypes.c_size_t(ctypes.sizeof(attr)),
+                          ctypes.c_uint32(0)))  # fmt: skip
+    if fd < 0:
+        return False, [f"files: Landlock refused ({os.strerror(ctypes.get_errno())})"]
+    try:
+        if (
+            libc.prctl(_NO_NEW_PRIVS, 1, 0, 0, 0) != 0
+            or libc.syscall(_LL_RESTRICT, ctypes.c_int(fd), ctypes.c_uint32(0)) != 0
+        ):
+            return False, [f"files: Landlock refused ({os.strerror(ctypes.get_errno())})"]
+    finally:
+        os.close(fd)
+    said = [f"files: Landlock ABI {abi}, no writes" if abi >= 3
+            else f"files: Landlock ABI {abi} cannot forbid truncate"]  # fmt: skip
+    if abi >= 4:
+        said.append("network: TCP blocked (Landlock)")
+    return abi >= 3, said
+
+
+def _can_fork() -> bool:
+    """Whether a new process can still be made (``RLIMIT_NPROC`` does not bind every user)."""
+    try:
+        child = os.fork()
+    except OSError:
+        return False
+    if child == 0:
+        os._exit(0)
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(child, 0)
+    return True
+
+
+def refusal(contained: Any, *, jailed: bool) -> Gap | None:
+    """The gap for a worker the pool must not use, from its ready frame (module doc, 1a)."""
+    if not isinstance(contained, dict):
+        return _gap(f"{PARSER_UNCONTAINED}: the parser process did not say how it is contained")
+    missing = []
+    if contained.get("files") is not True and not jailed:  # a box holds writes itself
+        missing.append("file writes (no Landlock ABI 3 and no bubblewrap box)")
+    if contained.get("processes") is not True:
+        missing.append("new processes (RLIMIT_NPROC does not bind this user)")
+    if not missing:
+        return None
+    return _gap(f"{PARSER_UNCONTAINED}: could not forbid {' or '.join(missing)}; "
+                "no parser was run")  # fmt: skip
 
 
 def _limit(which: int, soft: int, hard: int) -> None:
@@ -168,13 +254,16 @@ def main(config: dict[str, Any]) -> None:
     _limit(resource.RLIMIT_CORE, 0, 0)
     _limit(resource.RLIMIT_FSIZE, 0, 0)
     _limit(resource.RLIMIT_NPROC, 0, 0)
+    files, said = _landlock() if config.get("landlock", True) else (False, ["files: no Landlock"])
+    isolation += said
+    contained = {"files": files, "processes": not _can_fork()}
     out_of_memory = wire.frame({"stage": "error", "error": PARSER_MEMORY})  # built while we can
 
     def send(data: bytes) -> None:
         out.write(data)
         out.flush()
 
-    send(wire.frame({"stage": "ready", "isolation": isolation}))
+    send(wire.frame({"stage": "ready", "isolation": isolation, "contained": contained}))
     while True:
         job = _read_job(inp)
         if job is None:
@@ -365,7 +454,8 @@ class ParserPool:
     jobs; ``max_workers`` bound how many parse at once. ``jail`` runs each job in its own box
     (module doc), its input file written under ``scratch``. ``target`` is the function each
     worker runs, as ``module:function`` (the default is the real parsing; tests name a
-    hostile one). ``python`` is the interpreter (default: this one).
+    hostile one). ``python`` is the interpreter (default: this one). ``landlock=False``
+    skips the worker's Landlock step, so the worker is refused (tests of the refusal).
     """
 
     def __init__(
@@ -378,6 +468,7 @@ class ParserPool:
         scratch: Path | None = None,
         target: str = DEFAULT_TARGET,
         python: str | None = None,
+        landlock: bool = True,
     ) -> None:
         """Keep ``size`` idle workers and run at most ``max_workers`` (class doc)."""
         self.size = size
@@ -386,6 +477,7 @@ class ParserPool:
         self.scratch = scratch
         self.target = target
         self.python = python or sys.executable
+        self.landlock = landlock
         self.isolation: tuple[str, ...] = ()
         """What the last worker reported about its isolation (network namespace or not)."""
         self._paths = _python_paths()
@@ -433,7 +525,7 @@ class ParserPool:
         paths: Sequence[str] | None = None,
     ) -> list[str]:
         config = {"memory_bytes": limits.memory_bytes, "cpu_s": limits.cpu_s,
-                  "max_jobs": max_jobs}  # fmt: skip
+                  "max_jobs": max_jobs, "landlock": self.landlock}  # fmt: skip
         return [python or self.python, "-I", "-B", "-c", _BOOT,
                 json.dumps(list(self._paths if paths is None else paths)),
                 json.dumps(config)]  # fmt: skip
@@ -470,6 +562,10 @@ class ParserPool:
         except (_Timeout, _Closed, wire.WireError, OSError):
             code = worker.kill()
             return _died(code, jailed, limits)
+        refused = refusal(obj.get("contained"), jailed=jailed)
+        if refused is not None:
+            worker.kill()
+            return refused
         return worker
 
     def _run(

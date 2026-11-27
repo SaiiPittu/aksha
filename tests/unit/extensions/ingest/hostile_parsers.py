@@ -153,3 +153,20 @@ def malformed(name: str, data: bytes, declared: str | None, caps: Caps, allow: f
     os.write(1, wire.frame(reply))
     time.sleep(60)
     raise AssertionError("unreachable")
+
+
+def vandal(name: str, data: bytes, declared: str | None, caps: Caps, allow: frozenset[str],
+           *, sniffed: Any = None) -> Parsed:  # fmt: skip
+    """Tries to truncate, then to delete, the host file the input names; reports each."""
+    target = data.decode().strip()
+    seen: list[str] = []
+    for what in ("truncate", "unlink"):
+        try:
+            if what == "truncate":
+                os.truncate(target, 0)
+            else:
+                os.unlink(target)
+            seen.append(f"{what}: allowed")
+        except OSError as e:
+            seen.append(f"{what}: {type(e).__name__}")
+    return _said(name, data, declared, caps, "\n".join(seen))

@@ -22,9 +22,14 @@ from aksha.adapters.sandbox.bwrap import BwrapSandbox
 from aksha.app import RuntimeConfig, parser_pool
 from aksha.extensions.ingest import sniff
 from aksha.extensions.ingest.ingest import Ingested, ingest
-from aksha.extensions.ingest.parse import PARSER_CRASHED, PARSER_MEMORY, PARSER_TIMEOUT
+from aksha.extensions.ingest.parse import (
+    PARSER_CRASHED,
+    PARSER_MEMORY,
+    PARSER_TIMEOUT,
+    PARSER_UNCONTAINED,
+)
 from aksha.extensions.ingest.types import Caps
-from aksha.extensions.ingest.worker import ParserPool
+from aksha.extensions.ingest.worker import ParserPool, refusal
 from aksha.uploads import UploadIngester
 from tests.support import ingest_fixtures as fx
 from tests.unit.extensions.ingest import hostile_parsers
@@ -236,8 +241,8 @@ def test_a_worker_has_no_network() -> None:
         listener.settimeout(0.5)
         port = listener.getsockname()[1]
         got = run("port.txt", str(port).encode(), p)
-        if not any("own namespace" in i for i in p.isolation):
-            pytest.skip(f"no network namespace on this host: {p.isolation}")
+        if not any("own namespace" in i or "TCP blocked" in i for i in p.isolation):
+            pytest.skip(f"no network namespace or Landlock on this host: {p.isolation}")
         assert got.representation is not None
         assert got.representation.text.startswith("blocked: ")
         with pytest.raises(TimeoutError):
@@ -251,12 +256,59 @@ def test_a_worker_cannot_fork_or_write_files_and_gets_no_host_environment(
     monkeypatch.setenv("AKSHA_SYN_SECRET", "SYN-not-for-parsers")
     p = hostile("probes")
     got = run("probe.txt", str(tmp_path).encode(), p)
+    if got.gap is not None:  # a host without Landlock ABI 3: the worker was refused
+        assert got.gap.detail.startswith(PARSER_UNCONTAINED)
+        pytest.skip(f"the worker was refused on this host: {p.isolation}")
     assert got.representation is not None
     seen = got.representation.text.splitlines()
     assert "fork: BlockingIOError" in seen
-    assert "write: OSError" in seen
+    assert "write: PermissionError" in seen  # Landlock refuses the open itself
     assert "env: LANG,PATH" in seen  # the host's environment, keys included, stays out
     p.close()
+
+
+def test_a_worker_cannot_truncate_or_delete_a_host_file(tmp_path: Path) -> None:
+    store = tmp_path / "store.sqlite"
+    store.write_bytes(b"SYN-store-bytes")
+    p = hostile("vandal")
+    got = run("path.txt", str(store).encode(), p)
+    assert store.read_bytes() == b"SYN-store-bytes"  # whatever the host, the file is whole
+    if got.gap is not None:  # a host without Landlock ABI 3: the worker was refused
+        assert got.gap.detail.startswith(PARSER_UNCONTAINED)
+    else:
+        assert got.representation is not None
+        assert got.representation.text.splitlines() == [
+            "truncate: PermissionError",
+            "unlink: PermissionError",
+        ]
+    p.close()
+
+
+def test_a_worker_whose_writes_are_not_contained_is_refused_and_never_parses(
+    tmp_path: Path,
+) -> None:
+    store = tmp_path / "store.sqlite"
+    store.write_bytes(b"SYN-store-bytes")
+    p = ParserPool(target=f"{H}:vandal", landlock=False)
+    got = run("path.txt", str(store).encode(), p)
+    assert got.gap is not None
+    assert got.gap.detail.startswith(f"{PARSER_UNCONTAINED}: ")
+    assert "file writes" in got.gap.detail
+    assert store.read_bytes() == b"SYN-store-bytes"
+    assert idle(p) == 0  # a refused worker is never kept
+    p.close()
+
+
+def test_a_worker_that_can_still_fork_is_refused() -> None:
+    # RLIMIT_NPROC does not bind root or a process holding CAP_SYS_ADMIN or CAP_SYS_RESOURCE;
+    # the worker's own fork probe is what the pool trusts.
+    gap = refusal({"files": True, "processes": False}, jailed=False)
+    assert gap is not None and gap.detail.startswith(f"{PARSER_UNCONTAINED}: ")
+    assert "new processes" in gap.detail
+    assert refusal({"files": True, "processes": True}, jailed=False) is None
+    assert refusal({"files": False, "processes": True}, jailed=True) is None  # the box holds
+    assert refusal({"files": True, "processes": False}, jailed=True) is not None
+    assert refusal("not a dict", jailed=False) is not None
 
 
 def test_a_worker_is_reused_and_one_that_hit_a_limit_is_discarded() -> None:
