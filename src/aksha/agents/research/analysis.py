@@ -227,6 +227,10 @@ def _norm(text: str) -> str:
 
 REPOST_MIN = 40
 """How long a text must be before a longer text ending in it is read as its repost."""
+COPY_MIN_WORDS = 5
+"""How many words the same text needs under another product before it is read as a copy.
+
+Two customers of two products may both write "Works well."; that is two reviews."""
 
 
 def _signature(row: Mapping[str, Any]) -> str:
@@ -270,6 +274,8 @@ def review_sample(
     ordered = sorted(rows, key=lambda r: (str(r["fields"].get("date", "")), str(r["fields"]["id"])))
     for r in ordered:
         sig = _signature(r)
+        if len(sig.split()) < COPY_MIN_WORDS:  # a short common phrase: a copy only per product
+            sig = f"{_norm(str(r['fields'].get('product', '')))}\x00{sig}"
         earlier = seen.get(sig) or next(
             (o for k, o in seen.items() if len(k) >= REPOST_MIN and sig.endswith(" " + k)), None
         )

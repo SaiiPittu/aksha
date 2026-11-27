@@ -141,6 +141,17 @@ def test_a_repost_is_found_after_a_rename_or_behind_a_lead_in() -> None:
     assert sample.duplicates == (("R-2", "R-1"), ("R-4", "R-3"))
 
 
+def test_a_short_common_phrase_under_another_product_is_its_own_review() -> None:
+    rows = [
+        _row("R-1", "2026-01-01", "Beam", "Works well."),
+        _row("R-2", "2026-01-02", "Halo", "Works well."),
+        _row("R-3", "2026-01-03", "Beam", "Works well."),  # the same product: a copy
+    ]
+    sample = analysis.review_sample(rows, {})
+    assert sample.duplicates == (("R-3", "R-1"),)
+    assert len(sample.unique) == 2
+
+
 def test_themes_are_the_requests_own_terms() -> None:
     rows = [
         _row("R-1", "2026-01-01", "A", "The lights went off while I was sitting alone."),
