@@ -3,68 +3,72 @@
 [![CI](https://github.com/SaiiPittu/aksha/actions/workflows/ci.yml/badge.svg)](https://github.com/SaiiPittu/aksha/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 
-**A harness that thinks fast and slow.**
+Aksha is a headless agent harness in Python. One runtime runs many agents, each defined as data in its own module, and every fact any of them produces lands in one append-only, hash-chained event store.
 
-Aksha is a headless agent harness in Python. One runtime runs many agents, each defined as data in its own module. Fast models extract and classify, slow models generate, and a fast answer is accepted only at or above a declared confidence. Every fact lands in one append-only, hash-chained event store; every tool call passes a policy gate in code; a run pauses durably for an approval or a missing answer, and resumes after a crash without sending anything twice.
+[Quick start](docs/quickstart.md) · [Architecture](docs/architecture/overview.md) · [Interfaces](docs/interfaces.md) · [Evals](docs/evals/README.md) · [Limitations](docs/limitations.md) · [Design](docs/design/README.md)
 
-[Quick start](docs/quickstart.md) · [Architecture](docs/architecture/overview.md) · [Interfaces](docs/interfaces.md) · [Evals](docs/evals/README.md) · [Limitations](docs/limitations.md)
+## The problem
 
-## Try it in one minute
+An agent read 20 documents and wrote a decision. Then one of the documents changed. Is the decision still valid?
 
-No API key, and no network after the install: every model is an offline fake.
+Most agent stacks cannot answer, because nothing recorded what the decision rested on. The only safe move is to run everything again, which costs time and money, and a person who already reviewed the old answer has to review all of it again. Aksha treats agent work the way a build system treats files: every output records what it read, and a change rebuilds only what depends on it.
+
+## How Aksha answers it
+
+1. **Recorded reads with versions.** Every tool read is a fact in the event store: which record, which version, which span of text came back. Every saved output (an artifact version) carries the list of reads it was built from. Staleness is computed from those facts, never stored as a flag.
+2. **Citation-keyed invalidation.** A value an agent saves must quote a span a tool actually returned, and the runtime checks the quote at save. An agent can then key invalidation on its citations (`invalidation_keys="citations"`): its output reopens when a span it cites changes, or when the schema it was extracted under changes. A change elsewhere in a document it read is a weak dependency: the output stays current, is listed as noticed, and gets a low-priority recheck.
+3. **Scoped absence claims.** "Nothing was found" is a claim too, so it must name its scope: the sources it covered or the search it ran. If that search later finds something new, or a record in its scope moves, the claim reopens.
+4. **Early cutoff.** When a rebuilt step comes out equal to its old version, or a re-run search finds the same hits, the cascade stops there and nothing downstream of it rebuilds.
+
+A machine-only output rebuilds by itself. An output a person reviewed comes back to them as a diff, and only their accept makes the new version current. The design follows the dynamic-dependency formulation in Mokhov, Mitchell and Peyton Jones, "Build systems à la carte" (ICFP 2018), and the decision is [ADR-P05](docs/design/adr/ADR-P05-invalidation.md).
+
+In the demo below, the same change reopens 14 of the 34 saved outputs when keyed on citations, and 27 when keyed on every read.
+
+## Quick start
+
+Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). No API key, and no network after the install: offline, every model is a rule-based fake.
+
+### One command: the demo
 
 ```sh
 uvx --from git+https://github.com/SaiiPittu/aksha aksha demo
 ```
 
-Two agents run, their input changes, only the dependent work is rebuilt, and a send survives a real `SIGKILL`. An excerpt of the output from a run on 27 Nov 2026:
+Two agents (research and patent) run on a synthetic world, one input set changes, only the dependent work is rebuilt, and a send to a mock mailbox survives a real `SIGKILL`. An excerpt from a run on 27 Nov 2026 (about a minute here; the timings depend on the machine):
 
 ```text
-1. Both agents run on the stillroom world (10.9 s)
-   research R-0001 complete: 11 outputs, 21 model calls
-   patent   R-0002 complete: 23 outputs, 42 model calls
-2. The input changes to stillroom-v2's change set (0.25 s)
-3. Invalidation reopens only what depends on the change (24.04 s)
+1. Both agents run on the stillroom world (21.05 s)
+   research R-0001 complete: 11 outputs, 22 model calls
+   patent   R-0002 complete: 23 outputs, 43 model calls
+3. Invalidation reopens only what depends on the change (18.99 s)
    strong, reopened: needs (scoped record); C1: extraction (cites nothing, so read-keyed); C1: prior_art (cites nothing, so read-keyed)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
    keyed on every read instead, the same change would reopen 27 outputs, not 14
    rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
-   kept 13 patent outputs: C2: ...; C3: ...; C4: ...; portfolio
+   kept 13 patent outputs: ...
    kept 7 of 11 research outputs: ...
-4. SIGKILL mid-send, then recovery (2.99 s)
+   early cutoff: the 10 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
+4. SIGKILL mid-send, then recovery (7.02 s)
    at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times
    mailbox: 2 deliveries for 2 idempotency keys (patent.packet/C1@v1, patent.packet/C1@v2): each packet version exactly once
 5. Event store
-   hash chain verified: 1108 events, head sha256:68c06d6e8abaf4c3...
+   hash chain verified: 1499 events, head sha256:e70bde41c57a27cf...
 ```
 
 The command exits 0 only when every check passes.
 
-## Install
-
-Python 3.12 or newer. Today Aksha installs from GitHub:
+### Install
 
 ```sh
-# Recommended: an isolated tool install
 uv tool install git+https://github.com/SaiiPittu/aksha
+# or: pipx install "aksha-harness @ git+https://github.com/SaiiPittu/aksha"
 ```
 
-```sh
-# With pipx
-pipx install "aksha-harness @ git+https://github.com/SaiiPittu/aksha"
-```
+The distribution is `aksha-harness`; the command and the import are `aksha`. (`aksha` on PyPI is an unrelated project, so never `pip install aksha` or a bare `uvx aksha`.) Optional extras: `[server]` for `aksha serve`, `[otel]` for `aksha trace`, `[postgres]` for the PostgreSQL event store, `[ingest]` for PDF, Office and email parsing. `aksha doctor` prints the version, where state is kept and the install command for any missing extra.
 
-Once the first release is on PyPI, the distribution is `aksha-harness`; the command and the import stay `aksha`. (`aksha` on PyPI is an unrelated project, so never `pip install aksha` or a bare `uvx aksha`.)
+### Run an agent on your own files
 
-```sh
-uv tool install aksha-harness     # or: pipx install aksha-harness, or pip install aksha-harness
-```
-
-Optional extras, always quoted: `"aksha-harness[server]"` for `aksha serve`, `"aksha-harness[otel]"` for `aksha trace`, `"aksha-harness[postgres]"` for the PostgreSQL event store. `aksha doctor` prints the version, where state is kept, and the install command for any extra that is missing.
-
-## Your first run
-
-The research agent works on a folder of your own files. `aksha example` copies a bundled synthetic one to try it on:
+`aksha example` copies a bundled synthetic world to try it on. `--input` uploads a folder, and the quoted text is the request:
 
 ```sh
 aksha example stillroom my-inputs
@@ -74,70 +78,132 @@ aksha run --agent research --input my-inputs "Who sells camera-free occupancy se
 #     asks: Which geography should this cover? ...                       (exit code 3)
 aksha answer I-0001 EU
 # R-0001 research ended complete                                          (exit code 0)
+aksha show                    # every saved output
+aksha show research.matrix    # one output as JSON, every value cited
+aksha verify                  # check the hash chain
 ```
 
-The uploads are the person's own files; the vendors' pages are on the web the agent searches (`web_search`, `fetch_url`), here the world's offline web, which mixes them with copies, an outdated page, an advert and pages that only share a word. The agent chooses what to fetch and cites only fetched pages; a search snippet is never evidence. Then `aksha show` lists every output the agents saved, `aksha show research.matrix` prints one as JSON with every value cited, `aksha inspect R-0001` shows the run's steps and budget, and `aksha verify` checks the hash chain. The patent agent, approvals, uploads that reopen only changed work, and headless runs are in the [quick start](docs/quickstart.md).
+Upload the folder again after editing a file and only the work that depends on the edit reopens. The patent agent, approvals, corrections, headless runs and the exit codes are in the [quick start](docs/quickstart.md).
 
-## Record a run, replay it offline
+### Run the evals
+
+```sh
+aksha eval list               # suites, cases and registered agents
+aksha eval run research       # grader self-tests, then every case, graded from the episode's event store
+```
+
+Each case runs in a fresh copy of a fixture world, and the agent is graded on what it left in its event store, never on what it says it did. How to write a case and plug in an agent: [docs/evals/README.md](docs/evals/README.md).
+
+### Record a run, replay it offline
 
 ```sh
 aksha run --agent research --input my-inputs --answer geography=EU --record runs/first "Who sells camera-free occupancy sensing for offices, and at what price?"
-# recorded R-0001 research (complete) into runs/first: 173 model calls, 3 searches, 15 fetches
+# recorded R-0001 research (complete) into runs/first: 174 model calls, 3 searches, 15 fetches
 aksha replay runs/first
 # outputs: the same as recorded (11 outputs)
 ```
 
-`--record` keeps everything the run was given: the message, the inputs, the answers, every model answer (each generation and each fast-class call), every search and every fetch, then the outputs and the trace (OTLP JSON). `aksha replay` runs the same agent from the recording alone: no model, no search API, no network. A live run is recorded the same way, with `AKSHA_MODE=live` and its `AKSHA_LIVE_*` settings, and `AKSHA_SEARCH=brave` with `AKSHA_BRAVE_API_KEY` and `AKSHA_NETWORK=on` (every page fetch is checked by the `aksha.web` egress policy; keys come from the environment and are never recorded); the replay needs none of them. A recording made from a fake run ships in [`src/aksha/data/recordings/`](src/aksha/data/recordings/README.md). How it works: [web search and replay](docs/design/web-search-and-replay.md).
+`--record` keeps the request, the inputs, the answers, every model answer, every search and every fetch, then the outputs and an OpenTelemetry trace. `aksha replay` runs the same agent from the recording alone: no model, no search API, no network. A call the recorded run did not make is refused, never answered.
 
-## What you get
+## What is built
 
-- **An event store as the source of truth:** append-only and hash-chained, on SQLite by default or PostgreSQL; every view is rebuilt from it. [Architecture](docs/architecture/overview.md)
-- **Durable execution and a transactional outbox:** a crash mid-run resumes from the record, and an effect is keyed by its meaning, so a retry never sends twice. [Primitives](docs/design/03-primitives.md)
-- **A policy gate in code:** deny by default, approvals bound to the exact action by signature, headless runs that never ask. [Interfaces](docs/interfaces.md)
-- **Model classes:** extraction, classification and generation as separate contracts, thresholds with an abstention band, cascades that never cross a class. [Rationale](docs/design/rationale.md)
-- **Grounding:** a cited value must quote a span a tool actually returned, checked at save; a value not found is an explicit unknown. [Primitives](docs/design/03-primitives.md)
-- **Invalidation:** when an input changes, only the work that depends on it is rebuilt, and a human-reviewed output gets a diff review. An agent can key it on citations: a version reopens when a span it cites changes, a search its absence claim is scoped to finds something new, or the schema its values were extracted under changes; a change elsewhere in what it read is a notice and a low-priority recheck, not a rebuild. [ADR-P05](docs/design/adr/ADR-P05-invalidation.md)
-- **One session API** behind a command line and an HTTP server, with fixed exit codes and a capability record. [Interfaces](docs/interfaces.md)
-- **Evals:** worlds as environments, ordered graders, pass^k, invariance runs, and grader self-tests. [Evals](docs/evals/README.md)
+Counted from the code on main on 27 Nov 2026:
 
-## How it works
+| | |
+|---|---|
+| Primitives | 29 of the 30 in the [catalogue](docs/design/03-primitives.md) have code and tests; erasure (P30) is in review |
+| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.13 |
+| Session commands | 16 named commands behind one `dispatch`, with stored receipts so a retried command gets its first receipt back |
+| Event types | 62 in the core catalogue |
+| Command line | 23 subcommands, one server (`aksha serve`), fixed exit codes |
+| Tests | 3,244 collected (unit, contract, integration, architecture, agents), offline |
+| Evals | 12 suites over 10 fixture worlds |
 
-```mermaid
-flowchart LR
-  CMD["Command or<br/>tool step"] --> GATE["Policy gate"] --> W["Single writer:<br/>append in one transaction"]
-  W --> ES[("Event store<br/>append-only, hash-chained")]
-  ES --> V["Projections: Task status, approvals,<br/>budgets, invalidation, model context, trace"]
-  V --> NEXT["Next decision"]
-```
+The pieces around invalidation: a policy gate in code (deny by default, approvals bound to the exact action by signature), durable execution that resumes after a crash, a transactional outbox keyed by meaning so a retry never sends twice, model classes (extraction, classification, generation) with confidence thresholds, grounding that checks every quote at save, a correction loop (a person or an agent proposes a fix with evidence, the domain owner approves it, invalidation rebuilds what read the old value), cross-run reuse of outputs whose reads still hold, and tracing as a projection of the store. The tiers, ports and dependency rule are in the [architecture overview](docs/architecture/overview.md); the architecture tests in `tests/architecture/` enforce them.
 
-Facts go in through one writer and every view is computed from them by pure functions, so a restart rebuilds the same state and a budget cannot reset. The runtime in `src/aksha/runtime/` imports no adapter; backends plug in behind ports, and `src/aksha/app.py` is the one place that wires them. Agents and extensions import only `aksha.runtime.api` (and an agent also the extensions it names), and the tests in `tests/architecture/` enforce both rules. The three tiers, the ports and the hash chain are in [docs/architecture/overview.md](docs/architecture/overview.md).
+## Results on the held-out worlds
 
-## Status and limitations
+Six of the ten worlds were written without sight of the agent code, to test whether the offline agents generalise beyond the fixtures they were built on. Every suite run on a fresh clone of main on 27 Nov 2026, in fake model mode:
 
-As of 26 Nov 2026, 29 of the 30 primitives are built and tested. The three limits a first user meets:
+| Suite | Agent | Written blind | Cases passed | Grader self-tests |
+|---|---|---|---|---|
+| research | research | no | 6 of 6 | pass |
+| patent | patent | no | 8 of 8 | pass |
+| scripted | scripted test agent | no | 7 of 7 | pass |
+| change | research | no | 1 of 1 (3 arms, k = 3) | pass |
+| tilldew | both | no | 12 of 12 | pass |
+| cindral | both | no | 11 of 11 | pass |
+| rimefold | research | yes | 7 of 8 | fail (oracle gaps) |
+| kelasora | research | yes | 9 of 9 | fail (oracle gaps) |
+| vantlow | research | yes | 9 of 9 | fail (oracle gaps) |
+| pulvane | patent | yes | 1 of 7 | fail (oracle gaps) |
+| quillmere | patent | yes | 0 of 7 | fail (oracle gaps) |
+| brackwen | patent | yes | 2 of 9 | fail (oracle gaps) |
 
-1. **No real model has been run through the agents.** Offline (the default) every model is a rule-based fake, so results show the harness working, not model quality. `AKSHA_MODE=live` binds every model to a chat-completions server ([quick start](docs/quickstart.md#running-the-agents-live-with-your-own-key)), and is tested only against a stub server on localhost.
+On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 3 of 23. The patent agent's note reader does not yet find an invention in a meeting transcript, a lab notebook or a tracker export, and the self-test oracle and some graders still name fields in the first world's words; [limitations item 19](docs/limitations.md) lists each gap. They are left failing on purpose rather than fixed with a rule that fits one world. These are fake-model numbers, so they test the harness and the offline rules, not a model. A held-out suite exits 2 because its self-tests fail; no suite had an invariant failure.
+
+## Live mode
+
+Offline is the default (`AKSHA_MODE=fake`). To bind every model to a chat-completions server, hosted or on your machine:
+
+| Setting | Meaning |
+|---|---|
+| `AKSHA_MODE=live` | turn live mode on |
+| `AKSHA_LIVE_BASE_URL` | the server, for example `http://127.0.0.1:8000/v1` |
+| `AKSHA_LIVE_API_KEY` | the key; read from the environment only and never recorded (optional for a server on this machine) |
+| `AKSHA_LIVE_MODEL` | one model for every alias |
+| `AKSHA_LIVE_MODEL_<CLASS or ALIAS>` | a model per class or alias, such as `AKSHA_LIVE_MODEL_GENERATION` |
+| `AKSHA_LIVE_SAMPLES` | ask each classification N times and use the votes (default 1) |
+| `AKSHA_LIVE_TIMEOUT_S` | per-call timeout in seconds (default 60) |
+| `AKSHA_ALIAS_<ALIAS>=module:Class` | a native extraction or classification service for one alias |
+| `AKSHA_SEARCH=brave`, `AKSHA_BRAVE_API_KEY`, `AKSHA_NETWORK=on` | live web search, and page fetches under the `aksha.web` egress policy |
+
+A missing server, model or key is refused before any call, naming the setting to set. Live mode is tested end to end only against a stub server on localhost; see the limitations.
+
+## Limitations
+
+The ones a first user meets, as of 27 Nov 2026:
+
+1. **No real model has been run through the agents.** Every result above comes from rule-based fakes, so it shows the harness working, not model quality. Every confidence threshold is unfitted.
 2. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.
-3. **One local sandbox backend, Linux only, and a stateful one.** Bubblewrap is the only local confining backend; on a host without it, exec tools do not run unless the optional E2B cloud backend is chosen (`AKSHA_SANDBOX=e2b`, tested against a stub only). Each session keeps one sandbox for all its runs: a folder under the data directory bound as `/work` (a git repository becomes a worktree on the branch `aksha/<owner>/<session>`), or one remote sandbox. Accepted risk: a crash loses what was only in the box's temporary space, and the workspace is not yet snapshotted into the record per step. `aksha sandbox clean <session>` removes it.
+3. **One local sandbox backend, Linux only.** Bubblewrap is the only local confining backend, and a session's sandbox is stateful: a crash loses what was only in its temporary space.
+4. **Erasure is open.** Forgetting a memory hides it from recall but erases nothing from the append-only store; the erasure design is in review.
+5. **Some reopening is still wider than the change.** An output that cites nothing stays keyed on every read, a changed seller page reopens every company's evidence, and in the patent agent an edit to one section of a record reopens all the work built on that record.
 
-The full list is in [docs/limitations.md](docs/limitations.md).
+The full list, with what each one means in practice, is in [docs/limitations.md](docs/limitations.md).
+
+## Roadmap
+
+| Item | Status on 27 Nov 2026 |
+|---|---|
+| Citation-keyed invalidation, scoped absence claims, early cutoff | Built; opt-in per agent, both shipped agents opt in |
+| Definitions as dependencies: an extraction schema is a strong dependency, and the agent definition hash pins the modules it imports | Built; a dynamic import by a computed name is not seen by the hash |
+| Correction loop: propose with evidence, owner approves, rebuild what read the old value | Built (decision Proposed); no tool lets an agent propose a correction inside its own run, and nothing checks the approver's role |
+| Cross-run reuse of outputs whose reads still hold | Built; `AKSHA_REUSE=off` turns it off |
+| Erasure in the append-only store (P30) | In review |
+| A live-model run of the agents and of the fresh-against-resumed rebuild comparison | Not run |
+| A container backend, a real system of record behind the outbox, OTLP/HTTP export | Not built |
+| Unattended operation: stronger isolation, a halt-everything stop, per-agent identity, an untrusted-origin mark, an approval inbox, event-triggered runs (X-1 to X-7) | Designed, not built; see [future directions](docs/design/05-future-directions.md) |
 
 ## Documentation
 
-- [Quick start](docs/quickstart.md): the demo and the command line, step by step
+- [Quick start](docs/quickstart.md): every command with the output it printed
 - [Architecture overview](docs/architecture/overview.md) and [codebase structure](docs/architecture/codebase-structure.md)
-- [Interfaces](docs/interfaces.md) and [evals](docs/evals/README.md)
-- [Design](docs/design/README.md): the reading order, the primitives and the decisions log
+- [Interfaces](docs/interfaces.md): the session API, the server, the command line and tracing
+- [Evals](docs/evals/README.md): running, writing cases, plugging in an agent
+- [Design](docs/design/README.md): the primitives, the decision records and the decisions log
+- [Limitations](docs/limitations.md)
 
 ## Development
 
 ```sh
-make venv    # .venv with aksha (editable), the dev group, the server and the trace exporter
-make check   # lint, type check and the full test suite on SQLite, offline
-make demo    # the same demo, state in var/demo/
+make venv            # .venv with aksha (editable), the dev group and the optional extras
+make check           # lint, type check and the full test suite on SQLite, offline
+make test-postgres   # the PostgreSQL adapter's tests (make venv-postgres first)
+make demo            # the same demo, state in var/demo/
 ```
 
-Contributing, the test layout and the PostgreSQL tests: [CONTRIBUTING.md](CONTRIBUTING.md). Releasing: [docs/releasing.md](docs/releasing.md).
+Contributing and the test layout: [CONTRIBUTING.md](CONTRIBUTING.md). Releasing: [docs/releasing.md](docs/releasing.md).
 
 ## License
 

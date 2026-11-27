@@ -1,6 +1,6 @@
 # Personas
 
-*Status: intermediate design as of 26 Nov 2026. Each persona is a role, not a person, and every "Aksha gives them" line below is designed, not built. Four primitives are built and tested on a branch in review (P01, P10, P11, P20); nothing a persona would touch end to end has run.*
+*Status: intermediate design as of 26 Nov 2026. Each persona is a role, not a person, and every "Aksha gives them" line below is designed, not built. The build has moved on since this page was written: as of 27 Nov 2026, 29 of the 30 primitives are built and tested on main (see the [architecture overview](../../architecture/overview.md#the-primitives)), and this page has not been re-checked against the build.*
 
 Aksha has two kinds of user, and they judge different things. The agent developer and the operator judge the harness: can a new agent be added without touching the runtime, and can many runs be trusted unattended? The founder, the engineer-inventor and the counsel judge the example agents' work: is every claim grounded, and does nothing leave the system without approval? The reviewer of agent output sits between them, because it is the role the runtime has to serve for every agent, and the three example-agent users are the people who fill it.
 

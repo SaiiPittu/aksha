@@ -1,6 +1,6 @@
 # Evals: running, writing cases, and plugging in an agent
 
-*Status on 26 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each case k times in each of its worlds (and once per arm for a comparison case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their suites on the runtime with their fake models. On a fresh clone on 26 Nov 2026 every suite passed: research 11 of 11 episodes (6 of 6 cases), patent 16 of 16 (8 of 8), scripted 17 of 17 (7 of 7) and change 9 of 9 (the resume-against-fresh case, three arms at k = 3); see "Results on 26 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build (B1 to B23).*
+*Status on 27 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each case k times in each of its worlds (and once per arm for a comparison case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their suites on the runtime with their fake models. There are 12 suites over 10 worlds; six of the worlds were written without sight of the agent code. On a fresh clone of main on 27 Nov 2026 the six suites over the worlds the agents were built on all passed, the research agent passed 25 of 26 held-out cases and the patent agent 3 of 23; see "Results on 27 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build.*
 
 Each fixture world is an environment in the reinforcement-learning sense: a task (an eval case), a world state copied fresh for every episode, tools that read and write that state behind a path guard, and a grader the agent cannot reach. The agent is graded on what it leaves in the episode's event store, never on what it says it did.
 
@@ -156,16 +156,26 @@ The agent under test is a port (`aksha.evals.ports.AgentUnderTest`): a `name`, a
 
 `src/aksha/data/suites/scripted/` runs the same kind of cases through `ScriptedResearchAgent`, a small rule-based agent that reads the competitor pages and reviews and never the key; it is what the runner is tested with.
 
-## Results on 26 Nov 2026
+## Results on 27 Nov 2026
 
-From a fresh clone, `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`). In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. The self-tests passed in every run, with 33 of 33 gradeable criteria killed by a mutant.
+From a fresh clone of main, `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`). In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. No suite had an invariant failure.
 
-| Suite | Episodes passed | Cases passed | Suite verdict | Notes |
-|---|---|---|---|---|
-| research | 11 of 11 | 6 of 6 | pass | `rel.same_calls` passes on all five invariance pairs, with 32 calls each: the agent works through companies in the order it discovered their pages, not by name (ADR-P22 B23). |
-| patent | 16 of 16 | 8 of 8 | pass | `s8b-injection-patent` is removed. Its page is one only the research agent reads, and `s8a-injection-research` covers that trap (B22). |
-| scripted | 17 of 17 | 7 of 7 | pass | |
-| change | 9 of 9 | 1 of 1 | pass | Resume against fresh, three arms at k = 3, all correct. The per-arm numbers and what they do and do not show are in [resume-vs-fresh.md](resume-vs-fresh.md). |
+| Suite | World, written blind | Cases passed | Self-tests | Exit code | Notes |
+|---|---|---|---|---|---|
+| research | stillroom, stillroom-v2 | 6 of 6 | pass, 36 of 36 criteria killed | 0 | `rel.same_calls` holds on every invariance pair (ADR-P22 B23). |
+| patent | stillroom, stillroom-v2 | 8 of 8 | pass, 36 of 36 | 0 | |
+| scripted | stillroom, stillroom-v2 | 7 of 7 | pass, 36 of 36 | 0 | The rule-based test agent the runner is tested with. |
+| change | stillroom | 1 of 1 | pass, 36 of 36 | 0 | Resume against fresh, three arms at k = 3, all correct; see [resume-vs-fresh.md](resume-vs-fresh.md). |
+| tilldew | tilldew, no | 12 of 12 | pass, 36 of 36 | 0 | Both agents. |
+| cindral | cindral, no | 11 of 11 | pass, 35 of 35 | 0 | Both agents. |
+| rimefold | rimefold, yes | 7 of 8 | fail, 14 of 28 | 2 | Research. `rf-research-claim` fails: the claim is cited by its block, not its sentence. |
+| kelasora | kelasora, yes | 9 of 9 | fail, 14 of 28 | 2 | Research. |
+| vantlow | vantlow, yes | 9 of 9 | fail, 13 of 28 | 2 | Research. |
+| pulvane | pulvane, yes | 1 of 7 | fail, 0 of 27 | 2 | Patent. No candidate is found in a meeting transcript. |
+| quillmere | quillmere, yes | 0 of 7 | fail, 0 of 24 | 2 | Patent. No candidate is found in a lab notebook or an XML tracker. |
+| brackwen | brackwen, yes | 2 of 9 | fail, 0 of 27 | 2 | Patent. |
+
+A held-out suite exits 2 because its self-tests fail: the oracle and some graders still name fields in the first world's words, so they cannot pass on another world whatever the agent does. Each gap is listed in [limitations item 19](../limitations.md) and is left failing on purpose rather than fixed with a rule that fits one world.
 
 ## Not built yet
 

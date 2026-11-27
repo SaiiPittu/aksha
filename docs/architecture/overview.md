@@ -1,6 +1,6 @@
 # Architecture overview
 
-*As of 26 Nov 2026. The layout, the import rules and how to add an agent or an adapter are in [codebase-structure.md](codebase-structure.md); the full design is in [../design/02-architecture.md](../design/02-architecture.md).*
+*As of 27 Nov 2026. The layout, the import rules and how to add an agent or an adapter are in [codebase-structure.md](codebase-structure.md); the full design is in [../design/02-architecture.md](../design/02-architecture.md).*
 
 ## Three tiers
 
@@ -39,7 +39,7 @@ flowchart LR
   EXEC -->|"request, result"| BOX
 ```
 
-Caption: every arrow into tier 1 starts in tier 2, and tier 3 returns only its result. Tier 3 is designed; as of 26 Nov 2026 only its declared types and a process-group kill unit exist.
+Caption: every arrow into tier 1 starts in tier 2, and tier 3 returns only its result. Tier 3 is the sandbox: as of 27 Nov 2026 a bubblewrap backend on Linux and an optional E2B backend, with a process-group kill unit (P12).
 
 ## The event store is the source of truth
 
@@ -82,15 +82,15 @@ The layout and how to add an agent or an adapter are in [docs/architecture/codeb
 
 ## The primitives
 
-A primitive is one capability every agent gets from the runtime without writing it. Each has one architecture decision record (ADR) in [docs/design/adr/](../design/adr/). Status, as of 26 Nov 2026: **built** means the code and its tests exist (parts still designed inside a built primitive are listed in the structure document); **designed** means an ADR with a decision exists and at most its declared types are in code; **planned** means the options are listed and none is chosen.
+A primitive is one capability every agent gets from the runtime without writing it. Each has one architecture decision record (ADR) in [docs/design/adr/](../design/adr/). Status, as of 27 Nov 2026: **built** means the code and its tests exist (parts still designed inside a built primitive are listed in the structure document); **designed** means an ADR with a decision exists and at most its declared types are in code; **planned** means the options are listed and none is chosen.
 
-| ID | Primitive | Status | What exists (26 Nov 2026) |
+| ID | Primitive | Status | What exists (27 Nov 2026) |
 |---|---|---|---|
 | P01 | Event store and projections | built | Append-only store with hash chain, `verify()`, anchors, SQLite and PostgreSQL adapters, reducers and a projection cache |
 | P02 | Durable execution | built | Deterministic step IDs, injected clock, retries and timeouts, recovery on startup |
 | P03 | Transactional outbox and idempotency keys | built | Effects committed before the call, keyed by meaning, reconciled after a crash; command receipts |
 | P04 | Artifact store and lineage | built | Typed immutable versions, recorded reads, typed relations with excerpt evidence, blob store |
-| P05 | Invalidation | built | Source changes, early cutoff, rebuild runs, diff reviews for human-reviewed outputs |
+| P05 | Invalidation | built | Source changes, early cutoff, rebuild runs, diff reviews for human-reviewed outputs; opt-in per agent; citation keying (cited spans, scoped absence claims and extraction schemas strong, other reads weak); the correction loop and cross-run reuse |
 | P06 | Agent loop and turn | built | `run_turn` and `drive` over projections; every turn end goes to stop-policy evaluation |
 | P07 | Model interface and routing by class | built | Extraction, classification and generation contracts, thresholds with an abstention band, cascades, rule-based fakes, replay, a live generation adapter |
 | P08 | Context assembly and compaction | built | Context as a projection, observation masking, recorded summaries (on by default) |
@@ -115,7 +115,7 @@ A primitive is one capability every agent gets from the runtime without writing 
 | P27 | Steering and follow-up input | built | `Steer` in three lanes (steer, follow-up, amend) as durable facts, through the session API, HTTP and `aksha steer` |
 | P28 | Execution environment image | built | Images keyed by a content hash of the spec and lock files, first build approved, packages fetched under egress and hash-checked, installed offline, recorded, mounted read-only at `/env` |
 | P29 | External record state | built | One record per outside record from outbox receipts, with its source version's freshness joined |
-| P30 | Erasure in an append-only store | planned | |
+| P30 | Erasure in an append-only store | planned | A design is in review; `forget` in memory hides a record from recall and erases nothing |
 
 The catalogue, with dependencies and the build order, is [docs/design/03-primitives.md](../design/03-primitives.md).
 

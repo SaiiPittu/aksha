@@ -1,6 +1,6 @@
 # Features
 
-*Status: intermediate design as of 26 Nov 2026. Every feature below is designed. Four primitives are built and tested on a branch in review: the event store (P01), the tool registry (P10), the policy gate (P11) and the agent definition and extension API (P20), so features F-01, F-13, F-14 and F-28 are partly built. Priorities are for the first milestone, the 27 Nov 2026 cut of the build, and are proposals until the maintainer accepts them.*
+*Status: intermediate design as of 26 Nov 2026. Every feature below is designed. The build has moved on since this page was written: as of 27 Nov 2026, 29 of the 30 primitives are built and tested on main (see the [architecture overview](../../architecture/overview.md#the-primitives)), and this page has not been re-checked against the build. Priorities are for the first milestone, the 27 Nov 2026 cut of the build, and are proposals until the maintainer accepts them.*
 
 A feature is a capability a persona can name, built from one or more primitives. This page groups the features by the runtime area that owns them, using the same five families as the [primitives catalogue](../03-primitives.md), then adds deployment and the example agents. Each feature lists the [user stories](04-user-stories.md) it serves; the [requirements](06-requirements.md) say exactly what each feature must do.
 

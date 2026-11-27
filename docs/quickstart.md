@@ -1,6 +1,6 @@
 # Quick start: the demo and the command line, step by step
 
-*As of 26 Nov 2026. The shortest path is in the [README](../README.md): `aksha demo`, then `aksha example` and three commands. This page is the long walk-through from a clone, every command with the output it printed. Nothing here calls a model over the network: every model is a rule-based fake or a replay.*
+*As of 27 Nov 2026. The shortest path is in the [README](../README.md): `aksha demo`, then `aksha example` and three commands. This page is the long walk-through from a clone, every command with the output it printed. Nothing here calls a model over the network: every model is a rule-based fake or a replay.*
 
 ## From a clone
 
@@ -9,14 +9,14 @@
 ```sh
 make venv    # .venv with aksha (editable), dev tools, the server and the trace exporter
 make test    # the full suite on SQLite, offline
-make demo    # the change-and-recovery demo, about 20 seconds (creates .venv itself if missing)
+make demo    # the change-and-recovery demo, under a minute (creates .venv itself if missing)
 ```
 
 `make demo` tells the change-and-recovery story in one command:
 
 1. The research agent and the patent agent run to completion on the synthetic `stillroom` world. The patent agent sends one invention's counsel-review packet to a mock mailbox after an approval.
 2. The input changes to the `stillroom-v2` change set: a new publication family, and an earlier date on an outside suggestion.
-3. Invalidation reopens only the work that read the moved records. In the run on 26 Nov 2026 it rebuilt 10 patent outputs and kept the other 13 and all 11 research outputs. The packet's diff review is accepted and a fresh approval is asked for the new version.
+3. Invalidation reopens only the work that read the moved records. In the run on 27 Nov 2026 it rebuilt 14 outputs (10 patent, 4 research) and kept the other 13 patent and 7 research outputs; keyed on every read instead, the same change would have reopened 27. The packet's diff review is accepted and a fresh approval is asked for the new version.
 4. The new packet is sent by a child process that kills itself with a real `SIGKILL` after the mailbox stores it and before the runtime records the receipt. On restart, recovery asks the mailbox by idempotency key and does not send again: 2 deliveries for 2 keys, one per packet version.
 5. The event store's hash chain is verified.
 
@@ -119,7 +119,7 @@ A native System 1 service (an extraction or classification API with its own span
 ```sh
 aksha example stillroom stillroom-inputs
 AKSHA_SEARCH=world:stillroom aksha run --agent research --input stillroom-inputs --answer segment=offices --answer geography=EU --record runs/first "Research the competitors for the venture's occupancy sensor."
-# recorded R-0001 research (complete) into runs/first: 173 model calls, 2 searches, 15 fetches
+# recorded R-0001 research (complete) into runs/first: 174 model calls, 3 searches, 15 fetches
 aksha replay runs/first
 # replayed R-0001 offline from runs/first (complete) in runs/first-replay
 # outputs: the same as recorded (11 outputs)

@@ -1,6 +1,6 @@
 # User stories
 
-*Status: intermediate design as of 26 Nov 2026. Every story and acceptance criterion below is designed, not built, unless it says otherwise. Four primitives are built and tested on a branch in review (P01, P10, P11, P20). Thresholds and counts in the criteria are proposals for the maintainer to accept or change, not measurements.*
+*Status: intermediate design as of 26 Nov 2026. Every story and acceptance criterion below is designed, not built, unless it says otherwise. The build has moved on since this page was written: as of 27 Nov 2026, 29 of the 30 primitives are built and tested on main (see the [architecture overview](../../architecture/overview.md#the-primitives)), and this page has not been re-checked against the build. Thresholds and counts in the criteria are proposals for the maintainer to accept or change, not measurements.*
 
 Each story follows "As a ..., I want ..., so that ...", then numbered acceptance criteria a test can run, then the [scenarios](03-scenarios.md) it appears in. Stories are grouped by the [personas](02-personas.md) they serve. The [features](05-features.md) and [requirements](06-requirements.md) cite them by ID.
 

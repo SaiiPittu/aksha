@@ -1,6 +1,6 @@
 # Scenarios
 
-*Status: intermediate design as of 26 Nov 2026. Every scenario below is designed, not run. Four primitives are built and tested on a branch in review (P01, P10, P11, P20); no scenario has run end to end. Names, dates and numbers are synthetic and belong to the example fixtures' answer keys; counts of model turns and hours are estimates unless a row says otherwise.*
+*Status: intermediate design as of 26 Nov 2026. Every scenario below is designed, not run. The build has moved on since this page was written: as of 27 Nov 2026, 29 of the 30 primitives are built and tested on main (see the [architecture overview](../../architecture/overview.md#the-primitives)), and this page has not been re-checked against the build. Names, dates and numbers are synthetic and belong to the example fixtures' answer keys; counts of model turns and hours are estimates unless a row says otherwise.*
 
 These twelve walkthroughs are the product's acceptance tests in story form. Each one names its starting state, its steps in the order the runtime takes them, and what a test can check at the end. The [user stories](04-user-stories.md) cite them by number, and the [requirements](06-requirements.md) trace to them in the last column of the traceability table.
 
