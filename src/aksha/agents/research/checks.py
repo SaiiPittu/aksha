@@ -73,13 +73,14 @@ def scope_done(view: Any) -> CheckResult:
         )
     comparison = plan.get("kind") == "comparison"
     needed = ("segment", "geography") if comparison else ()
-    missing = [f for f in needed if not scope.get(f, {}).get("value")]
+    given = {f: v if isinstance(v := scope.get(f), Mapping) else {} for f in needed}
+    missing = [f for f in needed if not given[f].get("value")]
     if missing:
         return CheckResult(
             False, f"scope has no value for {missing}: give each a value and its basis",
             keys=tuple(missing),
         )  # fmt: skip
-    unsourced = [f for f in needed if not scope[f].get("basis")]
+    unsourced = [f for f in needed if not given[f].get("basis")]
     if unsourced:
         return CheckResult(
             False, f"{unsourced} have no basis: say where each came from (request, answer, "
@@ -133,6 +134,37 @@ def _joined(pages: list[str], links: list[Mapping[str, Any]]) -> bool:
     return group == set(pages)
 
 
+def _objects(listed: Any) -> list[Mapping[str, Any]]:
+    """The objects in a saved list (a malformed list, or item, is left out)."""
+    return [i for i in listed if isinstance(i, Mapping)] if isinstance(listed, list | tuple) else []
+
+
+def _companies(found: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """The competitors' companies that are objects."""
+    return _objects(found.get("companies"))
+
+
+def _pages(company: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """A company's pages that are objects."""
+    return _objects(company.get("pages"))
+
+
+def _key(company: Mapping[str, Any]) -> str:
+    """A company's key (computed at save when the model gave none)."""
+    return str(company.get("key"))
+
+
+def _unkeyed(companies: list[Mapping[str, Any]]) -> CheckResult | None:
+    """A failure naming the companies with no key, or None (the key is computed at save)."""
+    bad = [i for i, c in enumerate(companies) if not computed.valid_key(c.get("key"))]
+    if not bad:
+        return None
+    return CheckResult(
+        False, f"companies at {bad} have no key and no canonical name or page to compute "
+        "one from: give each a canonical name (the key is computed from it at save)",
+    )  # fmt: skip
+
+
 def discover_done(view: Any) -> CheckResult:
     """Each page belongs to one company; a merged company's pages are joined by ``same_entity_as``.
 
@@ -142,14 +174,23 @@ def discover_done(view: Any) -> CheckResult:
     found = _content(view, "competitors")
     if found is None:
         return CheckResult(False, "save the competitors")
-    companies = found.get("companies", [])
+    companies = _companies(found)
+    unkeyed = _unkeyed(companies)
+    if unkeyed is not None:
+        return unkeyed
+    norecord = [_key(c) for c in companies if any(not p.get("record") for p in _pages(c))]
+    if norecord:
+        return CheckResult(
+            False, f"companies {norecord} list a page with no record: give each page the "
+            "record it was read from", keys=tuple(norecord),
+        )  # fmt: skip
     # A page is a record, or one section of a record that holds several sellers' sections.
-    pages = [(p["record"], p.get("section")) for c in companies for p in c.get("pages", [])]
+    pages = [(str(p["record"]), p.get("section")) for c in companies for p in _pages(c)]
     if len(pages) != len(set(pages)):
         owners: dict[tuple[str, Any], list[str]] = {}
         for c in companies:
-            for p in c.get("pages", []):
-                owners.setdefault((p["record"], p.get("section")), []).append(str(c.get("key")))
+            for p in _pages(c):
+                owners.setdefault((str(p["record"]), p.get("section")), []).append(_key(c))
         shared = {_page_name(p): ks for p, ks in owners.items() if len(ks) > 1}
         return CheckResult(
             False, f"pages listed under more than one company: {shared}; a page belongs to "
@@ -162,23 +203,21 @@ def discover_done(view: Any) -> CheckResult:
             f"competitors list {len(companies)} companies on {len(pages)} pages: set resolved "
             f"to {len(companies)} and pages_found to {len(pages)}",
         )  # fmt: skip
-    merged = [c["key"] for c in companies if len(c.get("pages", [])) > 1]
+    merged = [c for c in companies if len(_pages(c)) > 1]
     linked = _relations(view, "same_entity_as")
-    unlinked = [
-        c["key"]
-        for c in companies
-        if c["key"] in merged and not _joined([p["record"] for p in c["pages"]], linked)
-    ]
+    unlinked = {
+        _key(c): [str(p["record"]) for p in _pages(c)]
+        for c in merged
+        if not _joined([str(p["record"]) for p in _pages(c)], linked)
+    }
     if unlinked:
-        join = {k: [p["record"] for c in companies if c["key"] == k for p in c["pages"]]
-                for k in unlinked}  # fmt: skip
         return CheckResult(
-            False, f"companies {unlinked} list several pages that no same_entity_as relation "
-            f"joins: save the competitors again with same_entity_as relations joining each "
-            f"one's pages {join}, each with the excerpt that says they are one company",
-            keys=tuple(unlinked),
+            False, f"companies {list(unlinked)} list several pages that no same_entity_as "
+            f"relation joins: save the competitors again with same_entity_as relations "
+            f"joining each one's pages {unlinked}, each with the excerpt that says they are "
+            "one company", keys=tuple(unlinked),
         )  # fmt: skip
-    unproven = [c["key"] for c in companies if c["key"] in merged and not c.get("merge_evidence")]
+    unproven = [_key(c) for c in merged if not c.get("merge_evidence")]
     if unproven:
         return CheckResult(
             False, f"companies {unproven} merge several pages but their merge_evidence is "
@@ -212,11 +251,13 @@ def profile_done(view: Any) -> CheckResult:
     points = [
         {"record": e.get("record"), "per": e.get("per"), "currency": e.get("currency"),
          "value": e["value"]}
-        for e in profile["prices"]
+        for e in profile.get("prices", ())
         if isinstance(e, Mapping) and "value" in e
     ]  # fmt: skip
     recorded = {
-        str(c.get("per")) for c in profile.get("conflicts", []) if c.get("field") == "price"
+        str(c.get("per"))
+        for c in profile.get("conflicts", ())
+        if isinstance(c, Mapping) and c.get("field") == "price"
     }
     open_ = [b for b in analysis.price_conflict(points) if b not in recorded]
     if open_:
@@ -233,9 +274,12 @@ def needs_done(view: Any) -> CheckResult:
     found = _content(view, "needs")
     if found is None:
         return CheckResult(False, "save the needs")
-    sample = found.get("sample", {})
+    sample = found.get("sample")
+    sample = sample if isinstance(sample, Mapping) else {}
     unique, rows = sample.get("unique"), sample.get("rows")
-    copies = len(sample.get("duplicates", []))
+    duplicates = sample.get("duplicates", ())
+    copies = len(duplicates) if isinstance(duplicates, list | tuple) else 0
+    needs = _objects(found.get("needs"))
     if not isinstance(unique, int) or isinstance(unique, bool) or unique < 0:
         return CheckResult(
             False, f"sample.unique is {unique!r}: set it to the number of distinct reviews "
@@ -249,7 +293,7 @@ def needs_done(view: Any) -> CheckResult:
         )  # fmt: skip
     distinct = {
         str(e["review"])
-        for n in found.get("needs", [])
+        for n in needs
         for e in computed.cited_reviews(n) or []
         if isinstance(e, Mapping) and e.get("review") is not None
     }
@@ -268,7 +312,7 @@ def needs_done(view: Any) -> CheckResult:
     ):
         return CheckResult(False, "no customer voice was read: read them, or say "
                            "status no_feedback_found with the listings checked")  # fmt: skip
-    have = {str(n.get("theme")) for n in found.get("needs", [])}
+    have = {str(n.get("theme")) for n in needs}
     if want - have:
         missing = sorted(want - have)
         return CheckResult(
@@ -278,7 +322,7 @@ def needs_done(view: Any) -> CheckResult:
             keys=tuple(missing),
         )  # fmt: skip
     bad = {}
-    for need in found.get("needs", []):
+    for need in needs:
         got = str(need.get("phrase", ""))
         m = PHRASE.match(got)
         n = len(computed.cited_reviews(need) or [])
@@ -295,14 +339,41 @@ def needs_done(view: Any) -> CheckResult:
     return CheckResult(True)
 
 
+def _names(company: Mapping[str, Any]) -> set[str]:
+    """A company's names, case folded: its canonical name and its aliases."""
+    found = [company.get("canonical"), company.get("name"), *(company.get("aliases") or ())]
+    names = (n.get("value") if isinstance(n, Mapping) else n for n in found)
+    return {" ".join(n.split()).casefold() for n in names if isinstance(n, str) and n.strip()}
+
+
+def _row_key(row: Mapping[str, Any], companies: list[Mapping[str, Any]]) -> str:
+    """The company a matrix row is for: its key when a company has it, else by the name."""
+    key = str(row.get("key"))
+    if any(_key(c) == key for c in companies):
+        return key
+    named = row.get("company")
+    name = named.get("value") if isinstance(named, Mapping) else named
+    if isinstance(name, str):
+        folded = " ".join(name.split()).casefold()
+        match = [c for c in companies if folded in _names(c)]
+        if len(match) == 1:
+            return _key(match[0])
+    return key
+
+
 def report_done(view: Any) -> CheckResult:
     """The matrix has a row per company with every dimension; findings and tests are saved."""
     matrix = _content(view, "matrix")
     companies = _content(view, "competitors") or {}
     if matrix is None:
         return CheckResult(False, "save the matrix")
-    want = sorted(c["key"] for c in companies.get("companies", []))
-    have = sorted(str(r.get("key")) for r in matrix.get("rows", []))
+    listed = _companies(companies)
+    unkeyed = _unkeyed(listed)
+    if unkeyed is not None:
+        return unkeyed
+    rows = _objects(matrix.get("rows"))
+    want = sorted(_key(c) for c in listed)
+    have = sorted(_row_key(r, listed) for r in rows)
     if want != have:
         add, drop = sorted(set(want) - set(have)), sorted(set(have) - set(want))
         twice = sorted({k for k in have if have.count(k) > 1})
@@ -311,7 +382,7 @@ def report_done(view: Any) -> CheckResult:
             f"{add}, remove rows for {drop} and keep one row per company (repeated: {twice})",
         )  # fmt: skip
     dims = dimension_ids(_content(view, "scope"))
-    empty = [f"{r.get('key')}/{c}" for r in matrix.get("rows", []) for c in _missing_cells(r, dims)]
+    empty = [f"{_row_key(r, listed)}/{c}" for r in rows for c in _missing_cells(r, dims)]
     if empty:
         return CheckResult(
             False, f"matrix cells {empty} are empty: add to each a cited entry, or an "
@@ -326,7 +397,11 @@ def report_done(view: Any) -> CheckResult:
     if tests is None or "tests" not in tests:
         return CheckResult(False, "save what to test next")
     unmarked = [
-        t.get("id") for t in tests["tests"] if t.get("threshold", {}).get("status") != "proposal"
+        t.get("id") if isinstance(t, Mapping) else t
+        for t in tests["tests"]
+        if not isinstance(t, Mapping)
+        or not isinstance(t.get("threshold", {}), Mapping)
+        or t.get("threshold", {}).get("status") != "proposal"
     ]
     if unmarked:
         return CheckResult(

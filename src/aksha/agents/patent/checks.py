@@ -132,7 +132,7 @@ def table_saved(view: Any) -> CheckResult:
     table = view.latest("table")
     if table is None:
         return CheckResult(False, "save the recommendation table")
-    have = {r["candidate"] for r in table.content.get("rows", [])}
+    have = {r.get("candidate") for r in table.content.get("rows", ()) if isinstance(r, Mapping)}
     want = {k for k in view.all_latest("recommendation") if k is not None}
     missing = sorted(want - have)
     if missing:

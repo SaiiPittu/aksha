@@ -103,6 +103,13 @@ The arrow `blocked --> running` on a rebuild re-entry had no guard against the e
 
 Tests: `tests/integration/test_rebuild_loop.py` drives a rebuild whose writer fails on entry (a turn limit of 0, the in-evaluation loop) and one whose writer refuses to save until its stop-veto limit fails it; both end `blocked`, naming the writer, after one entry.
 
+### Amendment from the build: a missing field is a failing check, not a raise (28 Nov 2026, S7, Proposed)
+
+D2 makes a check that raises a FAIL with `check_raised`, which blocks the instance at once. A live run on a real model blocked that way: the research agent's discover and report checks indexed each company's `key`, the model's saved companies had none (the schema did not require it), and the run ended `blocked` with work that one more save would have fixed.
+
+1. S7.1, `run_check` reads a `KeyError` as a gap in the saved work: an ordinary failing result (`check_failed`) whose message names the check and the missing field and asks for it, so the stop-veto limit counts it like any other failure. Every other exception, and a value that is not a `CheckResult`, stays `check_raised`.
+2. S7.2, the guard is the backstop. Each agent's checks still read optional fields with `get` and say what is missing, and a field a check needs that code can give (a key, a count) is computed at save (ADR-P04 K1).
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |
