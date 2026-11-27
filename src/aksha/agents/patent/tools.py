@@ -69,8 +69,16 @@ ALIASES = frozenset({"doc_kind", "template_fields", "publication_biblio"})
 """The fast-class aliases the domain tools ask (``world.py``)."""
 _SLOW = RetryPolicy(timeout_ms=600_000, max_retries=1)
 """A read asks fast-class models about several records: a live model takes seconds each."""
-READING = InputReading(SOURCE_NAME, COLLECTION, decide=DECIDE, kinds=KINDS, page_lines=2_000,
-                       page_chars=40_000, retry=_SLOW)  # fmt: skip
+READING = InputReading(
+    SOURCE_NAME,
+    COLLECTION,
+    decide=DECIDE,
+    kinds=KINDS,
+    page_lines=2_000,
+    page_chars=40_000,
+    result_chars=60_000,
+    retry=_SLOW,
+)
 """How the shared input tools read for this agent: a window fits its 60,000-character cap."""
 
 

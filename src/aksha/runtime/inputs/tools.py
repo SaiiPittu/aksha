@@ -53,7 +53,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from aksha.runtime.artifacts.types import InputRef
@@ -120,8 +120,10 @@ class InputReading:
     ``source`` and ``collection`` name the versioned source the inputs are records of.
     ``decide`` is the agent's decide alias and ``kinds`` its document kinds (ADR-P07 G3);
     with no decide alias, ``list_inputs`` lists no kinds and ``extract`` is refused.
-    ``page_lines``, ``page_chars`` and ``line_chars`` bound one ``read_document`` window, so
-    an agent fits it under its own result cap (ADR-P08). ``retry`` is the tools' timeout and
+    ``page_lines``, ``page_chars`` and ``line_chars`` bound one ``read_document`` window.
+    ``result_chars`` is the agent's result cap (ADR-P08 ``result_cap_chars``): a window whose
+    whole result would not fit under it is cut shorter, never left for the cap to cut in
+    the middle. ``retry`` is the tools' timeout and
     retry policy: a call that asks a live fast model per input may take seconds each.
     """
 
@@ -132,6 +134,7 @@ class InputReading:
     page_lines: int = PAGE_LINES
     page_chars: int = PAGE_CHARS
     line_chars: int = LINE_CHARS
+    result_chars: int | None = None
     retry: RetryPolicy = SLOW_RETRY
 
     def aliases(self) -> frozenset[str]:
@@ -422,7 +425,32 @@ def read_view(
     reading: InputReading,
     extra: Mapping[str, Any] | None = None,
 ) -> ToolOutcome:
-    """``found`` as ``read_document`` shows it (module doc): a window of lines and its units."""
+    """``found`` as ``read_document`` shows it (module doc): a window of lines and its units.
+
+    With ``reading.result_chars`` set, a window whose result would not fit is read again
+    with a smaller character budget, so the result ends with its own continue notice.
+    """
+    out = _view(ctx, found, args, reading, extra)
+    cap = reading.result_chars
+    for _ in range(4):
+        result = out.result
+        if cap is None or not isinstance(result, Ok):
+            return out
+        size = len(json.dumps(result.data, ensure_ascii=False)) + 24 * len(result.spans) + 200
+        if size <= cap or reading.page_chars < 200:
+            return out
+        reading = replace(reading, page_chars=max(100, int(reading.page_chars * cap / size * 0.9)))
+        out = _view(ctx, found, args, reading, extra)
+    return out
+
+
+def _view(
+    ctx: ToolContext,
+    found: ReturnedText,
+    args: Mapping[str, Any],
+    reading: InputReading,
+    extra: Mapping[str, Any] | None,
+) -> ToolOutcome:
     text = found.text
     fmt = sniff_format(found.record_id, text)
     segs = segments_of(text, fmt)

@@ -203,7 +203,14 @@ def test_units_are_exact_raw_ranges(reader: AttemptReader) -> None:
         assert isinstance(out.result, Ok)
         for d in out.result.spans:
             assert d.end > d.start and texts[d.record_id][d.start : d.end]
-    rows = [u for u in reviews.result.data["units"] if u[1] == "row"]
+    rows = {u[4] for u in reviews.result.data["units"] if u[1] == "row"}
+    nxt = reviews.result.data.get("next_offset")
+    while nxt is not None:  # a window cut to fit the agent's result cap: read on
+        more = call("read_document", _ctx(reader), {"ref": "input/reviews/reviews.json",
+                                                    "offset": nxt})  # fmt: skip
+        assert isinstance(more.result, Ok)
+        rows |= {u[4] for u in more.result.data["units"] if u[1] == "row"}
+        nxt = more.result.data.get("next_offset")
     assert len(rows) == 42
 
 

@@ -9,6 +9,7 @@ typed values each cited to a unit of exactly its range.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any
@@ -278,3 +279,15 @@ def test_search_ranks_passages_mints_nothing_and_records_its_hit_set(source: Sou
     assert read.kind == "query" and got.data["recorded"] == f"query:{read.id}@{read.version}"
     none = _call("search_inputs", source, {"query": "absent words", "match": "all"})
     assert isinstance(none, Ok) and none.data["hits"] == []
+
+
+def test_a_window_is_cut_to_fit_the_agent_result_cap() -> None:
+    long = "".join(f"line {n} " + "x" * 60 + "\n" for n in range(200))
+    source = Source({"input/long.txt": long})
+    capped = InputReading(
+        "inputs", "input", page_lines=2_000, page_chars=50_000, result_chars=4_000
+    )
+    got = _call("read_document", source, {"ref": "input/long.txt"}, reading=capped)
+    assert isinstance(got, Ok)
+    assert len(json.dumps(got.data)) + 24 * len(got.spans) <= 4_000
+    assert got.data["next_offset"] > 1 and "continue" in got.data["truncated"]

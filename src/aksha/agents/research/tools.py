@@ -40,7 +40,8 @@ READING = InputReading(
     decide=reading.DECIDE,
     kinds=reading.KINDS,
     page_lines=600,
-    page_chars=18_000,
+    page_chars=16_000,
+    result_chars=24_000,
     retry=RetryPolicy(timeout_ms=600_000, max_retries=1),
 )
 """How the shared input tools read for this agent: a window fits its 24,000-character result cap."""

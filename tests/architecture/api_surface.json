@@ -49,7 +49,7 @@
     "HttpResponse": "class HttpResponse(status: 'int', headers: 'Mapping[str, str]', body: 'bytes', url: 'str', truncated: 'bool' = False) -> None",
     "INPUT_TOOLS": "INPUT_TOOLS = ('list_inputs', 'read_document', 'search_inputs')",
     "INSTRUCTION_FLAG": "INSTRUCTION_FLAG = 'instruction_text'",
-    "InputReading": "class InputReading(source: 'str', collection: 'str', decide: 'str | None' = None, kinds: 'tuple[DocumentKind, ...]' = (), page_lines: 'int' = 400, page_chars: 'int' = 16000, line_chars: 'int' = 2000, retry: 'RetryPolicy' = RetryPolicy(timeout_ms=600000, max_retries=1, retry_on=frozenset({'timeout', 'transient'}), backoff_ms=(500, 1000))) -> None",
+    "InputReading": "class InputReading(source: 'str', collection: 'str', decide: 'str | None' = None, kinds: 'tuple[DocumentKind, ...]' = (), page_lines: 'int' = 400, page_chars: 'int' = 16000, line_chars: 'int' = 2000, result_chars: 'int | None' = None, retry: 'RetryPolicy' = RetryPolicy(timeout_ms=600000, max_retries=1, retry_on=frozenset({'timeout', 'transient'}), backoff_ms=(500, 1000))) -> None",
     "InputRef": "class InputRef(kind: 'InputKind', id: 'str', version: 'str', path: 'str | None' = None, entry_hash: 'str | None' = None) -> None",
     "InstanceRef": "class InstanceRef(run: 'str', task_path: 'str', key: 'str | None' = None) -> None",
     "InstanceStatus": "InstanceStatus = typing.Literal['new', 'running', 'suspended', 'done', 'blocked', 'withdrawn']",

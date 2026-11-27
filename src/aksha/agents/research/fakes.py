@@ -240,8 +240,8 @@ def _as_read(seen: Seen) -> None:
                 r = Result(r.step, r.name, r.args, fakes_views.listing_view(r.data), None, r.cites)
             elif r.name == "search_inputs":
                 legacy_args, shown = fakes_views.search_view(r.args, r.data or {})
-                data = shown if r.data else None
-                r = Result(r.step, "search", legacy_args, data, r.error, r.cites)
+                found = shown if r.data else None
+                r = Result(r.step, "search", legacy_args, found, r.error, r.cites)
             order.append(r)
             continue
         target = r.args.get("url") if r.name == "fetch_url" else r.args.get("ref")
