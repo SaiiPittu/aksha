@@ -29,6 +29,7 @@ from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
+from aksha.adapters.storage.decoded import RowMemo
 from aksha.runtime.canonical import canonical_json, freeze, iso_utc
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.events.envelope import Event, NewEvent
@@ -316,6 +317,10 @@ class SQLiteEventStore:
         self._head = _stored_head(conn, identity)
         """The writer's last committed ``(seq, hash)``; moves only after a commit."""
         self._mutex = threading.RLock()
+        self._events = RowMemo(_event)
+        """Decoded events by seq, reused only while the stored row is unchanged."""
+        self._artifacts = RowMemo(_artifact)
+        """Decoded artifact rows by (owner, ref), reused only while the row is unchanged."""
         self.committed = threading.Condition()
         """Notified after every commit by this handle, to wake its subscriptions."""
 
@@ -328,6 +333,12 @@ class SQLiteEventStore:
     def is_writer(self) -> bool:
         """Whether this handle holds the writer lock."""
         return self._lock_fd is not None
+
+    def _event(self, row: tuple[Any, ...]) -> Event:
+        return self._events.get(row[0], row)
+
+    def _artifact(self, row: tuple[Any, ...]) -> StoredArtifact:
+        return self._artifacts.get((row[0], row[1]), row)
 
     def _db(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -420,7 +431,7 @@ class SQLiteEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = ? AND uniq IN ({marks})",
             (batch.owner, *keys),
         )
-        existing = batch.first_conflict({r[8]: _event(r) for r in rows})
+        existing = batch.first_conflict({r[8]: self._event(r) for r in rows})
         if existing is not None:
             raise AlreadyRecorded(existing)
 
@@ -445,7 +456,7 @@ class SQLiteEventStore:
         if types is not None:
             sql += f" AND type IN ({','.join('?' * len(types))})"
             params.extend(sorted(types))
-        return iter([_event(r) for r in self._query(sql + " ORDER BY seq", params)])
+        return iter([self._event(r) for r in self._query(sql + " ORDER BY seq", params)])
 
     def read_artifacts(
         self, owner: str, *, upto_seq: int | None = None
@@ -456,7 +467,8 @@ class SQLiteEventStore:
         if upto_seq is not None:
             sql += " AND event_seq <= ?"
             params.append(upto_seq)
-        return tuple(_artifact(r) for r in self._query(sql + " ORDER BY event_seq, ref", params))
+        rows = self._query(sql + " ORDER BY event_seq, ref", params)
+        return tuple(self._artifact(r) for r in rows)
 
     def _last(self, owner: str) -> int:
         rows = self._query("SELECT MAX(seq) FROM events WHERE owner = ?", (owner,))
@@ -472,7 +484,7 @@ class SQLiteEventStore:
             f"SELECT {_EVENT_COLUMNS} FROM events WHERE owner = ? AND uniq = ?",
             (check_owner(owner), key),
         )
-        return _event(rows[0]) if rows else None
+        return self._event(rows[0]) if rows else None
 
     def owners_with_open_runs(self) -> tuple[str, ...]:
         """Owners with a started run that has not ended, sorted."""

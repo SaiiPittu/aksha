@@ -7,9 +7,10 @@ from a store.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
+from typing import Any
 
 from aksha.runtime.events.envelope import Event
 from aksha.runtime.storage.ports import EventStore
@@ -73,6 +74,22 @@ class LogView:
     events: tuple[Event, ...]
     artifacts: ArtifactsView
     complete: bool = False
+    _derived: dict[str, Any] = field(
+        default_factory=dict, init=False, repr=False, compare=False, hash=False
+    )
+
+    def derive[T](self, name: str, compute: Callable[[], T]) -> T:
+        """``compute()``, a pure function of this view named ``name``, computed once per view.
+
+        A view never changes, so a value derived from it is the same however often it is
+        asked for; several readers of one view (context assembly, the step executor, the
+        invalidation view) share one span index instead of each folding the whole log.
+        The memo lives and dies with the view and is never part of its equality.
+        """
+        if name not in self._derived:
+            self._derived[name] = compute()
+        value: T = self._derived[name]
+        return value
 
     def upto(self, seq: int) -> LogView:
         """The same log as it stood at ``seq``; a view never grows (``ValueError``).

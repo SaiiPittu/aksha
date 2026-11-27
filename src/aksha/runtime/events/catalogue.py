@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import copy
 import string
-from collections.abc import Iterable, Mapping
+from collections.abc import Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -1957,6 +1957,44 @@ def _template_fields(template: str) -> list[str]:
     return [field for _, field, _, _ in string.Formatter().parse(template) if field]
 
 
+_VALIDATORS: dict[Hashable, Draft202012Validator] = {}
+"""Checked validators by the schema's exact value: every store a process opens builds a
+catalogue, and checking the same few hundred schemas each time was most of opening one."""
+
+
+def _validator(declared: Mapping[str, Any]) -> Draft202012Validator:
+    """A validator of ``declared`` once it passes ``check_schema`` (``SchemaError`` if not).
+
+    A validator only reads its schema, so one built from a private deep copy is shared by
+    every catalogue whose spec declares an equal schema: same types, keys, order and values.
+    """
+    try:
+        key: Hashable | None = _schema_key(declared)
+    except TypeError:
+        key = None  # a value with no exact key is checked every time
+    found = None if key is None else _VALIDATORS.get(key)
+    if found is not None:
+        return found
+    schema = copy.deepcopy(dict(declared))  # the caller's nested dicts stay theirs
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    if key is not None:
+        _VALIDATORS[key] = validator
+    return validator
+
+
+def _schema_key(value: object) -> Hashable:
+    """A hashable key equal only for values of the same types, keys, order and contents."""
+    kind = type(value)
+    if isinstance(value, Mapping):
+        return (kind.__name__, tuple((k, _schema_key(v)) for k, v in value.items()))
+    if kind is list or kind is tuple:
+        return (kind.__name__, tuple(_schema_key(v) for v in value))  # type: ignore[attr-defined]
+    if kind in (str, int, float, bool, type(None)):
+        return (kind.__name__, value)
+    raise TypeError(f"no exact key for a {kind.__name__}")
+
+
 class Catalogue:
     """The event types one process may append: the core types plus registered extensions."""
 
@@ -1981,13 +2019,12 @@ class Catalogue:
         prefix = spec.dedup_prefix
         if prefix is not None and (not prefix.endswith(":") or prefix == ":"):
             raise CatalogueError(message=f"{spec.name}: a dedup key starts with a prefix like 'x:'")
-        schema = copy.deepcopy(dict(spec.schema))  # the caller's nested dicts stay theirs
         try:
-            Draft202012Validator.check_schema(schema)
+            validator = _validator(spec.schema)
         except SchemaError as e:
             raise CatalogueError(message=f"{spec.name}: invalid schema: {e.message}") from None
         self._specs[spec.name] = spec
-        self._validators[spec.name] = Draft202012Validator(schema)
+        self._validators[spec.name] = validator
 
     def __contains__(self, name: object) -> bool:
         """Whether an event type of this name is held."""

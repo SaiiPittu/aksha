@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # git ignores. An installed aksha uses the per-user data folder instead (aksha doctor).
 export AKSHA_HOME ?= var
 
-.PHONY: venv venv-postgres test test-postgres lint format typecheck check demo dist release-check
+.PHONY: venv venv-postgres test test-serial test-postgres lint format typecheck check demo dist release-check
 
 ## Create .venv and install the package with the dev group, the server, the trace exporter
 ## and the ingest extension's parsers (so their tests run rather than skip).
@@ -18,8 +18,20 @@ venv:
 venv-postgres: venv
 	uv pip install --python $(BIN)/python -e ".[server,otel,ingest,postgres]" --group dev
 
+## The suite on every core (pytest-xdist). Tests that share a module-scoped fixture (a whole
+## episode run once for many assertions) stay on one worker (tests/conftest.py groups
+## them); the rest go to whichever worker is free. Temporary files go to a RAM-backed
+## folder when there is one: the stores keep synchronous=FULL, so on a disk most of a test's
+## time was waiting for fsync. TEST_TMPDIR= (empty) uses the system temp folder instead.
+TEST_TMPDIR ?= $(if $(wildcard /dev/shm/.),/dev/shm,)
+PYTEST_PARALLEL ?= -n auto --dist loadgroup
+
 test:
-	$(BIN)/pytest
+	TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest $(PYTEST_PARALLEL)
+
+## The same suite in one process, in collection order: for debugging an order dependence.
+test-serial:
+	TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest -p no:xdist
 
 ## The PostgreSQL adapter's tests, failing (not skipping) when they cannot run. Needs psycopg
 ## (make venv-postgres) and either AKSHA_TEST_POSTGRES_DSN or docker with a local postgres
@@ -29,8 +41,8 @@ test:
 ## want of a driver, so this is the only job that runs them. A module that adds a postgres
 ## parameter is picked up by its id; an empty selection fails (pytest exit code 5).
 test-postgres:
-	AKSHA_REQUIRE_POSTGRES=1 $(BIN)/pytest tests/contract tests/unit/adapters/storage tests/unit/test_app.py
-	AKSHA_REQUIRE_POSTGRES=1 $(BIN)/pytest tests/integration -k postgres
+	AKSHA_REQUIRE_POSTGRES=1 TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest $(PYTEST_PARALLEL) tests/contract tests/unit/adapters/storage tests/unit/test_app.py
+	AKSHA_REQUIRE_POSTGRES=1 TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest $(PYTEST_PARALLEL) tests/integration -k postgres
 
 lint:
 	$(BIN)/ruff check .
