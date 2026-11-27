@@ -103,7 +103,7 @@ def test_the_metadata_names_the_distribution_and_no_dev_extra(wheel: Path) -> No
     assert headers["Name"] == "aksha-harness"
     assert headers["Requires-Python"] == ">=3.12"
     extras = set(headers.get_all("Provides-Extra") or ())
-    assert extras == {"postgres", "server", "otel", "ingest", "live"}
+    assert extras == {"postgres", "server", "otel", "ingest", "live", "tui"}
     assert headers["Version"] in wheel.name
 
 

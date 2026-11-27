@@ -34,7 +34,7 @@ dependencies = ["jsonschema>=4.19"]
 # `make venv` installs the dev group only; `make venv-postgres` adds the PostgreSQL driver.
 postgres = ["psycopg[binary]>=3.2"]
 # The HTTP server of the session API (ADR-P19): ``aksha serve``.
-server = ["fastapi>=0.115", "uvicorn>=0.30"]
+server = ["fastapi>=0.115", "uvicorn>=0.30", "argon2-cffi>=23.1", "python-multipart>=0.0.18"]
 # The trace exporter extension (ADR-P21 D8): OTLP JSON Lines files, offline.
 otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.66b2"]
 # Live mode's provider layer (ADR-P07 G6): LiteLLM reaches every provider it supports, so
@@ -46,6 +46,9 @@ otel = ["opentelemetry-sdk~=1.45.2", "opentelemetry-exporter-otlp-json-file==0.6
 # which a pin must never name. Its wheel ships no .pth start-up hook. Aksha uses only the
 # library's completion call, not its proxy server, which most advisories concern.
 live = ["litellm==1.111.0"]
+# The interactive terminal UI, ``aksha chat``: a client of the HTTP API (it starts ``aksha
+# serve`` itself when none runs, so the server extra comes with it).
+tui = ["textual>=8.2,<9", "aksha-harness[server]"]
 # The ingest extension's parsers: PDF (BSD-3-Clause), Word, PowerPoint and Excel (MIT),
 # images (MIT-CMU). Without them those types are named gaps; text, CSV, JSON, HTML and
 # email need only the standard library. HEIC needs pillow-heif, installed separately:
@@ -157,6 +160,19 @@ exclude = ["^scratch-pad/", "^web/"]
 module = ["pypdf", "pypdf.*", "docx", "docx.*", "pptx", "pptx.*", "openpyxl", "openpyxl.*",
           "PIL", "PIL.*", "pillow_heif", "pillow_heif.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Textual (and Rich under it) is the optional extra aksha-harness[tui]. Without it installed
+# its classes are Any, so the TUI modules may subclass them and use its decorators.
+module = ["textual", "textual.*", "rich", "rich.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aksha.interfaces.tui.app", "aksha.interfaces.tui.screens",
+          "tests.unit.interfaces.tui.test_app"]
+disallow_subclassing_any = false
+disallow_untyped_decorators = false
+warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # LiteLLM is the optional extra aksha-harness[live]; the adapter treats it as Any.

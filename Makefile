@@ -12,11 +12,11 @@ export AKSHA_HOME ?= var
 ## and the ingest extension's parsers (so their tests run rather than skip).
 venv:
 	uv venv --allow-existing --python $(PY) $(VENV)
-	uv pip install --python $(BIN)/python -e ".[server,otel,ingest]" --group dev
+	uv pip install --python $(BIN)/python -e ".[server,otel,ingest,tui]" --group dev
 
 ## Add the PostgreSQL driver (extra aksha-harness[postgres]) so the PostgreSQL tests run.
 venv-postgres: venv
-	uv pip install --python $(BIN)/python -e ".[server,otel,ingest,postgres]" --group dev
+	uv pip install --python $(BIN)/python -e ".[server,otel,ingest,tui,postgres]" --group dev
 
 ## The suite on every core (pytest-xdist). Tests that share a module-scoped fixture (a whole
 ## episode run once for many assertions) stay on one worker (tests/conftest.py groups
