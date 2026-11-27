@@ -1,0 +1,467 @@
+{
+ "content": {
+  "needs": [
+   {
+    "count": 7,
+    "covers": {
+     "coverage": {
+      "count": 7,
+      "of": 40,
+      "scope": {
+       "records": [
+        "record:input/reviews/reviews.json@sha256:cc78a9b3a24669a13dc2c53a8c57087e9bef9221ab8dec6fe0fa1b361c5dd028"
+       ]
+      },
+      "statement": "reviews in the sample that speak to battery"
+     }
+    },
+    "evidence": [
+     {
+      "cite": {
+       "quote": "Batteries died after about a year, not seven.",
+       "span": "EX-0226"
+      },
+      "date": "2026-01-08",
+      "geography": "US",
+      "product": "Tallyway Beam",
+      "review": "R-007"
+     },
+     {
+      "cite": {
+       "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+       "span": "EX-0228"
+      },
+      "date": "2026-02-27",
+      "geography": "DE",
+      "product": "Tallyway Beam",
+      "review": "R-009"
+     },
+     {
+      "cite": {
+       "quote": "Battery warnings started after eight months on most units.",
+       "span": "EX-0234"
+      },
+      "date": "2026-02-08",
+      "geography": "UK",
+      "product": "OccuPoint",
+      "review": "R-015"
+     },
+     {
+      "cite": {
+       "quote": "Battery swap schedule is a constant chore for facilities.",
+       "span": "EX-0239"
+      },
+      "date": "2026-04-17",
+      "geography": "US",
+      "product": "Tallyway Beam",
+      "review": "R-020"
+     },
+     {
+      "cite": {
+       "quote": "Battery life nowhere near the advertised figure in a busy office.",
+       "span": "EX-0244"
+      },
+      "date": "2026-06-01",
+      "geography": "UK",
+      "product": "Tallyway Beam",
+      "review": "R-025"
+     },
+     {
+      "cite": {
+       "quote": "Battery dropped to 20% within the first year.",
+       "span": "EX-0250"
+      },
+      "date": "2026-07-28",
+      "geography": "UK",
+      "product": "OccuPoint",
+      "review": "R-031"
+     },
+     {
+      "cite": {
+       "quote": "Battery lasted ten months, far from the claim.",
+       "span": "EX-0258"
+      },
+      "date": "2026-10-07",
+      "geography": "DE",
+      "product": "Noctra Air",
+      "review": "R-039"
+     }
+    ],
+    "first": "2026-01-08",
+    "geographies": {
+     "DE": 2,
+     "UK": 3,
+     "US": 2
+    },
+    "in_scope_geography": {
+     "count": 2,
+     "geography": "EU"
+    },
+    "last": "2026-10-07",
+    "need": "What buyers say about battery",
+    "of": 40,
+    "phrase": "7 of 40 reviews in this sample",
+    "products": {
+     "Noctra Air": 1,
+     "OccuPoint": 2,
+     "Tallyway Beam": 4
+    },
+    "terms": [
+     "batter*",
+     "not battery powered"
+    ],
+    "theme": "battery"
+   },
+   {
+    "count": 5,
+    "covers": {
+     "coverage": {
+      "count": 5,
+      "of": 40,
+      "scope": {
+       "records": [
+        "record:input/reviews/reviews.json@sha256:cc78a9b3a24669a13dc2c53a8c57087e9bef9221ab8dec6fe0fa1b361c5dd028"
+       ]
+      },
+      "statement": "reviews in the sample that speak to stillness"
+     }
+    },
+    "evidence": [
+     {
+      "cite": {
+       "quote": "The lights went off while I was sitting alone reading for half an hour.",
+       "span": "EX-0221"
+      },
+      "date": "2026-01-30",
+      "geography": "NL",
+      "product": "Kelvra TS-32",
+      "review": "R-002"
+     },
+     {
+      "cite": {
+       "quote": "Seated people are counted reliably, even when they barely move.",
+       "span": "EX-0223"
+      },
+      "date": "2026-02-20",
+      "geography": "UK",
+      "product": "Veyra Halo",
+      "review": "R-004"
+     },
+     {
+      "cite": {
+       "quote": "Display says empty while four of us sat still in a workshop.",
+       "span": "EX-0232"
+      },
+      "date": "2026-03-09",
+      "geography": "DE",
+      "product": "Noctra Air",
+      "review": "R-013"
+     },
+     {
+      "cite": {
+       "quote": "Room shows empty while someone sits still at the desk.",
+       "span": "EX-0235"
+      },
+      "date": "2026-03-01",
+      "geography": "NL",
+      "product": "OccuPoint",
+      "review": "R-016"
+     },
+     {
+      "cite": {
+       "quote": "Motion sensor misses people on calls who do not move.",
+       "span": "EX-0245"
+      },
+      "date": "2026-06-12",
+      "geography": "NL",
+      "product": "Noctra Air",
+      "review": "R-026"
+     }
+    ],
+    "first": "2026-01-30",
+    "geographies": {
+     "DE": 1,
+     "NL": 3,
+     "UK": 1
+    },
+    "in_scope_geography": {
+     "count": 4,
+     "geography": "EU"
+    },
+    "last": "2026-06-12",
+    "need": "What buyers say about stillness",
+    "of": 40,
+    "phrase": "5 of 40 reviews in this sample",
+    "products": {
+     "Kelvra TS-32": 1,
+     "Noctra Air": 2,
+     "OccuPoint": 1,
+     "Veyra Halo": 1
+    },
+    "terms": [
+     "sit*",
+     "sat",
+     "seated",
+     "still",
+     "do not move",
+     "barely move"
+    ],
+    "theme": "stillness"
+   },
+   {
+    "count": 7,
+    "covers": {
+     "coverage": {
+      "count": 7,
+      "of": 40,
+      "scope": {
+       "records": [
+        "record:input/reviews/reviews.json@sha256:cc78a9b3a24669a13dc2c53a8c57087e9bef9221ab8dec6fe0fa1b361c5dd028"
+       ]
+      },
+      "statement": "reviews in the sample that speak to setup"
+     }
+    },
+    "evidence": [
+     {
+      "cite": {
+       "quote": "Accurate in our meeting rooms, but every sensor needed a new PoE cable.",
+       "span": "EX-0220"
+      },
+      "date": "2026-01-12",
+      "geography": "DE",
+      "product": "Kelvra TS-32",
+      "review": "R-001"
+     },
+     {
+      "cite": {
+       "quote": "Good data. Our electrician took two days for one floor.",
+       "span": "EX-0222"
+      },
+      "date": "2026-02-14",
+      "geography": "FR",
+      "product": "Kelvra TS-32",
+      "review": "R-003"
+     },
+     {
+      "cite": {
+       "quote": "Radar is great but every unit needs a power socket on the ceiling.",
+       "span": "EX-0224"
+      },
+      "date": "2026-03-03",
+      "geography": "DE",
+      "product": "Veyra Halo",
+      "review": "R-005"
+     },
+     {
+      "cite": {
+       "quote": "Easy install, no wiring at all.",
+       "span": "EX-0229"
+      },
+      "date": "2026-03-21",
+      "geography": "ES",
+      "product": "Tallyway Beam",
+      "review": "R-010"
+     },
+     {
+      "cite": {
+       "quote": "Cheap and battery powered. Setup app is clunky.",
+       "span": "EX-0233"
+      },
+      "date": "2026-01-25",
+      "geography": "US",
+      "product": "OccuPoint",
+      "review": "R-014"
+     },
+     {
+      "cite": {
+       "quote": "Solid, but the cabling cost more than the sensors.",
+       "span": "EX-0242"
+      },
+      "date": "2026-05-14",
+      "geography": "IN",
+      "product": "Kelvra TS-32",
+      "review": "R-023"
+     },
+     {
+      "cite": {
+       "quote": "Install needed an electrician for sockets.",
+       "span": "EX-0248"
+      },
+      "date": "2026-07-02",
+      "geography": "ES",
+      "product": "Veyra Halo",
+      "review": "R-029"
+     }
+    ],
+    "first": "2026-01-12",
+    "geographies": {
+     "DE": 2,
+     "ES": 2,
+     "FR": 1,
+     "IN": 1,
+     "US": 1
+    },
+    "in_scope_geography": {
+     "count": 5,
+     "geography": "EU"
+    },
+    "last": "2026-07-02",
+    "need": "What buyers say about setup",
+    "of": 40,
+    "phrase": "7 of 40 reviews in this sample",
+    "products": {
+     "Kelvra TS-32": 3,
+     "OccuPoint": 1,
+     "Tallyway Beam": 1,
+     "Veyra Halo": 2
+    },
+    "terms": [
+     "cabl*",
+     "electrician",
+     "socket*",
+     "wiring",
+     "install*",
+     "setup"
+    ],
+    "theme": "setup"
+   },
+   {
+    "count": 3,
+    "covers": {
+     "coverage": {
+      "count": 3,
+      "of": 40,
+      "scope": {
+       "records": [
+        "record:input/reviews/reviews.json@sha256:cc78a9b3a24669a13dc2c53a8c57087e9bef9221ab8dec6fe0fa1b361c5dd028"
+       ]
+      },
+      "statement": "reviews in the sample that speak to privacy"
+     }
+    },
+    "evidence": [
+     {
+      "cite": {
+       "quote": "Works well. Works council asked us to prove it does not see through walls.",
+       "span": "EX-0225"
+      },
+      "date": "2026-03-18",
+      "geography": "US",
+      "product": "Veyra Halo",
+      "review": "R-006"
+     },
+     {
+      "cite": {
+       "quote": "Our works council wanted written proof that no image leaves the sensor.",
+       "span": "EX-0236"
+      },
+      "date": "2026-03-15",
+      "geography": "DE",
+      "product": "OccuPoint",
+      "review": "R-017"
+     },
+     {
+      "cite": {
+       "quote": "Accurate. Legal asked many questions about radar and privacy.",
+       "span": "EX-0243"
+      },
+      "date": "2026-05-20",
+      "geography": "DE",
+      "product": "Veyra Halo",
+      "review": "R-024"
+     }
+    ],
+    "first": "2026-03-15",
+    "geographies": {
+     "DE": 2,
+     "US": 1
+    },
+    "in_scope_geography": {
+     "count": 2,
+     "geography": "EU"
+    },
+    "last": "2026-05-20",
+    "need": "What buyers say about privacy",
+    "of": 40,
+    "phrase": "3 of 40 reviews in this sample",
+    "products": {
+     "OccuPoint": 1,
+     "Veyra Halo": 2
+    },
+    "terms": [
+     "privacy",
+     "works council",
+     "image"
+    ],
+    "theme": "privacy"
+   }
+  ],
+  "sample": {
+   "duplicates": [
+    {
+     "duplicate_of": "R-009",
+     "evidence": [
+      {
+       "cite": {
+        "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+        "span": "EX-0260"
+       }
+      },
+      {
+       "cite": {
+        "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+        "span": "EX-0228"
+       }
+      }
+     ],
+     "reason": "same product and text on another site",
+     "review": "R-041"
+    },
+    {
+     "duplicate_of": "R-016",
+     "evidence": [
+      {
+       "cite": {
+        "quote": "Room shows empty while someone sits still at the desk.",
+        "span": "EX-0261"
+       }
+      },
+      {
+       "cite": {
+        "quote": "Room shows empty while someone sits still at the desk.",
+        "span": "EX-0235"
+       }
+      }
+     ],
+     "reason": "same product and text on another site",
+     "review": "R-042"
+    }
+   ],
+   "first": "2026-01-08",
+   "geographies": {
+    "DE": 9,
+    "ES": 3,
+    "FR": 5,
+    "IN": 2,
+    "NL": 7,
+    "UK": 7,
+    "US": 7
+   },
+   "last": "2026-10-15",
+   "note": "counts describe this sample only, never a market",
+   "rating_scales": [
+    "points out of 10",
+    "stars out of 5"
+   ],
+   "rows": 42,
+   "sites": {
+    "facilitiesforum.example": 11,
+    "reviewhub.example": 29
+   },
+   "unique": 40
+  }
+ },
+ "freshness": "current",
+ "ref": "research.needs@v1"
+}

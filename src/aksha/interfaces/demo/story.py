@@ -94,6 +94,7 @@ class Report:
     kept: dict[str, list[str]] = field(default_factory=dict)
     cutoff: list[str] = field(default_factory=list)
     next_action: dict[str, str] = field(default_factory=dict)
+    contributor: dict[str, Any] = field(default_factory=dict)
     approvals: list[dict[str, Any]] = field(default_factory=list)
     kill: dict[str, Any] = field(default_factory=dict)
     mailbox: dict[str, Any] = field(default_factory=dict)
@@ -343,6 +344,16 @@ def _final(rt: DemoRuntime, work: Path, report: Report) -> None:
         "before": _content(rt, report.first["patent"], "patent.recommendation/C1")["next_action"],
         "after": _content(rt, report.after["patent"], "patent.recommendation/C1")["next_action"],
         "key_expects": variant_key()["expected_after_change"]["C1_next_action"]["after"],
+    }
+    outside = _content(rt, report.after["patent"], "patent.extraction/C1")["outside_contributions"]
+    _require(outside, "the rebuilt C1 extraction names no outside contributor")
+    report.contributor = {
+        "person": outside[0]["person_id"],
+        "date": outside[0]["date"],
+        "elements": outside[0]["elements"],
+        "before_agreement": outside[0]["before_agreement_effective"],
+        "status": outside[0]["status"],
+        "question": outside[0]["counsel_question"],
     }
     rows = counsel_mailbox(work).rows()  # what the outside world received
     report.mailbox = {

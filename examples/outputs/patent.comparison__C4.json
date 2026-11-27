@@ -1,0 +1,95 @@
+{
+ "content": {
+  "candidate": "C4",
+  "cells": [
+   {
+    "element": "B1",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0007.json",
+      "publication": "SYN-PUB-0007",
+      "quote": "A battery-powered occupancy sensor comprising a passive infrared detector and a high-power sensing element, wherein the passive infrared detector wakes the high-power sensing element for a fixed observation window upon detecting motion, and the high-power sensing element is switched off if no occupant is classified within the window.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0008.json",
+      "publication": "SYN-PUB-0008",
+      "quote": "A passive infrared detector wakes the high-power element for a fixed observation window when motion is detected, and the element is switched off again if no occupant is classified within the window.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2021-1103",
+    "members": {
+     "SYN-PUB-0007": "partial",
+     "SYN-PUB-0008": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "B2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0007.json",
+      "publication": "SYN-PUB-0007",
+      "quote": "A battery-powered occupancy sensor comprising a passive infrared detector and a high-power sensing element, wherein the passive infrared detector wakes the high-power sensing element for a fixed observation window upon detecting motion, and the high-power sensing element is switched off if no occupant is classified within the window.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0008.json",
+      "publication": "SYN-PUB-0008",
+      "quote": "A passive infrared detector wakes the high-power element for a fixed observation window when motion is detected, and the element is switched off again if no occupant is classified within the window.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2021-1103",
+    "members": {
+     "SYN-PUB-0007": "partial",
+     "SYN-PUB-0008": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "B3",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0008.json",
+      "publication": "SYN-PUB-0008",
+      "quote": "A battery-powered occupancy sensor configured to transmit a message only when an occupant count changes, and to transmit a heartbeat message at a fixed interval when the count has not changed.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2021-1103",
+    "members": {
+     "SYN-PUB-0007": "not_found",
+     "SYN-PUB-0008": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "B4",
+    "evidence": [],
+    "family": "SYN-PRI-2021-1103",
+    "members": {
+     "SYN-PUB-0007": "not_found",
+     "SYN-PUB-0008": "not_found"
+    },
+    "state": "not_found"
+   }
+  ],
+  "closest_families": [
+   "SYN-PRI-2021-1103"
+  ],
+  "elements": [
+   "B1",
+   "B2",
+   "B3",
+   "B4"
+  ],
+  "families": [
+   "SYN-PRI-2021-1103"
+  ],
+  "note": "not_found means this search showed no reference for the element; it is not a finding that the element is new."
+ },
+ "freshness": "current",
+ "ref": "patent.comparison/C4@v1"
+}

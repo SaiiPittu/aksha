@@ -1,0 +1,11 @@
+{
+ "content": {
+  "candidate": "C1",
+  "packet": "patent.packet/C1@v1",
+  "receipt": "recorded by the outbox",
+  "recipient": "counsel-primary",
+  "status": "sent"
+ },
+ "freshness": "current",
+ "ref": "patent.handoff/C1@v1"
+}

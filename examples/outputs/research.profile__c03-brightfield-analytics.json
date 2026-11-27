@@ -1,0 +1,161 @@
+{
+ "content": {
+  "cells": {
+   "battery_life": [
+    {
+     "cite": {
+      "quote": "Battery life up to 3 years.",
+      "span": "EX-0122"
+     },
+     "label": "vendor_claim",
+     "passage": "claim",
+     "published": "2026-04-02",
+     "record": "web/brightfield.example/product",
+     "value": "Battery life up to 3 years."
+    },
+    {
+     "cite": {
+      "quote": "Battery thermal and PIR sensor. Battery life up to 3 years.",
+      "span": "EX-0147"
+     },
+     "label": "vendor_claim",
+     "passage": "claim",
+     "published": "2026-09-15",
+     "record": "web/corvane.example/product",
+     "value": "Battery thermal and PIR sensor. Battery life up to 3 years."
+    }
+   ],
+   "power": [
+    {
+     "cite": {
+      "quote": "A battery thermal and PIR desk and room sensor from Brightfield Analytics.",
+      "span": "EX-0108"
+     },
+     "label": "fact",
+     "passage": "text",
+     "published": "2026-04-02",
+     "record": "web/brightfield.example/product",
+     "value": "A battery thermal and PIR desk and room sensor from Brightfield Analytics."
+    },
+    {
+     "cite": {
+      "quote": "Battery thermal and PIR sensor. Battery life up to 3 years.",
+      "span": "EX-0147"
+     },
+     "label": "vendor_claim",
+     "passage": "claim",
+     "published": "2026-09-15",
+     "record": "web/corvane.example/product",
+     "value": "Battery thermal and PIR sensor. Battery life up to 3 years."
+    }
+   ],
+   "privacy": [
+    {
+     "unknown": {
+      "checked": [
+       "record:web/brightfield.example/product@sha256:fae5ff29bb29ce7d84730f48d0fb01626ea010ee242f9993a8c4aaeee8b6c846",
+       "record:web/corvane.example/product@sha256:df94cc6e70d104584179ccade524ee02e64220bcf4fefbfe27e4879323525560"
+      ],
+      "question": "What does Brightfield Analytics state about privacy? Its pages do not say.",
+      "reason": "not_found"
+     }
+    }
+   ]
+  },
+  "conflicts": [
+   {
+    "field": "price",
+    "per": "unit",
+    "status": "open",
+    "values": [
+     "USD 229 per unit (one-off), page dated 2026-04-02",
+     "USD 199 per unit (one-off, launch offer), page dated 2026-09-15"
+    ]
+   }
+  ],
+  "flags": [],
+  "key": "c03-brightfield-analytics",
+  "name": "Brightfield Analytics",
+  "pages": [
+   {
+    "published": "2026-04-02",
+    "record": "web/brightfield.example/product",
+    "url": "https://brightfield.example/product"
+   },
+   {
+    "published": "2026-09-15",
+    "record": "web/corvane.example/product",
+    "url": "https://corvane.example/product"
+   }
+  ],
+  "price_notes": [],
+  "prices": [
+   {
+    "cite": {
+     "quote": "USD 229 per unit",
+     "span": "EX-0116"
+    },
+    "currency": "USD",
+    "item": "OccuPoint sensor",
+    "label": "fact",
+    "number": "229",
+    "passage": "price",
+    "per": "unit",
+    "published": "2026-04-02",
+    "record": "web/brightfield.example/product",
+    "terms": "one-off",
+    "value": "229"
+   },
+   {
+    "cite": {
+     "quote": "USD 7 per sensor per month",
+     "span": "EX-0120"
+    },
+    "currency": "USD",
+    "item": "Occupancy insights",
+    "label": "fact",
+    "number": "7",
+    "passage": "price",
+    "per": "sensor per month",
+    "published": "2026-04-02",
+    "record": "web/brightfield.example/product",
+    "terms": "billed annually",
+    "value": "7"
+   },
+   {
+    "cite": {
+     "quote": "USD 199 per unit",
+     "span": "EX-0141"
+    },
+    "currency": "USD",
+    "item": "Corvane Presence P1 sensor",
+    "label": "fact",
+    "number": "199",
+    "passage": "price",
+    "per": "unit",
+    "published": "2026-09-15",
+    "record": "web/corvane.example/product",
+    "terms": "one-off, launch offer",
+    "value": "199"
+   },
+   {
+    "cite": {
+     "quote": "USD 7 per sensor per month",
+     "span": "EX-0145"
+    },
+    "currency": "USD",
+    "item": "Occupancy insights",
+    "label": "fact",
+    "number": "7",
+    "passage": "price",
+    "per": "sensor per month",
+    "published": "2026-09-15",
+    "record": "web/corvane.example/product",
+    "terms": "billed annually",
+    "value": "7"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.profile/c03-brightfield-analytics@v1"
+}

@@ -1,0 +1,19 @@
+{
+ "content": {
+  "based_on": [
+   "patent.extraction/C4@v1",
+   "patent.comparison/C4@v1"
+  ],
+  "candidate": "C4",
+  "next_action": "collect_more_evidence",
+  "risks": [
+   "own public disclosure DISC-03 on 2026-06-02 (blog post)",
+   "undated disclosure DISC-04 (investor update email)"
+  ],
+  "rule": "R3",
+  "why": "business priority 2; implementation: prototype; B4 not found in any family searched",
+  "would_change_if": "counsel's view of the public disclosure, and an element no family shows"
+ },
+ "freshness": "current",
+ "ref": "patent.recommendation/C4@v1"
+}

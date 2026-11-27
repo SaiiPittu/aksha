@@ -1,0 +1,288 @@
+{
+ "content": {
+  "agreements": [],
+  "alternatives": [
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "quote": "Fixed one-second sampling with radio batching every minute."
+   }
+  ],
+  "business_priority": {
+   "file": "input/priorities/business-priorities.md",
+   "quote": "**Battery install with no cabling.**",
+   "rank": 2
+  },
+  "candidate": "C4",
+  "conception": {
+   "date": "2026-01-28",
+   "file": "input/notes/C4-battery-saving-sampling.md",
+   "quote": "Date: 28 Jan 2026"
+  },
+  "contributors": [
+   {
+    "agreement": "employment, standard IP assignment",
+    "contributed": "Designed the event-driven sampling schedule and heartbeat",
+    "date": "2026-01-28",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-02",
+    "quote": "Designed the event-driven sampling schedule and heartbeat",
+    "record_id": "CR-03",
+    "role": "embedded engineer"
+   }
+  ],
+  "counsel_questions": [
+   {
+    "question": "Who are the inventors of each element?",
+    "status": "needs_counsel_confirmation",
+    "topic": "inventorship"
+   },
+   {
+    "question": "Do the employment, contractor and consulting agreements assign each contribution?",
+    "status": "needs_counsel_confirmation",
+    "topic": "ownership"
+   },
+   {
+    "question": "DISC-03 was public 178 days before today. Does any grace period apply?",
+    "status": "needs_counsel_confirmation",
+    "topic": "disclosure"
+   },
+   {
+    "question": "DISC-04: when was it sent, and to how many people? The record has no date.",
+    "status": "needs_counsel_confirmation",
+    "topic": "disclosure"
+   }
+  ],
+  "disclosures": [
+   {
+    "as_of": "2026-11-27",
+    "counsel_question": "DISC-03 was public 178 days before today. Does any grace period apply?",
+    "date": "2026-06-02",
+    "describes_fully": true,
+    "disclosure_id": "DISC-03",
+    "elapsed_days": 178,
+    "event_type": "blog post",
+    "file": "input/disclosures/history.csv",
+    "own_disclosure": true,
+    "public": "yes",
+    "quote": "Full description of event-driven sampling, the 60 second window and the 15 minute heartbeat",
+    "row": {
+     "file": "input/disclosures/history.csv",
+     "quote": "DISC-03,2026-06-02,C4"
+    },
+    "status": "needs_counsel_confirmation"
+   },
+   {
+    "as_of": "2026-11-27",
+    "counsel_question": "DISC-04: when was it sent, and to how many people? The record has no date.",
+    "date": null,
+    "describes_fully": false,
+    "disclosure_id": "DISC-04",
+    "elapsed_days": null,
+    "event_type": "investor update email",
+    "file": "input/disclosures/history.csv",
+    "own_disclosure": true,
+    "public": "unclear",
+    "quote": "Battery-life chart and a summary of the sampling schedule",
+    "row": {
+     "file": "input/disclosures/history.csv",
+     "quote": "DISC-04,,C4"
+    },
+    "status": "needs_counsel_confirmation"
+   }
+  ],
+  "elements": [
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "id": "B1",
+    "label": "PIR wakes the thermopile for a 60 s window at 1 Hz",
+    "quote": "When the PIR fires, power the thermopile and sample once per second for a 60 second window.",
+    "step": 2,
+    "terms": [
+     [
+      "passive infrared"
+     ],
+     [
+      "wakes"
+     ],
+     [
+      "window"
+     ],
+     [
+      "60 s",
+      "60 second",
+      "sixty second"
+     ],
+     [
+      "1 Hz",
+      "once per second",
+      "once a second"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "id": "B2",
+    "label": "fall back to 10 s sampling then PIR-only",
+    "quote": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings.",
+    "step": 3,
+    "terms": [
+     [
+      "10 s",
+      "every 10 seconds",
+      "reduced rate",
+      "fallback"
+     ],
+     [
+      "switched off"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "id": "B3",
+    "label": "report on change plus 15 min heartbeat",
+    "quote": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit.",
+    "step": 4,
+    "terms": [
+     [
+      "only when the occupant count changes",
+      "only when an occupant count changes"
+     ],
+     [
+      "heartbeat"
+     ],
+     [
+      "15 min",
+      "15-minute",
+      "fifteen minute",
+      "every 15 minutes"
+     ]
+    ]
+   },
+   {
+    "gap": {
+     "question": "Which step of the note describes estimated 0.2 mA average (estimate, not measured)?",
+     "reason": "not_found"
+    },
+    "id": "B4",
+    "label": "estimated 0.2 mA average (estimate, not measured)",
+    "step": null,
+    "terms": [
+     [
+      "0.2 mA",
+      "average current"
+     ]
+    ]
+   }
+  ],
+  "implementation": {
+   "file": "input/notes/C4-battery-saving-sampling.md",
+   "quote": "Prototype firmware fw-0.8.1 on two units. Power profile not yet measured.",
+   "status": "prototype"
+  },
+  "mechanism": [
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "n": 1,
+    "quote": "Keep the thermopile and the radio off by default; the PIR stays on.",
+    "text": "Keep the thermopile and the radio off by default; the PIR stays on."
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "n": 2,
+    "quote": "When the PIR fires, power the thermopile and sample once per second for a 60 second window.",
+    "text": "When the PIR fires, power the thermopile and sample once per second for a 60 second window."
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "n": 3,
+    "quote": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings.",
+    "text": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings."
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "n": 4,
+    "quote": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit.",
+    "text": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit."
+   }
+  ],
+  "missing_details": [],
+  "missing_documents": [],
+  "note": "input/notes/C4-battery-saving-sampling.md",
+  "opinions": [],
+  "outside_contributions": [],
+  "parameters": [
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "name": "Battery capacity",
+    "quote": "| Battery capacity | 3000 | mAh |",
+    "status": "complete",
+    "unit": "mAh",
+    "value": "3000"
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "name": "Occupied sample rate",
+    "quote": "| Occupied sample rate | 1 | per second |",
+    "status": "complete",
+    "unit": "per second",
+    "value": "1"
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "name": "Empty sample interval",
+    "quote": "| Empty sample interval | 10 | seconds |",
+    "status": "complete",
+    "unit": "seconds",
+    "value": "10"
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "name": "Heartbeat interval",
+    "quote": "| Heartbeat interval | 15 | minutes |",
+    "status": "complete",
+    "unit": "minutes",
+    "value": "15"
+   },
+   {
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "name": "Average current, estimated",
+    "quote": "| Average current, estimated | 0.2 | mA | engineering estimate, not measured",
+    "status": "complete",
+    "unit": "mA",
+    "value": "0.2"
+   }
+  ],
+  "people_terms": [
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "embedded engineer"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "employment, standard IP assignment"
+   }
+  ],
+  "problem": {
+   "file": "input/notes/C4-battery-saving-sampling.md",
+   "quote": "Reading the thermopile and sending over the radio every second empties a 3,000 mAh battery in about two months."
+  },
+  "search": [
+   [
+    "passive infrared",
+    "PIR"
+   ],
+   [
+    "battery"
+   ]
+  ],
+  "sources": {
+   "contributors": "input/contributors/records.csv",
+   "disclosures": "input/disclosures/history.csv"
+  },
+  "title": "Engineering note: event-driven sampling for a two-year battery"
+ },
+ "freshness": "current",
+ "ref": "patent.extraction/C4@v1"
+}

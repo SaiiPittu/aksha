@@ -1,0 +1,226 @@
+{
+ "content": {
+  "candidate": "C1",
+  "counts": {
+   "complete": 10,
+   "missing": 0,
+   "needs_counsel_confirmation": 4
+  },
+  "fields": [
+   {
+    "field": "title",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": "Engineering note: self-calibrating thermal baseline"
+   },
+   {
+    "field": "candidate_id",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": "C1"
+   },
+   {
+    "field": "problem",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": "The thermal baseline drifts when HVAC (heating, ventilation and air conditioning) cycles, causing false \"occupied\" readings in empty rooms. Sun on the floor in the afternoon does the same."
+   },
+   {
+    "field": "mechanism_steps",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": [
+     "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link.",
+     "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+     "During a verified-empty window, record each pixel's mean temperature and its standard deviation over the window.",
+     "Update the baseline slowly: new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute.",
+     "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background.",
+     "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation."
+    ]
+   },
+   {
+    "field": "parameters",
+    "open_details": [
+     "Note author: Why 20 minutes?"
+    ],
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": [
+     {
+      "name": "PIR quiet window",
+      "status": "complete",
+      "unit": "minutes",
+      "value": "20"
+     },
+     {
+      "name": "Door state required",
+      "status": "complete",
+      "unit": "n/a",
+      "value": "closed"
+     },
+     {
+      "name": "Baseline update weight",
+      "status": "complete",
+      "unit": "per minute",
+      "value": "0.01"
+     },
+     {
+      "name": "Pixel freeze after detection",
+      "status": "complete",
+      "unit": "minutes",
+      "value": "10"
+     },
+     {
+      "name": "Threshold multiplier k",
+      "status": "complete",
+      "unit": "standard deviations",
+      "value": "4"
+     }
+    ]
+   },
+   {
+    "field": "alternatives_considered",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": [
+     "Fixed nightly recalibration at 03:00.",
+     "Updating whenever the PIR is quiet, without the door gate."
+    ]
+   },
+   {
+    "field": "difference_from_known_approaches",
+    "required": true,
+    "source": "patent.comparison/C1@v1",
+    "status": "complete",
+    "value": {
+     "comparison": "patent.comparison/C1@v1",
+     "note": "not found is not new"
+    }
+   },
+   {
+    "counsel_question": "Who are the inventors of each element?",
+    "field": "contributors",
+    "required": true,
+    "source": "input/contributors/records.csv",
+    "status": "needs_counsel_confirmation",
+    "value": [
+     {
+      "contributed": "Wrote the gated baseline update rule and the engineering note",
+      "date": "2026-01-14",
+      "employer": "Stillroom",
+      "name": "Asha Rao",
+      "person_id": "P-01",
+      "role": "firmware lead"
+     },
+     {
+      "contributed": "Implemented the gated update in firmware fw-0.9.3",
+      "date": "2026-02-02",
+      "employer": "Stillroom",
+      "name": "Ravi Menon",
+      "person_id": "P-02",
+      "role": "embedded engineer"
+     },
+     {
+      "contributed": "Reviewed the thermal noise model",
+      "date": "2026-01-21",
+      "employer": "Northgate University",
+      "name": "Dr. Wei Lin",
+      "person_id": "P-05",
+      "role": "outside consultant"
+     },
+     {
+      "contributed": "Presented the self-calibration demo at the trade show",
+      "date": "2026-03-10",
+      "employer": "Stillroom",
+      "name": "Daniel Sato",
+      "person_id": "P-07",
+      "role": "founder and CEO"
+     }
+    ]
+   },
+   {
+    "field": "conception_date_and_records",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": {
+     "date": "2026-01-14",
+     "record": "input/notes/C1-self-calibration.md"
+    }
+   },
+   {
+    "counsel_question": "DISC-01 was public 262 days before today. Does any grace period apply?",
+    "field": "public_disclosures",
+    "required": true,
+    "source": "input/disclosures/history.csv",
+    "status": "needs_counsel_confirmation",
+    "value": [
+     {
+      "date": "2026-03-10",
+      "disclosure_id": "DISC-01",
+      "elapsed_days": 262,
+      "event_type": "trade-show demo",
+      "public": "yes",
+      "status": "needs_counsel_confirmation"
+     }
+    ]
+   },
+   {
+    "counsel_question": "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+    "field": "outside_resources",
+    "required": true,
+    "source": "input/contributors/records.csv",
+    "status": "needs_counsel_confirmation",
+    "value": [
+     {
+      "agreement": "CA-2025-11",
+      "agreement_document": "referenced_not_found",
+      "effective": "2025-12-01",
+      "person_id": "P-05"
+     }
+    ]
+   },
+   {
+    "field": "implementation_evidence",
+    "required": true,
+    "source": "input/notes/C1-self-calibration.md",
+    "status": "complete",
+    "value": {
+     "evidence": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.",
+     "missing_documents": [],
+     "status": "built_and_tested"
+    }
+   },
+   {
+    "counsel_question": "The note has no drawings. Which figures should an application include?",
+    "field": "figure_list",
+    "required": true,
+    "status": "needs_counsel_confirmation",
+    "value": null
+   },
+   {
+    "field": "open_questions_for_counsel",
+    "required": true,
+    "status": "complete",
+    "value": [
+     "Who are the inventors of each element?",
+     "Do the employment, contractor and consulting agreements assign each contribution?",
+     "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+     "DISC-01 was public 262 days before today. Does any grace period apply?",
+     "Note author: Why 20 minutes?"
+    ]
+   }
+  ],
+  "form": "Invention disclosure form (blank)",
+  "template": "invention-disclosure-form",
+  "template_version": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451"
+ },
+ "freshness": "current",
+ "ref": "patent.form/C1~invention-disclosure-form@v1"
+}

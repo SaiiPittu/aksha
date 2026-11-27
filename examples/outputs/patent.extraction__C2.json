@@ -1,0 +1,249 @@
+{
+ "content": {
+  "agreements": [],
+  "alternatives": [
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "quote": "One unit per room at the centre of the ceiling."
+   }
+  ],
+  "business_priority": {
+   "file": "input/priorities/business-priorities.md",
+   "quote": "**Installer time.**",
+   "rank": 4
+  },
+  "candidate": "C2",
+  "conception": {
+   "date": "2026-02-03",
+   "file": "input/notes/C2-sensor-placement.md",
+   "quote": "Date: 3 Feb 2026"
+  },
+  "contributors": [
+   {
+    "agreement": "employment, standard IP assignment",
+    "contributed": "Sketched the placement planner and the walk test",
+    "date": "2026-02-03",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-03",
+    "quote": "Sketched the placement planner and the walk test",
+    "record_id": "CR-04",
+    "role": "hardware engineer"
+   },
+   {
+    "agreement": "contractor statement of work SOW-14",
+    "contributed": "Built the mounting jig from the hardware engineer's drawings",
+    "date": "2026-02-10",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-06",
+    "quote": "Built the mounting jig from the hardware engineer's drawings",
+    "record_id": "CR-05",
+    "role": "contract technician"
+   }
+  ],
+  "counsel_questions": [
+   {
+    "question": "Who are the inventors of each element?",
+    "status": "needs_counsel_confirmation",
+    "topic": "inventorship"
+   },
+   {
+    "question": "Do the employment, contractor and consulting agreements assign each contribution?",
+    "status": "needs_counsel_confirmation",
+    "topic": "ownership"
+   },
+   {
+    "question": "2026-03-10-trade-show-demo-1 on 2026-03-10, 262 days before today: who could see it? The record does not say whether it was public.",
+    "status": "needs_counsel_confirmation",
+    "topic": "disclosure"
+   }
+  ],
+  "disclosures": [
+   {
+    "as_of": "2026-11-27",
+    "counsel_question": "2026-03-10-trade-show-demo-1 on 2026-03-10, 262 days before today: who could see it? The record does not say whether it was public.",
+    "date": "2026-03-10",
+    "describes_fully": false,
+    "disclosure_id": "2026-03-10-trade-show-demo-1",
+    "elapsed_days": 262,
+    "elements_shown": [],
+    "event_type": null,
+    "file": "input/disclosures/2026-03-10-trade-show-demo.md",
+    "own_disclosure": true,
+    "public": "unknown",
+    "quote": "Date: 10 Mar 2026\nPlace: Smart Workplace Expo 2026, Rotterdam, stand B14, open exhibition floor\nPresenters: Daniel Sato (founder), Asha Rao (firmware lead)\nAudience: open to registered visitors; about 200 people passed the stand",
+    "row": {
+     "file": "input/disclosures/2026-03-10-trade-show-demo.md",
+     "quote": "Date: 10 Mar 2026\nPlace: Smart Workplace Expo 2026, Rotterdam, stand B14, open exhibition floor\nPresenters: Daniel Sato (founder), Asha Rao (firmware lead)\nAudience: open to registered visitors; about 200 people passed the stand"
+    },
+    "shown_quotes": [],
+    "status": "needs_counsel_confirmation"
+   }
+  ],
+  "elements": [
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "id": "P1",
+    "label": "footprint at seated head height from field of view",
+    "quote": "For each candidate mount point, compute the sensor footprint at seated head height, 1.2 m above the floor, from the 90 degree field of view.",
+    "step": 2,
+    "terms": [
+     [
+      "footprint"
+     ],
+     [
+      "working height",
+      "head height"
+     ],
+     [
+      "field of view"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "id": "P2",
+    "label": "layout score over seat coverage, overlap, heat-source and doorway exposure",
+    "quote": "Score each layout on seat coverage, overlap between units, and exposure to heat sources and doorways.",
+    "step": 3,
+    "terms": [
+     [
+      "coverage of seat",
+      "seat locations",
+      "seats"
+     ],
+     [
+      "doorway"
+     ],
+     [
+      "heat source",
+      "vent"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "id": "P3",
+    "label": "post-install walk test against the plan",
+    "quote": "After install, walk one person to marked spots and check each unit sees them where the plan predicts.",
+    "step": 4,
+    "terms": [
+     [
+      "walk test",
+      "walk"
+     ]
+    ]
+   }
+  ],
+  "implementation": {
+   "file": "input/notes/C2-sensor-placement.md",
+   "quote": "Whiteboard photo taken 3 Feb 2026. The walk-test results are in placement-trial-02.csv (attached separately).",
+   "status": "idea_only"
+  },
+  "mechanism": [
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "n": 1,
+    "quote": "Take the floor plan with ceiling height, doors, windows, vents and seats.",
+    "text": "Take the floor plan with ceiling height, doors, windows, vents and seats."
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "n": 2,
+    "quote": "For each candidate mount point, compute the sensor footprint at seated head height, 1.2 m above the floor, from the 90 degree field of view.",
+    "text": "For each candidate mount point, compute the sensor footprint at seated head height, 1.2 m above the floor, from the 90 degree field of view."
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "n": 3,
+    "quote": "Score each layout on seat coverage, overlap between units, and exposure to heat sources and doorways.",
+    "text": "Score each layout on seat coverage, overlap between units, and exposure to heat sources and doorways."
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "n": 4,
+    "quote": "After install, walk one person to marked spots and check each unit sees them where the plan predicts.",
+    "text": "After install, walk one person to marked spots and check each unit sees them where the plan predicts."
+   }
+  ],
+  "missing_details": [],
+  "missing_documents": [
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "name": "placement-trial-02.csv",
+    "quote": "placement-trial-02.csv",
+    "status": "referenced_not_found"
+   }
+  ],
+  "note": "input/notes/C2-sensor-placement.md",
+  "opinions": [],
+  "outside_contributions": [],
+  "parameters": [
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "name": "Field of view",
+    "quote": "| Field of view | 90 | degrees | thermopile lens",
+    "status": "complete",
+    "unit": "degrees",
+    "value": "90"
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "name": "Seated head height",
+    "quote": "| Seated head height | 1.2 | m |",
+    "status": "complete",
+    "unit": "m",
+    "value": "1.2"
+   },
+   {
+    "file": "input/notes/C2-sensor-placement.md",
+    "name": "Minimum distance from a vent",
+    "quote": "| Minimum distance from a vent | not decided | m |",
+    "statement": {
+     "answer": "0.5 m from the vent edge, so its air flow stays outside the footprint.",
+     "by": "person",
+     "interrupt": "I-0002"
+    },
+    "status": "complete",
+    "unit": "m",
+    "value": "0.5 m from the vent edge, so its air flow stays outside the footprint."
+   }
+  ],
+  "people_terms": [
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "hardware engineer"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "employment, standard IP assignment"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "contract technician"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "contractor statement of work SOW-14"
+   }
+  ],
+  "problem": {
+   "file": "input/notes/C2-sensor-placement.md",
+   "quote": "Installers mount units where the ceiling tile is convenient. Mounted near the door, a unit counts the corridor; under a vent, it sees air flow as people."
+  },
+  "search": [
+   [
+    "mount point",
+    "placement"
+   ]
+  ],
+  "sources": {
+   "contributors": "input/contributors/records.csv",
+   "disclosures": "input/disclosures/history.csv"
+  },
+  "title": "Engineering note: placement planner for ceiling units"
+ },
+ "freshness": "current",
+ "ref": "patent.extraction/C2@v1"
+}

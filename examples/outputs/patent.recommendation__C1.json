@@ -1,0 +1,19 @@
+{
+ "content": {
+  "based_on": [
+   "patent.extraction/C1@v1",
+   "patent.comparison/C1@v1"
+  ],
+  "candidate": "C1",
+  "next_action": "prioritize_counsel_review",
+  "risks": [
+   "own public disclosure DISC-01 on 2026-03-10 (trade-show demo)",
+   "outside contributor P-05 suggested F2, F3 on 2026-01-05, before the note"
+  ],
+  "rule": "R1",
+  "why": "business priority 1; implementation: built_and_tested; F3 not found in any family searched; family SYN-PRI-2021-0412 discloses F1, F5; family SYN-PRI-2022-0118 discloses F2",
+  "would_change_if": "a reference discloses F3, or an outside contributor's role changes inventorship or ownership"
+ },
+ "freshness": "current",
+ "ref": "patent.recommendation/C1@v1"
+}

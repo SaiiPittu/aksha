@@ -1,0 +1,73 @@
+{
+ "content": {
+  "candidates": [
+   "C1",
+   "C2",
+   "C3",
+   "C4"
+  ],
+  "coverage": [
+   {
+    "coverage": {
+     "count": 4,
+     "scope": {
+      "query": "patent.list_inputs?{\"kinds\":[\"invention_disclosure\",\"meeting_notes\",\"other\"]}"
+     },
+     "statement": "every invention candidate the inputs hold"
+    }
+   },
+   {
+    "coverage": {
+     "count": 2,
+     "scope": {
+      "query": "patent.list_templates?{}"
+     },
+     "statement": "every blank form the inputs hold"
+    }
+   }
+  ],
+  "notes": [
+   {
+    "candidate": "C1",
+    "file": "input/notes/C1-self-calibration.md",
+    "title": "Engineering note: self-calibrating thermal baseline"
+   },
+   {
+    "candidate": "C2",
+    "file": "input/notes/C2-sensor-placement.md",
+    "title": "Engineering note: placement planner for ceiling units"
+   },
+   {
+    "candidate": "C3",
+    "file": "input/notes/C3-privacy-preserving-coordination.md",
+    "title": "Engineering note: counting across overlapping units without images"
+   },
+   {
+    "candidate": "C4",
+    "file": "input/notes/C4-battery-saving-sampling.md",
+    "title": "Engineering note: event-driven sampling for a two-year battery"
+   }
+  ],
+  "plan": {
+   "candidates": [
+    "C1",
+    "C2",
+    "C3",
+    "C4"
+   ],
+   "fill_forms": true,
+   "forms": [],
+   "prior_art": true,
+   "priority_cutoff": 2,
+   "send": true
+  },
+  "unread": [
+   {
+    "file": "input/reviews/reviews.json",
+    "holds": "read; no invention recognised in it"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "patent.portfolio@v1"
+}

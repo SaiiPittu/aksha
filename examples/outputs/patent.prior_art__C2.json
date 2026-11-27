@@ -1,0 +1,129 @@
+{
+ "content": {
+  "candidate": "C2",
+  "families": [
+   {
+    "differences": [
+     "status wordings differ; each is kept as written"
+    ],
+    "family": "SYN-PRI-2019-0630",
+    "members": [
+     "SYN-PUB-0009",
+     "SYN-PUB-0010"
+    ],
+    "status_wordings": {
+     "SYN-PUB-0009": [
+      "Published application"
+     ],
+     "SYN-PUB-0010": [
+      "Granted - in force"
+     ]
+    }
+   }
+  ],
+  "hits": [
+   "SYN-PUB-0009",
+   "SYN-PUB-0010"
+  ],
+  "publications": [
+   {
+    "abstract": "Footprint at working height and seat coverage drive proposed mount points.",
+    "dates": {
+     "filing": "2020-06-29",
+     "priority": "2019-06-30",
+     "publication": "2021-01-07"
+    },
+    "dependent_claims": [],
+    "description": "A planning tool computes the floor footprint of a ceiling sensor at a working height from its field of view and the ceiling height, and proposes mount points that maximise coverage of seats in a floor plan.",
+    "family": "SYN-PRI-2019-0630",
+    "file": "input/publications/SYN-PUB-0009.json",
+    "id": "SYN-PUB-0009",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0009.json",
+      "number": 1,
+      "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan."
+     }
+    ],
+    "kind_code": "A1",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2019-06-30",
+      "number": "SYN-PRI-2019-0630"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0009.json",
+      "quote": "Published application",
+      "source": "document",
+      "wording": "Published application"
+     }
+    ],
+    "title": "Planning mount points for ceiling occupancy sensors",
+    "url": "https://patents.synthetic.example/SYN-PUB-0009"
+   },
+   {
+    "abstract": "Footprint at working height and seat coverage drive proposed mount points.",
+    "dates": {
+     "filing": "2020-06-29",
+     "grant": "2023-08-22",
+     "priority": "2019-06-30",
+     "publication": "2021-01-07"
+    },
+    "dependent_claims": [
+     {
+      "depends_on": 1,
+      "file": "input/publications/SYN-PUB-0010.json",
+      "number": 2,
+      "quote": "The method of claim 1, further comprising penalising mount points within a minimum distance of a doorway."
+     }
+    ],
+    "description": "A planning tool computes the floor footprint of a ceiling sensor at a working height from its field of view and the ceiling height, and proposes mount points that maximise coverage of seats in a floor plan.",
+    "family": "SYN-PRI-2019-0630",
+    "file": "input/publications/SYN-PUB-0010.json",
+    "id": "SYN-PUB-0010",
+    "independent_claims": [
+     {
+      "file": "input/publications/SYN-PUB-0010.json",
+      "number": 1,
+      "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan."
+     }
+    ],
+    "kind_code": "B2",
+    "office": "SYN-Office-1",
+    "priority_claims": [
+     {
+      "date": "2019-06-30",
+      "number": "SYN-PRI-2019-0630"
+     }
+    ],
+    "status": [
+     {
+      "as_of": null,
+      "file": "input/publications/SYN-PUB-0010.json",
+      "quote": "Granted - in force",
+      "source": "document",
+      "wording": "Granted - in force"
+     }
+    ],
+    "title": "Planning mount points for ceiling occupancy sensors",
+    "url": "https://patents.synthetic.example/SYN-PUB-0010"
+   }
+  ],
+  "query": "patent.search_publications?{\"all_of\":[[\"mount point\",\"placement\"]]}",
+  "web": {
+   "kept": [],
+   "queries": [
+    "mount point placement"
+   ],
+   "read": [
+    "https://kelvra.example/product"
+   ]
+  }
+ },
+ "freshness": "current",
+ "ref": "patent.prior_art/C2@v1"
+}

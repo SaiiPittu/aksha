@@ -1,0 +1,229 @@
+{
+ "content": {
+  "candidate": "C1",
+  "inputs": {
+   "comparison": "patent.comparison/C1@v1",
+   "extraction": "patent.extraction/C1@v1",
+   "forms": [
+    "patent.form/C1~filing-information-worksheet@v1",
+    "patent.form/C1~invention-disclosure-form@v1"
+   ],
+   "prior_art": "patent.prior_art/C1@v1",
+   "recommendation": "patent.recommendation/C1@v1"
+  },
+  "scope_note": "Prepared for counsel review. This agent gave no patentability or freedom-to-operate opinion, drafted no claims, set no legal deadline and filed nothing. 'not_found' means no reference in this search showed the element; it is not a finding that the element is new.",
+  "sections": [
+   {
+    "items": [
+     {
+      "field": "applicant",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Counsel to confirm."
+     },
+     {
+      "field": "proposed_inventors",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Who are the inventors?"
+     },
+     {
+      "field": "ownership_and_assignments",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Counsel to confirm."
+     },
+     {
+      "field": "outside_party_agreements",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Counsel to confirm."
+     },
+     {
+      "field": "earlier_public_disclosures",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Counsel to confirm."
+     },
+     {
+      "field": "jurisdictions_of_interest",
+      "form": "patent.form/C1~filing-information-worksheet@v1",
+      "question": "Counsel to confirm."
+     },
+     {
+      "field": "contributors",
+      "form": "patent.form/C1~invention-disclosure-form@v1",
+      "question": "Who are the inventors of each element?"
+     },
+     {
+      "field": "public_disclosures",
+      "form": "patent.form/C1~invention-disclosure-form@v1",
+      "question": "DISC-01 was public 262 days before today. Does any grace period apply?"
+     },
+     {
+      "field": "outside_resources",
+      "form": "patent.form/C1~invention-disclosure-form@v1",
+      "question": "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?"
+     },
+     {
+      "field": "figure_list",
+      "form": "patent.form/C1~invention-disclosure-form@v1",
+      "question": "The note has no drawings. Which figures should an application include?"
+     }
+    ],
+    "questions": [
+     "Who are the inventors of each element?",
+     "Do the employment, contractor and consulting agreements assign each contribution?",
+     "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+     "DISC-01 was public 262 days before today. Does any grace period apply?"
+    ],
+    "title": "Needs counsel confirmation"
+   },
+   {
+    "text": "Prepared for counsel review. This agent gave no patentability or freedom-to-operate opinion, drafted no claims, set no legal deadline and filed nothing. 'not_found' means no reference in this search showed the element; it is not a finding that the element is new.",
+    "title": "Scope"
+   },
+   {
+    "counts": {
+     "complete": 12,
+     "missing": 3,
+     "needs_counsel_confirmation": 10
+    },
+    "forms": [
+     "patent.form/C1~filing-information-worksheet@v1",
+     "patent.form/C1~invention-disclosure-form@v1"
+    ],
+    "missing": [
+     {
+      "field": "related_applications",
+      "form": "patent.form/C1~filing-information-worksheet@v1"
+     },
+     {
+      "field": "priority_claims",
+      "form": "patent.form/C1~filing-information-worksheet@v1"
+     },
+     {
+      "field": "representative",
+      "form": "patent.form/C1~filing-information-worksheet@v1"
+     }
+    ],
+    "title": "Forms"
+   },
+   {
+    "cells": [
+     {
+      "element": "F1",
+      "family": "SYN-PRI-2021-0412",
+      "state": "disclosed"
+     },
+     {
+      "element": "F1",
+      "family": "SYN-PRI-2022-0118",
+      "state": "not_found"
+     },
+     {
+      "element": "F2",
+      "family": "SYN-PRI-2021-0412",
+      "state": "partial"
+     },
+     {
+      "element": "F2",
+      "family": "SYN-PRI-2022-0118",
+      "state": "disclosed"
+     },
+     {
+      "element": "F3",
+      "family": "SYN-PRI-2021-0412",
+      "state": "not_found"
+     },
+     {
+      "element": "F3",
+      "family": "SYN-PRI-2022-0118",
+      "state": "not_found"
+     },
+     {
+      "element": "F4",
+      "family": "SYN-PRI-2021-0412",
+      "state": "partial"
+     },
+     {
+      "element": "F4",
+      "family": "SYN-PRI-2022-0118",
+      "state": "not_found"
+     },
+     {
+      "element": "F5",
+      "family": "SYN-PRI-2021-0412",
+      "state": "disclosed"
+     },
+     {
+      "element": "F5",
+      "family": "SYN-PRI-2022-0118",
+      "state": "not_found"
+     }
+    ],
+    "closest_families": [
+     "SYN-PRI-2021-0412"
+    ],
+    "comparison": "patent.comparison/C1@v1",
+    "families": [
+     "SYN-PRI-2021-0412",
+     "SYN-PRI-2022-0118"
+    ],
+    "title": "Prior-art matrix"
+   },
+   {
+    "next_action": "prioritize_counsel_review",
+    "recommendation": "patent.recommendation/C1@v1",
+    "risks": [
+     "own public disclosure DISC-01 on 2026-03-10 (trade-show demo)",
+     "outside contributor P-05 suggested F2, F3 on 2026-01-05, before the note"
+    ],
+    "title": "Recommendation",
+    "why": "business priority 1; implementation: built_and_tested; F3 not found in any family searched; family SYN-PRI-2021-0412 discloses F1, F5; family SYN-PRI-2022-0118 discloses F2"
+   },
+   {
+    "contributors": [
+     {
+      "contributed": "Wrote the gated baseline update rule and the engineering note",
+      "person_id": "P-01",
+      "role": "firmware lead"
+     },
+     {
+      "contributed": "Implemented the gated update in firmware fw-0.9.3",
+      "person_id": "P-02",
+      "role": "embedded engineer"
+     },
+     {
+      "contributed": "Reviewed the thermal noise model",
+      "person_id": "P-05",
+      "role": "outside consultant"
+     },
+     {
+      "contributed": "Presented the self-calibration demo at the trade show",
+      "person_id": "P-07",
+      "role": "founder and CEO"
+     }
+    ],
+    "outside_contributions": [
+     {
+      "before_agreement_effective": false,
+      "before_conception_record": true,
+      "counsel_question": "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+      "date": "2026-01-05",
+      "date_quote": {
+       "file": "input/disclosures/consultant-email.eml.txt",
+       "quote": "Date: Mon, 05 Jan 2026 16:42:10 +0100"
+      },
+      "elements": [
+       "F2",
+       "F3"
+      ],
+      "file": "input/disclosures/consultant-email.eml.txt",
+      "person_id": "P-05",
+      "quote": "Why not use the door contact as a room-sealed signal, and only relearn the\nbaseline when the room is sealed and the PIR has been quiet for a while?",
+      "status": "needs_counsel_confirmation"
+     }
+    ],
+    "title": "Contributors"
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "patent.packet/C1@v1"
+}

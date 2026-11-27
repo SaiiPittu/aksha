@@ -1,0 +1,86 @@
+{
+ "content": {
+  "tests": [
+   {
+    "evidence": [
+     {
+      "cite": {
+       "quote": "Batteries died after about a year, not seven.",
+       "span": "EX-0226"
+      }
+     },
+     {
+      "cite": {
+       "quote": "We replace batteries every 14 months across 300 doors. That is a job.",
+       "span": "EX-0228"
+      }
+     }
+    ],
+    "hypothesis": "Buyers choose the product that does best on battery.",
+    "id": "T1",
+    "method": "Run five buyer interviews and one side-by-side trial on battery, the reviews' own words as prompts.",
+    "metric": "buyers who name it among their top two reasons to choose",
+    "theme": "battery",
+    "threshold": {
+     "status": "proposal",
+     "value": "3 of 5 buyers"
+    },
+    "why": "7 of 40 reviews in this sample raise it."
+   },
+   {
+    "evidence": [
+     {
+      "cite": {
+       "quote": "Accurate in our meeting rooms, but every sensor needed a new PoE cable.",
+       "span": "EX-0220"
+      }
+     },
+     {
+      "cite": {
+       "quote": "Good data. Our electrician took two days for one floor.",
+       "span": "EX-0222"
+      }
+     }
+    ],
+    "hypothesis": "Buyers choose the product that does best on setup.",
+    "id": "T2",
+    "method": "Run five buyer interviews and one side-by-side trial on setup, the reviews' own words as prompts.",
+    "metric": "buyers who name it among their top two reasons to choose",
+    "theme": "setup",
+    "threshold": {
+     "status": "proposal",
+     "value": "3 of 5 buyers"
+    },
+    "why": "7 of 40 reviews in this sample raise it."
+   },
+   {
+    "evidence": [
+     {
+      "cite": {
+       "quote": "The lights went off while I was sitting alone reading for half an hour.",
+       "span": "EX-0221"
+      }
+     },
+     {
+      "cite": {
+       "quote": "Seated people are counted reliably, even when they barely move.",
+       "span": "EX-0223"
+      }
+     }
+    ],
+    "hypothesis": "Buyers choose the product that does best on stillness.",
+    "id": "T3",
+    "method": "Run five buyer interviews and one side-by-side trial on stillness, the reviews' own words as prompts.",
+    "metric": "buyers who name it among their top two reasons to choose",
+    "theme": "stillness",
+    "threshold": {
+     "status": "proposal",
+     "value": "3 of 5 buyers"
+    },
+    "why": "5 of 40 reviews in this sample raise it."
+   }
+  ]
+ },
+ "freshness": "current",
+ "ref": "research.tests@v1"
+}

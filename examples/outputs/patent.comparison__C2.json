@@ -1,0 +1,71 @@
+{
+ "content": {
+  "candidate": "C2",
+  "cells": [
+   {
+    "element": "P1",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0009.json",
+      "publication": "SYN-PUB-0009",
+      "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0010.json",
+      "publication": "SYN-PUB-0010",
+      "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2019-0630",
+    "members": {
+     "SYN-PUB-0009": "disclosed",
+     "SYN-PUB-0010": "disclosed"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "P2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0010.json",
+      "publication": "SYN-PUB-0010",
+      "quote": "The method of claim 1, further comprising penalising mount points within a minimum distance of a doorway.",
+      "where": "claim 2"
+     }
+    ],
+    "family": "SYN-PRI-2019-0630",
+    "members": {
+     "SYN-PUB-0009": "not_found",
+     "SYN-PUB-0010": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "P3",
+    "evidence": [],
+    "family": "SYN-PRI-2019-0630",
+    "members": {
+     "SYN-PUB-0009": "not_found",
+     "SYN-PUB-0010": "not_found"
+    },
+    "state": "not_found"
+   }
+  ],
+  "closest_families": [
+   "SYN-PRI-2019-0630"
+  ],
+  "elements": [
+   "P1",
+   "P2",
+   "P3"
+  ],
+  "families": [
+   "SYN-PRI-2019-0630"
+  ],
+  "note": "not_found means this search showed no reference for the element; it is not a finding that the element is new."
+ },
+ "freshness": "current",
+ "ref": "patent.comparison/C2@v1"
+}

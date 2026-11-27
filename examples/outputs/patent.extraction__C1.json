@@ -1,0 +1,411 @@
+{
+ "content": {
+  "agreements": [
+   {
+    "document": "referenced_not_found",
+    "effective": "2025-12-01",
+    "file": "input/contributors/records.csv",
+    "person_id": "P-05",
+    "quote": "consulting agreement CA-2025-11, effective 2025-12-01",
+    "ref": "CA-2025-11"
+   }
+  ],
+  "alternatives": [
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "quote": "Fixed nightly recalibration at 03:00."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "quote": "Updating whenever the PIR is quiet, without the door gate."
+   }
+  ],
+  "business_priority": {
+   "file": "input/priorities/business-priorities.md",
+   "quote": "**Accuracy with still occupants.**",
+   "rank": 1
+  },
+  "candidate": "C1",
+  "conception": {
+   "date": "2026-01-14",
+   "file": "input/notes/C1-self-calibration.md",
+   "quote": "Date: 14 Jan 2026"
+  },
+  "contributors": [
+   {
+    "agreement": "employment, standard IP assignment",
+    "contributed": "Wrote the gated baseline update rule and the engineering note",
+    "date": "2026-01-14",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-01",
+    "quote": "Wrote the gated baseline update rule and the engineering note",
+    "record_id": "CR-01",
+    "role": "firmware lead"
+   },
+   {
+    "agreement": "employment, standard IP assignment",
+    "contributed": "Implemented the gated update in firmware fw-0.9.3",
+    "date": "2026-02-02",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-02",
+    "quote": "Implemented the gated update in firmware fw-0.9.3",
+    "record_id": "CR-02",
+    "role": "embedded engineer"
+   },
+   {
+    "agreement": "consulting agreement CA-2025-11, effective 2025-12-01",
+    "contributed": "Reviewed the thermal noise model",
+    "date": "2026-01-21",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-05",
+    "quote": "Reviewed the thermal noise model",
+    "record_id": "CR-07",
+    "role": "outside consultant"
+   },
+   {
+    "agreement": "founder, IP assignment",
+    "contributed": "Presented the self-calibration demo at the trade show",
+    "date": "2026-03-10",
+    "elements": [],
+    "file": "input/contributors/records.csv",
+    "person_id": "P-07",
+    "quote": "Presented the self-calibration demo at the trade show",
+    "record_id": "CR-08",
+    "role": "founder and CEO"
+   }
+  ],
+  "counsel_questions": [
+   {
+    "question": "Who are the inventors of each element?",
+    "status": "needs_counsel_confirmation",
+    "topic": "inventorship"
+   },
+   {
+    "question": "Do the employment, contractor and consulting agreements assign each contribution?",
+    "status": "needs_counsel_confirmation",
+    "topic": "ownership"
+   },
+   {
+    "question": "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+    "status": "needs_counsel_confirmation",
+    "topic": "outside contributor"
+   },
+   {
+    "question": "DISC-01 was public 262 days before today. Does any grace period apply?",
+    "status": "needs_counsel_confirmation",
+    "topic": "disclosure"
+   }
+  ],
+  "disclosures": [
+   {
+    "as_of": "2026-11-27",
+    "counsel_question": "DISC-01 was public 262 days before today. Does any grace period apply?",
+    "date": "2026-03-10",
+    "describes_fully": false,
+    "disclosure_id": "DISC-01",
+    "elapsed_days": 262,
+    "elements_shown": [
+     "F2",
+     "F3"
+    ],
+    "event_type": "trade-show demo",
+    "file": "input/disclosures/history.csv",
+    "own_disclosure": true,
+    "public": "yes",
+    "quote": "Live demo plus one slide describing the PIR-quiet and door-closed baseline gate",
+    "row": {
+     "file": "input/disclosures/history.csv",
+     "quote": "DISC-01,2026-03-10,C1"
+    },
+    "shown_quote": {
+     "file": "input/disclosures/2026-03-10-trade-show-demo.md",
+     "quote": "no motion for 20 minutes and the door closed"
+    },
+    "status": "needs_counsel_confirmation"
+   },
+   {
+    "as_of": "2026-11-27",
+    "date": "2026-01-05",
+    "describes_fully": false,
+    "disclosure_id": "DISC-05",
+    "elapsed_days": 326,
+    "event_type": "outside email",
+    "file": "input/disclosures/history.csv",
+    "own_disclosure": false,
+    "public": "no",
+    "quote": "Dr. Lin suggested using the door contact as a room-sealed signal for calibration",
+    "row": {
+     "file": "input/disclosures/history.csv",
+     "quote": "DISC-05,2026-01-05,C1"
+    },
+    "status": "complete"
+   }
+  ],
+  "elements": [
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "id": "F1",
+    "label": "per-pixel thermopile empty-room baseline",
+    "quote": "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link.",
+    "step": 1,
+    "terms": [
+     [
+      "thermal array",
+      "thermopile",
+      "thermal occupancy sensor"
+     ],
+     [
+      "background frame",
+      "background estimate",
+      "baseline"
+     ],
+     [
+      "pixel"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "id": "F2",
+    "label": "baseline update only after a PIR quiet window",
+    "quote": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+    "step": 2,
+    "terms": [
+     [
+      "background"
+     ],
+     [
+      "no motion",
+      "low activity"
+     ],
+     [
+      "quiet period",
+      "holding period",
+      "no motion has been detected"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "id": "F3",
+    "label": "baseline update also gated on the door contact reporting closed",
+    "quote": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+    "step": 2,
+    "terms": [
+     [
+      "door"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "id": "F4",
+    "label": "slow EMA update with per-pixel freeze after detection",
+    "quote": "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background.",
+    "step": 5,
+    "terms": [
+     [
+      "running average",
+      "moving average",
+      "stationary occupant is not absorbed"
+     ],
+     [
+      "freeze",
+      "update weight"
+     ]
+    ]
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "id": "F5",
+    "label": "per-pixel threshold from that pixel's noise",
+    "quote": "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation.",
+    "step": 6,
+    "terms": [
+     [
+      "threshold derived from",
+      "noise estimate of that pixel",
+      "noise"
+     ]
+    ]
+   }
+  ],
+  "implementation": {
+   "file": "input/notes/C1-self-calibration.md",
+   "quote": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.",
+   "status": "built_and_tested"
+  },
+  "mechanism": [
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 1,
+    "quote": "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link.",
+    "text": "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 2,
+    "quote": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+    "text": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 3,
+    "quote": "During a verified-empty window, record each pixel's mean temperature and its standard deviation over the window.",
+    "text": "During a verified-empty window, record each pixel's mean temperature and its standard deviation over the window."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 4,
+    "quote": "Update the baseline slowly: new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute.",
+    "text": "Update the baseline slowly: new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 5,
+    "quote": "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background.",
+    "text": "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background."
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "n": 6,
+    "quote": "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation.",
+    "text": "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation."
+   }
+  ],
+  "missing_details": [
+   {
+    "field": "open point",
+    "file": "input/notes/C1-self-calibration.md",
+    "gap": {
+     "question": "Note author: Why 20 minutes?",
+     "reason": "not_found"
+    },
+    "quote": "Why 20 minutes: to be written up.",
+    "status": "missing",
+    "value": null
+   }
+  ],
+  "missing_documents": [],
+  "note": "input/notes/C1-self-calibration.md",
+  "opinions": [],
+  "outside_contributions": [
+   {
+    "before_agreement_effective": false,
+    "before_conception_record": true,
+    "counsel_question": "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
+    "date": "2026-01-05",
+    "date_quote": {
+     "file": "input/disclosures/consultant-email.eml.txt",
+     "quote": "Date: Mon, 05 Jan 2026 16:42:10 +0100"
+    },
+    "elements": [
+     "F2",
+     "F3"
+    ],
+    "file": "input/disclosures/consultant-email.eml.txt",
+    "person_id": "P-05",
+    "quote": "Why not use the door contact as a room-sealed signal, and only relearn the\nbaseline when the room is sealed and the PIR has been quiet for a while?",
+    "status": "needs_counsel_confirmation"
+   }
+  ],
+  "parameters": [
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "name": "PIR quiet window",
+    "quote": "| PIR quiet window | 20 | minutes |",
+    "status": "complete",
+    "unit": "minutes",
+    "value": "20"
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "name": "Door state required",
+    "quote": "| Door state required | closed | n/a | from the door contact",
+    "status": "complete",
+    "unit": "n/a",
+    "value": "closed"
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "name": "Baseline update weight",
+    "quote": "| Baseline update weight | 0.01 | per minute | exponential moving average",
+    "status": "complete",
+    "unit": "per minute",
+    "value": "0.01"
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "name": "Pixel freeze after detection",
+    "quote": "| Pixel freeze after detection | 10 | minutes |",
+    "status": "complete",
+    "unit": "minutes",
+    "value": "10"
+   },
+   {
+    "file": "input/notes/C1-self-calibration.md",
+    "name": "Threshold multiplier k",
+    "quote": "| Threshold multiplier k | 4 | standard deviations |",
+    "status": "complete",
+    "unit": "standard deviations",
+    "value": "4"
+   }
+  ],
+  "people_terms": [
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "firmware lead"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "employment, standard IP assignment"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "embedded engineer"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "employment, standard IP assignment"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "outside consultant"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "consulting agreement CA-2025-11, effective 2025-12-01"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "founder and CEO"
+   },
+   {
+    "file": "input/contributors/records.csv",
+    "quote": "founder, IP assignment"
+   }
+  ],
+  "problem": {
+   "file": "input/notes/C1-self-calibration.md",
+   "quote": "The thermal baseline drifts when HVAC (heating, ventilation and air conditioning) cycles, causing false \"occupied\" readings in empty rooms. Sun on the floor in the afternoon does the same."
+  },
+  "search": [
+   [
+    "background"
+   ],
+   [
+    "sensor"
+   ]
+  ],
+  "sources": {
+   "contributors": "input/contributors/records.csv",
+   "disclosures": "input/disclosures/history.csv"
+  },
+  "title": "Engineering note: self-calibrating thermal baseline"
+ },
+ "freshness": "current",
+ "ref": "patent.extraction/C1@v1"
+}

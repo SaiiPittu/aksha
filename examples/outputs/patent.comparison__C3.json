@@ -1,0 +1,209 @@
+{
+ "content": {
+  "candidate": "C3",
+  "cells": [
+   {
+    "element": "Q1",
+    "evidence": [],
+    "family": "SYN-PRI-2020-0907",
+    "members": {
+     "SYN-PUB-0003": "not_found",
+     "SYN-PUB-0004": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "Q1",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "publication": "SYN-PUB-0005",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "disclosed",
+     "SYN-PUB-0006": "disclosed"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "Q2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0003.json",
+      "publication": "SYN-PUB-0003",
+      "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0004.json",
+      "publication": "SYN-PUB-0004",
+      "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2020-0907",
+    "members": {
+     "SYN-PUB-0003": "partial",
+     "SYN-PUB-0004": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "Q2",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "publication": "SYN-PUB-0005",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "partial",
+     "SYN-PUB-0006": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "Q3",
+    "evidence": [],
+    "family": "SYN-PRI-2020-0907",
+    "members": {
+     "SYN-PUB-0003": "not_found",
+     "SYN-PUB-0004": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "Q3",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "publication": "SYN-PUB-0005",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "disclosed",
+     "SYN-PUB-0006": "partial"
+    },
+    "state": "disclosed"
+   },
+   {
+    "element": "Q4",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0003.json",
+      "publication": "SYN-PUB-0003",
+      "quote": "The server registers the frames to a common floor grid, merges them into one thermal image of the room, and counts people in the merged image so that a person in the overlap is counted once.",
+      "where": "description"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0004.json",
+      "publication": "SYN-PUB-0004",
+      "quote": "The server registers the frames to a common floor grid, merges them into one thermal image of the room, and counts people in the merged image so that a person in the overlap is counted once.",
+      "where": "description"
+     }
+    ],
+    "family": "SYN-PRI-2020-0907",
+    "members": {
+     "SYN-PUB-0003": "partial",
+     "SYN-PUB-0004": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "Q4",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0005.json",
+      "publication": "SYN-PUB-0005",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+      "where": "claim 1"
+     },
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data.",
+      "where": "claim 1"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "partial",
+     "SYN-PUB-0006": "partial"
+    },
+    "state": "partial"
+   },
+   {
+    "element": "Q5",
+    "evidence": [],
+    "family": "SYN-PRI-2020-0907",
+    "members": {
+     "SYN-PUB-0003": "not_found",
+     "SYN-PUB-0004": "not_found"
+    },
+    "state": "not_found"
+   },
+   {
+    "element": "Q5",
+    "evidence": [
+     {
+      "file": "input/publications/SYN-PUB-0006.pdf.txt",
+      "publication": "SYN-PUB-0006",
+      "quote": "The method of claim 1, wherein room counts are aggregated to floor level.",
+      "where": "claim 2"
+     }
+    ],
+    "family": "SYN-PRI-2022-0118",
+    "members": {
+     "SYN-PUB-0005": "not_found",
+     "SYN-PUB-0006": "partial"
+    },
+    "state": "partial"
+   }
+  ],
+  "closest_families": [
+   "SYN-PRI-2022-0118"
+  ],
+  "elements": [
+   "Q1",
+   "Q2",
+   "Q3",
+   "Q4",
+   "Q5"
+  ],
+  "families": [
+   "SYN-PRI-2020-0907",
+   "SYN-PRI-2022-0118"
+  ],
+  "note": "not_found means this search showed no reference for the element; it is not a finding that the element is new."
+ },
+ "freshness": "current",
+ "ref": "patent.comparison/C3@v1"
+}
