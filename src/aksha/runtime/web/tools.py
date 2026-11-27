@@ -2,10 +2,12 @@
 
 ``web_search(query, limit)`` returns ranked results (title, url, snippet, date) and mints
 nothing: a snippet is a pointer, never evidence. :func:`web_search_tool` builds it for
-an agent. ``fetch_url(url)`` fetches the page and returns it as numbered, citable
-passages; an agent that reads pages its own way (with its fast-class readers, or as a
-typed document view) writes its own body over :func:`fetch_text`, and keeps
-:func:`fetch_url_spec` so the tool is the same to every model. A fetch is a read with the
+an agent. ``fetch_url(url, offset?, limit?, cells?, extract?)`` fetches the page and
+shows it as the shared ``read_document`` shows an input (``inputs/tools.read_view``):
+numbered lines and citable units; :func:`fetch_url_tool` builds it, with the agent's
+``InputReading`` when ``extract`` should decide the page's kind. An agent that reads pages
+its own way may still write its own body over :func:`fetch_text` and keep
+:func:`fetch_url_spec`. A fetch is a read with the
 egress policy :data:`WEB_EGRESS`: on a live web, every hop is checked (ADR-P26). Both
 tools are declared under :data:`WEB_EGRESS`, and only a tool under it is handed
 ``ToolContext.web`` (``loop.tier.web_for``), so no other tool can search or fetch.

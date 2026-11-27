@@ -37,7 +37,10 @@ from aksha.runtime.tools.types import Err, Ok, ToolContext
 
 NOTE = "# Plan\n\nWe sell the probe.\n\n## Prices\n\n- The probe costs EUR 49 per year.\n"
 TABLE = "id,owner,what\nr1,A,first row\nr2,B,second row\nr3,A,third row\n"
-CONVERTED = '[document D-1 v1] "a.pdf" (name as uploaded)\n\n[p.1]\nIntro text here.\n[p.2]\nResults text here.\n'
+CONVERTED = (
+    '[document D-1 v1] "a.pdf" (name as uploaded)\n\n'
+    "[p.1]\nIntro text here.\n[p.2]\nResults text here.\n"
+)
 
 
 class Source:

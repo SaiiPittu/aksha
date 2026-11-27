@@ -165,6 +165,8 @@ def _plan(
         column = candidate_column(item.get("columns", ())) if item.get("format") == "csv" else None
         if column is not None and key is not None and kind in TABLE_KINDS:
             return {"ref": ref, "where": {"column": column, "values": [key]}}
+        if kind == "other" and item.get("format") in ("csv", "json"):
+            return None  # a table of no kind that names no candidate is no one's record
     return {"ref": ref}
 
 
