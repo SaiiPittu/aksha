@@ -63,6 +63,11 @@ def _cells(prefix: str, forms: frozenset[Form] = SPAN) -> tuple[CitePolicy, ...]
     )
 
 
+COMPUTED_KEY: dict[str, Any] = {
+    "type": "string",
+    "description": "computed at save from the canonical name (or the first page) when not "
+    "given: leave it out",
+}
 SOURCED: dict[str, Any] = {
     **_obj("value", "basis", value={"type": "string"}, basis={"type": "string"}),
     "description": "the value, and where it came from (basis): request, answer, an input",
@@ -106,8 +111,17 @@ COMPETITORS = ArtifactKind(
         "resolved",
         "manual_alternatives",
         "dimensions",
-        companies=LIST,
+        companies={
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"key": COMPUTED_KEY},
+                "description": "one company: canonical, aliases, pages, merge_evidence",
+            },
+        },
         dimensions=LIST,
+        resolved={"type": "integer", "description": "computed at save: the companies listed"},
+        pages_found={"type": "integer", "description": "computed at save: the pages listed"},
     ),
     cites=(
         CitePolicy("/companies/*/canonical", forms=SPAN, value_in_quote=True),
@@ -138,11 +152,22 @@ NEEDS = ArtifactKind(
 )
 MATRIX = ArtifactKind(
     "matrix",
-    _obj("columns", "rows", "resolved", "pages_found", rows=LIST),
+    _obj(
+        "columns",
+        "rows",
+        "resolved",
+        "pages_found",
+        rows={
+            "type": "array",
+            "items": {"type": "object", "properties": {"key": COMPUTED_KEY}},
+            "description": "one row per company, naming it in company",
+        },
+    ),
     cites=(
         CitePolicy("/rows/*/company", forms=SPAN, value_in_quote=True),
         *_cells("/rows/*", SPAN_OR_ARTIFACT),
     ),
+    compute=computed.matrix,
 )
 FINDINGS = ArtifactKind(
     "findings",

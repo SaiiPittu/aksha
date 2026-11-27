@@ -4,6 +4,11 @@ A completion check is the agent's pure function over a ``TaskView``. The runtime
 only through :func:`run_check`, which turns an exception into a failing ``CheckResult``
 whose message names the exception, and a value that is not a ``CheckResult`` into one
 too, so an agent bug blocks one instance instead of ending the process.
+
+A ``KeyError`` is the one exception read as a gap in the saved work rather than a bug: a
+check indexed a field the model's content does not have. It is an ordinary failing check
+(``check_failed``) whose message names the missing field, so the model can add it in the
+next turn, and the instance is not blocked at once (ADR-P15 D2, amendment S7).
 """
 
 from __future__ import annotations
@@ -24,6 +29,13 @@ def run_check(check: Check, view: Any) -> tuple[CheckResult, bool]:
     """``(result, raised)``: the check's result, or a failing one when it raised."""
     try:
         result: object = check(view)
+    except KeyError as exc:  # a field the saved content lacks: the model can add it
+        field = exc.args[0] if exc.args else "?"
+        message = (
+            f"{check_name(check)}: the saved work has no field {field!r}, which this check "
+            f"reads: add {field!r} where it is missing and save again"
+        )
+        return CheckResult(ok=False, message=message), False
     except Exception as exc:  # an agent's check is untrusted code: any error is a FAIL
         message = f"{CHECK_RAISED}: {type(exc).__name__}: {exc}"
         return CheckResult(ok=False, message=message), True
