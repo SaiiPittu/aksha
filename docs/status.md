@@ -25,7 +25,7 @@ On the 20-candidate `coldwick` world the supervised patent run takes 138 model t
 
 ## Results on the held-out worlds
 
-Six of the eleven worlds were written without sight of the agent code, to test whether the offline agents generalise beyond the fixtures they were built on. Every suite run on main (`f8b8f58`) on 27 Nov 2026 with `aksha eval run <suite>` (`--k 3` for `change`), in fake model mode:
+Six of the eleven worlds were written without sight of the agent code, to test whether the offline agents generalise beyond the fixtures they were built on. Every suite was run with `aksha eval run <suite>` (`--k 3` for `change`), in fake model mode, on main (`f8b8f58`) on 27 Nov 2026 and again on 28 Nov 2026 after the web app and derived-counts changes merged, with the same results:
 
 | Suite | Agent | Written blind | Cases passed | Grader self-tests |
 |---|---|---|---|---|

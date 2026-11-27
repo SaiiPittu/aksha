@@ -25,7 +25,10 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
    added publications/SYN-PUB-0011.json (a new publication family)
    edited disclosures/consultant-email.eml.txt, disclosures/history.csv (the outside suggestion, now dated earlier)
 3. Invalidation reopens only what depends on the change (6.6 s)
+   weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
    keyed on every read instead, the same change would reopen 27 outputs, not 14
+   rebuilt 14: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...; findings, matrix, needs, tests, selection, table
+   kept 13 patent outputs: C2: comparison, extraction, prior_art, recommendation; ...; portfolio
    kept 7 of 11 research outputs: ...
    C1 next action: prioritize_counsel_review -> collect_more_evidence (the v2 answer key expects collect_more_evidence)
    C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation for counsel
