@@ -33,7 +33,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from aksha.runtime.definitions.modules import SourceFinding
+from aksha.runtime.definitions.modules import SourceFinding, dynamic_import
 
 ImportPin = tuple[str, str]
 """(top-level module, what pins it): ``"name==version"`` for each installed distribution that
@@ -57,8 +57,9 @@ class ExternalImport:
 def external_imports(folder: Path) -> tuple[ExternalImport, ...]:
     """Every absolute import in ``folder``'s Python files that may need a pin, in file order.
 
-    A top-level ``tests/`` folder is skipped, as the hash skips it. Relative imports stay
-    inside the folder, whose files the hash already covers.
+    A dynamic import by literal name (``importlib.import_module("x")``, ``__import__("x")``)
+    counts as an import of ``x``. A top-level ``tests/`` folder is skipped, as the hash skips
+    it. Relative imports stay inside the folder, whose files the hash already covers.
     """
     out: list[ExternalImport] = []
     for path in sorted(folder.rglob("*.py")):
@@ -71,6 +72,8 @@ def external_imports(folder: Path) -> tuple[ExternalImport, ...]:
                 names = [a.name for a in node.names]
             elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
                 names = [node.module]
+            elif isinstance(node, ast.Call):
+                names = dynamic_import(node)  # importlib.import_module("x"), __import__("x")
             else:
                 continue
             for name in names:

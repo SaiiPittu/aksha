@@ -420,6 +420,39 @@ def test_a_helper_module_from_outside_the_agent_folder_is_refused(
     assert "syn_helper" in refusal.message
 
 
+@pytest.mark.parametrize(
+    "call", ['importlib.import_module("syn_helper")', '__import__("syn_helper")']
+)
+def test_a_literal_dynamic_import_from_outside_the_agent_folder_is_refused(
+    plugins: Plugins, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, call: str
+) -> None:
+    # ADR-P20 B10 covers a dynamic import by literal name as it covers an import statement:
+    # otherwise the helper could change with the definition hash unchanged.
+    helpers = tmp_path / "helpers"
+    helpers.mkdir()
+    (helpers / "syn_helper.py").write_text("def tone(text: str) -> str:\n    return text\n")
+    monkeypatch.syspath_prepend(str(helpers))
+    (plugins.toy / "checks.py").write_text(
+        (plugins.toy / "checks.py").read_text(encoding="utf-8")
+        + f"\nimport importlib\n\ndef _helper() -> object:\n    return {call}\n"
+    )
+    with pytest.raises(LoadError) as err:
+        load_agents([plugins.toy], [plugins.extensions])
+    (refusal,) = err.value.refusals
+    assert (refusal.code, refusal.module) == ("import_unpinned", "toy/checks.py")
+    assert "syn_helper" in refusal.message
+
+
+def test_a_literal_dynamic_import_of_an_installed_module_is_pinned(plugins: Plugins) -> None:
+    from aksha.runtime.definitions.hashing import import_pins
+
+    checks = plugins.toy / "checks.py"
+    extra = '\nimport importlib\n\nJS = importlib.import_module("jsonschema.validators")\n'
+    checks.write_text(checks.read_text(encoding="utf-8") + extra)
+    pinned = f"jsonschema=={_version('jsonschema')}"
+    assert dict(import_pins(plugins.toy)) == {"jsonschema": pinned}
+
+
 def test_an_installed_or_absent_import_is_pinned_into_the_definition_hash(
     plugins: Plugins,
 ) -> None:

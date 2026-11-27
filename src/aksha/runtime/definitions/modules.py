@@ -108,7 +108,7 @@ def _findings(file: str, tree: ast.Module) -> list[SourceFinding]:
         if isinstance(node, ast.Import | ast.ImportFrom):
             targets = _imported(node)
         elif isinstance(node, ast.Call):
-            targets = _dynamic_import(node)
+            targets = dynamic_import(node)
         for target in targets:
             if _is_aksha(target) and not _is_api(target):
                 message = f"imports {target}; import aksha.runtime.api only"
@@ -140,7 +140,7 @@ def _network_targets(node: ast.AST) -> list[str]:
     elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
         names = [node.module, *(f"{node.module}.{a.name}" for a in node.names)]
     elif isinstance(node, ast.Call):
-        names = _dynamic_import(node)
+        names = dynamic_import(node)
     return [n for n in names if _is_network(n)]
 
 
@@ -167,7 +167,7 @@ def _imported(node: ast.Import | ast.ImportFrom) -> list[str]:
     return [node.module]
 
 
-def _dynamic_import(call: ast.Call) -> list[str]:
+def dynamic_import(call: ast.Call) -> list[str]:
     """``importlib.import_module("aksha.app")`` or ``__import__("aksha.app")``, by literal name."""
     fn = call.func
     name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", None)
