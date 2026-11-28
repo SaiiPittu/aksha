@@ -1,6 +1,6 @@
 # Research Agent: how it is defined and how it works
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`.*
+*Status on 28 Nov 2026. Read against `main`, 28 Nov 2026.*
 
 The assignment asks a Research Agent to say who already solves the problem, what customers complain about and what to test next, with every finding linked to the excerpt that supports it. A research agent that writes a fluent report from search snippets fails that bar silently: the table looks complete, and nobody can tell a stated price from a guessed one. This page shows how the agent is defined, how each step uses the shared runtime, which rules keep its outputs grounded, and how it behaves when evidence is missing, both offline and with a real model.
 
@@ -119,7 +119,7 @@ trace: replay/trace/R-0001/1.otlp.jsonl
 outputs: the same as recorded (7 outputs)
 ```
 
-`tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` checks the replayed outputs byte for byte.
+`tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` checked the replayed outputs byte for byte when this run was recorded. The recording has been stale since the fixes of 28 Nov 2026: on `main` the replay no longer matches its recorded outputs, and the test is a strict expected failure until the run is re-recorded on a live model.
 
 ### A real model, interactive, on the assignment's own prompt
 
@@ -152,13 +152,13 @@ The run's events, inspector output, outputs and trace are in [examples/live/rese
 
 ## Sources
 
-Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
+Read on `main`, 28 Nov 2026.
 
-- Definition: `src/aksha/agents/research/agent.py` (Task tree lines 385 to 450, budget line 453), `src/aksha/agents/research/tools.py`, `src/aksha/agents/research/checks.py`, `src/aksha/agents/research/computed.py`, `src/aksha/agents/research/analysis.py`, `src/aksha/agents/research/prompts/` (`instructions.md`, `scope.md`, `discover.md`, `evidence.md`, `voice.md`, `report.md`).
-- Grounding and unknowns: `src/aksha/runtime/artifacts/store.py` (line 277), `src/aksha/runtime/grounding/verify.py`, `src/aksha/runtime/finalization/unknowns.py`.
+- Definition: `src/aksha/agents/research/agent.py` (Task tree lines 404 to 463, budget line 468), `src/aksha/agents/research/tools.py`, `src/aksha/agents/research/checks.py`, `src/aksha/agents/research/computed.py`, `src/aksha/agents/research/analysis.py`, `src/aksha/agents/research/prompts/` (`instructions.md`, `scope.md`, `discover.md`, `evidence.md`, `voice.md`, `report.md`).
+- Grounding and unknowns: `src/aksha/runtime/artifacts/store.py` (line 281), `src/aksha/runtime/grounding/verify.py`, `src/aksha/runtime/finalization/unknowns.py`.
 - Noisy web: `src/aksha/data/worlds/stillroom/web.json`, `src/aksha/data/worlds/stillroom/key.json`, `src/aksha/adapters/search/world.py`; guard `tests/architecture/test_no_world_leakage.py`.
 - Eval cases: `src/aksha/data/suites/research/*.toml`; results in [docs/evals/README.md](../evals/README.md), "Results on 27 Nov 2026".
-- Tests, all passing on 28 Nov 2026 with `pytest` on this branch: `tests/agents/research/test_episodes.py`, `tests/agents/research/test_runs.py`, `tests/agents/research/test_counts.py`, `tests/integration/test_grounding.py`, `tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task`, `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs`.
+- Tests, all passing on 28 Nov 2026 with `pytest` on `main`: `tests/agents/research/test_episodes.py`, `tests/agents/research/test_runs.py`, `tests/agents/research/test_counts.py`, `tests/integration/test_grounding.py`, `tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task`, `tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs`. The live recording's replay test, `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs`, is a strict expected failure (stale recording).
 - Runtime and agent boundary: [02-shared-runtime.md](02-shared-runtime.md), `tests/architecture/test_extension_boundary.py::test_third_agent_runtime_hash_unchanged`.
 - Offline runs: [examples/research-conversation.md](../../examples/research-conversation.md), [examples/outputs/research-summary.md](../../examples/outputs/research-summary.md); `aksha demo` with a private `AKSHA_HOME`, 28 Nov 2026, exit 0.
 - Final run after the fixes: exported to `examples/live/research-2026-11-28/` from the store `aksha-live/live-chat-research-final/aksha.sqlite`, read from a copy.

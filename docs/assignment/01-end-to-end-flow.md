@@ -1,6 +1,6 @@
 # How one request flows through the runtime
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`. Every ID below comes from a real run made on that date; the commands to make the same run are at the end of the page.*
+*Status on 28 Nov 2026. Read against `main`, 28 Nov 2026. Every ID below comes from a real run made on that date; the commands to make the same run are at the end of the page.*
 
 The problem: a reviewer can read about durable execution, stop policy, approvals and invalidation one feature at a time and still not see how they fit, or whether they are a scripted demo. This page follows one research request from the first message to the saved, cited outputs, then follows the change, approval and send that come after it. Each stage names the code that does it, one test that proves it, and the event that recorded it.
 
@@ -247,7 +247,7 @@ The event count and the sequence numbers depend on where the kill lands; the ste
 
 ## Sources
 
-Code, at commit `738febd`:
+Code, on `main`, 28 Nov 2026:
 
 - `src/aksha/app.py` (`open_session`, the composition root)
 - `src/aksha/runtime/router/router.py`, `src/aksha/runtime/router/types.py` (`ROUTE_THRESHOLDS`)
@@ -283,12 +283,12 @@ Tests, all passing on 28 Nov 2026 (measured: the 33 node IDs below collect 44 te
 - `tests/integration/test_interrupts.py::test_injection_cannot_create_approval`
 - `tests/integration/test_outbox.py::test_crash_after_send_before_outcome_records_the_receipt_from_lookup`, `::test_send_retried_3x_restart_1x_one_row`
 - `tests/integration/test_demo.py::test_a_fresh_approval_is_asked_for_the_new_packet_and_scripted`, `::test_the_sigkill_mid_send_recovers_to_exactly_one_send_per_packet`
-- `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs`
+- `tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs`
 
 Runs, 28 Nov 2026, measured:
 
 - Run A: `aksha run --input inputs '<the request>'`, then `aksha answer I-0001 --agent research`, then `aksha answer I-0002 --answer segment=offices --answer geography=EU`; ended holding on `budget-1`.
 - Run B: the commands under "Run it yourself"; `aksha verify` printed `chain ok: 460 events, head sha256:8611f0080e1d...`.
-- The demo: `aksha demo` in a private `AKSHA_HOME`; exit 0, `hash chain verified: 1912 events`.
+- The demo: `aksha demo` in a private `AKSHA_HOME`, run earlier on 28 Nov 2026 (commit `738febd`); exit 0, `hash chain verified: 1912 events`. The same demo on `main` at the end of that day writes 1943 events. A fresh run therefore differs from stages 7 to 9 in its details: the sequence numbers are higher (for example, `A-0001`'s `approval.granted` is seq 1322, not 1304), 21 searches and listings re-run instead of 19, and the approval signatures differ. The run and approval IDs, the send step IDs, the idempotency keys, the 17 rebuilt outputs and the outcomes are the same (measured).
 - Live runs (b) and (c): read-only event stores kept by the maintainer outside the repository; sequence numbers as quoted.
 - Offline examples generated from real runs: [examples/research-conversation.md](../../examples/research-conversation.md), [examples/routing-conversation.md](../../examples/routing-conversation.md), [examples/change-and-recovery.md](../../examples/change-and-recovery.md).

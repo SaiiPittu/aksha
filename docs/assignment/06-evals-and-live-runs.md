@@ -1,6 +1,6 @@
 # Evals, held-out worlds and live runs
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`; the live runs below are all from 28 Nov 2026.*
+*Status on 28 Nov 2026. Read against `main`, 28 Nov 2026; the live runs below are all from 28 Nov 2026.*
 
 The problem: a harness can pass every test and still be a scripted demo, and an agent can do well on the world it was built on and fail on the next one. A reviewer needs to know which claims rest on code and tests, which rest on synthetic worlds the agents were tuned on, which rest on worlds nobody tuned for, and which rest on a real model. This page separates the four, gives the real numbers for each, and says what each one does not prove.
 
@@ -157,7 +157,7 @@ Every other setting was its default: six retries per model step with backoff, a 
 4. How it ended: `partial: 2 unknown`, with `evidence[noctra]` and `evidence[tallyway]` left unverified, not guessed (event 387, `run.ended`).
 5. Root cause: the per-key bug below. The two instances' first model requests have the same arguments hash, `sha256:8c73d289…` (events 203 and 211), because nothing in them named the company. `evidence[noctra]` answered with a question (event 206): "Which company should I profile: Corvane Group (including the Brightfield Analytics page), Noctra, or Tallyway?" <!-- prose-ok --> `evidence[tallyway]` tried to save Corvane's profile and was refused `foreign_writer` (event 249).
 
-How to inspect it, with no key and no network (measured on 28 Nov 2026; the replay took about 10 seconds):
+How to inspect it, with no key and no network (measured on 28 Nov 2026, before the fixes below; the replay took about 10 seconds):
 
 ```console
 $ aksha replay src/aksha/data/recordings/research-live-gpt --out replay-live
@@ -170,7 +170,7 @@ $ AKSHA_HOME=replay-live/store aksha inspect R-0001       # steps by ID, e.g. R-
 $ AKSHA_HOME=replay-live/store aksha show research.profile/corvane-group
 ```
 
-The replay rebuilds the same 388 events, with the same types, Task instances, steps and payloads in the same order, so events 206 and 249 above can be read in `replay-live/store/aksha.sqlite`. Only the hashes differ from one replay to the next, because each new store gets its own random store ID and the chain starts from a genesis hash of that ID (`src/aksha/runtime/storage/chain.py`); two replays measured on 28 Nov 2026 gave heads starting `61dadf34` and `9a4c94c0`. The test `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` replays it on every run of the suite.
+The replay rebuilds the same 388 events, with the same types, Task instances, steps and payloads in the same order, so events 206 and 249 above can be read in `replay-live/store/aksha.sqlite`. Only the hashes differ from one replay to the next, because each new store gets its own random store ID and the chain starts from a genesis hash of that ID (`src/aksha/runtime/storage/chain.py`); two replays measured on 28 Nov 2026 gave heads starting `61dadf34` and `9a4c94c0`. The test `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` replayed it on every run of the suite until then. The recording has been stale since the fixes of 28 Nov 2026: on `main` the replay no longer matches its recorded outputs, and the test is a strict expected failure until the run is re-recorded on a live model.
 
 ### Run (b): interactive research on the assignment's example prompt
 
@@ -338,7 +338,7 @@ The full list is on the [limitations page](../limitations.md). The ones that bea
 
 ## Sources
 
-Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
+Read on `main`, 28 Nov 2026.
 
 - Eval design, graders and results: [evals guide](../evals/README.md), [docs/status.md](../status.md#results-on-the-held-out-worlds), [limitations page](../limitations.md) items 11, 12, 17, 18, 19.
 - Worlds: `src/aksha/data/worlds/stillroom/` (`spec.yaml`, `manifest.json`, `key.json`, `web.json`, `changes/scope-eu-uk/changeset.json`, `world.lock.json`), `src/aksha/data/worlds/rimefold/spec.yaml`; eval sets in `src/aksha/data/suites/`.

@@ -175,7 +175,7 @@ The three eval cases also passed on 28 Nov 2026 in fake model mode, where a pass
 
 ## Sources
 
-- Run on 28 Nov 2026 from branch `docs/assignment` at commit `738febd`: `AKSHA_HOME=<private temp dir> aksha demo`, exit 0, "Done in 117.64 s". Event sequence numbers and IDs were read from that run's `demo/aksha.sqlite` (tables `events`, `artifacts`, `boots`) and `demo/mailbox.json`. The run, approval and interrupt IDs and the event count (1,912) match the generated example below; the chain head hash differs between runs.
+- Run on 28 Nov 2026 from branch `docs/assignment` at commit `738febd`: `AKSHA_HOME=<private temp dir> aksha demo`, exit 0, "Done in 117.64 s". Event sequence numbers and IDs were read from that run's `demo/aksha.sqlite` (tables `events`, `artifacts`, `boots`) and `demo/mailbox.json`. The run, approval and interrupt IDs match the generated example below. Its event count, 1,912, matched that example at that commit; the example was regenerated later, and the same demo on `main` now writes 1,943 events, so later sequence numbers are higher there. The chain head hash differs between runs.
 - Tests: `PYTHONPATH=src python -m pytest` on the 27 node IDs in the table above (some are parametrized): 28 passed, 2 skipped, in 420 s.
 - Generated walkthrough of the same demo: [`examples/change-and-recovery.md`](../../examples/change-and-recovery.md).
 - Demo code: [`src/aksha/interfaces/demo/story.py`](../../src/aksha/interfaces/demo/story.py), [`world.py`](../../src/aksha/interfaces/demo/world.py), [`child.py`](../../src/aksha/interfaces/demo/child.py), [`summary.py`](../../src/aksha/interfaces/demo/summary.py).

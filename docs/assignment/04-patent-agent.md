@@ -1,6 +1,6 @@
 # Patent Agent: how it is defined and how it works
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`.*
+*Status on 28 Nov 2026. Read against `main`, 28 Nov 2026.*
 
 The assignment asks for a Patent Agent that picks which of four invention candidates should go to a patent attorney first, gives its reasons, and prepares the paperwork for that review. An agent that writes a confident memo fails that bar in a way nobody notices: it can call a feature "novel", fill an inventor field with a guess, or treat a market survey as prior art. This page shows how the agent is defined, how its work is split into steps the runtime checks, which decisions code makes instead of the model, and how it behaved offline and with a real model.
 
@@ -196,7 +196,7 @@ A follow-up in the same session, "Please send the C1 counsel-review packet to ou
 
 ## Sources
 
-Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
+Read on `main`, 28 Nov 2026.
 
 - Definition: `src/aksha/agents/patent/agent.py` (`tasks()`, `candidates()`, `build_agent`), `src/aksha/agents/patent/portfolio.py` (`SPEC`, `SUPERVISE_ABOVE`, `DEEP_CAP`), `src/aksha/agents/patent/rules.py` (`next_action`, `family_of`, `required_missing`, `research_misuse`, `RESEARCH_NOTE`), `src/aksha/agents/patent/checks.py` (`recommendation_follows_rules`, `research_cited`, `packet_saved`, `forms_filled`), `src/aksha/agents/patent/tools.py` (`READING`, `FORMS`, `send_packet`), `src/aksha/runtime/forms/tools.py` (`fill_form`, `form_refusal`), `src/aksha/agents/patent/prompts/instructions.md`, `src/aksha/extensions/portfolio/`.
 - Tests, 70 passing on 28 Nov 2026 with `pytest tests/agents/test_patent_units.py tests/agents/test_patent_episodes.py tests/architecture/test_extension_boundary.py::test_third_agent_runtime_hash_unchanged`: the node IDs named above, plus `tests/agents/test_patent_episodes.py::test_only_extract_c2_waits_for_its_gap_question`, `tests/agents/test_patent_episodes.py::test_no_send_without_an_approval_bound_to_the_packet_signature`, `tests/agents/test_patent_episodes.py::test_restart_mid_approval_and_mid_send_sends_once`, `tests/agents/test_patent_units.py::test_the_rule_table`, `tests/agents/test_patent_units.py::test_the_recommendation_check_vetoes_an_action_the_rules_do_not_give`.

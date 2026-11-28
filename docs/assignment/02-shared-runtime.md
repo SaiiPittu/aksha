@@ -1,6 +1,6 @@
 # The shared runtime and its safeguards
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`.*
+*Status on 28 Nov 2026. Read against `main`, 28 Nov 2026.*
 
 The problem: an agent harness is only worth having if a second and third agent get durability, permissions, approvals and recovery without anyone rewriting them. If each agent carries its own copy, the guarantees drift and a reviewer has to re-check every agent. This page shows what the runtime gives every agent, where each feature lives in code, which test proves it, and what an agent is never allowed to do.
 
@@ -21,7 +21,7 @@ The runtime is one Python package per primitive under [`src/aksha/runtime/`](../
 | Invalidation | When an input changes, the outputs that read it become stale, and only those are rebuilt. | Unaffected work is kept and stale work cannot finish a run. | `src/aksha/runtime/invalidation/view.py` | `tests/integration/test_invalidation.py::test_unrelated_writer_is_not_touched` |
 | Limits, timeouts and retries | Tool-call, model-turn and time budgets, per-step timeouts and bounded retries, all counted from the event store. | A runaway or crash-looping run stops, and the counts survive a restart. | `src/aksha/runtime/budgets/limits.py`, `src/aksha/runtime/budgets/meter.py` | `tests/integration/test_budgets.py::test_a_crash_loop_runs_no_more_than_max_retries_plus_one_attempts` |
 | Sessions and user isolation | Named commands with receipts, one owner per session, per-owner streams and IDs. | One user never sees another user's runs, uploads or approvals. | `src/aksha/runtime/session/service.py` | `tests/integration/test_http.py::test_another_owner_sees_nothing` |
-| Record and replay | A live run's model, search and fetch answers are written to JSON Lines files and replayed offline by step. | A real model run can be re-checked in tests with no keys or network. | `src/aksha/adapters/recording/`, `src/aksha/adapters/models/replay.py` | `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` |
+| Record and replay | A live run's model, search and fetch answers are written to JSON Lines files and replayed offline by step. | A recorded run can be re-checked in tests with no keys or network. | `src/aksha/adapters/recording/`, `src/aksha/adapters/models/replay.py` | `tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs` |
 | Routing | Classifies a request by each loaded agent's declared purpose, or asks when unsure. | The router knows no agent by name, and never guesses. | `src/aksha/runtime/router/router.py` | `tests/integration/test_router.py::test_route_abstains_and_asks` |
 | Interrupts | A question or approval request is an `interrupt.raised` event; the run holds until it is answered. | A pending question or approval survives a restart unchanged. | `src/aksha/runtime/interrupts/` | `tests/integration/test_interrupts.py::test_mid_approval_restart_shows_the_same_request` |
 | Shared tools | The input tools (`list_inputs`, `read_document`, `search_inputs`), `web_search`, `fetch_url`, `todo` and the form tools (`read_form`, `fill_form`) are declared once and listed by any agent; the agent declares only how they read for it: its document kinds and its blank forms (`InputReading`, `FormSpec`); the filled-form kind and its counts come from the harness too (`form_kind`). | A tool two agents need is written once, so its limits, refusals and field-status rules are the same for both, and an agent keeps only its own actions (the patent agent's is `send_packet`). | `src/aksha/runtime/inputs/tools.py`, `src/aksha/runtime/forms/tools.py` | `tests/unit/runtime/forms/test_tools.py::test_fill_form_refuses_a_fill_the_rules_forbid`, `tests/unit/runtime/forms/test_tools.py::test_a_toy_agent_that_lists_the_form_tools_loads_and_saves_through_the_store` |
@@ -40,32 +40,32 @@ $ AKSHA_HOME=$(mktemp -d) aksha demo
 ...
    A-0001 approved patent.packet/C1@v1 only, so it does not cover patent.packet/C1@v2; a fresh approval is requested
 ...
-4. SIGKILL mid-send, then recovery (20.87 s)
+4. SIGKILL mid-send, then recovery (3.33 s)
    a child process sent patent.packet/C1@v2; the mailbox stored it, then SIGKILL (exit -9) before the receipt was recorded
    at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times; R-0005 ended complete
    mailbox: 2 deliveries for 2 idempotency keys (patent.packet/C1@v1, patent.packet/C1@v2): each packet version exactly once
 
 5. Event store
-   hash chain verified: 1912 events, head sha256:0271290477174451...
+   hash chain verified: 1943 events, head sha256:859ebd31c4f2cd20...
 ```
 
 Reading that run's store, the first send went through these events, in order:
 
-1. Event 1298, `approval.requested` for A-0001, at step `R-0002/send[C1]/t01/c01`. Its body names `patent.packet/C1@v1`, recipient `counsel-primary`, and idempotency key `sha256:160424de…`.
-2. Event 1304, `approval.granted`, signature `v1:56d55c7c…`, covering `patent.packet/C1@v1` only.
-3. Event 1310, `outbox.enqueued` at step `R-0002/send[C1]/t02/c01`, under the same key `sha256:160424de…`.
-4. Event 1312, `outbox.completed`, receipt `m-1`, one attempt.
+1. Event 1316, `approval.requested` for A-0001, at step `R-0002/send[C1]/t01/c01`. Its body names `patent.packet/C1@v1`, recipient `counsel-primary`, and idempotency key `sha256:160424de…`.
+2. Event 1322, `approval.granted`, signature `v1:e252fb42…`, covering `patent.packet/C1@v1` only.
+3. Event 1328, `outbox.enqueued` at step `R-0002/send[C1]/t02/c01`, under the same key `sha256:160424de…`.
+4. Event 1330, `outbox.completed`, receipt `m-1`, one attempt.
 
-After the input change, the packet was rebuilt as version 2, so A-0001 no longer covered it. A fresh approval, A-0002 (event 1891, signature `v1:30e6af26…`), was granted for `patent.packet/C1@v2`. The process was killed after the mailbox stored the message but before the receipt was recorded. On restart, recovery asked the mailbox by key instead of sending again: event 1899 is `outbox.completed` with receipt `m-2` and `"reconciled": true`.
+After the input change, the packet was rebuilt as version 2, so A-0001 no longer covered it. A fresh approval, A-0002 (event 1922, signature `v1:65b06ca0…`), was granted for `patent.packet/C1@v2`. The process was killed after the mailbox stored the message but before the receipt was recorded. On restart, recovery asked the mailbox by key instead of sending again: event 1930 is `outbox.completed` with receipt `m-2` and `"reconciled": true`.
 
 Then `aksha verify` on the same store:
 
 ```console
 $ AKSHA_HOME=<that home>/demo aksha verify
-chain ok: 1912 events, head sha256:0271290477174451999bd53605569605f67bdb9636a73ed36572fb48684f9fc6
+chain ok: 1943 events, head sha256:859ebd31c4f2cd20f2ea0b73815f32a2b2b4c104cde7511996226dc1ab8465cf
 ```
 
-The event count, 1912, matches the committed example in [examples/change-and-recovery.md](../../examples/change-and-recovery.md). The head hash differs per run, because each new store gets a random store ID that seeds the first hash of its chain (`new_store_id` in `src/aksha/runtime/storage/chain.py`); the demo's clock is fixed, so timestamps do not vary. A second run on 28 Nov 2026 (head `sha256:f7be60d47f4fb092…`) put the same six events at the same numbers, with the same keys and signatures.
+The event count, 1943, matches the committed example in [examples/change-and-recovery.md](../../examples/change-and-recovery.md). The head hash differs per run, because each new store gets a random store ID that seeds the first hash of its chain (`new_store_id` in `src/aksha/runtime/storage/chain.py`); the demo's clock is fixed, so timestamps do not vary. A second run on 28 Nov 2026 (head `sha256:d7de399fc6ab2646…`) put the same six events at the same numbers, with the same keys and signatures.
 
 ## Where the runtime ends and an agent begins
 
@@ -178,6 +178,6 @@ The live runs also exposed a harness bug, being fixed: a Task instance created p
 - Runtime packages: `src/aksha/runtime/` (storage, execution, policy, interrupts, outbox, grounding, artifacts, invalidation, budgets, session, router, models, definitions).
 - Adapters: `src/aksha/adapters/models/litellm.py`, `src/aksha/adapters/models/replay.py`, `src/aksha/adapters/recording/`.
 - Agents: `src/aksha/agents/research/fakes.py`, `tests/fixtures/agents/toy/agent.py`, `tests/fixtures/agents/scribe/`.
-- Every test named on this page passed on 28 Nov 2026 at commit `738febd` (33 passed; the 8 skips were PostgreSQL variants, skipped because no PostgreSQL driver was installed).
-- Demo store: a fresh `AKSHA_HOME` on 28 Nov 2026; events 1298, 1304, 1310, 1312, 1891 and 1899 read with SQLite from `<home>/demo/aksha.sqlite`.
+- Every test named on this page except `tests/integration/test_http.py::test_another_owner_sees_nothing` passed on 28 Nov 2026 on `main` (39 passed; the 8 skips were PostgreSQL variants, skipped because no PostgreSQL driver was installed). That one test was not run, because the environment used lacked the `server` extra it needs.
+- Demo store: a fresh `AKSHA_HOME` on 28 Nov 2026, on `main`; events 1316, 1322, 1328, 1330, 1922 and 1930 read with SQLite from `<home>/demo/aksha.sqlite`.
 - Live stores, read-only: the recorded research run ships as `src/aksha/data/recordings/research-live-gpt/`; the two interactive runs' stores (events 191 and 197 are in the research one, event 330 in the patent one; event 287 is in the recorded run's store, `runs/live-sol-final/store`) are kept outside the repository. Refusals were counted with `json_extract(payload, '$.outcome') = 'refused'` on `step.completed` in all three stores.
