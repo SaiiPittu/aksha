@@ -1,7 +1,7 @@
 {
   "files": {
     "key.json": "sha256:b7ac6fee71e041af6335a32c88e930e0524eac711b7f1379e3583d410f4f940e",
-    "manifest.json": "sha256:0c4488420bb9b529e03babfcd4ddf4f91ae1895ffd7fc79daf428d61b0dca2e9",
+    "manifest.json": "sha256:5e7821fd41fd2ff68dcc0e83604591d25e0ffeb326498afb1da823c20693a457",
     "sources/exports/farmer-reviews.csv": "sha256:5c3b68a061b45437518676656de80864fea276893454cec3c10789e1992850e3",
     "sources/forms/filing-sheet.md": "sha256:4a183c62a94ef55c29cbb7adddc0aac9577335aeee31d8a3840232f97974a571",
     "sources/forms/idf-blank.md": "sha256:0bbf06474e2c8dbe73f470f8e955d305b8e26bb1f423253a65e8f146e0ae277b",
@@ -17,7 +17,7 @@
     "sources/rnd/td3-electrode-self-cleaning.md": "sha256:ff19ecbed378150f872f2d6ae5d428efd4ee20676ad9b428e9247fbd97dc29d6",
     "sources/vendors/khetimeter.md": "sha256:d517a8d2ebf3615be5f3ffa23295a837f016baa4d0d2cbc29690891d96100aba",
     "spec.yaml": "sha256:5e91a8ea9b079cec862bd997b765b7e005825ece58d76c2d9283909eba46b87b",
-    "web.json": "sha256:48a5145c8ecc3c2df8758067905ac1e617ca0ca58a38187d08d70dc23bd55311",
+    "web.json": "sha256:38e9294494f005dd5678a3330efadd8d16c51a23877edd07a96761ef95727fa3",
     "web/agri-listings.example/aquasense-s2": "sha256:2f6efa64d218810e33ec48b4ba1e2d16f61c43f11cce2514b83b8b4e89cd4b5a",
     "web/aquasense.example/s2": "sha256:2f6efa64d218810e33ec48b4ba1e2d16f61c43f11cce2514b83b8b4e89cd4b5a",
     "web/dripwise.example/root-2025": "sha256:f5f2fa0b2eae2a46e6c467ce4263e069657ad33c44b63693e4a24b1d5294985b",

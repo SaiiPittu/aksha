@@ -1008,14 +1008,9 @@ def _discover(seen: Seen) -> GenerationResult:
     }
     listing = (listed[0].data or {}).get("query")
     if not rows and listing:
-        # No seller found: the empty list is an absence over what was listed and searched.
-        content["absence"] = {
-            "absence": {
-                "statement": "no input listed, and no page fetched, sells what the request "
-                "is about",
-                "scope": {"query": _query_id(str(listing))},
-            }
-        }
+        # No seller found: the empty list is an absence over what was listed and searched,
+        # and every record read is left out with the words of its own that show why.
+        content.update(_empty_market(seen, str(listing), fetched))
     return _calls(
         seen,
         [
@@ -1023,6 +1018,45 @@ def _discover(seen: Seen) -> GenerationResult:
             _finish(f"{len(companies)} companies on {content['pages_found']} pages"),
         ],
     )
+
+
+def _empty_market(seen: Seen, listing: str, fetched: Sequence[Result]) -> dict[str, Any]:
+    """The ``absence`` and ``excluded`` of a comparison that found no seller.
+
+    The scope names the listing and every web search run; each record read is excluded as
+    ``not_a_seller`` (none sold), cited by its first passage no other record shares, so the
+    cite is about that record and never a line every page carries.
+    """
+    searched = [str((r.data or {}).get("recorded")) for r in seen.of("web_search")
+                if (r.data or {}).get("recorded")]  # fmt: skip
+    texts: dict[str, int] = {}
+    for r in fetched:
+        for p in {" ".join(str(p["text"]).split()) for p in (r.data or {}).get("passages", [])}:
+            texts[p] = texts.get(p, 0) + 1
+    excluded: list[dict[str, Any]] = []
+    records: list[str] = []
+    for r in fetched:
+        d = r.data or {}
+        passages = list(d.get("passages", []))
+        own = next((p for p in passages if texts.get(" ".join(str(p["text"]).split())) == 1),
+                   passages[0] if passages else None)  # fmt: skip
+        if own is None or str(d.get("record", "")) in {e["record"] for e in excluded}:
+            continue
+        entry: dict[str, Any] = {"record": str(d["record"]), "reason": "not_a_seller",
+                                 "cite": r.cite(own["n"], own["text"])}  # fmt: skip
+        if d.get("url"):
+            entry["url"] = d["url"]
+        excluded.append(entry)
+        if r.name == "fetch_url":  # a page is read whole; an input may be read by section
+            records.append(f"record:{d['record']}@{d['version']}")
+    scope: dict[str, Any] = {"query": [_query_id(listing), *map(_query_id, searched)]}
+    if records:
+        scope["records"] = records
+    statement = (
+        "no input listed, and no page found by the searches, sells what the request is about"
+    )
+    return {"absence": {"absence": {"statement": statement, "scope": scope}},
+            "excluded": excluded}  # fmt: skip
 
 
 DOCUMENT_KINDS = ("market_report", "conversation", "internal_note", "other")

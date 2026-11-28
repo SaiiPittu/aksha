@@ -11,7 +11,8 @@ whose one key is its form:
    optional).
 
 ``SCOPE`` holds ``query``, a recorded search or listing the instance ran (its query ID,
-``<agent>.search?{...}``; the read's version is the hit set's hash), and/or
+``<agent>.search?{...}``, or the ``query:<id>@<hash>`` a result names; the read's version
+is the hit set's hash), or a list of them, and/or
 ``records``, the records read in full, as read text (``record:pages/P-0001@3``), the same
 form an explicit unknown's ``checked`` takes. The save path refuses a claim node with no
 scope (``scope_missing``), a malformed one (``scope_invalid``) and a scope that names a
@@ -39,7 +40,7 @@ ScopeCode = Literal["scope_missing", "scope_invalid", "scope_not_read"]
 
 SCOPE_HELP = (
     "an absence or coverage claim names the scope it rests on: "
-    '{"scope": {"query": "<the recorded search or listing>"}} or '
+    '{"scope": {"query": "<the recorded search or listing>"}} (or a list of them) or '
     '{"scope": {"records": ["record:<id>@<version>", ...]}}, so a new matching source '
     "or a changed record can reopen it"
 )
@@ -141,11 +142,21 @@ def _count(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+def _query_id(value: str) -> str:
+    """A scope's query as its ID: ``query:<id>@<hash>`` (a result's ``recorded``) or the ID."""
+    return value[len("query:") :].rpartition("@")[0] if value.startswith("query:") else value
+
+
 def _scope(value: Any) -> Scope | None:
     if not isinstance(value, Mapping) or not value or set(value) - {"query", "records"}:
         return None
     query, records = value.get("query"), value.get("records", [])
-    if query is not None and (not isinstance(query, str) or not query):
+    queries = [query] if isinstance(query, str) else query
+    if query is not None and (
+        not isinstance(queries, list | tuple)
+        or not queries
+        or not all(isinstance(q, str) and _query_id(q) for q in queries)
+    ):
         return None
     if not isinstance(records, list | tuple) or not all(
         isinstance(r, str) and r.startswith("record:") and "@" in r for r in records
@@ -153,7 +164,8 @@ def _scope(value: Any) -> Scope | None:
         return None
     if query is None and not records:
         return None
-    return Scope(() if query is None else (query,), tuple(records))
+    found = () if queries is None else tuple(dict.fromkeys(_query_id(q) for q in queries))
+    return Scope(found, tuple(records))
 
 
 def scope_problem(

@@ -29,6 +29,7 @@ from aksha.evals.errors import KeyRefMissing
 from aksha.evals.grade import Check, Criterion, GradeContext, failed, passed
 from aksha.evals.key import KeyFact
 from aksha.evals.normalize import cell_state, enum_key, is_unknown, name_key, price_of, unit_key
+from aksha.evals.world import on_label
 
 EXTRACTED_KINDS = frozenset(
     {"mechanism_step", "parameter", "conception_record", "alternative_rejected"}
@@ -73,6 +74,31 @@ def market_found(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check
     if want > 0 and not got:
         return failed(f"no competitor saved, but the key resolves {want}: the market is not empty")
     return passed(f"{len(got)} competitors saved, key resolves {want}")
+
+
+def exclusion_not_on_label(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
+    """No page or record is left out on the world's synthetic label.
+
+    Every page of a world says it is invented for testing; the world declares those labels
+    (``label`` in its ``web.json`` and ``manifest.json``). An ``excluded`` output whose cited
+    words overlap a label left a page out on the label, not on what the page shows, however
+    the reason was worded (``not_a_seller`` fits "not a real company or offer" word for word).
+    A world that declares no label has nothing to check.
+    """
+    labels = ctx.world.labels()
+    if not labels:
+        return passed("the world declares no synthetic label")
+    bad: list[str] = []
+    excluded = ctx.state.of_kind("excluded")
+    for out in excluded:
+        quotes = [str(out.content.get("quote") or ""),
+                  *(str(c.get("exact") or "") for c in out.citations)]  # fmt: skip
+        hit = next((lab for q in quotes if q for lab in [on_label(q, labels)] if lab), None)
+        if hit is not None:
+            bad.append(f"{out.content.get('record', out.key)} left out on the label {hit!r}")
+    if bad:
+        return failed(*bad)
+    return passed(f"{len(excluded)} exclusions, none on the synthetic label")
 
 
 def duplicates_are_edges(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
@@ -450,6 +476,12 @@ CRITERIA = (
         "state",
         market_found,
         description="a market the key resolves is never reported empty",
+    ),
+    Criterion(
+        "research.exclusion_not_on_label",
+        "state",
+        exclusion_not_on_label,
+        description="no page is left out on the world's synthetic label",
     ),
     Criterion("research.duplicates_are_edges", "state", duplicates_are_edges),
     Criterion("research.prices", "state", prices),

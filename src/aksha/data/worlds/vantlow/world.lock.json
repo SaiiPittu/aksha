@@ -1,7 +1,7 @@
 {
   "files": {
     "key.json": "sha256:06702c2687999cfa1fb720aa31343b2de49cb5ccfdce41c2e0e3d2296e60086e",
-    "manifest.json": "sha256:f99b1b7288c0344d18c8526a3bbe5af2dfdf69259e99d38fc27aa9dab4f01f8d",
+    "manifest.json": "sha256:5634bd2e8cc88b87260eaa1ace3aeda193bc1308a5690d01e9992cbe6dc69074",
     "sources/benchmarks/open-ingest-bench-2026.md": "sha256:572c7d6586ff4b3f635118ecf890faf9966802fe8b4e5098663838aeb5992b03",
     "sources/benchmarks/siltgrove-query-benchmark-2026.pdf.txt": "sha256:a5bfdafe0e0256134d3fb4ea75b18b233ba62b1e135ed7f317e399d54ee780d6",
     "sources/pricing/brackpond-plans-saved.md": "sha256:8ece26b693ce4661f120d84ca3a2efea0275157d68ee35931bfd9ef5f719c47a",

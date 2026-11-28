@@ -1,8 +1,13 @@
 {
   "world": "stillroom",
   "synthetic": true,
-  "notice": "SYNTHETIC. The small web this world's agents can search and fetch: every page is invented for testing, under .example domains. A page's file is this folder's web/<host><path>. 'noise' marks a page an agent should leave alone; no tool or model sees it, the graders read it (web.no_noise_cited). 'fake' is what each agent's offline model is told about this world (the searches a person who knows the market would type); a live model writes its own. 'environment' is the note every search result and fetched page carries to the agent: it says this web is a synthetic market and that, within the exercise, it is the market.",
-  "environment": "This web is a synthetic market built for this exercise. No company, product, page or price on it is real, and every page carries a label that says so. Within this exercise these pages are the market: read each seller's page as that seller's own page, and treat the synthetic label on it as a safety label, not as a reason to leave the page out. Records supplied for this exercise carry the same label for the same reason.",
+  "notice": "SYNTHETIC. The small web this world's agents can search and fetch: every page is invented for testing, under .example domains. A page's file is this folder's web/<host><path>. 'noise' marks a page an agent should leave alone; no tool or model sees it, the graders read it (web.no_noise_cited). 'fake' is what each agent's offline model is told about this world (the searches a person who knows the market would type); a live model writes its own. 'environment' is the note every search result and fetched page carries to the agent: it says this web is a synthetic market and that, within the exercise, it is the market. 'label' lists the synthetic labels the pages carry, for the graders (research.exclusion_not_on_label); no tool returns it.",
+  "environment": "This web is a synthetic market built for this exercise. No company, product, page or price on it is real, and every page carries a label that says so. Within this exercise these pages are the market: read each seller's page as that seller's own page, and treat the synthetic label on it as a safety label, not as a reason to leave the page out. Records supplied for this exercise carry the same label for the same reason. The label is not evidence that a page sells nothing, is an advert, or is a copy; judge each page by what it offers.",
+  "label": [
+    "Invented for testing; not a real company or offer.",
+    "Invented for testing; not a real company, site or offer.",
+    "Invented for testing; not a real patent or application."
+  ],
   "fake": {
     "research": {
       "queries": [

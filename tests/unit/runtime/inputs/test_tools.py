@@ -98,10 +98,19 @@ def _tools(reading: InputReading = READING) -> dict[str, Any]:
     return {t.spec.name: t for t in input_tools("tester", reading)}
 
 
-def _ctx(reader: Any, run_date: str | None = None) -> ToolContext:
+def _ctx(reader: Any, run_date: str | None = None, environment: str = "") -> ToolContext:
     models = OfflineReaders({"kind": Kind(), "prices": Prices()}, ALIASES)
     return ToolContext(
-        "o", "tester", "t", None, "s", 1, reader=reader, models=models, run_date=run_date
+        "o",
+        "tester",
+        "t",
+        None,
+        "s",
+        1,
+        reader=reader,
+        models=models,
+        run_date=run_date,
+        environment=environment,
     )
 
 
@@ -135,6 +144,24 @@ def test_a_listing_names_kind_size_version_and_mints_nothing(source: Source) -> 
     assert got.data["as_of"] == "2026-11-27"
     (read,) = got.reads
     assert read.kind == "query" and read.id == "tester.list_inputs?{}"
+
+
+def test_the_environment_s_note_on_the_records_comes_with_every_input_result(
+    source: Source,
+) -> None:
+    """A world's note that its records are a synthetic sample reaches the model from the
+    environment, with each listing, read and search; with no note, nothing is added."""
+    note = "These records are a synthetic sample built for this exercise."
+    calls: list[tuple[str, dict[str, Any]]] = [
+        ("list_inputs", {}),
+        ("read_document", {"ref": "input/note.md"}),
+        ("search_inputs", {"query": "probe"}),
+    ]
+    for name, args in calls:
+        got = _call(name, source, dict(args), environment=note)
+        assert isinstance(got, Ok) and got.data["environment"] == note, name
+        bare = _call(name, source, dict(args))
+        assert isinstance(bare, Ok) and "environment" not in bare.data, name
 
 
 def test_a_listing_version_is_its_hit_set(source: Source) -> None:

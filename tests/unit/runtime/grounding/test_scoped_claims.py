@@ -54,6 +54,20 @@ def test_an_absence_claim_scoped_to_a_search_it_ran_is_accepted() -> None:
     assert claim.scope == Scope((QUERY,), ())
 
 
+def test_a_scope_may_name_several_searches_each_as_its_id_or_its_recorded_read() -> None:
+    """An empty market rests on every search that found nothing: a list, in either form."""
+    other = 'syn.search?{"term":"radar"}'
+    reads = READS | {f"query:{other}@q-2"}
+    both = absence({"query": [f"query:{QUERY}@q-1", other]})
+    assert verify_content({"none": both}, (), evidence(reads=reads)) == ()
+    (claim,) = claims_in({"none": both})
+    assert claim.scope == Scope((QUERY, other), ())
+    unread = absence({"query": [QUERY, 'syn.search?{"term":"sonar"}']})
+    assert codes({"none": unread}) == ["scope_not_read"]
+    for bad in ([], [""], [3]):
+        assert codes({"none": absence({"query": bad})}) == ["scope_invalid"], bad
+
+
 def test_a_claim_with_no_scope_is_refused_with_what_to_add() -> None:
     (refused,) = verify_content({"no_lidar": absence()}, (), evidence())
     assert isinstance(refused, CiteError)

@@ -1,7 +1,7 @@
 {
   "files": {
     "key.json": "sha256:9582d9989ea481d5ea2ac8e58d57d0b55a1c5e9ac5480c87400e7d3d89c6f969",
-    "manifest.json": "sha256:4a9517ad742fe5eb5e49b83023886bf83c13218f8f78ed38b75b3b59e81a34e0",
+    "manifest.json": "sha256:516cd8b89590a6873035ea7876c5eb36bf0e5772903c06112a4ea34b7196bfc0",
     "sources/brochures/nimbo-clinic-brochure.pdf.txt": "sha256:37150a14ab1b9abff6c213793831976193bfee5ce5d8ecf1e241bf37cbf00ebe",
     "sources/brochures/physiograph-datasheet.pdf.txt": "sha256:a5d1aee924facb69af0fe30b0f2017d0cd84481c0c7056dee5859ab47db65868",
     "sources/decks/waitlist-ranking.pptx.txt": "sha256:c2c151428c2e4de6cce71ab178d5af6fec9d84f0b9dc8da612ed8d6bb1687462",
@@ -14,7 +14,7 @@
     "sources/reports/uk-clinic-software-survey.pdf.txt": "sha256:0a4b1a3f4927c8ba9a3d7ce5af1c3799787a02b59adceaaaf261f817e0598296",
     "sources/spreadsheets/price-comparison.tsv": "sha256:27898e759fd862fdde8cda0d9abbfaadf585849ef66cce0393b117ec500f26d9",
     "spec.yaml": "sha256:e7507c8b337456c4e4eb5c2b863a2b3a149e94f433e1b28c9702ec1418011d06",
-    "web.json": "sha256:bc7b7b6f45c6a2478ac35a5f0b8a2195ed8cc798fa67c265326cb14959ad6654",
+    "web.json": "sha256:7afab4833ab62684fd80094e28081def54e6bbd892f249bddd8ec7d9bb40a5c4",
     "web/booking-deals.example/clinic-software": "sha256:23e1f07a876daf6ef114ccb4e3a7af6dece384abb64bbb8fcacc1c7927f45589",
     "web/clinicwords.example/glossary/booking": "sha256:0244dbf6e623378859ff6f8697e57162b851d198337ff1eff72d52228be15fbf",
     "web/corlew.example/diary": "sha256:5ff6046af8cd7df18d0ed0fd80cedfffa1806b43645a7573c630cd6a7bf39c17",

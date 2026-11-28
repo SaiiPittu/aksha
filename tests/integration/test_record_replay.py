@@ -98,8 +98,10 @@ def test_the_bundled_example_replays_to_its_recorded_outputs(tmp_path: Path) -> 
     strict=True,
     reason=(
         "stale recording: since each keyed instance's context names its key and the "
-        "evidence Task gives a refused finish back to its model, the recorded GPT answers "
-        "no longer match the contexts this run sends; it needs re-recording on a live model"
+        "evidence Task gives a refused finish back to its model, and since web_search names "
+        "its recorded query and the input tools carry the world's note on its records, the "
+        "recorded GPT answers no longer match the contexts this run sends; it needs "
+        "re-recording on a live model"
     ),
 )
 def test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs(

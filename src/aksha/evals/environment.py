@@ -37,6 +37,7 @@ from aksha.evals.events import episode_catalogue
 from aksha.evals.faults import FaultProfile
 from aksha.evals.ports import AgentUnderTest, StoreOpener
 from aksha.evals.world import (
+    MANIFEST_FILE,
     WEB_FILE,
     World,
     load_change_set,
@@ -117,6 +118,9 @@ class Environment:
             # beside it, out of every tool's reach, for the harness's search proxy.
             shutil.copytree(self.world.web, folder / "world" / "web")
             shutil.copyfile(self.world.root / WEB_FILE, folder / WEB_FILE)
+        if (self.world.root / MANIFEST_FILE).is_file():
+            # Beside the copy too: its environment note is what the input tools return.
+            shutil.copyfile(self.world.root / MANIFEST_FILE, folder / MANIFEST_FILE)
         store = self.open_store(folder / "store.sqlite", episode_catalogue())
         seed = rollout_seed(self.seed, case.id, rollout)
         handle_box: list[EpisodeHandle] = []

@@ -1,7 +1,7 @@
 {
   "files": {
     "key.json": "sha256:d6ae0e14c8f5265969f048c0fb21d75f6a5fc65d2fac092a8f799d7cbe7e507f",
-    "manifest.json": "sha256:38050337144af76a4d5d80e70015ecff244092d9ec8c080c7592998736daf47d",
+    "manifest.json": "sha256:9991a6aa27a7df089c774c2637589d1001a643a15287a5bf73f833a8189e363b",
     "sources/datasheets/glacivo-trackpoint-datasheet.pdf.txt": "sha256:d6360baa9ec289770aedbca16d4f890f516ce737bdfaaf7cc5e566113db2dfd1",
     "sources/datasheets/pellisar-u8-datasheet.pdf.txt": "sha256:4ed37aa99fc82156f57770b5ddc25dafc41bcf0eeba5701a545571fe0535d0d8",
     "sources/exports/review-hub-export.json": "sha256:fca1cd7caa3e7f464d9b79ec5c87b6be92b6d035ad3372491ebce67e2969db83",

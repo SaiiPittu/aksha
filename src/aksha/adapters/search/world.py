@@ -175,6 +175,24 @@ def environment_note(raw: Mapping[str, Any]) -> str:
     return " ".join(note.split()) if isinstance(note, str) else ""
 
 
+MANIFEST_FILE = "manifest.json"
+"""A world's manifest: what a server would know of its records, beside ``sources/``."""
+
+
+def world_inputs_environment(root: Path) -> str:
+    """The ``environment`` note a world's manifest states on its supplied records; else empty.
+
+    The agent-facing counterpart of the web's note for the records the world supplies as
+    inputs (reviews, saved pages, price lists): each keeps its own synthetic label, and the
+    note says that within the exercise they are the market's own records. The input tools
+    return it with every result (``ToolContext.environment``).
+    """
+    path = root / MANIFEST_FILE
+    if not path.is_file():
+        return ""
+    return environment_note(json.loads(path.read_text(encoding="utf-8")))
+
+
 def world_environment(root: Path) -> str:
     """The ``environment`` note of the world at ``root``; empty when it declares no web."""
     path = root / WEB_FILE

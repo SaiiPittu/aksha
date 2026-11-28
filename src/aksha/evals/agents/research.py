@@ -15,6 +15,8 @@ Bundle output            From the run's artifacts
                          label ``unknown``, cited by the page's ``price_notes``) and every
                          dimension's vendor claims and facts (``cells``). ``E<n>`` numbers
                          the companies by their first page, so a renamed world keeps each key
+``excluded/X<n>``        each record the ``competitors`` leave out (``excluded``): the record,
+                         the reason and the quote, cited by its span
 ``same_entity_as``       each company's ``merge_evidence``, cited by its span
 ``contradicts``          a row with ``price_conflict``, cited by its later price's span
 ``review_summary/all``   ``needs.sample`` (rows, unique, duplicate pairs) and each need's
@@ -114,6 +116,9 @@ class ResearchUnderTest(RuntimeUnderTest):
         for i, company in enumerate(companies, start=1):
             key = str(company.get("key"))
             self._company(episode, spans, f"E{i}", company, rows.get(key, {}), profile(key))
+        for i, entry in enumerate(content("competitors").get("excluded", ()), start=1):
+            if isinstance(entry, Mapping):
+                self._excluded(episode, spans, f"X{i}", entry)
         self._reviews(episode, spans, content("needs"))
         for finding in content("findings").get("findings", ()):
             if str(finding.get("id", "")).startswith("instruction-like"):
@@ -137,6 +142,23 @@ class ResearchUnderTest(RuntimeUnderTest):
                 "regions": [] if region is None else str(region).split("+"),
                 "basis": geo.get("basis"),
                 "segment": scope.get("segment", {}).get("value"),
+            },
+            [] if cite is None else [cite],
+        )
+
+    def _excluded(self, ep: Episode, spans: SpanIndex, key: str, entry: Mapping[str, Any]) -> None:
+        raw = entry.get("cite")
+        cite = _cite(spans, raw)
+        quoted = raw.get("quote") if isinstance(raw, Mapping) else None
+        record = str(entry.get("record") or "").removeprefix("record:").rpartition("@")
+        ep.save(
+            "excluded",
+            key,
+            {
+                "record": _file(record[0] or record[2]),
+                "url": entry.get("url"),
+                "reason": entry.get("reason"),
+                "quote": quoted,
             },
             [] if cite is None else [cite],
         )

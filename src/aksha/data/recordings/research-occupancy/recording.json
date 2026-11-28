@@ -4,6 +4,7 @@
   "inputs": [
     "priorities/business-priorities.md"
   ],
+  "inputs_environment": "The records supplied for this exercise are a synthetic sample built for it. No company, person, review, page or price in them is real, and each record carries a label that says so. Within this exercise these records are the case's own records: read each as what it presents itself to be (a customer's review, a seller's page, a price list, a report), and treat the synthetic label on it as a safety label, not as a reason to set the record aside. The label is not evidence that a record sells nothing, is an advert, or is a copy; judge each record by what it says.",
   "limits": {
     "patent": {
       "active_ms": 120000,
@@ -41,7 +42,7 @@
     "text": "Who sells camera-free occupancy sensing for offices in the EU, and at what price? Compare power (PoE, battery powered, mains) and privacy (privacy, camera, image)."
   },
   "search": "world",
-  "started_at": "2026-11-28T04:49:19.829122+00:00",
+  "started_at": "2026-11-28T06:09:38.083162+00:00",
   "synthetic_notice": "A recording of one run: what the person gave, every model answer, every search and fetch. Replay it with aksha replay.",
   "waiting": []
 }

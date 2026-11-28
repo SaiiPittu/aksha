@@ -81,7 +81,10 @@ def test_a_record_id_is_the_page_s_host_and_path() -> None:
 def test_a_search_returns_hits_and_mints_nothing() -> None:
     reader = AttemptReader(None)
     out = web_search(_ctx(_handle(reader), reader), {"query": "soil  probe"})
-    assert isinstance(out.result, Ok) and out.result.spans == () and out.result.reads == ()
+    assert isinstance(out.result, Ok) and out.result.spans == ()
+    (read,) = out.result.reads  # a recorded query: the call, versioned by the URLs it found
+    assert read.kind == "query" and read.id == 'a.web_search?{"query":"soil  probe"}'
+    assert out.result.data["recorded"] == f"query:{read.id}@{read.version}"
     assert out.result.data["query"] == "soil probe"
     assert out.result.data["results"][0]["url"] == "https://a.example/probe"
     assert "not evidence" in out.result.data["note"]
