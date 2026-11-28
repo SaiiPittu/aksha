@@ -281,7 +281,7 @@ Run (d), 28 Nov 2026, 11:22 to 11:37 IST (India Standard Time), store `live-chat
 
 1. What it did: each extraction instance saved under its own key (events 233, 330, 411 and 479), which shows #114 working. The 21 publication reads took at most 0.2 seconds each, against 122 to 226 seconds in run (c), which shows #115 working. All four candidates reached the deep tier.
 2. How it ended: `blocked: candidate[C2]/deep, candidate[C2]/deep/recommend` (event 1025). C1, C3 and C4 passed their recommendation checks.
-3. Root cause: C2's recommendation was refused twice, once for its next action (event 738) and once for the missing fixed sentence (event 751). The model then saved version 3 with `collect_more_evidence` and the sentence (event 756), on turn 6, the last its limit allowed (2 turns times the live factor of 3). The limit ended the instance as failed without running the check on that save (event 760).
+3. Root cause: C2's recommendation was refused twice, once for its next action (event 738) and once for the missing fixed sentence (event 751). The model then saved version 3 with `collect_more_evidence` and the sentence (event 756), on turn 6, the last its limit allowed (2 turns times the live factor of 3). The turn limit ended the instance as failed without running the check on that save (event 765), so its parent was blocked (event 760).
 4. Fixed in #117: a limit now runs the completion check first, and no Task declares a turn limit by default.
 
 Run (e), 28 Nov 2026, 13:51 to 14:03 IST, store `live-chat-patent-after2-selfselected`:
