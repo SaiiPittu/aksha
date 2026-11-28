@@ -321,7 +321,7 @@ def test_the_patent_forms_are_declared_as_data_for_the_shared_form_tool() -> Non
     assert t["template"] == "filing-information-worksheet" and t["ref"] == WORKSHEET
     counsel = [f["field"] for f in t["fields"] if f["default_status"]]
     assert "proposed_inventors" in counsel and "applicant" in counsel
-    assert t["statuses"] == list(rules.FIELD_STATUSES)
+    assert t["statuses"] == ["complete", "missing", "needs_counsel_confirmation"]
     assert FORMS.confirm_status == "needs_counsel_confirmation"
 
 
@@ -571,6 +571,20 @@ def test_fill_form_records_required_from_the_template_not_the_model() -> None:
     ]
 
 
+def test_fill_form_takes_the_forms_name_as_read_form_shows_it() -> None:
+    """A live model copies ``template`` from read_form's result: the name fills the form too."""
+    name = _worksheet()["template"]
+    assert name == "filing-information-worksheet"
+    args = {"template": name, "key": "C1", "fields": _ws_fields()}
+    out = _tools()["fill_form"].body(_ctx(), args)
+    assert isinstance(out.result, Ok)
+    (save,) = out.saves
+    assert save.key == "C1~filing-information-worksheet" and save.content["file"] == WORKSHEET
+    gone = _tools()["fill_form"].body(_ctx(), {"template": "no-such-form", "key": "C1",
+                                               "fields": []})  # fmt: skip
+    assert isinstance(gone.result, Err) and gone.result.paths == ("/template",)
+
+
 # --- the model's parsing ---------------------------------------------------------------
 
 
@@ -624,13 +638,17 @@ def test_the_agent_keeps_only_its_one_external_effect_of_its_own() -> None:
 
 
 def test_a_forms_counts_are_computed_from_its_fields_at_every_save() -> None:
-    """ADR-P04 K1: the form kind recomputes ``counts``, so a corrected field moves them too."""
+    """ADR-P04 K1: the harness's form kind recomputes ``counts``, so a corrected field moves
+    them too; the agent declares it with ``form_kind`` and keeps no status list of its own."""
     (form,) = [k for k in AGENT.artifacts if k.name == "form"]
-    assert form.compute is rules.computed_form
+    assert form.compute is not None and form.keyed
+    assert isinstance(form.schema, dict)
+    assert form.schema["required"] == ["template", "candidate", "fields", "counts"]
+    assert not hasattr(rules, "FIELD_STATUSES") and not hasattr(rules, "computed_form")
     fields = [{"field": "a", "status": "complete"}, {"field": "b", "status": "missing"},
               {"field": "c", "status": "missing"}]  # fmt: skip
     wrong = {"fields": fields, "counts": {"complete": 3, "missing": 0}}
-    assert rules.computed_form(wrong)["counts"] == {
+    assert form.compute(wrong)["counts"] == {
         "complete": 1,
         "missing": 2,
         "needs_counsel_confirmation": 0,

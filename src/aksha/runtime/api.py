@@ -81,8 +81,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    model over a text its request carries.
 15. The harness's form tools (P10 F1): ``form_tools`` and ``FormSpec`` (``read_form`` and
    ``fill_form`` over an agent's blank forms, its form kind declared as data),
-   ``FORM_TOOLS`` (their names) and ``form_counts`` (a filled form's counts per status,
-   what a form kind's ``compute`` writes).
+   ``FORM_TOOLS`` (their names), ``form_kind`` (the kind ``fill_form`` saves into, its
+   counts recomputed on every save, for the agent to declare) and ``form_counts`` (a
+   filled form's counts per status, what that kind's ``compute`` writes).
 """
 
 from __future__ import annotations
@@ -110,7 +111,7 @@ from aksha.runtime.egress.ports import HttpResponse
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
-from aksha.runtime.forms.tools import FORM_TOOLS, FormSpec, form_counts, form_tools
+from aksha.runtime.forms.tools import FORM_TOOLS, FormSpec, form_counts, form_kind, form_tools
 from aksha.runtime.grounding.parts import part_version, where_part
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.segment import (
@@ -378,6 +379,7 @@ __all__ = [
     "fetch_url_tool",
     "find_dates",
     "form_counts",
+    "form_kind",
     "form_tools",
     "from_field",
     "input_tools",

@@ -7,12 +7,13 @@ kind's extraction schema list the form's fields, the agent declares as data
 :func:`form_tools`:
 
 ``read_form(template)``
-    One blank form by its input ref: its name, its title and its fields in order, each
-    with whether the form marks it required, whether only the confirmer completes it, and
-    the guidance its row gives. These are exactly the fields ``fill_form`` checks. The
-    form's kind is decided and its fields extracted as ``read_document(extract=true)``
-    does it, over the form's passages as whole lines (a field is marked by its line: a list
-    mark, a box, a row's cells). Mints a span over every passage.
+    One blank form by its input ref, or by its name as this result shows it: its name, its
+    title and its fields in order, each with whether the form marks it required, whether
+    only the confirmer completes it, and the guidance its row gives. These are exactly the
+    fields ``fill_form`` checks. The form's kind is decided and its fields extracted as
+    ``read_document(extract=true)`` does it, over the form's passages as whole lines (a
+    field is marked by its line: a list mark, a box, a row's cells). Mints a span over
+    every passage.
 
 ``fill_form(template, key, fields)``
     Saves one filled form for ``key`` (the item it is for: the Task's key when the Task has
@@ -31,10 +32,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from aksha.runtime.artifacts.types import InputRef, SaveRequest
+from aksha.runtime.artifacts.types import ArtifactKind, InputRef, SaveRequest
 from aksha.runtime.grounding.segment import Segment, sniff_format
 from aksha.runtime.grounding.types import ReturnedText, SpanDraft
 from aksha.runtime.inputs.tools import InputReading, resolve, segments_of
@@ -168,11 +169,61 @@ def _stem(record: str) -> str:
     return _EXTS.sub("", record.rsplit("/", 1)[-1])
 
 
+def _named(ctx: ToolContext, reading: InputReading, spec: FormSpec, record: str) -> str | None:
+    """The name ``record`` gives itself in its ``spec.name_key`` header field, if any."""
+    if spec.name_key is None or ctx.reader is None:
+        return None
+    found = ctx.reader.read(reading.source, record)
+    if found is None:
+        return None
+    fmt = sniff_format(record, found.text)
+    for g in segments_of(found.text, fmt):
+        if g.kind == "meta" and g.attrs.get("key") == spec.name_key:
+            return str(g.attrs.get("value") or "").strip() or None
+    return None
+
+
+def resolve_form(ctx: ToolContext, reading: InputReading, spec: FormSpec, ref: str) -> str | Err:
+    """The record of the blank form ``ref`` names: by its input ref, else by its form name.
+
+    An error names ``/template``, the argument of the form tools.
+    """
+    record = resolve(ctx, reading, ref)
+    if isinstance(record, Err) and record.code == "not_found":
+        name = ref.strip()
+        records = (
+            sorted(ctx.reader.records(reading.source, reading.collection)) if ctx.reader else ()
+        )
+        hits = [r for r in records if form_name(r) == name or _named(ctx, reading, spec, r) == name]
+        if len(hits) == 1:
+            return hits[0]
+        if len(hits) > 1:
+            return Err(
+                "ambiguous_ref",
+                f"{name!r} names {len(hits)} blank forms: {hits[:5]}; give the full ref "
+                "list_inputs shows",
+                paths=("/template",),
+            )
+    if isinstance(record, Err):
+        message = record.message
+        if record.code == "not_found":
+            message = (
+                f"{ref.strip()!r} is neither an input nor a blank form's name; list_inputs "
+                f"with kinds [{spec.template_kind!r}] lists the blank forms"
+            )
+        return replace(record, message=message, paths=("/template",))
+    return record
+
+
 def read_blank_form(
     ctx: ToolContext, reading: InputReading, spec: FormSpec, ref: str
 ) -> BlankForm | Err:
-    """The blank form ``ref`` names, read as the module doc says, or the ``Err`` to return."""
-    record = resolve(ctx, reading, ref)
+    """The blank form ``ref`` names, read as the module doc says, or the ``Err`` to return.
+
+    ``ref`` is the form's input ref, or its name as ``read_form`` shows it (the plan names
+    forms that way too).
+    """
+    record = resolve_form(ctx, reading, spec, ref)
     if isinstance(record, Err):
         return record
     found = ctx.reader.read(reading.source, record) if ctx.reader is not None else None
@@ -278,6 +329,24 @@ def form_key(key: str, name: str) -> str:
     return f"{key}~{name}"
 
 
+def form_kind(spec: FormSpec) -> ArtifactKind:
+    """The kind ``fill_form`` saves into, for an agent to declare as its own (``spec.saves``).
+
+    Keyed ``<key>~<form name>``; it requires the form's name, the item it is for, its
+    fields and their counts, and every save (a correction of one field too) recomputes the
+    counts from the fields with the spec's statuses, so a count is never the model's.
+    """
+    statuses = spec.statuses
+
+    def computed_form(content: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(content.get("fields"), list):
+            content["counts"] = form_counts(content["fields"], statuses)
+        return content
+
+    schema = {"type": "object", "required": ["template", spec.key_field, "fields", "counts"]}
+    return ArtifactKind(spec.saves, schema, keyed=True, compute=computed_form)
+
+
 # --- the tools ---------------------------------------------------------------------------
 
 
@@ -348,7 +417,7 @@ def form_tools(agent: str, reading: InputReading, spec: FormSpec) -> tuple[ToolD
                 READ_FORM,
                 agent,
                 "read",
-                "Read one blank form by its input ref (list_inputs with kinds "
+                "Read one blank form by its input ref or its name (list_inputs with kinds "
                 f"['{spec.template_kind}'] lists them): its name, title and fields in order, "
                 f"each with whether it is required and whether only {spec.confirmer} "
                 "completes it. These are exactly the fields fill_form checks.",
@@ -370,9 +439,9 @@ def form_tools(agent: str, reading: InputReading, spec: FormSpec) -> tuple[ToolD
                 FILL_FORM,
                 agent,
                 "store",
-                "Fill one blank form (by its input ref) for key, the item it is for. Give "
-                f"every field of the form once, each {{field, value, status}} with status "
-                f"one of {statuses}; a field only {spec.confirmer} completes, or one with "
+                "Fill one blank form (by its input ref or its name) for key, the item it is "
+                "for. Give every field of the form once, each {field, value, status} with "
+                f"status one of {statuses}; a field only {spec.confirmer} completes, or one with "
                 f"an open '{spec.question}', cannot be complete, and a complete field holds "
                 "a value.",
                 {
@@ -401,8 +470,10 @@ __all__ = [
     "FormField",
     "FormSpec",
     "form_counts",
+    "form_kind",
     "form_name",
     "form_refusal",
     "form_tools",
     "read_blank_form",
+    "resolve_form",
 ]

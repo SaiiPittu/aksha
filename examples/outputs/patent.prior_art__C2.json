@@ -113,7 +113,9 @@
     "url": "https://patents.synthetic.example/SYN-PUB-0010"
    }
   ],
-  "query": "patent.search_publications?{\"all_of\":[[\"mount point\",\"placement\"]]}",
+  "query": [
+   "patent.search_inputs?{\"kinds\":[\"prior_art_publication\"],\"limit\":1,\"terms\":[\"mount point\",\"placement\"]}"
+  ],
   "web": {
    "kept": [],
    "queries": [

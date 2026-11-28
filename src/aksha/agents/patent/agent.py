@@ -62,11 +62,12 @@ from aksha.runtime.api import (
     VersionedSourceSpec,
     artifact_keys,
     chosen_by_person,
+    form_kind,
     kind_question,
 )
 
 from . import checks, portfolio, rules
-from .tools import build_tools
+from .tools import FORMS, build_tools
 from .world import COLLECTIONS, SOURCE_NAME
 from .world import KINDS as DOC_KINDS
 
@@ -198,12 +199,7 @@ KINDS = (
     ),
     ArtifactKind("table", _schema("rows")),
     ArtifactKind("selection", SELECTION, reviewable=True),
-    ArtifactKind(
-        "form",
-        _schema("template", "candidate", "fields", "counts"),
-        keyed=True,
-        compute=rules.computed_form,
-    ),
+    form_kind(FORMS),  # the harness's filled-form kind: counts recomputed on every save
     ArtifactKind("packet", PACKET, keyed=True, reviewable=True),
     ArtifactKind("handoff", _schema("candidate", "packet", "status"), keyed=True),
     *portfolio_kinds(),

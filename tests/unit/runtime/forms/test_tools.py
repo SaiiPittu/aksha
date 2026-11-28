@@ -282,3 +282,80 @@ def test_counts_are_computed_from_the_fields() -> None:
     fields = [{"status": "complete"}, {"status": "missing"}, {"status": "missing"}, "x"]
     assert form_counts(fields, SPEC.statuses) == {"complete": 1, "missing": 2, "needs_review": 0}
     assert form_counts(None, SPEC.statuses) == {"complete": 0, "missing": 0, "needs_review": 0}
+
+
+# --- a toy agent that lists the tools, loaded and saved through the runtime -------------
+
+
+def _done(view: Any) -> Any:
+    from aksha.runtime.api import CheckResult
+
+    return CheckResult(True)
+
+
+def _checklist_agent(*, with_kind: bool = True) -> Any:
+    """A minimal ``checklist`` agent: one Task listing the shared form tools, nothing else."""
+    from aksha.runtime.api import Agent, Task, VersionedSourceSpec, form_kind
+
+    tools = form_tools("checklist", READING, SPEC)
+    writes = ("checklist",) if with_kind else ()
+    return Agent(
+        name="checklist",
+        purpose="Fill a site's intake checklist.",
+        instructions="prompts/instructions.md",
+        reads=("record:input",),
+        artifacts=(form_kind(SPEC),) if with_kind else (),
+        tools=tools,
+        tasks=(Task("fill", extracts=True, tools=FORM_TOOLS, writes=writes, done=_done),),
+        model_aliases=ALIASES,
+        sources=(VersionedSourceSpec("inputs", collections=("input",)),),
+    )
+
+
+def test_a_toy_agent_that_lists_the_form_tools_loads_and_saves_through_the_store(
+    source: Source, tmp_path: Any
+) -> None:
+    """Rule of three: a non-patent agent declares ``form_kind`` and the loader takes the tools;
+    the fill it saves passes the kind's schema and its counts are the store's computation."""
+    from aksha.runtime.artifacts.store import ArtifactStore
+    from aksha.runtime.artifacts.types import SaveRequest, WriterId
+    from aksha.runtime.canonical import thaw
+    from aksha.runtime.definitions.validate import validate_agent
+    from tests.support.artifacts import RUN, World
+
+    agent = _checklist_agent()
+    assert validate_agent(agent, module="checklist/agent.py", extensions=()) == []
+    out = _call("fill_form", source, {"template": "site-intake", "key": "S1", "fields": _fields()})
+    assert isinstance(out.result, Ok)
+    (save,) = out.saves
+    lying = SaveRequest(save.kind, save.key, {**save.content, "counts": {"complete": 3}})
+    (kind,) = agent.artifacts
+    world = World(tmp_path)
+    try:
+        store = ArtifactStore({"checklist.checklist": kind})
+        saved = store.save(world.view(), lying, writer=WriterId("checklist", "fill", "S1"),
+                           run=RUN, instance="fill", step="s",
+                           writes={"checklist.checklist"}).version  # fmt: skip
+        assert (saved.ref.kind, saved.ref.key) == ("checklist.checklist", "S1~site-intake")
+        assert thaw(saved.content)["counts"] == {"complete": 1, "missing": 1, "needs_review": 1}
+    finally:
+        world.close()
+    without = _checklist_agent(with_kind=False)
+    codes = [r.code for r in validate_agent(without, module="checklist/agent.py", extensions=())]
+    assert "write_kind_not_owned" in codes
+
+
+def test_fill_form_takes_a_forms_name_and_points_errors_at_template(source: Source) -> None:
+    """read_form shows ``template`` as the form's name; a model that copies it fills the form."""
+    by_name = _call("fill_form", source, {"template": "site-intake", "key": "S1",
+                                          "fields": _fields()})  # fmt: skip
+    assert isinstance(by_name.result, Ok) and by_name.saves[0].content["file"] == FORM
+    by_file = _call("read_form", source, {"template": "visit-form"})
+    assert isinstance(by_file.result, Ok)
+    assert by_file.result.data["ref"] == "input/forms/Visit Form.md"
+    absent = _call("read_form", source, {"template": "no-such-form"}).result
+    assert isinstance(absent, Err) and absent.code == "not_found"
+    assert absent.paths == ("/template",) and "['intake']" in absent.message
+    twice = Source({FORM: INTAKE, "input/forms/copy.md": INTAKE})
+    both = _call("read_form", twice, {"template": "site-intake"}).result
+    assert isinstance(both, Err) and both.code == "ambiguous_ref" and both.paths == ("/template",)

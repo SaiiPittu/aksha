@@ -28,7 +28,7 @@ Each edit must match exactly once or the demo refuses to run. `tests/integration
 
 ## 2. What the run rebuilt and what it kept
 
-Run it in a private home (22.13 s in the generated example; 117.64 s on 28 Nov 2026 on a loaded machine):
+Run it in a private home (19.74 s in the generated example; 117.64 s on 28 Nov 2026 on a loaded machine):
 
 ```console
 $ AKSHA_HOME=$(mktemp -d) aksha demo
@@ -38,7 +38,7 @@ Act 1 runs both agents to `complete`: research run `R-0001` saves 11 outputs and
 
 ```console
 2. The input changes to stillroom-v2's change set (3.91 s)
-   one command recorded 4 moved records and re-ran 19 recorded searches and listings: 1 found new hits
+   one command recorded 4 moved records and re-ran 21 recorded searches and listings: 2 found new hits
 
 3. Invalidation reopens only what depends on the change (52.09 s)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)

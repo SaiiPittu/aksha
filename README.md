@@ -28,7 +28,7 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
 ```text
 1. Both agents run on the stillroom world (8.32 s)
    research R-0001 complete: 11 outputs, 23 model calls
-   patent   R-0002 complete: 23 outputs, 54 model calls
+   patent   R-0002 complete: 23 outputs, 55 model calls
 2. The input changes to stillroom-v2's change set (0.75 s)
    added publications/SYN-PUB-0011.json (a new publication family)
    edited disclosures/consultant-email.eml.txt, disclosures/history.csv (the outside suggestion, now dated earlier)

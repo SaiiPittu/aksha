@@ -2,19 +2,19 @@
  "acts": [
   [
    "first runs",
-   22.88
+   7.19
   ],
   [
    "change",
-   2.59
+   0.76
   ],
   [
    "rebuild",
-   30.82
+   7.11
   ],
   [
    "kill and recover",
-   11.67
+   3.58
   ]
  ],
  "runs": {
@@ -28,7 +28,7 @@
    "agent": "patent",
    "cause": "request",
    "outcome": "complete",
-   "model_calls": 54
+   "model_calls": 55
   },
   "R-0003": {
    "agent": "research",
@@ -111,8 +111,8 @@
    "input/disclosures/history.csv#where:candidate=C1",
    "input/reviews/reviews.json"
   ],
-  "queries_rerun": 19,
-  "queries_changed": 1,
+  "queries_rerun": 21,
+  "queries_changed": 2,
   "invalidated": [
    "research.needs@v1",
    "patent.extraction/C1@v1",
@@ -343,9 +343,9 @@
  },
  "chain": {
   "ok": true,
-  "events": 1935,
-  "head": "sha256:e24e9ec07f292e5c04c26f8d9c9ecf9f8ffbb3159792275a08c0a0064ab63ebf",
+  "events": 1943,
+  "head": "sha256:99e1b36622375a84a59866ded3b1c30d3ba79dc77bea565a17c02ebf3d35033e",
   "break": null
  },
- "seconds": 71.05
+ "seconds": 19.74
 }

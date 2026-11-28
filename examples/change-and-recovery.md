@@ -16,7 +16,7 @@ Both agents run on the synthetic stillroom world. The research agent asks which 
 ```console
 1. Both agents run on the stillroom world (n s)
    research R-0001 complete: 11 outputs, 23 model calls
-   patent   R-0002 complete: 23 outputs, 54 model calls
+   patent   R-0002 complete: 23 outputs, 55 model calls
    scripted: research asked geography: EU
    scripted: patent asked the inventor one gap question: answered
    scripted: patent asked which candidate to prepare: chose C1
@@ -32,7 +32,7 @@ Two things change. A closer prior-art publication appears (a new family). The ou
    added publications/SYN-PUB-0011.json (a new publication family)
    edited disclosures/consultant-email.eml.txt, disclosures/history.csv (the outside suggestion, now dated earlier)
    edited reviews/reviews.json (one review no output cites; the demo's own edit)
-   one command recorded 4 moved records and re-ran 19 recorded searches and listings: 1 found new hits
+   one command recorded 4 moved records and re-ran 21 recorded searches and listings: 2 found new hits
 ```
 
 ## 3. Only the affected work reopens
@@ -62,7 +62,7 @@ Approval A-0001 named patent.packet/C1@v1 exactly, so it cannot cover the rebuil
    rebuilt 17: C1: comparison, extraction, handoff, packet, prior_art, recommendation; C1~filing-information-worksheet: form; C1~invention-disclosure-form: form; C2: recommendation; C3: recommendation; C4: recommendation; findings, matrix, needs, tests, selection, table
    kept 10 patent outputs: C2: comparison, extraction, prior_art; C3: comparison, extraction, prior_art; C4: comparison, extraction, prior_art; portfolio
    kept 7 of 11 research outputs: c01-kelvra-systems: profile; c02-noctra: profile; c03-brightfield-analytics: profile; c04-veyra-labs: profile; c05-tallyway: profile; competitors, scope
-   early cutoff: the 18 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
+   early cutoff: the 19 queries that found the same hits stopped the cascade; 0 rebuilt version came out equal
    C1 next action: prioritize_counsel_review -> collect_more_evidence (the v2 answer key expects collect_more_evidence)
    C1 recommendation read research.findings@v1, research.needs@v1 (business importance only), then research.findings@v2, research.needs@v2 once the research rebuilt; C2-C4's recommendations reopened for the same reason, their next actions unchanged
    C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation for counsel
@@ -89,9 +89,9 @@ A child process sends the new packet and is killed with a real SIGKILL after the
 
 ```console
 5. Event store
-   hash chain verified: 1935 events, head sha256:e24e9ec07f292e5c...
+   hash chain verified: 1943 events, head sha256:99e1b36622375a84...
 
-Done in 71.05 s. Store, mailbox and sources: demo
+Done in 19.74 s. Store, mailbox and sources: demo
 ```
 
 ## What the new evidence did to the shortlist

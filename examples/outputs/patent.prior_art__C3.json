@@ -232,7 +232,9 @@
     }
    }
   ],
-  "query": "patent.search_publications?{\"all_of\":[[\"overlap\"]]}",
+  "query": [
+   "patent.search_inputs?{\"kinds\":[\"prior_art_publication\"],\"limit\":1,\"terms\":[\"overlap\"]}"
+  ],
   "web": {
    "kept": [],
    "queries": [

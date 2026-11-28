@@ -108,7 +108,8 @@ and ``ArtifactVersion.answer``. A kind a declared choice saves is the runtime's 
 tool's save of it is refused ``answer_only``.
 3.2 (28 Nov 2026, ADR-P10 F1) added the harness's form tools: ``form_tools`` and
 ``FormSpec`` (``read_form`` and ``fill_form``, the field statuses and the rules that refuse
-a fill), ``FORM_TOOLS`` and ``form_counts``, and the trailing field
+a fill), ``FORM_TOOLS``, ``form_kind`` (the filled form's kind, counts computed) and
+``form_counts``, and the trailing field
 ``InputReading.search_kinds`` (``search_inputs`` over some document kinds; off by default).
 """
 

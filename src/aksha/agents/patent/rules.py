@@ -23,11 +23,8 @@ import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from aksha.runtime.api import form_counts as _counts
-
 NEXT_ACTIONS = ("prioritize_counsel_review", "collect_more_evidence", "deprioritize_for_now")
 STATES = ("disclosed", "partial", "not_found", "not_checked")
-FIELD_STATUSES = ("complete", "missing", "needs_counsel_confirmation")
 BUILT = ("built_and_tested", "in_use_under_nda")
 IMPLEMENTATION = ("built_and_tested", "in_use_under_nda", "prototype", "idea_only", "unknown")
 """What ``extraction.implementation.status`` holds (declared in the extraction schema)."""
@@ -150,18 +147,6 @@ def family_of(publications: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]
         )
         families.setdefault(names[0][2] if names else str(p["id"]), []).append(str(p["id"]))
     return {k: sorted(v) for k, v in sorted(families.items())}
-
-
-def form_counts(fields: Any) -> dict[str, int]:
-    """How many of a form's ``fields`` are in each status: computed, never the model's."""
-    return _counts(fields, FIELD_STATUSES)
-
-
-def computed_form(content: dict[str, Any]) -> dict[str, Any]:
-    """A form's ``counts`` from its fields, at every save (a correction of one field too)."""
-    if isinstance(content.get("fields"), list):
-        content["counts"] = form_counts(content["fields"])
-    return content
 
 
 def computed_recommendation(content: dict[str, Any]) -> dict[str, Any]:

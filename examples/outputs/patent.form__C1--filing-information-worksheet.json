@@ -97,6 +97,7 @@
     }
    }
   ],
+  "file": "input/templates/filing-information-worksheet.md",
   "form": "Filing-information worksheet (blank, mock)",
   "template": "filing-information-worksheet",
   "template_version": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2"

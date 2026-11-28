@@ -132,7 +132,7 @@ The agent declares `invalidation="rebuild"` keyed on citations, so a changed pas
 `aksha demo` with a private `AKSHA_HOME` on 28 Nov 2026 exited 0 and printed, among others:
 
 ```text
-patent   R-0002 complete: 23 outputs, 54 model calls
+patent   R-0002 complete: 23 outputs, 55 model calls
 scripted: patent asked the inventor one gap question: answered
 scripted: patent asked which candidate to prepare: chose C1
 scripted: approved A-0001 for patent.packet/C1@v1; the mailbox received it once

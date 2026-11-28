@@ -36,6 +36,7 @@ from aksha.runtime.api import (
 )
 
 from . import fakes_stillroom, fakes_views, portfolio, rules
+from .tools import FORMS
 
 Groups = list[list[str]]
 
@@ -1798,7 +1799,7 @@ def packet(
         for f in content["fields"]
         if f["status"] == "missing"
     ]
-    counts = {s: sum(content["counts"][s] for _, content in forms) for s in rules.FIELD_STATUSES}
+    counts = {s: sum(content["counts"][s] for _, content in forms) for s in FORMS.statuses}
     cmp_ = reads["comparison"][1]
     rec = reads["recommendation"][1]
     return {

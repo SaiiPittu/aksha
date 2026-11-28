@@ -134,6 +134,7 @@
     "fetch_url_tool": "def fetch_url_tool(agent: 'str', reading: 'InputReading | None' = None) -> 'ToolDecl'",
     "find_dates": "def find_dates(text: 'str', order: 'str' = '') -> 'list[tuple[str, int, int]]'",
     "form_counts": "def form_counts(fields: 'Any', statuses: 'Sequence[str]') -> 'dict[str, int]'",
+    "form_kind": "def form_kind(spec: 'FormSpec') -> 'ArtifactKind'",
     "form_tools": "def form_tools(agent: 'str', reading: 'InputReading', spec: 'FormSpec') -> 'tuple[ToolDecl, ...]'",
     "from_field": "def from_field(kind: 'str', path: 'str') -> 'FromField'",
     "input_tools": "def input_tools(agent: 'str', reading: 'InputReading') -> 'tuple[ToolDecl, ...]'",

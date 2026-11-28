@@ -236,7 +236,7 @@ def routing(base: Path) -> Session:
     )
     route = ident(r"waiting for route (I-\d+)", out)
     s.run(
-        "Name the agent; the run starts on the patent agent and asks its first question",
+        "Name the agent; the run starts on the patent agent and holds on the default budget",
         ["answer", route, "--agent", "patent"],
     )
     s.run(

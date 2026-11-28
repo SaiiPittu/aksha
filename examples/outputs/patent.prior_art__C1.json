@@ -248,7 +248,10 @@
     }
    }
   ],
-  "query": "patent.search_publications?{\"all_of\":[[\"background\"],[\"sensor\"]]}",
+  "query": [
+   "patent.search_inputs?{\"kinds\":[\"prior_art_publication\"],\"limit\":1,\"terms\":[\"background\"]}",
+   "patent.search_inputs?{\"kinds\":[\"prior_art_publication\"],\"limit\":1,\"terms\":[\"sensor\"]}"
+  ],
   "web": {
    "kept": [],
    "queries": [
