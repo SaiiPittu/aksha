@@ -110,15 +110,30 @@ test("re-uploading the change set rebuilds live in the same thread, through a re
   await expect(page.getByText(/Rebuilding after an input change/).first()).toBeVisible({ timeout: 120_000 })
   await shot(page, "09-reupload-rebuild")
 
-  const review = page.locator("[data-interrupt-kind=review]").filter({ hasText: "Waiting on you" })
-  await expect(review).toBeVisible({ timeout: 180_000 })
-  await expect(review).toContainText("patent.packet/C1")
-  await review.scrollIntoViewIfNeeded()
-  await shot(page, "10-review-card")
-  await review.getByRole("button", { name: /^Accept/ }).click()
-  await expect(page.locator("[data-interrupt-kind=review][data-interrupt-state=resolved]")).toBeVisible()
-
+  // The rebuild asks for a review of each rebuilt version a person must confirm: the
+  // re-saved selection (the person's choice) and the packet's diff. Accept each one as it
+  // comes, until the fresh approval appears.
+  const waiting = page.locator("[data-interrupt-kind=review]").filter({ hasText: "Waiting on you" })
   const approval = page.locator("[data-interrupt-kind=approval]").filter({ hasText: "Needs your approval" })
+  await expect(waiting.first()).toBeVisible({ timeout: 180_000 })
+  await waiting.first().scrollIntoViewIfNeeded()
+  await shot(page, "10-review-card")
+  const reviewed: string[] = []
+  for (let i = 0; i < 4 && !(await approval.isVisible()); i++) {
+    const card = waiting.first()
+    if (!(await card.isVisible())) {
+      await expect(waiting.first().or(approval)).toBeVisible({ timeout: 180_000 })
+      continue
+    }
+    reviewed.push((await card.textContent()) ?? "")
+    const resolvedBefore = await page.locator("[data-interrupt-kind=review][data-interrupt-state=resolved]").count()
+    await card.getByRole("button", { name: /^Accept/ }).click()
+    await expect
+      .poll(() => page.locator("[data-interrupt-kind=review][data-interrupt-state=resolved]").count())
+      .toBeGreaterThan(resolvedBefore)
+  }
+  expect(reviewed.some((text) => text.includes("patent.packet/C1"))).toBe(true)
+
   await expect(approval).toBeVisible({ timeout: 180_000 })
   await expect(approval).toContainText("patent.packet/C1@v2")
   const before = mailbox().length
