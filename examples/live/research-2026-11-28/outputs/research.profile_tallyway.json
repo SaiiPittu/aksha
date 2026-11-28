@@ -1,0 +1,98 @@
+{
+  "content": {
+    "cells": {
+      "battery_life": [
+        {
+          "cite": {
+            "quote": "Up to 7 years of battery life.",
+            "span": "EX-0197"
+          },
+          "date": "2026-08-21",
+          "label": "vendor_claim",
+          "page": "https://tallyway.example/product",
+          "value": "Up to 7 years of battery life."
+        },
+        {
+          "cite": {
+            "quote": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)",
+            "span": "EX-0199"
+          },
+          "date": "2026-08-21",
+          "label": "fact",
+          "page": "https://tallyway.example/product",
+          "value": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)"
+        }
+      ],
+      "counting_accuracy": [
+        {
+          "unknown": {
+            "question": "What is Beam's measured counting accuracy?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "installation_effort": [
+        {
+          "cite": {
+            "quote": "Install it and forget it.",
+            "span": "EX-0198"
+          },
+          "date": "2026-08-21",
+          "label": "vendor_claim",
+          "page": "https://tallyway.example/product",
+          "value": "Install it and forget it."
+        },
+        {
+          "unknown": {
+            "question": "How long does installation take and what work does it require?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "privacy": [
+        {
+          "unknown": {
+            "question": "What data does Beam collect, transmit or retain?",
+            "reason": "not_checked"
+          }
+        }
+      ]
+    },
+    "conflicts": [],
+    "flags": [],
+    "key": "tallyway",
+    "name": "Tallyway",
+    "pages": [
+      {
+        "date": "2026-08-21",
+        "url": "https://tallyway.example/product"
+      }
+    ],
+    "prices": [
+      {
+        "basis": "one-off",
+        "cite": {
+          "quote": "USD 189 per unit</td><td>one-off",
+          "span": "EX-0193"
+        },
+        "date": "2026-08-21",
+        "label": "fact",
+        "page": "https://tallyway.example/product",
+        "value": "USD 189 per unit"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "USD 5 per counter per month</td><td>billed annually",
+          "span": "EX-0194"
+        },
+        "date": "2026-08-21",
+        "label": "fact",
+        "page": "https://tallyway.example/product",
+        "value": "USD 5 per counter per month"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.profile/tallyway@v1"
+}

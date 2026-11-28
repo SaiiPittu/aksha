@@ -1,0 +1,214 @@
+{
+  "content": {
+    "findings": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "CO2 accuracy +/- 50 ppm.",
+              "span": "EX-0191"
+            }
+          },
+          {
+            "cite": {
+              "quote": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)",
+              "span": "EX-0199"
+            }
+          }
+        ],
+        "label": "inference",
+        "value": "The five sellers are pilot candidates, not verified end-to-end solutions. In particular, Noctra\u2019s CO2 accuracy is not headcount accuracy, and Tallyway\u2019s stated battery life depends on reporting frequency."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Display says empty while four of us sat still in a workshop.",
+              "span": "EX-0112"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Counts drift when two people pass the door together.",
+              "span": "EX-0107"
+            }
+          },
+          {
+            "cite": {
+              "quote": "CO2 lags by ten minutes, so the room shows empty after people walk in.",
+              "span": "EX-0110"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Hot afternoons show ghost occupants near the window.",
+              "span": "EX-0121"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Counting and missed occupancy: 10 of 40 reviews in this sample; still occupants, simultaneous crossings, lag and false positives."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "every sensor needed a new PoE cable.",
+              "span": "EX-0100"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our electrician took two days for one floor.",
+              "span": "EX-0102"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Sensor placement guide was unclear; two rooms needed remounting.",
+              "span": "EX-0135"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Installation: 9 of 40 reviews in this sample; cabling, electrician time and remounting."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Batteries died after about a year, not seven.",
+              "span": "EX-0106"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery swap schedule is a constant chore for facilities.",
+              "span": "EX-0119"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Battery: 7 of 40 reviews in this sample; early depletion and replacement burden."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0101"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0115"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Workflow: 4 of 40 reviews in this sample; lights going off and occupied rooms showing empty."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Sales would not give a price until a call. Took three weeks.",
+              "span": "EX-0111"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Very accurate, pricey per month.",
+              "span": "EX-0118"
+            }
+          },
+          {
+            "cite": {
+              "quote": "the cabling cost more than the sensors.",
+              "span": "EX-0122"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Cost: 4 of 40 reviews in this sample; quote delays, recurring fees and cabling."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Works council asked us to prove it does not see through walls.",
+              "span": "EX-0105"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our works council wanted written proof that no image leaves the sensor.",
+              "span": "EX-0116"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "Privacy: 3 of 40 reviews in this sample; requests for evidence about sensing through walls and image transmission."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "We replace batteries every 14 months across 300 doors.",
+              "span": "EX-0108"
+            }
+          },
+          {
+            "cite": {
+              "quote": "We replace batteries every 14 months across 300 doors.",
+              "span": "EX-0168"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0115"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0169"
+            }
+          }
+        ],
+        "label": "fact",
+        "value": "42 supplied rows, 40 unique reviews after excluding two cross-posts. Themes overlap; counts describe this sample only."
+      }
+    ],
+    "unknowns": [
+      {
+        "unknown": {
+          "question": "Which products meet independently measured headcount and end-to-end booking and lighting requirements in real rooms?",
+          "reason": "not_checked"
+        }
+      },
+      {
+        "unknown": {
+          "question": "What are the EU delivered and installed prices, taxes, recurring charges and replacement costs?",
+          "reason": "not_checked"
+        }
+      },
+      {
+        "unknown": {
+          "question": "What data is retained or transmitted and what evidence can each supplier provide to a works council?",
+          "reason": "not_checked"
+        }
+      },
+      {
+        "unknown": {
+          "question": "What battery runtime is achievable at the reporting cadence the workflows require?",
+          "reason": "not_checked"
+        }
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.findings@v1"
+}

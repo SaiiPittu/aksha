@@ -217,7 +217,7 @@ flowchart TB
 
 Take from this that the safeguards held (no wrong profile was accepted under another company's key, and nothing was guessed), while the agent got almost none of the per-key work done.
 
-Being fixed on 28 Nov 2026, not merged: telling each keyed instance its key, giving a text-only finish a feedback turn instead of failing it at once, and cutting the cost of reading inputs (one decision per passage, and the 21 classification calls per publication). The live runs will be repeated after the fixes.
+Fixed and merged on 28 Nov 2026: each keyed instance is told its key, and a text-only finish gets a feedback turn instead of failing at once (#114), and a run asks each fast-class request once (#115). The research run repeated after the fixes is under [After the fixes](#after-the-fixes).
 
 ### What the live runs taught earlier
 
@@ -231,14 +231,42 @@ The runs on 27 and 28 Nov 2026 before these three found five harness problems, a
 
 ### After the fixes
 
-To be added: the same three prompts, the same settings, repeated after the per-key and ingestion fixes merge, with each run's outcome, event IDs and recording.
+The fixes merged on 28 Nov 2026, each its own pull request:
+
+1. [#114](https://github.com/SaiiPittu/aksha/pull/114): each keyed Task instance is told its key, and a text-only finish gets a feedback turn instead of failing at once.
+2. [#115](https://github.com/SaiiPittu/aksha/pull/115): a run asks each fast-class request (decide or extract) once; a retry asks only the call that failed.
+3. [#116](https://github.com/SaiiPittu/aksha/pull/116): an empty comparison needs a scoped absence claim, and a world frames its own synthetic pages, so the model does not read the "synthetic" label as a reason to drop every seller.
+4. [#117](https://github.com/SaiiPittu/aksha/pull/117): a limit runs the completion check and ends a Task as a finish would, and no Task declares a turn limit by default (decision 42).
+
+#### Research, before and after
+
+| Run | Code | Outcome | What it shows |
+| --- | --- | --- | --- |
+| (a) first one-shot run | before the fixes | `partial: 2 unknown` | 392 model calls in 27.6 minutes, 352 of them per-passage decisions while reading inputs |
+| (b) interactive, assignment prompt | before the fixes | `partial: 5 unknown` | all five `evidence` instances unverified: the per-key bug |
+| interactive, after #114 | #114 merged | complete but empty | it saved no competitors, because it read the worlds' "synthetic" label as a reason to drop every seller; fixed in #116 |
+| final interactive run | `main` at `b2dacd9`, #114 to #117 | `complete` (`completion_checks_passed`) | 5 of 5 competitors match the answer key, each profile under its own key |
+
+The final run, 28 Nov 2026, had the settings of run (b): `openai/gpt-6.2-sol` through LiteLLM, `AKSHA_LIVE_REASONING_EFFORT=low`, `AKSHA_LIVE_TIMEOUT_S=240`, `AKSHA_SEARCH=world:stillroom`, and only `reviews/reviews.json` uploaded, with the assignment's example prompt.
+
+1. Question: `I-0001` (event 28), "What problem should the comparison focus on? The supplied reviews mention sensors in meeting rooms, but the request doesn't specify the use case."
+2. Answer (event 33): camera-free occupancy sensing for office meeting rooms, for facility managers of mid-size EU office buildings, with privacy, counting accuracy, installation effort and battery life weighed as much as price.
+3. What it did, in 8.7 minutes: 57 model calls, 3 web searches, 12 fetches and 147 citations bound. It saved the scope, 5 competitors (`kelvra-systems`, `veyra-labs`, `noctra`, `tallyway`, `corvane-group`), 5 profiles each under its own key, the needs (42 rows, 40 unique, battery life in 7 of 40, the key's count), the matrix, 8 findings with 4 unknowns marked `not_checked`, and 5 tests with thresholds marked `proposal`.
+4. The acquisition trap, K5 in the key: it merged the Brightfield Analytics and Corvane pages with a `same_entity_as` relation (event 125) citing "Corvane Presence P1 is the new name for OccuPoint. Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand."
+5. How it ended: `complete` at event 575; `aksha verify` printed `chain ok: 576 events`.
+
+The exported events, inspector output, saved outputs and trace are in [examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md), with the commands to repeat it. It is not a recording, so it does not replay.
+
+#### Patent
+
+The Patent Agent's run after the fixes is in progress. A live run exposed the model making the person's selection itself, instead of asking; that is being fixed before the run is repeated.
 
 ## Top limitations
 
 The full list is on the [limitations page](../limitations.md). The ones that bear on this page:
 
 1. The evals run in fake model mode only; no eval set has run live (item 12).
-2. Live-model evidence is three runs, none of which finished all its work: two research runs ended partial and the Patent Agent's one live run ended blocked. Item 11 describes only run (a), the one that is recorded.
+2. Live-model evidence is thin: one research run, after the fixes, ended complete with 5 of 5 competitors; the earlier research runs ended partial, and no Patent Agent run has yet finished live. Item 11 describes only run (a), the one that is recorded.
 3. Three of the six held-out worlds are no longer strictly held out, and the offline patent comparison counts words, so most remaining patent failures are matrix cells (item 19).
 4. A world's offline web ranks pages by shared words; live web search has been tested only against a stub (item 17).
 5. A replay answers only what was recorded, so a change to an agent's prompt or tools makes its recordings stale (item 18).
@@ -255,4 +283,5 @@ Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
 - Runs (b) and (c): the maintainer's live stores, kept outside the repository and read from a copy with `aksha status`, `aksha verify` (324 and 527 events, chain ok), `aksha inspect R-0001`, `aksha show` and `aksha trace R-0001 --out <folder>`; event numbers from each store's `events` table.
 - Rule table, completion checks and prompts: `src/aksha/agents/patent/rules.py`, `src/aksha/agents/patent/checks.py`, `src/aksha/agents/research/agent.py` (`evidence` uses the default `max_finish_vetoes`, three), `src/aksha/agents/research/prompts/evidence.md`.
 - Test count: `.venv/bin/python -m pytest --collect-only -q` after `make venv` printed `3742 tests collected`, 28 Nov 2026.
+- Final research run after the fixes: the maintainer's live store `aksha-live/live-chat-research-final/aksha.sqlite`, read from a copy with `aksha verify` (576 events, chain ok), `aksha inspect R-0001`, `aksha show` and `aksha trace R-0001 --out <folder>`, exported to `examples/live/research-2026-11-28/`; compared with `src/aksha/data/worlds/stillroom/key.json`.
 - Earlier live fixes: [live-mode page](../live-mode.md), and commit `5b11d46` for the schema fix.

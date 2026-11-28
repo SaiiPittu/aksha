@@ -1,0 +1,129 @@
+{
+  "content": {
+    "tests": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Display says empty while four of us sat still in a workshop.",
+              "span": "EX-0112"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Counts drift when two people pass the door together.",
+              "span": "EX-0107"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Hot afternoons show ghost occupants near the window.",
+              "span": "EX-0121"
+            }
+          }
+        ],
+        "label": "inference",
+        "priority": 1,
+        "threshold": {
+          "status": "proposal",
+          "value": "At least 99% of occupied minutes detected and at least 95% of sampled counts within one person."
+        },
+        "value": "Compare sensor logs to time-stamped manual occupancy and headcounts in real rooms. Include quiet seated work, paired doorway crossings, sunny rooms and back-to-back meetings."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0101"
+            }
+          },
+          {
+            "cite": {
+              "quote": "CO2 lags by ten minutes, so the room shows empty after people walk in.",
+              "span": "EX-0110"
+            }
+          }
+        ],
+        "label": "inference",
+        "priority": 2,
+        "threshold": {
+          "status": "proposal",
+          "value": "Zero releases of occupied rooms and zero false lights-off events across 100 scripted scenarios; lights on within 2 seconds of entry; at least 95% of scripted no-shows released within 10 minutes."
+        },
+        "value": "Start booking in shadow mode; compare proposed releases with manual logs and test lighting on arrival, still occupancy, departure and outages. Compare against manual check-in and existing lighting controls."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Our electrician took two days for one floor.",
+              "span": "EX-0102"
+            }
+          },
+          {
+            "cite": {
+              "quote": "the cabling cost more than the sensors.",
+              "span": "EX-0122"
+            }
+          }
+        ],
+        "label": "inference",
+        "priority": 3,
+        "threshold": {
+          "status": "proposal",
+          "value": "At most two technician-hours per room on the standard retrofit path; itemized three-year cost for every pilot option."
+        },
+        "value": "Trial retrofits in rooms with and without existing power or network drops. Log labor, materials, downtime, rework and obtain an itemized EU quote including subscriptions and maintenance."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "7 years at 1 report per 10 minutes; 14 months at 1 report per minute (typical office setting)",
+              "span": "EX-0199"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery swap schedule is a constant chore for facilities.",
+              "span": "EX-0119"
+            }
+          }
+        ],
+        "label": "inference",
+        "priority": 4,
+        "threshold": {
+          "status": "proposal",
+          "value": "At least 24 months projected service life at the tested cadence, with assumptions documented."
+        },
+        "value": "Measure battery draw at the reporting cadence that passes workflow tests; model replacement labor and validate the estimate with field telemetry."
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Works council asked us to prove it does not see through walls.",
+              "span": "EX-0105"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our works council wanted written proof that no image leaves the sensor.",
+              "span": "EX-0116"
+            }
+          }
+        ],
+        "label": "inference",
+        "priority": 5,
+        "threshold": {
+          "status": "proposal",
+          "value": "No images transmitted, zero adjacent-room detections in 30 scripted trials, and documented retention and access controls approved before live use."
+        },
+        "value": "Run privacy review as a gate before live deployment. Verify sensor outputs and retention, verify what leaves the device, and test for detections from adjacent rooms."
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.tests@v1"
+}

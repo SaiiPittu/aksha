@@ -1,0 +1,372 @@
+{
+  "content": {
+    "columns": [
+      "price",
+      "privacy",
+      "counting_accuracy",
+      "installation_effort",
+      "battery_life"
+    ],
+    "pages_found": 6,
+    "resolved": 5,
+    "rows": [
+      {
+        "cells": {
+          "battery_life": [
+            {
+              "cite": {
+                "artifact": "research.profile/corvane-group@v1",
+                "path": "/cells/battery_life/0"
+              }
+            }
+          ],
+          "counting_accuracy": [
+            {
+              "unknown": {
+                "question": "What is headcount accuracy?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "installation_effort": [
+            {
+              "unknown": {
+                "question": "What does installation require?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data is retained or shared?",
+                "reason": "not_located"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Corvane Group, corvane.example.",
+            "span": "EX-0019"
+          },
+          "label": "fact",
+          "value": "Corvane Group"
+        },
+        "conflicts": [
+          {
+            "cite": {
+              "artifact": "research.profile/corvane-group@v1",
+              "path": "/conflicts/0"
+            },
+            "kind": "contradicts"
+          }
+        ],
+        "key": "corvane-group",
+        "merge": {
+          "cite": {
+            "quote": "Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand.",
+            "span": "EX-0013"
+          },
+          "kind": "same_entity_as"
+        },
+        "prices": [
+          {
+            "cite": {
+              "artifact": "research.profile/corvane-group@v1",
+              "path": "/prices/0"
+            }
+          },
+          {
+            "cite": {
+              "artifact": "research.profile/corvane-group@v1",
+              "path": "/prices/1"
+            }
+          },
+          {
+            "cite": {
+              "artifact": "research.profile/corvane-group@v1",
+              "path": "/prices/2"
+            }
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_life": [
+            {
+              "unknown": {
+                "question": "Is battery operation supported?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "counting_accuracy": [
+            {
+              "unknown": {
+                "question": "What is headcount accuracy?",
+                "reason": "not_located"
+              }
+            }
+          ],
+          "installation_effort": [
+            {
+              "cite": {
+                "artifact": "research.profile/kelvra-systems@v1",
+                "path": "/cells/installation_effort/0"
+              }
+            },
+            {
+              "cite": {
+                "artifact": "research.profile/kelvra-systems@v1",
+                "path": "/cells/installation_effort/1"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "cite": {
+                "artifact": "research.profile/kelvra-systems@v1",
+                "path": "/cells/privacy/0"
+              }
+            },
+            {
+              "cite": {
+                "artifact": "research.profile/kelvra-systems@v1",
+                "path": "/cells/privacy/1"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Kelvra Systems, kelvra.example.",
+            "span": "EX-0034"
+          },
+          "label": "fact",
+          "value": "Kelvra Systems"
+        },
+        "key": "kelvra-systems",
+        "prices": [
+          {
+            "cite": {
+              "artifact": "research.profile/kelvra-systems@v1",
+              "path": "/prices/0"
+            }
+          },
+          {
+            "cite": {
+              "artifact": "research.profile/kelvra-systems@v1",
+              "path": "/prices/1"
+            }
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_life": [
+            {
+              "cite": {
+                "artifact": "research.profile/veyra-labs@v1",
+                "path": "/cells/battery_life/0"
+              }
+            },
+            {
+              "unknown": {
+                "question": "Is battery operation supported?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "counting_accuracy": [
+            {
+              "cite": {
+                "artifact": "research.profile/veyra-labs@v1",
+                "path": "/cells/counting_accuracy/0"
+              }
+            },
+            {
+              "unknown": {
+                "question": "What is measured headcount error?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "installation_effort": [
+            {
+              "cite": {
+                "artifact": "research.profile/veyra-labs@v1",
+                "path": "/cells/installation_effort/0"
+              }
+            },
+            {
+              "unknown": {
+                "question": "What mounting and calibration work is needed?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data is retained or shared?",
+                "reason": "not_checked"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Veyra Labs, veyra.example.",
+            "span": "EX-0047"
+          },
+          "label": "fact",
+          "value": "Veyra Labs"
+        },
+        "key": "veyra-labs",
+        "prices": [
+          {
+            "cite": {
+              "artifact": "research.profile/veyra-labs@v1",
+              "path": "/prices/0"
+            }
+          },
+          {
+            "cite": {
+              "artifact": "research.profile/veyra-labs@v1",
+              "path": "/prices/1"
+            }
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_life": [
+            {
+              "cite": {
+                "artifact": "research.profile/noctra@v1",
+                "path": "/cells/battery_life/0"
+              }
+            }
+          ],
+          "counting_accuracy": [
+            {
+              "unknown": {
+                "question": "What is headcount error, distinct from CO2 measurement accuracy?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "installation_effort": [
+            {
+              "unknown": {
+                "question": "What does mounting and setup require?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data is retained or shared?",
+                "reason": "not_checked"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Noctra, noctra.example.",
+            "span": "EX-0076"
+          },
+          "label": "fact",
+          "value": "Noctra"
+        },
+        "key": "noctra",
+        "price_notes": [
+          {
+            "cite": {
+              "artifact": "research.profile/noctra@v1",
+              "path": "/price_notes/0"
+            }
+          }
+        ],
+        "prices": [
+          {
+            "unknown": {
+              "question": "What amount and billing basis would sales quote?",
+              "reason": "not_checked"
+            }
+          }
+        ]
+      },
+      {
+        "cells": {
+          "battery_life": [
+            {
+              "cite": {
+                "artifact": "research.profile/tallyway@v1",
+                "path": "/cells/battery_life/0"
+              }
+            },
+            {
+              "cite": {
+                "artifact": "research.profile/tallyway@v1",
+                "path": "/cells/battery_life/1"
+              }
+            }
+          ],
+          "counting_accuracy": [
+            {
+              "unknown": {
+                "question": "What is measured headcount error?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "installation_effort": [
+            {
+              "unknown": {
+                "question": "What labor, mounting and calibration are required?",
+                "reason": "not_checked"
+              }
+            }
+          ],
+          "privacy": [
+            {
+              "unknown": {
+                "question": "What data is retained or shared?",
+                "reason": "not_checked"
+              }
+            }
+          ]
+        },
+        "company": {
+          "cite": {
+            "quote": "Tallyway, tallyway.example.",
+            "span": "EX-0064"
+          },
+          "label": "fact",
+          "value": "Tallyway"
+        },
+        "key": "tallyway",
+        "prices": [
+          {
+            "cite": {
+              "artifact": "research.profile/tallyway@v1",
+              "path": "/prices/0"
+            }
+          },
+          {
+            "cite": {
+              "artifact": "research.profile/tallyway@v1",
+              "path": "/prices/1"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.matrix@v1"
+}

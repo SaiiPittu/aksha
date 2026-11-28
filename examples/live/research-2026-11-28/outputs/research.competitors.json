@@ -1,0 +1,140 @@
+{
+  "content": {
+    "companies": [
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Kelvra Systems, kelvra.example.",
+            "span": "EX-0034"
+          },
+          "label": "fact",
+          "value": "Kelvra Systems"
+        },
+        "key": "kelvra-systems",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/kelvra.example/product",
+            "url": "https://kelvra.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Veyra Labs, veyra.example.",
+            "span": "EX-0047"
+          },
+          "label": "fact",
+          "value": "Veyra Labs"
+        },
+        "key": "veyra-labs",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/veyra.example/product",
+            "url": "https://veyra.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Noctra, noctra.example.",
+            "span": "EX-0076"
+          },
+          "label": "fact",
+          "value": "Noctra"
+        },
+        "key": "noctra",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/noctra.example/product",
+            "url": "https://noctra.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [],
+        "canonical": {
+          "cite": {
+            "quote": "Tallyway, tallyway.example.",
+            "span": "EX-0064"
+          },
+          "label": "fact",
+          "value": "Tallyway"
+        },
+        "key": "tallyway",
+        "merge_evidence": [],
+        "pages": [
+          {
+            "record": "web/tallyway.example/product",
+            "url": "https://tallyway.example/product"
+          }
+        ]
+      },
+      {
+        "aliases": [
+          {
+            "cite": {
+              "quote": "Brightfield Analytics joined Corvane Group on 12 May 2026",
+              "span": "EX-0013"
+            },
+            "label": "fact",
+            "value": "Brightfield Analytics"
+          }
+        ],
+        "canonical": {
+          "cite": {
+            "quote": "Corvane Group, corvane.example.",
+            "span": "EX-0019"
+          },
+          "label": "fact",
+          "value": "Corvane Group"
+        },
+        "key": "corvane-group",
+        "merge_evidence": [
+          {
+            "cite": {
+              "quote": "Corvane Presence P1 is the new name for OccuPoint. Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand.",
+              "span": "EX-0013"
+            },
+            "label": "fact",
+            "value": "Product line continued under Corvane"
+          }
+        ],
+        "pages": [
+          {
+            "record": "web/corvane.example/product",
+            "url": "https://corvane.example/product"
+          },
+          {
+            "record": "web/brightfield.example/product",
+            "url": "https://brightfield.example/product"
+          }
+        ]
+      }
+    ],
+    "dimensions": [
+      "price",
+      "privacy",
+      "counting_accuracy",
+      "installation_effort",
+      "battery_life"
+    ],
+    "manual_alternatives": {
+      "unknown": {
+        "question": "Which manual alternatives are documented in the evidence?",
+        "reason": "not_checked"
+      }
+    },
+    "pages_found": 6,
+    "resolved": 5
+  },
+  "freshness": "current",
+  "ref": "research.competitors@v1"
+}

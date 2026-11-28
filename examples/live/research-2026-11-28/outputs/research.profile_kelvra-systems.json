@@ -1,0 +1,129 @@
+{
+  "content": {
+    "cells": {
+      "battery_life": [
+        {
+          "unknown": {
+            "question": "What battery life, if any, is specified?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "counting_accuracy": [
+        {
+          "unknown": {
+            "question": "What counting accuracy is specified?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "installation_effort": [
+        {
+          "cite": {
+            "quote": "Powered over Ethernet (PoE), ceiling mounted.",
+            "span": "EX-0183"
+          },
+          "date": "2026-10-14",
+          "label": "fact",
+          "page": "https://kelvra.example/product",
+          "value": "Powered over Ethernet (PoE), ceiling mounted."
+        },
+        {
+          "cite": {
+            "quote": "Installation requires a PoE cable run to every sensor.",
+            "span": "EX-0033"
+          },
+          "date": "2026-10-14",
+          "label": "fact",
+          "page": "https://kelvra.example/product",
+          "value": "Installation requires a PoE cable run to every sensor."
+        }
+      ],
+      "price": [
+        {
+          "basis": "one-off",
+          "cite": {
+            "quote": "EUR 249 per unit</td><td>one-off",
+            "span": "EX-0180"
+          },
+          "date": "2026-10-14",
+          "label": "fact",
+          "page": "https://kelvra.example/product",
+          "value": "EUR 249 per unit"
+        },
+        {
+          "basis": "billed annually",
+          "cite": {
+            "quote": "EUR 6 per sensor per month</td><td>billed annually",
+            "span": "EX-0181"
+          },
+          "date": "2026-10-14",
+          "label": "fact",
+          "page": "https://kelvra.example/product",
+          "value": "EUR 6 per sensor per month"
+        }
+      ],
+      "privacy": [
+        {
+          "cite": {
+            "quote": "Thermal only.",
+            "span": "EX-0184"
+          },
+          "date": "2026-10-14",
+          "label": "fact",
+          "page": "https://kelvra.example/product",
+          "value": "Thermal only."
+        },
+        {
+          "cite": {
+            "quote": "The sensor cannot capture faces or identities.",
+            "span": "EX-0185"
+          },
+          "date": "2026-10-14",
+          "label": "vendor_claim",
+          "page": "https://kelvra.example/product",
+          "value": "The sensor cannot capture faces or identities."
+        }
+      ]
+    },
+    "conflicts": [],
+    "flags": [],
+    "key": "kelvra-systems",
+    "name": "Kelvra Systems",
+    "pages": [
+      {
+        "date": "2026-10-14",
+        "record": "web/kelvra.example/product",
+        "url": "https://kelvra.example/product"
+      }
+    ],
+    "prices": [
+      {
+        "basis": "one-off",
+        "cite": {
+          "quote": "EUR 249 per unit</td><td>one-off",
+          "span": "EX-0180"
+        },
+        "date": "2026-10-14",
+        "item": "Kelvra TS-32 sensor",
+        "label": "fact",
+        "page": "https://kelvra.example/product",
+        "value": "EUR 249 per unit"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "EUR 6 per sensor per month</td><td>billed annually",
+          "span": "EX-0181"
+        },
+        "date": "2026-10-14",
+        "item": "Workplace analytics",
+        "label": "fact",
+        "page": "https://kelvra.example/product",
+        "value": "EUR 6 per sensor per month"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.profile/kelvra-systems@v1"
+}
