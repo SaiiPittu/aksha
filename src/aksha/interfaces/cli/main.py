@@ -563,6 +563,11 @@ def cmd_replay(ctx: Context, args: argparse.Namespace) -> int:
             "this recording predates recorded limits and failed model calls: a step "
             "retried after a model timeout cannot replay from it; record the run again"
         )
+    elif done.older_asks:
+        ctx.say(
+            "this recording predates asking each fast request once per run "
+            "(ADR-P07 G8); record the run again"
+        )
     return wire.EXIT_FAILED
 
 

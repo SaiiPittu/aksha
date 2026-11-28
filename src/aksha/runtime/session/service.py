@@ -104,6 +104,7 @@ from aksha.runtime.invalidation.ports import InputWorkspace, QueryRunner, Versio
 from aksha.runtime.invalidation.rebuild import open_rebuild_runs
 from aksha.runtime.loop.drive import drive, drive_pass, drive_rebuilds
 from aksha.runtime.loop.types import DriveResult, LoopSetup
+from aksha.runtime.models.calls import FastAnswers
 from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.outbox.ports import SystemOfRecord
 from aksha.runtime.outbox.types import OutboxEntry
@@ -189,11 +190,14 @@ class SessionAgent:
         blobs: BlobStore | None = None,
         reader: RecordReader | None = None,
         tier: ExecutionTier | None = None,
+        answers: FastAnswers | None = None,
     ) -> LoopSetup:
         """The loop's setup for one of ``owner``'s runs of this agent.
 
         ``reader`` is the record reader its tool bodies read versioned sources through;
-        ``tier`` is tier 3 (the sandbox backend, the network, egress and environments).
+        ``tier`` is tier 3 (the sandbox backend, the network, egress and environments);
+        ``answers`` the process's fast-class memo (``models.calls.FastAnswers``), so a
+        setup built per pass keeps what the run's earlier steps were answered.
         """
         limits = self.agent.limits
         extra: dict[str, Any] = {} if limits is None else {"limits": limits}
@@ -216,6 +220,7 @@ class SessionAgent:
             reader=reader,
             tier=tier or ExecutionTier(),
             lifetimes=self.lifetimes,
+            answers=answers or FastAnswers(),
             **extra,
         )
 
@@ -297,6 +302,7 @@ class Session:
         self._executors: dict[str, StepExecutor] = {}
         self._inputs_checked: set[str] = set()
         self._unavailable: dict[str, dict[str, str]] = {}
+        self._answers = FastAnswers()
         startable = {
             a.name: Startable(a.routable(), a.run_fields())
             for a in agents
@@ -713,7 +719,11 @@ class Session:
         ticked = self.apply_corrections(owner) or ticked
         blocked = self._blocked(owner)
         self._unavailable.setdefault(owner, {}).update(blocked)
-        for run in self.runnable(owner):
+        runnable = self.runnable(owner)
+        # A run that ended (complete, partial, blocked, failed) is never read again, so its
+        # fast-class memo goes; a run that waits on a person is still open and keeps it.
+        self._answers.retain(owner, runnable)
+        for run in runnable:
             if run in self._unavailable[owner]:
                 continue
             try:
@@ -721,6 +731,8 @@ class Session:
             except EffectNeedsOutbox as e:
                 self._unavailable[owner][run] = f"{e.code}: {e.message}"
                 continue
+            if state == "ended":
+                self._answers.forget(owner, run)
             if state == "running":
                 return True
             stopping = state == "held" and run in runs_to_resume_for_stop(
@@ -771,7 +783,8 @@ class Session:
 
         def driver(run: RunSummary, steps: DurableStepExecutor, /) -> None:
             try:
-                drive(self._setup(owner, run.run), steps, run.run)
+                if drive(self._setup(owner, run.run), steps, run.run).state == "ended":
+                    self._answers.forget(owner, run.run)
             except EffectNeedsOutbox as e:
                 self._unavailable.setdefault(owner, {})[run.run] = f"{e.code}: {e.message}"
 
@@ -798,12 +811,17 @@ class Session:
             view = load_view(self.store, owner)
             setup = agent.setup(self.store, owner, _latest_request(view, name),
                                 sandbox=self.sandbox(), blobs=self.blobs,
-                                reader=self._reader(owner))  # fmt: skip
+                                reader=self._reader(owner), answers=self._answers)  # fmt: skip
             try:
-                out.extend(drive_rebuilds(setup, self._executor(owner), self.ids))
+                driven = drive_rebuilds(setup, self._executor(owner), self.ids)
             except EffectNeedsOutbox as e:
                 why = f"{e.code}: {e.message}"
                 self._unavailable.setdefault(owner, {})[f"rebuilds of {name}"] = why
+                continue
+            for done in driven:
+                if done.state == "ended":
+                    self._answers.forget(owner, done.run)
+            out.extend(driven)
         return tuple(out)
 
     def unavailable(self, owner: str) -> Mapping[str, str]:
@@ -820,7 +838,7 @@ class Session:
         assert agent is not None, f"{run} is not a run of a loaded agent"
         return agent.setup(self.store, owner, _request(view, run), sandbox=self.sandbox(),
                            blobs=self.blobs, reader=self._reader(owner),
-                           tier=self.tier)  # fmt: skip
+                           tier=self.tier, answers=self._answers)  # fmt: skip
 
     def _reader(self, owner: str) -> RecordReader | None:
         """The owner's inputs through the workspace, every other source through ``reader``."""

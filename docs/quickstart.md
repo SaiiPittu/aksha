@@ -128,7 +128,7 @@ Files stay off the native path by default: every upload goes through intake's ow
 ```sh
 aksha example stillroom stillroom-inputs
 AKSHA_SEARCH=world:stillroom aksha run --agent research --input stillroom-inputs --answer segment=offices --answer geography=EU --record runs/first "Research the competitors for the venture's occupancy sensor."
-# recorded R-0001 research (complete) into runs/first: 174 model calls, 3 searches, 15 fetches
+# recorded R-0001 research (complete) into runs/first: 100 model calls, 2 searches, 15 fetches
 aksha replay runs/first
 # replayed R-0001 offline from runs/first (complete) in runs/first-replay
 # outputs: the same as recorded (11 outputs)

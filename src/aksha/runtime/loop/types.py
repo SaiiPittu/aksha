@@ -25,6 +25,7 @@ from aksha.runtime.context.reentry import ReentrySetting
 from aksha.runtime.context.types import AssemblyInputs, ContextPolicy, effective_policy
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.grounding.ports import RecordReader
+from aksha.runtime.models.calls import FastAnswers
 from aksha.runtime.models.routing import AliasTable
 from aksha.runtime.policy.permissions import ceiling_of
 from aksha.runtime.policy.types import Permissions, SourceVersion
@@ -166,6 +167,10 @@ class LoopSetup:
     """Tier 3: the sandbox backend, the network under the HTTP client, egress policies and
     environment specs (ADR-P12, P26, P28). The default runs nothing and reaches nothing."""
     lifetimes: Mapping[str, int] = field(default_factory=lambda: MappingProxyType({}))
+    answers: FastAnswers = field(default_factory=FastAnswers)
+    """The fast-class answers each run has had (``models.calls.FastAnswers``): a process
+    that builds a setup per pass passes one instance to all of them, so every tool step of a
+    run, a retried attempt included, asks each fast request once."""
 
     def record_lifetimes(self) -> Mapping[str, int]:
         """The agent's sources' lifetimes by collection, then ``lifetimes`` over them."""

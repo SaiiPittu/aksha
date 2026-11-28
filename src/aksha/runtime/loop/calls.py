@@ -302,13 +302,18 @@ def run_position(
                 session = run_session(view, setup.owner, ref.run)
                 exe = exec_for(setup, spec, str(step), attempt, unit, session)
             models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner,
-                                    setup.agent.name, setup.definition_hash or "")  # fmt: skip
+                                    setup.agent.name, setup.definition_hash or "",
+                                    setup.answers.of_run(setup.owner, ref.run))  # fmt: skip
             outcome = body(ctx(reader, http, exe, dates, models))
             extra = (*dates.reads, *models.reads)  # definition reads (ADR-P05 M2) after dates
             out = _dispatched(setup, ref, step, spec, outcome, reader.returned, extra)
             if models.records:
                 out = replace(out, value={**(out.value or {}), MODEL_CALLS_FIELD: models.records})
-            return with_records(out, http, exe)
+            done = with_records(out, http, exe)
+            # The step completes with the usage of the answers it was the first to use; a
+            # later step records them with none (models.calls, FastAnswers).
+            setup.answers.book(setup.owner, ref.run, models.booked_here)
+            return done
 
         return record(lambda: dispatched(lambda c: call_body(decl, c, args)), unit)
     if decision.route == "reserved" and call.name == "finish":

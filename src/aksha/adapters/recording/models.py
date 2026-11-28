@@ -8,13 +8,15 @@ answer is appended to the recording's ``models`` stream, keyed by what was asked
 
 * a generation by its step key (the step ID without the run) and its context hash;
 * an extraction or a classification by its alias and its request hash (a tool body's
-  requests carry no step of their own), in call order when one request is asked twice.
+  requests carry no step of their own), in call order when one request is asked more
+  than once (a call that failed and its retry).
 
 A call the adapter refused (a timeout, a rate limit, a context overflow) is appended too,
 with its error, so a replay fails the same call the same way and the step retries as it
-did: a tool step whose body timed out on its 54th call and then ran again asked its
-first 53 requests twice, and only the record of the failure says which answers belong
-to the attempt that failed.
+did. A tool step whose body timed out and then ran again asks only the request that
+failed (ADR-P07 G8: earlier answers are remembered for the run); a recording made before
+G8 asked them all again, and only the record of the failure says which answers belonged
+to the failed attempt.
 
 :func:`recorded_adapters` answers from those lines: a generation whose step key the run
 never recorded is ``replay_missing``, one asked something else ``replay_mismatch``; a
