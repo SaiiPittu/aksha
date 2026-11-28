@@ -28,7 +28,7 @@ Each edit must match exactly once or the demo refuses to run. `tests/integration
 
 ## 2. What the run rebuilt and what it kept
 
-Run it in a private home (22.13 s in the generated example; 117.64 s on 28 Nov 2026 on a loaded machine):
+Run it in a private home (19.74 s in the generated example; 117.64 s on 28 Nov 2026 on a loaded machine):
 
 ```console
 $ AKSHA_HOME=$(mktemp -d) aksha demo
@@ -38,7 +38,7 @@ Act 1 runs both agents to `complete`: research run `R-0001` saves 11 outputs and
 
 ```console
 2. The input changes to stillroom-v2's change set (3.91 s)
-   one command recorded 4 moved records and re-ran 19 recorded searches and listings: 1 found new hits
+   one command recorded 4 moved records and re-ran 21 recorded searches and listings: 2 found new hits
 
 3. Invalidation reopens only what depends on the change (52.09 s)
    weak, noticed and not rebuilt: patent.portfolio read reviews.json outside what it rests on; 1 low-priority recheck item(s)
@@ -77,6 +77,8 @@ The same run shows each rule on a real event:
 | Cites nothing | C1's extraction and prior art cite nothing, so they are read-keyed and reopened | `patent.extraction/C1@v2`, seq 1571 |
 | Weak read | The portfolio read `reviews.json` without citing it: noticed, not rebuilt | `evidence.noticed`, seq 1347 |
 | Early cutoff on searches | 19 searches and listings re-ran; only `patent.search_publications` for "background" and "sensor" found new hits | `query.reexecuted`, seq 1327 to 1345; seq 1337 has `"changed":true` |
+
+The run above predates the shared publication search. Since 28 Nov 2026 the patent agent searches the uploaded publications with the shared `search_inputs` over the `prior_art_publication` kind, one recorded query per group of terms, so the same demo on branch `refactor/patent-shared-tools` re-ran 21 searches and listings (`query.reexecuted`, seq 1341 to 1361), and the 2 that found new hits are C1's two searches, for "background" (seq 1351) and "sensor" (seq 1356). It rebuilt and kept the same 17 outputs each, measured with `AKSHA_HOME=<private temp dir> aksha demo`, exit 0.
 
 In this run no rebuilt output came out equal to its old version (the demo prints "0 rebuilt version came out equal"), so the cutoff on rebuilt outputs is proven by tests, not by the demo. Keyed on every read instead of on citations, the same change would have reopened 27 outputs, not 17.
 

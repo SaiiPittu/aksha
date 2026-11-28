@@ -79,6 +79,11 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``read_document`` returns, over any returned text), ``todo_tool`` and ``think_tool``;
    ``OfflineReaders``, an agent's offline fast readers run in process by a rule-based
    model over a text its request carries.
+15. The harness's form tools (P10 F1): ``form_tools`` and ``FormSpec`` (``read_form`` and
+   ``fill_form`` over an agent's blank forms, its form kind declared as data),
+   ``FORM_TOOLS`` (their names), ``form_kind`` (the kind ``fill_form`` saves into, its
+   counts recomputed on every save, for the agent to declare) and ``form_counts`` (a
+   filled form's counts per status, what that kind's ``compute`` writes).
 """
 
 from __future__ import annotations
@@ -106,6 +111,7 @@ from aksha.runtime.egress.ports import HttpResponse
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
+from aksha.runtime.forms.tools import FORM_TOOLS, FormSpec, form_counts, form_kind, form_tools
 from aksha.runtime.grounding.parts import part_version, where_part
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.segment import (
@@ -241,6 +247,7 @@ from aksha.runtime.web.types import WEB_EGRESS, WEB_SOURCE, web_record_id
 __all__ = [
     "API_VERSION",
     "FORMATS",
+    "FORM_TOOLS",
     "INPUT_TOOLS",
     "INSTRUCTION_FLAG",
     "OTHER_KIND",
@@ -289,6 +296,7 @@ __all__ = [
     "FieldAnswer",
     "FieldSpec",
     "ForcedTool",
+    "FormSpec",
     "FromField",
     "GenerationRequest",
     "GenerationResult",
@@ -370,6 +378,9 @@ __all__ = [
     "fetch_url_spec",
     "fetch_url_tool",
     "find_dates",
+    "form_counts",
+    "form_kind",
+    "form_tools",
     "from_field",
     "input_tools",
     "instruction_text",

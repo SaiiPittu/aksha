@@ -41,7 +41,7 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
 | Demo line | What it shows |
 |---|---|
 | `research R-0001 complete: 11 outputs, 23 model calls` | The Research Agent ran its whole task tree through real tool calls and saved 11 versioned outputs. |
-| `patent   R-0002 complete: 23 outputs, 54 model calls` | The Patent Agent ran on the same runtime, in a separate run with its own tools. |
+| `patent   R-0002 complete: 23 outputs, 55 model calls` | The Patent Agent ran on the same runtime, in a separate run with its own tools. |
 | `scripted: approved A-0001 for patent.packet/C1@v1; the mailbox received it once` | The send waited for an approval bound to one exact packet version. |
 | `rebuilt 17: C1: comparison, extraction, handoff, packet, prior_art, recommendation; ...` | The new prior-art reference and the re-dated contributor email reopened candidate C1's chain; the edited reviews file reopened the research needs and the outputs built on them, and C2 to C4's recommendations, which read those outputs. |
 | `kept 7 of 11 research outputs: ...; competitors, scope` | Work that does not depend on the change was kept, not rerun. |

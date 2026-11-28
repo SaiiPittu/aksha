@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -67,6 +68,14 @@ class Kind(RuleClassificationModel):
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         q = request.questions[0]
         pick = "note" if "format: markdown" in request.state else "other"
+        section = "#section-" in request.state.split("\n", 1)[0]
+        if "undecided" in request.state or (section and "maybe" in request.state):
+            # abstains (an even split, as a live classifier can): on a record whose ref says
+            # undecided, and on a section that says maybe
+            even = {o: Decimal(1) / len(q.options) for o in q.options}
+            return ClassificationResult(
+                answers=((q.name, ClassAnswer(pick, distribution_ppm(even))),)
+            )
         rest = (Decimal(1) - Decimal("0.95")) / (len(q.options) - 1)
         probs = {o: Decimal("0.95") if o == pick else rest for o in q.options}
         return ClassificationResult(answers=((q.name, ClassAnswer(pick, distribution_ppm(probs))),))
@@ -162,6 +171,34 @@ def test_the_environment_s_note_on_the_records_comes_with_every_input_result(
         assert isinstance(got, Ok) and got.data["environment"] == note, name
         bare = _call(name, source, dict(args))
         assert isinstance(bare, Ok) and "environment" not in bare.data, name
+
+
+def test_a_kind_filter_keeps_an_input_whose_kind_is_undecided(source: Source) -> None:
+    """An abstention never hides an input: a kind-filtered listing keeps it, marked."""
+    source.texts["input/undecided.txt"] = "Plain words.\n"
+    got = _call("list_inputs", source, {"kinds": ["note"]})
+    assert isinstance(got, Ok)
+    rows = {r["ref"]: r for r in got.data["inputs"]}
+    assert set(rows) == {"input/note.md", "input/undecided.txt"}  # not t.csv: confidently other
+    assert rows["input/undecided.txt"]["decided"] is False
+    assert rows["input/undecided.txt"]["note"].startswith("kind undecided")
+    assert "note" not in rows["input/note.md"]
+    every = _call("list_inputs", source, {})
+    assert isinstance(every, Ok) and all("note" not in r for r in every.data["inputs"])
+
+
+def test_a_kind_filter_hides_a_decided_record_with_an_abstaining_section(source: Source) -> None:
+    """Only the record's own abstention keeps it: live, a preamble section abstains on most
+    multi-section notes, and keeping those would defeat the filter."""
+    source.texts["input/mixed.md"] = "# Plan\n\nWe sell it.\n\n## Aside\n\nmaybe later.\n"
+    two = replace(READING, kinds=(*KINDS, DocumentKind("memo", "a memo")))
+    every = _call("list_inputs", source, {}, reading=two)
+    assert isinstance(every, Ok)
+    mixed = next(r for r in every.data["inputs"] if r["ref"] == "input/mixed.md")
+    assert (mixed["kind"], mixed["decided"]) == ("note", True)
+    assert [s["decided"] for s in mixed["sections"]] == [True, False]  # the Aside abstains
+    got = _call("list_inputs", source, {"kinds": ["memo"]}, reading=two)
+    assert isinstance(got, Ok) and got.data["inputs"] == []  # a decided note is no memo
 
 
 def test_a_listing_version_is_its_hit_set(source: Source) -> None:
@@ -306,6 +343,25 @@ def test_search_ranks_passages_mints_nothing_and_records_its_hit_set(source: Sou
     assert read.kind == "query" and got.data["recorded"] == f"query:{read.id}@{read.version}"
     none = _call("search_inputs", source, {"query": "absent words", "match": "all"})
     assert isinstance(none, Ok) and none.data["hits"] == []
+
+
+def test_search_by_kind_searches_only_the_inputs_of_those_kinds() -> None:
+    """A search over one kind hits and records only those inputs: another kind moves nothing."""
+    source = Source({"input/note.md": NOTE, "input/plain.txt": "The probe is cheap.\n"})
+    by_kind = replace(READING, search_kinds=True)
+    every = _call("search_inputs", source, {"query": "probe"})
+    notes = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]}, reading=by_kind)
+    assert isinstance(every, Ok) and isinstance(notes, Ok)
+    assert every.data["inputs_hit"] == ["input/note.md", "input/plain.txt"]
+    assert notes.data["inputs_hit"] == ["input/note.md"] and notes.data["inputs_searched"] == 1
+    source.texts["input/other.txt"] = "Another probe page.\n"  # a new input of another kind
+    again = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]}, reading=by_kind)
+    assert isinstance(again, Ok) and again.reads == notes.reads
+    assert "kinds" in _tools(by_kind)["search_inputs"].spec.schema["properties"]
+    # off by default: an agent that does not search by kind keeps its recorded tool list
+    assert "kinds" not in _tools()["search_inputs"].spec.schema["properties"]
+    refused = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]})
+    assert isinstance(refused, Err) and refused.code == "no_kinds"
 
 
 def test_a_window_is_cut_to_fit_the_agent_result_cap() -> None:

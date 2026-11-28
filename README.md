@@ -28,7 +28,7 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
 ```text
 1. Both agents run on the stillroom world (8.32 s)
    research R-0001 complete: 11 outputs, 23 model calls
-   patent   R-0002 complete: 23 outputs, 54 model calls
+   patent   R-0002 complete: 23 outputs, 55 model calls
 2. The input changes to stillroom-v2's change set (0.75 s)
    added publications/SYN-PUB-0011.json (a new publication family)
    edited disclosures/consultant-email.eml.txt, disclosures/history.csv (the outside suggestion, now dated earlier)
@@ -76,7 +76,7 @@ make venv && make check   # lint, type check and every test, offline; about 6 mi
 | | Research | Patent |
 |---|---|---|
 | Job | Who sells camera-free occupancy sensing, at what price, and what customers ask for | Which invention candidates to take to counsel, and a disclosure packet for the chosen one |
-| Tools | The six shared tools: `list_inputs`, `read_document`, `search_inputs`, `web_search`, `fetch_url`, `todo` | The shared tools plus `search_publications`, `fetch_publication`, `list_templates`, `read_template`, `fill_form`, `send_packet` |
+| Tools | The six shared tools: `list_inputs`, `read_document`, `search_inputs`, `web_search`, `fetch_url`, `todo` | The shared tools, the shared form tools `read_form` and `fill_form`, and its one action of its own, `send_packet` |
 | Outputs | `research.scope`, `competitors`, one `profile` per company, `matrix`, `needs`, `findings`, `tests` | Per candidate `extraction`, `prior_art`, `comparison`, `recommendation`; `portfolio`, `table`, `selection`, `form`, `packet`, `handoff` |
 | People in the loop | A question when the segment or geography is missing | The candidate choice, then an approval on `send_packet` bound to the packet version and recipient |
 | Docs | [docs/agents/research.md](docs/agents/research.md) | [docs/agents/patent.md](docs/agents/patent.md) |

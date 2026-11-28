@@ -46,7 +46,7 @@ R-0002 patent waiting
 $ aksha answer I-0003 C1
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent waiting
-  waiting for approval A-0001: aksha approve A-0001 --signature v1:7d96ae2beaf74b47346eba327d8b3ec39ec2a3da382f47075a5bffaf73676cd3
+  waiting for approval A-0001: aksha approve A-0001 --signature v1:ae57f3fe9c83d0f3b772b0019b737aec7c337e98d54776957a646c8dfabb29a7
     approves: send_packet
     packet: patent.packet/C1@v1
     recipient: counsel-primary
@@ -56,7 +56,7 @@ R-0002 patent waiting
 ## 4. Approve the exact send shown; the mock mailbox receives the packet once
 
 ```console
-$ aksha approve A-0001 --signature v1:7d96ae2beaf7
+$ aksha approve A-0001 --signature v1:ae57f3fe9c83
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent ended complete
 (exit code 0)
@@ -65,9 +65,9 @@ R-0002 patent ended complete
 ## 5. Approving again delivers nothing
 
 ```console
-$ aksha approve A-0001 --signature v1:7d96ae2beaf7
+$ aksha approve A-0001 --signature v1:ae57f3fe9c83
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
-refused: already_decided (command c-7378b700752e9da22c0725ee, seq 1370)
+refused: already_decided (command c-619f219f231e369deea6d009, seq 1375)
 (exit code 7)
 ```
 
@@ -131,6 +131,6 @@ R-0002 patent ended complete
 
 ```console
 $ aksha verify
-chain ok: 1370 events, head sha256:25cdef89f9a5597f409240425802679e0302ee73a6563a4bd5c40587b2447a32
+chain ok: 1375 events, head sha256:f2cfd7a91924cc82d8adeed43fbdbc638f55feb3624b51d611e86d16b36b45f8
 (exit code 0)
 ```

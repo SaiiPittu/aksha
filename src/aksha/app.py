@@ -1734,7 +1734,6 @@ def open_demo(
     """
     from aksha.agents.patent.agent import build_agent as build_patent_agent
     from aksha.agents.patent.fakes import PatentFake
-    from aksha.agents.patent.world import SourceWorld
     from aksha.agents.research.fakes import ResearchModel
 
     clock = FakeClock(DEMO_START)
@@ -1755,8 +1754,7 @@ def open_demo(
         store, research, research.agent, research.registry, research_model["generate"],
         requests[research.agent.name], blobs, folder, tier,
     )  # fmt: skip
-    world = SourceWorld(DEMO_START.date())
-    agent = build_patent_agent(world)
+    agent = build_patent_agent()
     listed = {t.spec.name: t for t in agent.tools if isinstance(t, ToolDecl)}
     patent_setup = _setup(
         store, patent, agent, ToolRegistry(agent, listed, ()), PatentFake(),

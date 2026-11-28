@@ -1,9 +1,9 @@
 """Pure completion checks. Each reads only the Task view it is given.
 
 A message states what was found, what was expected and the change that passes. The counts
-a check could compare are computed by code: a form's ``counts`` by ``fill_form`` and again
-at every save (the kind's ``compute``), the next action by the rule table, the review by
-the portfolio extension; the model never counts.
+a check could compare are computed by code: a form's ``counts`` by the harness's
+``fill_form`` and again at every save (the kind's ``compute``), the next action by the rule
+table, the review by the portfolio extension; the model never counts.
 """
 
 from __future__ import annotations
@@ -229,7 +229,11 @@ def forms_filled(view: Any) -> CheckResult:
     missing = [t for t in want if t not in filled]
     if missing:
         return CheckResult(False, f"fill the forms {missing}", keys=tuple(missing))
-    return CheckResult(bool(filled), "fill each blank form found (list_templates)")
+    return CheckResult(
+        bool(filled),
+        "fill each blank form found (list_inputs with kinds "
+        "['form_template'], then read_form and fill_form)",
+    )
 
 
 def packet_saved(view: Any) -> CheckResult:

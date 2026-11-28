@@ -11,9 +11,16 @@ document kinds (:class:`InputReading`, declared data):
     The inputs with their format, size (characters and lines), version, a table's columns
     and, when the agent
     declares a decide alias, their document kind (ADR-P07 G3) and the kinds of their
-    sections (G4). A recorded query (ADR-P05 D6): its version hashes what it listed, so an
-    input added later re-executes it. ``as_of`` is the date the run counts to (a recorded
-    time read, ADR-P25 B2), so a model counts days to a recorded date. Mints nothing.
+    sections (G4). ``kinds`` keeps the inputs of those kinds (the record's or a
+    section's) and, because a fast classifier is an optimisation and never a gatekeeper,
+    also every input whose record kind the decision abstained on (``decided: false``),
+    with a note that the record's kind is undecided, so an agent can still read it by its
+    ref. Such an input is not kept when the record's kind was decided, nor when one of its
+    sections was confidently decided as a declared kind outside ``kinds``: an abstaining
+    preamble never defeats the filter. A recorded query (ADR-P05
+    D6): its version hashes what it listed, so an input added later re-executes it.
+    ``as_of`` is the date the run counts to (a recorded time read, ADR-P25 B2), so a model
+    counts days to a recorded date. Mints nothing.
 
 ``read_document(ref, offset?, limit?, section?, cells?, where?, extract?)``
     One input through its representation (what the ingest extension serves at the input's
@@ -37,10 +44,12 @@ document kinds (:class:`InputReading`, declared data):
     and records that record part as the read (ADR-P05 D6), so a change to another row
     reopens nothing built from these.
 
-``search_inputs(query, ref?, formats?, match?, limit?)``
-    Lexical search over every unit of every input (or of one): ranked passages, each with
-    its input, anchor, lines and a snippet. A recorded query whose version hashes the set of
-    inputs it hit. Mints nothing: a hit is a pointer, and a claim needs the unit read.
+``search_inputs(query, ref?, formats?, kinds?, match?, limit?)``
+    Lexical search over every unit of every input (or of one, or of the inputs of some
+    kinds, decided as ``list_inputs`` decides them): ranked passages, each with its input,
+    anchor, lines and a snippet. A recorded query whose version hashes the set of inputs it
+    hit, so an input of another kind added later leaves it unchanged. Mints nothing: a hit
+    is a pointer, and a claim needs the unit read.
 
 :func:`read_view` is the view ``read_document`` returns, over any returned text, so the
 generic ``fetch_url`` (``web/tools.py``) shows a fetched page exactly as an input.
@@ -147,6 +156,10 @@ class InputReading:
     line_chars: int = LINE_CHARS
     result_chars: int | None = None
     retry: RetryPolicy = SLOW_RETRY
+    search_kinds: bool = False
+    """Whether ``search_inputs`` takes ``kinds`` (it needs ``decide``): off by default, so an
+    agent that does not search by kind keeps the schema and the tool list it was recorded
+    with."""
 
     def aliases(self) -> frozenset[str]:
         """The fast-class aliases the tools may ask: the decide alias and each kind's schema."""
@@ -320,7 +333,7 @@ def resolve(ctx: ToolContext, reading: InputReading, ref: str) -> str | Err:
 # --- list_inputs -----------------------------------------------------------------------
 
 
-def _decide(
+def decide_row(
     ctx: ToolContext, reading: InputReading, found: ReturnedText, fmt: str, segs: Sequence[Segment]
 ) -> dict[str, Any]:
     """The record's kind and, when it has several sections, each section's kind."""
@@ -339,6 +352,27 @@ def _decide(
             )
         row["sections"] = listed
     return row
+
+
+UNDECIDED_NOTE = (
+    "kind undecided: the fast classifier did not settle the record's kind, so it is listed "
+    "for the kinds you asked for; read it to see whether it is one"
+)
+"""The note on an input a kind-filtered listing keeps although its kind is undecided."""
+
+
+def _undecided(row: Mapping[str, Any], kinds: set[str]) -> bool:
+    """Whether a row outside ``kinds`` is kept as undecided.
+
+    Its record kind abstained, and no section was confidently decided as a declared kind
+    outside ``kinds``.
+    """
+    if row["decided"]:
+        return False  # a confident record kind is never undecided, whatever a section says
+    return not any(
+        s["decided"] and s["kind"] != OTHER_KIND and s["kind"] not in kinds
+        for s in row.get("sections", ())
+    )
 
 
 def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading) -> ToolOutcome:
@@ -370,10 +404,12 @@ def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading
             with suppress(ValueError):
                 row["columns"] = list(read_rows(found.text, fmt).columns)
         if reading.decide is not None:
-            row.update(_decide(ctx, reading, found, fmt, segments_of(found.text, fmt)))
+            row.update(decide_row(ctx, reading, found, fmt, segments_of(found.text, fmt)))
             held = {row["kind"], *(s["kind"] for s in row.get("sections", ()))}
             if kinds and not kinds & held:
-                continue
+                if not _undecided(row, kinds):
+                    continue
+                row["note"] = UNDECIDED_NOTE  # an abstention never hides an input
         rows.append(row)
     keys = [
         f"{x['ref']}:{x.get('kind', '')}:"
@@ -744,6 +780,11 @@ def search_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReadi
             Err("query_empty", "give a query or terms with a word to search for", paths=("/query",))
         )
     formats = {str(f) for f in args.get("formats", ())}
+    kinds = {str(k) for k in args.get("kinds", ())}
+    if kinds and (reading.decide is None or not reading.search_kinds):
+        return ToolOutcome(
+            Err("no_kinds", "this agent declares no document kinds to filter by", paths=("/kinds",))
+        )
     limit = int(args.get("limit", SEARCH_LIMIT))
     if args.get("ref") is not None:
         one = resolve(ctx, reading, str(args["ref"]))
@@ -762,9 +803,14 @@ def search_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReadi
         fmt = sniff_format(r, found.text)
         if formats and fmt not in formats:
             continue
+        segs = segments_of(found.text, fmt)
+        if kinds:  # the same decision list_inputs lists (one per input, memoised per run)
+            row = decide_row(ctx, reading, found, fmt, segs)
+            if not kinds & {row["kind"], *(s["kind"] for s in row.get("sections", ()))}:
+                continue
         searched += 1
         starts = _line_starts(found.text)
-        units = units_of(found.text, fmt, segments_of(found.text, fmt))
+        units = units_of(found.text, fmt, segs)
         # A JSON value's whole unit is searched only when none of its rows matched.
         mine: list[dict[str, Any]] = []
         for u in sorted(units, key=lambda x: x.kind == "data"):
@@ -864,6 +910,17 @@ def read_schema(reading: InputReading) -> dict[str, Any]:
     }
 
 
+def search_schema(reading: InputReading) -> dict[str, Any]:
+    """``search_inputs``'s arguments; ``kinds`` only for an agent that searches by kind."""
+    schema = {**SEARCH_SCHEMA, "properties": dict(SEARCH_SCHEMA["properties"])}
+    if reading.decide is not None and reading.search_kinds:
+        schema["properties"]["kinds"] = {
+            "type": "array",
+            "items": {"enum": list(reading.kind_names())},
+        }
+    return schema
+
+
 SEARCH_SCHEMA: Mapping[str, Any] = {
     "type": "object",
     "properties": {
@@ -910,6 +967,7 @@ def input_tools(agent: str, reading: InputReading) -> tuple[ToolDecl, ...]:
     def searcher(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         return search_inputs(ctx, args, reading)
 
+    by_kind = reading.decide is not None and reading.search_kinds
     listing.__name__, reader.__name__, searcher.__name__ = INPUT_TOOLS
     return (
         ToolDecl(
@@ -955,12 +1013,14 @@ def input_tools(agent: str, reading: InputReading) -> tuple[ToolDecl, ...]:
                 "Search the inputs (or one, by ref) for words: ranked passages with their "
                 "ref, anchor, lines and a snippet. A query matches any of its words (the "
                 "default), all of them, or the exact phrase; terms is a list of words or "
-                "phrases, each matched whole. A hit is not citable: read_document it to cite it.",
-                SEARCH_SCHEMA,
+                "phrases, each matched whole. A hit is not citable: read_document it to cite it."
+                + (" kinds searches only the inputs of those kinds." if by_kind else ""),
+                search_schema(reading),
                 collections=collections,
                 recorded_query=True,
                 result_key="/ref",
                 retry=reading.retry,
+                model_aliases=aliases if by_kind else frozenset(),
             ),
             searcher,
         ),

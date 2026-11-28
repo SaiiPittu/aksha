@@ -2,14 +2,14 @@
 
 1. :func:`next_action`: the recommendation rule table (one of three next actions).
 2. :func:`family_of`: publications grouped into families by a shared priority number.
-3. :func:`form_refusal`: what the form tool refuses (a field marked complete that counsel
-   must confirm, a complete field with no value, a template field left out).
-4. :func:`required_missing`: the required fields still missing, which keep a packet from
-   becoming ready.
-5. :func:`research_misuse`: where a recommendation names a research output outside its
+3. :func:`required_missing`: the required fields still missing, which keep a packet from
+   becoming ready. What a fill of a form may hold (a counsel field never complete, a
+   complete field with a value, every template field given) is the harness's form tool's
+   rule (``runtime/forms``), checked in code for every agent that lists it.
+4. :func:`research_misuse`: where a recommendation names a research output outside its
    business-importance part, which would use market research as novelty or prior-art
    evidence.
-6. :func:`selection_options` and :func:`selection_from_answer`: the choice put to the
+5. :func:`selection_options` and :func:`selection_from_answer`: the choice put to the
    person (the table's candidates with their recommendations) and the selection the
    runtime saves from the codes they chose. The person decides; the agent never does.
 
@@ -25,7 +25,6 @@ from typing import Any
 
 NEXT_ACTIONS = ("prioritize_counsel_review", "collect_more_evidence", "deprioritize_for_now")
 STATES = ("disclosed", "partial", "not_found", "not_checked")
-FIELD_STATUSES = ("complete", "missing", "needs_counsel_confirmation")
 BUILT = ("built_and_tested", "in_use_under_nda")
 IMPLEMENTATION = ("built_and_tested", "in_use_under_nda", "prototype", "idea_only", "unknown")
 """What ``extraction.implementation.status`` holds (declared in the extraction schema)."""
@@ -150,22 +149,6 @@ def family_of(publications: Sequence[Mapping[str, Any]]) -> dict[str, list[str]]
     return {k: sorted(v) for k, v in sorted(families.items())}
 
 
-def form_counts(fields: Any) -> dict[str, int]:
-    """How many of a form's ``fields`` are in each status: computed, never the model's."""
-    listed = fields if isinstance(fields, list | tuple) else ()
-    return {
-        s: sum(1 for f in listed if isinstance(f, Mapping) and f.get("status") == s)
-        for s in FIELD_STATUSES
-    }
-
-
-def computed_form(content: dict[str, Any]) -> dict[str, Any]:
-    """A form's ``counts`` from its fields, at every save (a correction of one field too)."""
-    if isinstance(content.get("fields"), list):
-        content["counts"] = form_counts(content["fields"])
-    return content
-
-
 def computed_recommendation(content: dict[str, Any]) -> dict[str, Any]:
     """A recommendation's ``business_importance.note``, written by code at every save.
 
@@ -185,34 +168,6 @@ def required_missing(form: Mapping[str, Any]) -> list[str]:
         for f in form.get("fields", ())
         if f.get("required") and f.get("status") == "missing"
     ]
-
-
-def form_refusal(
-    template: Mapping[str, Any], fields: Sequence[Mapping[str, Any]]
-) -> tuple[str, str] | None:
-    """Why the form tool refuses ``fields`` for ``template``, or None: ``(code, message)``."""
-    declared = {f["field"]: f for f in template["fields"]}
-    given = [str(f.get("field")) for f in fields]
-    if sorted(given) != sorted(declared):
-        missing = sorted(set(declared) - set(given))
-        extra = sorted(set(given) - set(declared))
-        return "fields_mismatch", f"missing {missing}, not in the template {extra}"
-    for f in fields:
-        name, status, value = str(f["field"]), f.get("status"), f.get("value")
-        if status not in FIELD_STATUSES:
-            return "status_invalid", f"{name}: status is one of {FIELD_STATUSES}"
-        empty = value in (None, "", [], {})
-        if status == "complete" and empty:
-            return "complete_needs_value", f"{name}: a complete field holds a value"
-        default = declared[name].get("default_status") or ""
-        if status == "complete" and default.startswith("needs_counsel_confirmation"):
-            return "counsel_decides", f"{name}: only counsel confirms this field"
-        if status == "complete" and f.get("counsel_question"):
-            return (
-                "counsel_decides",
-                f"{name}: a field with an open counsel question is not complete",
-            )
-    return None
 
 
 def _table_rows(view: Any) -> list[Mapping[str, Any]]:
@@ -244,7 +199,9 @@ def selection_options(view: Any) -> tuple[tuple[str, str], ...]:
         if code in {c for c, _ in out}:
             continue
         src = _recommended(view, code, row)
-        label = f"{src.get('next_action', '')}: {src.get('why', '')}".strip(": ")
+        why = src.get("why")  # a live model may save a structured why: the action alone then
+        why = " ".join(why.split()) if isinstance(why, str) else ""
+        label = f"{src.get('next_action') or ''}: {why}".strip(": ")
         out.append((code, label))
     return tuple(out)
 

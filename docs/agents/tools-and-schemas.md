@@ -26,8 +26,8 @@ A recorded query (`recorded_query=True`) is versioned by a hash of what it retur
 | Tool | Owner | Effect | Research Tasks | Patent Tasks | Limits | Idempotency |
 |---|---|---|---|---|---|---|
 | `list_inputs` | the agent (shared harness tool) | `read`, recorded query | `scope`, `discover`, `voice` | `scope`, `extract`, `prepare` | `limit` at most 500 entries; read retry policy | Re-runnable; versioned by its listing |
-| `read_document` | the agent (shared) | `read`, mints spans | `scope`, `discover`, `evidence`, `voice` | `scope`, `extract`, `prepare` | `limit` at most 2,000 lines; window 16,000 characters (research) or 40,000 (patent) | Re-runnable; the read records the input's version |
-| `search_inputs` | the agent (shared) | `read`, recorded query | `scope`, `discover`, `voice` | `scope`, `extract`, `prepare` | Hits are pointers, never citable | Re-runnable; versioned by its hits |
+| `read_document` | the agent (shared) | `read`, mints spans | `scope`, `discover`, `evidence`, `voice` | `scope`, `extract`, `prepare`, `deep`, `prior_art` | `limit` at most 2,000 lines; window 16,000 characters (research) or 40,000 (patent) | Re-runnable; the read records the input's version |
+| `search_inputs` | the agent (shared) | `read`, recorded query | `scope`, `discover`, `voice` | `scope`, `extract`, `prepare`, `deep`, `prior_art` | Hits are pointers, never citable; `kinds` searches only the inputs of those kinds | Re-runnable; versioned by the inputs it hit |
 | `todo` | the agent (shared) | `read` | `scope`, `discover`, `evidence`, `voice` | `scope`, `extract` | One item in progress at a time | Re-runnable; the whole list is sent each call |
 | `web_search` | the agent (shared) | `read`, egress `aksha.web` | `discover` | `deep`, `prior_art` | `query` 2 to 400 characters, `limit` 1 to 20; 60,000 ms timeout, two retries | Re-runnable; mints nothing, a snippet is never evidence |
 | `fetch_url` | the agent (shared) | `read`, egress `aksha.web`, mints spans | `discover`, `evidence` | `deep`, `prior_art` | `url` 8 to 2,000 characters; read retry policy | Re-runnable; the page is read as record `web/<host><path>` at its version |
@@ -35,19 +35,17 @@ A recorded query (`recorded_query=True`) is versioned by a hash of what it retur
 | `ask` | runtime | `reserved` | `scope` | `extract`, `select` | Only where the Task declares an interrupt | One open interrupt; the answer is a recorded fact |
 | `save_artifact` | runtime | `store` | every Task | every Task but `candidate` and `prepare` | Only the kinds in the Task's `writes`; content checked against the kind's schema and cite policies | A new version per save |
 | `commit_round` | patent (portfolio extension) | `store` | none | `candidate` | Deep tier cap 10, deep budget 100 turns, batch cap 10; the whole round is refused when one is broken | A new round per commit |
-| `list_templates` | patent | `read`, recorded query | none | `scope`, `prepare` | Read retry policy | Re-runnable; versioned by the template list |
-| `read_template` | patent | `read`, mints spans | none | `prepare` | Read retry policy | Re-runnable |
-| `search_publications` | patent | `read`, recorded query | none | `deep`, `prior_art` | `all_of` holds at least one group of at least one term | Re-runnable; versioned by its hit IDs |
-| `fetch_publication` | patent | `read`, mints spans | none | `deep`, `prior_art` | Read retry policy | Re-runnable |
-| `fill_form` | patent | `store`, writes `patent.form` | none | `prepare` | Refuses a field list that is not the template's (`fields_mismatch`), an unknown status, a `complete` field with no value, and a `complete` counsel field (`counsel_decides`) | One form version per candidate and template (`<candidate>~<template>`) |
+| `read_form` | the agent (shared harness tool) | `read`, mints spans | none | `scope`, `prepare` | Read retry policy; refuses an input the kind decision confidently read as another kind (`not_a_form`) or that holds no field (`no_fields`); when the decision abstains, an input with a section confidently decided as another declared kind is `not_a_form`, and otherwise the form is recognised by its structure (at least one form field extracted) and the result says `recognised_by: "structure"` | Re-runnable; the read records the form's version |
+| `fill_form` | the agent (shared harness tool) | `store`, writes the agent's form kind (`patent.form`, declared with the harness's `form_kind`, which recomputes the counts on every save) | none | `prepare` | Refuses a field list that is not the form's (`fields_mismatch`), an unknown status (`status_invalid`), a `complete` field with no value (`complete_needs_value`), and a `complete` field only the confirmer completes or with an open question (`confirm_only`) | One form version per key and form (`<candidate>~<template>`) |
 | `send_packet` | patent | `external`, system `counsel_mail` | none | `send` | Needs an approval of the exact packet version and recipient; the recipient matches `^[A-Za-z0-9][A-Za-z0-9._@+-]{0,127}$` | `reconcile` on `("/packet", "/recipient")`: the same packet to the same recipient is sent at most once |
 
 The read retry policy is a 600,000 ms timeout with one retry for both agents (`READING.retry`); other tools use the default of 10,000 ms with two retries. The `deep` row lists the tools of the `deep` parent, which its child `prior_art` uses.
 
-Two tools keep the model from writing what code must decide:
+Two tools keep the model from writing what code must decide, and the shared reading tools never let a cheap model hide an input:
 
-1. `fill_form` checks the fields against the blank template in `rules.form_refusal` and records `required` from the template, never from the model ([`tests/agents/test_patent_units.py`](../../tests/agents/test_patent_units.py), `test_form_refusals`, `test_fill_form_refuses_marking_a_counsel_field_complete`, `test_fill_form_records_required_from_the_template_not_the_model`).
-2. `send_packet`'s body never sends: it returns `outbox_only`, and only the outbox delivers, after the approval (`test_send_needs_an_approval_and_goes_through_the_outbox`).
+1. `fill_form`, the harness's form tool ([`src/aksha/runtime/forms/tools.py`](../../src/aksha/runtime/forms/tools.py)), checks the fields against the blank form in `form_refusal` and records `required` from the form, never from the model. The agent declares its forms as data (`FormSpec`: the patent agent's is `tools.FORMS`, with counsel as the confirmer and `needs_counsel_confirmation` as the confirm status); the rules are the runtime's. Tested with a checklist agent in [`tests/unit/runtime/forms/test_tools.py`](../../tests/unit/runtime/forms/test_tools.py) and for the patent agent in [`tests/agents/test_patent_units.py`](../../tests/agents/test_patent_units.py) (`test_fill_form_refuses_marking_a_counsel_field_complete`, `test_fill_form_records_required_from_the_template_not_the_model`).
+2. A fast classifier is an optimisation, never a gatekeeper. The document-kind decision behind `list_inputs` and the form tools can abstain (live, a fast classification model abstained on a blank invention disclosure form, and the per-run memo kept that abstention for the whole run). `list_inputs` with `kinds` then still lists the input, with `decided: false` and a note that the record's kind is undecided, so the model can name it. Only the record-level abstention counts: an input whose record kind was decided, or one with a section confidently decided as a declared kind outside `kinds`, stays filtered out (live, most multi-section notes have an abstaining preamble, and an engineering note whose Problem and Mechanism sections were decided invention disclosures held a parameter table that looks like form rows). `read_form` and `fill_form` reuse that same decided row (the same requests, so memo hits): an undecided input with a section confidently read as another kind is refused `not_a_form`; otherwise they run the form kind's extraction over it and accept it as a blank form when that yields at least one form field (`recognised_by: "structure"`). An input the decision confidently read as another kind is refused `not_a_form` as before. Tested in [`tests/unit/runtime/forms/test_tools.py`](../../tests/unit/runtime/forms/test_tools.py) (`test_a_blank_form_the_classifier_abstains_on_is_read_and_filled_by_its_structure`, `test_a_record_confidently_read_as_another_kind_is_still_refused`, `test_an_undecided_record_with_a_section_of_another_kind_is_not_a_form`) and [`tests/unit/runtime/inputs/test_tools.py`](../../tests/unit/runtime/inputs/test_tools.py) (`test_a_kind_filter_keeps_an_input_whose_kind_is_undecided`, `test_a_kind_filter_hides_a_decided_record_with_an_abstaining_section`).
+3. `send_packet`'s body never sends: it returns `outbox_only`, and only the outbox delivers, after the approval (`test_send_needs_an_approval_and_goes_through_the_outbox`).
 
 `save_artifact`'s published schema is generic. What the model is shown is made per Task: the description names each kind the Task writes, whether it takes a key, which fields must cite, and the kind's content schema (`offered_for_task`). The kinds are listed in [research.md](research.md#outputs) and [patent.md](patent.md#outputs).
 
@@ -70,7 +68,7 @@ for agent in (R, P):
         print(agent.name, name, json.dumps(thaw(spec.schema), indent=2))
 ```
 
-A schema shared by both agents is printed once. `list_inputs` differs only in its `kinds` enum, which comes from each agent's document kinds.
+A schema shared by both agents is printed once. `list_inputs` differs only in its `kinds` enum, which comes from each agent's document kinds; `search_inputs` takes `kinds` only for the patent agent.
 
 ### `list_inputs`
 
@@ -234,6 +232,8 @@ For the patent agent:
 
 ### `search_inputs`
 
+For the research agent:
+
 ```json
 {
   "type": "object",
@@ -282,6 +282,20 @@ For the patent agent:
       "type": "integer",
       "minimum": 1,
       "maximum": 100
+    },
+    "kinds": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "competitor_page",
+          "pricing_table",
+          "customer_reviews",
+          "market_report",
+          "conversation",
+          "internal_note",
+          "other"
+        ]
+      }
     }
   },
   "anyOf": [
@@ -299,6 +313,8 @@ For the patent agent:
   "additionalProperties": false
 }
 ```
+
+For the patent agent, which sets `search_kinds`, the same with a `kinds` property: an array whose items are its document kinds, as for `list_inputs`. The research agent's search takes no `kinds`.
 
 ### `todo`
 
@@ -827,18 +843,7 @@ For the patent agent:
 }
 ```
 
-### `list_templates`
-
-```json
-{
-  "type": "object",
-  "properties": {},
-  "required": [],
-  "additionalProperties": false
-}
-```
-
-### `read_template`
+### `read_form`
 
 ```json
 {
@@ -846,55 +851,12 @@ For the patent agent:
   "properties": {
     "template": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 512
     }
   },
   "required": [
     "template"
-  ],
-  "additionalProperties": false
-}
-```
-
-### `search_publications`
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "all_of": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "array",
-        "minItems": 1,
-        "items": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    }
-  },
-  "required": [
-    "all_of"
-  ],
-  "additionalProperties": false
-}
-```
-
-### `fetch_publication`
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "id": {
-      "type": "string",
-      "minLength": 1
-    }
-  },
-  "required": [
-    "id"
   ],
   "additionalProperties": false
 }
@@ -908,11 +870,12 @@ For the patent agent:
   "properties": {
     "template": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "maxLength": 512
     },
-    "candidate": {
+    "key": {
       "type": "string",
-      "minLength": 1
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
     },
     "fields": {
       "type": "array",
@@ -923,7 +886,7 @@ For the patent agent:
   },
   "required": [
     "template",
-    "candidate",
+    "key",
     "fields"
   ],
   "additionalProperties": false

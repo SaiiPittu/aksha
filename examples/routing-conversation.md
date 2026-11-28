@@ -58,7 +58,7 @@ session S-<session> waiting for route I-0001 (aksha answer I-0001 --agent NAME)
 (exit code 3)
 ```
 
-## 3. Name the agent; the run starts on the patent agent and asks its first question
+## 3. Name the agent; the run starts on the patent agent and holds on the default budget
 
 Note: this routed run recorded no budget of its own on `run.started`, so it runs on the runtime default (`DEFAULT_BUDGET`, 40 tool calls) and holds on a budget interrupt the same request run with `--agent` does not reach.
 
@@ -66,8 +66,6 @@ Note: this routed run recorded no budget of its own on `run.started`, so it runs
 $ aksha answer I-0001 --agent patent
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0001 patent waiting
-  waiting for input (missing detail) I-0002: aksha answer I-0002 TEXT
-    asks: C2: the note leaves Minimum distance from a vent undecided. What is it?
   waiting for budget budget-1: aksha answer budget-1 TEXT
 (exit code 3)
 ```
@@ -89,9 +87,7 @@ R-0002 research waiting
 
 ```console
 $ aksha status
-R-0001 patent waiting
-  waiting for input (missing detail) I-0002: aksha answer I-0002 TEXT
-    asks: C2: the note leaves Minimum distance from a vent undecided. What is it?
+R-0001 patent running
 R-0002 research waiting
   waiting for budget budget-1: aksha answer budget-1 TEXT
 (exit code 0)

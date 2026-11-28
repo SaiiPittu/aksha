@@ -25,7 +25,6 @@ from aksha.adapters.storage.sqlite import open_store
 from aksha.agents.patent.agent import KINDS, build_agent
 from aksha.agents.patent.fakes import ADAPTERS as FAKE_ADAPTERS
 from aksha.agents.patent.fakes import PatentFake
-from aksha.agents.patent.world import SourceWorld
 from aksha.runtime.artifacts.store import ArtifactStore
 from aksha.runtime.artifacts.types import ArtifactKind, ArtifactVersion
 from aksha.runtime.artifacts.versions import current
@@ -119,12 +118,11 @@ class PatentRig:
     def __init__(self, path: Path, world: str = "stillroom") -> None:
         self.path = path
         self.clock = FakeClock(START)
-        self.world = SourceWorld(TODAY)
         self.inputs = Inputs(world)
         self.world_name = world
         self.model = PatentFake()
         self.ledger = Ledger("counsel_mail")
-        self.agent = build_agent(self.world)
+        self.agent = build_agent()
         self._open()
 
     def _open(self) -> None:

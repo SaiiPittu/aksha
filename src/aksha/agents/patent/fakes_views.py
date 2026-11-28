@@ -17,7 +17,12 @@ tools returned into what those rules read:
    its fast-class aliases are answered by in ``fake`` mode), gives the views the rules were
    written against (:data:`VIEWS`: the candidates, one candidate's note, contributor rows,
    disclosure rows with days to ``as_of``, people, priorities, a linked document).
-3. **A fetched page.** :func:`page_view` reads a ``fetch_url`` result the same way, as a
+3. **Publications.** A prior-art search is ``search_inputs`` over the inputs of the
+   publication kind; the model reads every input it hit in full (:func:`refs_needed`) and
+   works the hits, each publication's numbers, dates, priority claims and status
+   wordings, and the families out over what it read (:func:`seen_world`), as a live model
+   reads ``read_document`` and its ``publication_biblio`` extraction.
+4. **A fetched page.** :func:`page_view` reads a ``fetch_url`` result the same way, as a
    publication when it is one, else as a document.
 
 The views are computed in the model's own turn, never by a tool, so nothing here is agent
@@ -227,6 +232,44 @@ def world_of(results: Results, models: OfflineReaders, task: str = "extract") ->
     )
 
 
+def refs_needed(results: Results, refs: Sequence[str]) -> list[tuple[str, dict[str, Any]]]:
+    """The ``read_document`` calls still to make before every one of ``refs`` is read whole.
+
+    A prior-art search names the inputs it hit (``search_inputs``' ``inputs_hit``); the
+    model reads each of those in full, then works its reading out over them
+    (:func:`seen_world`).
+    """
+    done = [(dict(a), d) for a, d in _ok(results, "read_document")]
+    out: list[tuple[str, dict[str, Any]]] = []
+    for ref in dict.fromkeys(refs):
+        got = [d for a, d in done if a.get("ref") == ref and a.get("where") is None
+               and a.get("section") is None]  # fmt: skip
+        if not got:
+            out.append(("read_document", {"ref": ref}))
+            continue
+        shown = {int(w.get("first_line", 1)) for w in got}
+        for w in got:
+            nxt = w.get("next_offset")
+            if nxt is not None and int(nxt) not in shown:
+                out.append(("read_document", {"ref": ref, "offset": int(nxt)}))
+    return out
+
+
+def seen_world(results: Results, models: OfflineReaders) -> SourceWorld:
+    """Every input this instance read in full, at the version it read last (no listing)."""
+    windows = _windows(results)
+    latest: dict[str, str] = {}
+    for a, d in _ok(results, "read_document"):
+        if a.get("section") is None and a.get("where") is None:
+            latest[str(d["ref"])] = str(d["version"])
+    texts = {
+        ref: ReturnedText("inputs", ref, version, text_of(windows[(ref, version)]))
+        for ref, version in latest.items()
+        if (ref, version) in windows
+    }
+    return SourceWorld(reader=SeenReader(texts), models=models)
+
+
 def _shown(data: Mapping[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in data.items() if k != "parts"}
 
@@ -285,7 +328,7 @@ def _view(world: SourceWorld, name: str, args: Mapping[str, Any]) -> dict[str, A
 
 
 def page_view(data: Mapping[str, Any], models: OfflineReaders) -> dict[str, Any]:
-    """A fetched page as a publication when it is one, else as a document (item 3)."""
+    """A fetched page as a publication when it is one, else as a document (item 4)."""
     text = ReturnedText("web", str(data["ref"]), str(data["version"]), text_of([data]))
     world = SourceWorld(reader=OneRecord(text), models=models)
     record = text.record_id

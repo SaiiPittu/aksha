@@ -217,6 +217,7 @@
     ]
    }
   ],
+  "file": "input/templates/invention-disclosure-form.md",
   "form": "Invention disclosure form (blank)",
   "template": "invention-disclosure-form",
   "template_version": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451"

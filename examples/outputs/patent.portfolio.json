@@ -20,7 +20,7 @@
     "coverage": {
      "count": 2,
      "scope": {
-      "query": "patent.list_templates?{}"
+      "query": "patent.list_inputs?{\"kinds\":[\"form_template\"]}"
      },
      "statement": "every blank form the inputs hold"
     }
