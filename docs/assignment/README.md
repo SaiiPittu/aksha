@@ -36,7 +36,7 @@ You need Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). No API key a
 uvx --from git+https://github.com/SaiiPittu/aksha aksha demo
 ```
 
-The demo runs both agents, changes the inputs, rebuilds only what depends on the change, kills the process mid-send with a real `SIGKILL` (the signal that ends a process at once, with no cleanup) and recovers it. It exits 0 only when every check passes. Every answer and approval a person would give is scripted, and the store records each one as given by `demo-script`. The demo announces about 20 seconds, which assumes an idle machine; on a machine busy with other work, two runs on 28 Nov 2026 took 122.66 s and 148.89 s (measured). Both printed the lines below; only the hash chain's head differs from run to run, because each new store gets a random store ID that seeds the first hash of its chain (the demo's clock is fixed, so timestamps do not vary; see [02-shared-runtime.md](02-shared-runtime.md#proof-that-it-is-one-real-system-one-send-traced-through-the-store)). Lines from the second run, measured:
+The demo runs both agents, changes the inputs, rebuilds only what depends on the change, kills the process mid-send with a real `SIGKILL` (the signal that ends a process at once, with no cleanup) and recovers it. It exits 0 only when every check passes. Every answer and approval a person would give is scripted, and the store records each one as given by `demo-script`. On 28 Nov 2026 the command above, run from GitHub with `uvx`, printed "Done in 18.66 s" and took 36.7 s including the first install (measured); a busy machine takes longer. It printed the lines below. The hash chain's head differs from run to run, because each new store gets a random store ID that seeds the first hash of its chain (the demo's clock is fixed, so timestamps do not vary; see [02-shared-runtime.md](02-shared-runtime.md#proof-that-it-is-one-real-system-one-send-traced-through-the-store)). Lines from that run, measured:
 
 | Demo line | What it shows |
 |---|---|
@@ -49,13 +49,13 @@ The demo runs both agents, changes the inputs, rebuilds only what depends on the
 | `C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation` | The contribution and ownership question goes to counsel; the agent does not decide it. |
 | `A-0001 approved patent.packet/C1@v1 only, so it does not cover patent.packet/C1@v2; a fresh approval is requested` | An approval covers one packet version; a changed packet needs a fresh one. |
 | `at restart: 1 outbox entry open with no receipt; recovery asked the mailbox by key 1 time, sent 0 times` | After the `SIGKILL`, recovery checked whether the send had happened instead of sending again. |
-| `hash chain verified: 1912 events, head sha256:ebc0aa9a8d656d0b...` | Every fact above is an event in one tamper-evident log. |
+| `hash chain verified: 1943 events, head sha256:928ad01e44731a54...` | Every fact above is an event in one tamper-evident log. |
 
-The run can be inspected afterwards. With `AKSHA_HOME` set to the store folder the demo prints on its last line (`<AKSHA_HOME>/demo`), `aksha --user founder-1 inspect R-0005` printed the recovered send run with `"outcome": "complete"` and its steps by ID, such as `R-0005/send[C1]/t01/c01` (tool `send_packet`), and `aksha verify` printed `chain ok: 1912 events, head sha256:ebc0aa9a8d656d0b...`. The demo's mock mailbox, `mailbox.json` in that folder, held two deliveries, `m-1` for `patent.packet/C1@v1` and `m-2` for `patent.packet/C1@v2`. A longer walk through the same run is in [01-end-to-end-flow.md](01-end-to-end-flow.md).
+The run can be inspected afterwards. Set `AKSHA_HOME` to the store folder the demo prints on its last line (`<AKSHA_HOME>/demo`). Then `aksha --user founder-1 inspect R-0005` printed the recovered send run with `"outcome": "complete"` and its steps by ID, such as `R-0005/send[C1]/t01/c01` (tool `send_packet`), and `aksha verify` printed `chain ok: 1943 events` with that store's own head. These were measured on a later run of the same code on 28 Nov 2026. The demo's mock mailbox, `mailbox.json` in that folder, held two deliveries, `m-1` for `patent.packet/C1@v1` and `m-2` for `patent.packet/C1@v2`. A longer walk through the same run is in [01-end-to-end-flow.md](01-end-to-end-flow.md).
 
 ### Six targeted tests
 
-Set up once with `make venv`, then run each command from the repository root. Each finished in under 25 seconds on 28 Nov 2026 (measured; the replay test takes about 20 s, the others 1 to 5 s). Tests that are also written for PostgreSQL are skipped when the `postgres` extra is not installed.
+Set up once with `make venv`, then run each command from the repository root. Each finished in under 25 seconds on 28 Nov 2026 (measured; most take 1 to 5 s). Tests that are also written for PostgreSQL are skipped when the `postgres` extra is not installed.
 
 | Claim | Command | Expected result |
 |---|---|---|
@@ -64,7 +64,7 @@ Set up once with `make venv`, then run each command from the repository root. Ea
 | Outputs are grounded: a search snippet cannot be cited, a failed fetch stays unverified, missing data stays unknown | `.venv/bin/pytest -p no:xdist tests/integration/test_grounding.py::test_search_hit_cannot_be_cited tests/integration/test_grounding.py::test_failed_fetch_is_unverified tests/integration/test_grounding.py::test_missing_is_unknown_not_zero` | `3 passed` |
 | A crash at any commit point, or repeated retries, still sends once | `.venv/bin/pytest -p no:xdist tests/integration/test_effect_steps.py::test_crash_at_each_commit_point_sends_once_and_records_once tests/integration/test_outbox.py::test_send_retried_3x_restart_1x_one_row` | `4 passed, 4 skipped` without PostgreSQL |
 | A changed input reopens its dependents and leaves unrelated work alone | `.venv/bin/pytest -p no:xdist tests/integration/test_invalidation.py::test_s6_change_and_recovery tests/integration/test_invalidation.py::test_unrelated_writer_is_not_touched` | `2 passed` |
-| The recorded live-model run replays offline to the same outputs | `.venv/bin/pytest -p no:xdist tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs` | `1 passed` |
+| A recorded run replays offline, with no model and no network, to the same outputs byte for byte | `.venv/bin/pytest -p no:xdist tests/integration/test_record_replay.py::test_the_bundled_example_replays_to_its_recorded_outputs` | `1 passed` |
 
 The full suite is `make check` (lint, type check and every test, offline).
 
@@ -105,7 +105,7 @@ The [requirements matrix](../requirements.md) maps each assignment requirement, 
 Two kinds of claim appear in these pages, and they rest on different evidence.
 
 1. Harness guarantees are proven offline by code and tests. Tool permissions, citation checks, invalidation, approvals bound to one version (in an attended run), one send per key and crash recovery hold whatever the model writes, because the runtime enforces them. The demo and the tests above run on rule-based fake models, so they prove these guarantees and nothing about how well a real model does the task.
-2. Model-in-the-loop performance is proven only by live runs. On 28 Nov 2026 three live runs used GPT-6.2 Sol through LiteLLM (a library that calls many model providers through one interface). One-shot research ended partial after 27.6 minutes with two competitors left unverified rather than guessed. An interactive research run on the assignment's own example prompt ended partial, and an interactive patent run on its own example prompt ended blocked. The main cause was a harness bug: a task instance that runs once per company or per candidate is never told which one it is. That bug, and the cost of reading inputs, are being fixed, and the runs will be repeated. [06-evals-and-live-runs.md](06-evals-and-live-runs.md) has the detail.
+2. Model-in-the-loop performance is proven only by live runs. On 28 Nov 2026 both agents completed the assignment's own example prompts on GPT-6.2 Sol through LiteLLM (a library that calls many model providers through one interface), in interactive runs where a person answered their questions. The Research Agent found all five competitors ([examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md)). The Patent Agent investigated all four candidates, asked which to prepare, filled both blank forms for the one chosen and held the packet unsent, as the request asked ([examples/live/patent-2026-11-28/](../../examples/live/patent-2026-11-28/README.md)). Earlier runs that day ended partial or blocked, and they exposed the harness bugs fixed in #114 to #123. The approve-and-send step has not run live; it runs offline only, in `aksha demo`. A follow-up asking for the send ended blocked (see the patent folder). [06-evals-and-live-runs.md](06-evals-and-live-runs.md) has every run.
 
 ## Reading order
 
@@ -118,11 +118,11 @@ Two kinds of claim appear in these pages, and they rest on different evidence.
 
 ## Sources
 
-Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
+Read on `main`, 28 Nov 2026.
 
-- Demo: `aksha demo` with a private `AKSHA_HOME`, run twice on 28 Nov 2026, exit 0 both times; then `aksha --user founder-1 inspect R-0005`, `aksha verify` and the store's `mailbox.json`.
+- Demo: `uvx --from git+https://github.com/SaiiPittu/aksha aksha demo` on 28 Nov 2026, exit 0, "Done in 18.66 s" (36.7 s wall time with the install); then `aksha demo` twice on `main` in a private `AKSHA_HOME`, exit 0 both times, 1943 events each, followed by `aksha --user founder-1 inspect R-0005`, `aksha verify` and the store's `mailbox.json`.
 - Main README: [README.md](../../README.md) (the `uvx` line).
 - Requirements matrix: [docs/requirements.md](../requirements.md), [docs/requirements.json](../requirements.json), `tests/architecture/test_requirements_evidence.py`.
 - Held-out results: [docs/status.md](../status.md#results-on-the-held-out-worlds), [docs/limitations.md](../limitations.md) item 19.
-- Live recording: `src/aksha/data/recordings/research-live-gpt/`; settings in [docs/live-mode.md](../live-mode.md).
+- Live runs: [examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md) and [examples/live/patent-2026-11-28/](../../examples/live/patent-2026-11-28/README.md), the exported stores of the two complete runs. The first one-shot research recording, `src/aksha/data/recordings/research-live-gpt/`, predates the fixes and no longer replays ([limitations](../limitations.md) item 18). Settings are in [docs/live-mode.md](../live-mode.md).
 - Tests timed on 28 Nov 2026 with `pytest -p no:xdist`, results as in the table above.

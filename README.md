@@ -9,12 +9,6 @@ Aksha is a headless agent harness in Python. One shared runtime runs many agents
 
 > **Reviewing this assignment?** Start with [docs/assignment/README.md](docs/assignment/README.md). It is a short reviewer's guide: a two-minute check, six targeted tests, the runtime and agent boundary, each agent's evidence rules, change and crash recovery, and honest results on held-out worlds and live model runs, each claim tied to a path, a test or a real event ID.
 
-## Three agents, one runtime (the rule of three)
-
-The runtime follows one rule: no abstraction enters it until three different agents fit that abstraction with no agent-specific code in the runtime. Two document agents alone could pass with a design that is only a document pipeline, so the third agent is chosen to work differently. The three are the Research Agent (built), the Patent Agent (built) and a contrast coding agent (designed, not built). The coding agent would edit a Git repository in a sandbox, run its tests and push a branch after approval. It presses on what the two document agents do not: long contexts, a shell in a sandbox, a completion check that runs the tests, and cancellation mid-edit.
-
-On 25 Nov 2026 each of the 22 original primitive decision records (ADRs) was checked against all three agents. The coding agent is a design, not running code, so its verdicts come from reading interfaces and are the weakest evidence of the three. The running check is narrower: `test_third_agent_runtime_hash_unchanged` in [tests/architecture/test_extension_boundary.py](tests/architecture/test_extension_boundary.py) loads a third, toy agent and checks that every Python file under `src/aksha/runtime` hashes the same before and after. What each agent presses on is in [docs/design/rationale.md](docs/design/rationale.md), and the verdict counts per agent are in [section 7 of the problem and goals](docs/design/01-product/01-problem-and-goals.md#7-the-rule-of-three).
-
 ## See it work in under 2 minutes
 
 You need Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). No API key is needed, and nothing goes over the network after the install. Offline, every model is a rule-based fake.
@@ -59,6 +53,12 @@ The whole output, act by act, is in [examples/change-and-recovery.md](examples/c
 ```sh
 make venv && make check   # lint, type check and every test, offline; about 6 minutes on 8 cores
 ```
+
+## Three agents, one runtime (the rule of three)
+
+The runtime follows one rule: no abstraction enters it until three different agents fit that abstraction with no agent-specific code in the runtime. Two document agents alone could pass with a design that is only a document pipeline, so the third agent is chosen to work differently. The three are the Research Agent (built), the Patent Agent (built) and a contrast coding agent (designed, not built). The coding agent would edit a Git repository in a sandbox, run its tests and push a branch after approval. It presses on what the two document agents do not: long contexts, a shell in a sandbox, a completion check that runs the tests, and cancellation mid-edit.
+
+On 25 Nov 2026 each of the 22 original primitive decision records (ADRs) was checked against all three agents. The coding agent is a design, not running code, so its verdicts come from reading interfaces and are the weakest evidence of the three. The running check is narrower: `test_third_agent_runtime_hash_unchanged` in [tests/architecture/test_extension_boundary.py](tests/architecture/test_extension_boundary.py) loads a third, toy agent and checks that every Python file under `src/aksha/runtime` hashes the same before and after. What each agent presses on is in [docs/design/rationale.md](docs/design/rationale.md), and the verdict counts per agent are in [section 7 of the problem and goals](docs/design/01-product/01-problem-and-goals.md#7-the-rule-of-three).
 
 ## Assignment requirements at a glance
 
@@ -163,7 +163,7 @@ These are fake-model numbers. They test the harness and the offline rules, not a
 
 ## Live models
 
-Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. So far the adapters have been smoke-tested on one Gemini model. Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). On 28 Nov 2026 both agents completed the assignment's own example tasks on GPT-6.2 Sol, in interactive runs where a person answered their questions: the Research Agent found all five competitors in 57 model calls ([trajectory](examples/live/research-2026-11-28/README.md)), and the Patent Agent investigated all four candidates, asked which to prepare, filled both blank forms and held the packet for approval ([trajectory](examples/live/patent-2026-11-28/README.md)). Earlier live runs that day exposed the harness bugs fixed in #114 to #123; each run, before and after, is in [docs/assignment/06-evals-and-live-runs.md](docs/assignment/06-evals-and-live-runs.md). The first one-shot Research recording (`src/aksha/data/recordings/research-live-gpt/`) predates those fixes and no longer replays. The evals have not yet run live. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
+Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. The adapters were first smoke-tested on one Gemini model, and both agents have since run end to end on GPT-6.2 Sol (below). Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). On 28 Nov 2026 both agents completed the assignment's own example tasks on GPT-6.2 Sol, in interactive runs where a person answered their questions: the Research Agent found all five competitors in 57 model calls ([trajectory](examples/live/research-2026-11-28/README.md)), and the Patent Agent investigated all four candidates, asked which to prepare, filled both blank forms and held the packet unsent, as the request asked ([trajectory](examples/live/patent-2026-11-28/README.md)). Earlier live runs that day exposed the harness bugs fixed in #114 to #123; each run, before and after, is in [docs/assignment/06-evals-and-live-runs.md](docs/assignment/06-evals-and-live-runs.md). The first one-shot Research recording (`src/aksha/data/recordings/research-live-gpt/`) predates those fixes and no longer replays. The evals have not yet run live. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
 
 ## Documentation map
 
