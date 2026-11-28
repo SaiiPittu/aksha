@@ -186,6 +186,20 @@ def _drive(c: Conversation) -> None:
     s["upload_2"] = (up.status_code, up.json())
     s["invalidation_after_upload"] = c.get("/invalidation")
     _settled(c, 2)
+    # The rebuild first copies the person's selection onto the new table, and the person
+    # confirms it (only the person chooses); then the packet's own review is the one left.
+    chosen = _wait(
+        lambda: [
+            r for r in c.get("/reviews")["reviews"] if r["old"].startswith("patent.selection@")
+        ],
+        "the selection review",
+    )
+    body = {"card_hash": chosen[0]["card_hash"], "command_id": "c-review-0"}
+    ok = c.client.post(f"/api/v1/reviews/{chosen[0]['review']}/accept", headers=H, json=body)
+    assert ok.status_code == 200 and ok.json()["receipt"]["status"] == "accepted", ok.text
+    _wait(lambda: [r for r in c.get("/reviews")["reviews"] if r["old"].startswith(PACKET)],
+          "the packet review")  # fmt: skip
+    _settled(c, 2)
     s["stream_runs"] = _session_runs_on_stream(c.reader)
     s["reviews"] = c.get("/reviews")
     s["reviews_other_session"] = c.get("/reviews", session="S-nobody")

@@ -13,7 +13,7 @@ appends. Pure.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aksha.runtime.events.envelope import NewEvent
@@ -48,23 +48,40 @@ def raised(request: InterruptRequest, interrupt_id: str, *, step: str | None = N
 
 
 def ask_request(
-    declared: DeclaredInterrupt, args: Mapping[str, Any], *, run: str, instance: str
+    declared: DeclaredInterrupt,
+    args: Mapping[str, Any],
+    *,
+    run: str,
+    instance: str,
+    options: Sequence[tuple[str, str]] | None = None,
 ) -> InterruptRequest:
     """The interrupt an ``ask`` call raises on the instance whose Task declared ``declared``.
 
     ``question`` is one question (ID :data:`SINGLE_QUESTION`); ``questions`` (a list of
     ``{id, text}``) asks several, each answered on its own (S2). A ``choice`` lists
-    ``options``.
+    ``options``: the model's, or, when the Task declares them in code, ``options`` (the
+    ``(code, label)`` pairs its ``DeclaredInterrupt.options`` gave), and then a model's own
+    ``options`` argument is refused (``ValueError``). Declared options also record their
+    labels (``option_labels``) and whether any subset may be chosen (``multiple``).
     """
     listed = args.get("questions")
     if listed:
         questions = tuple(Question(str(q["id"]), str(q["text"])) for q in listed)
     else:
         questions = (Question(SINGLE_QUESTION, str(args["question"])),)
-    options = tuple(str(o) for o in args.get("options", ()))
+    extra: dict[str, Any] = {}
+    if declared.options is not None:
+        if "options" in args:
+            raise ValueError("this Task's options are set by its definition; ask with the "
+                             "question only")  # fmt: skip
+        pairs = tuple((str(c), str(label)) for c, label in (options or ()))
+        codes = tuple(c for c, _ in pairs)
+        extra = {"option_labels": [label for _, label in pairs], "multiple": declared.multiple}
+    else:
+        codes = tuple(str(o) for o in args.get("options", ()))
     return InterruptRequest(
-        declared.kind, run=run, instance=instance, questions=questions, options=options,
-        label=declared.label,
+        declared.kind, run=run, instance=instance, questions=questions, options=codes,
+        label=declared.label, extra=extra,
     )  # fmt: skip
 
 

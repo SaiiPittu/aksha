@@ -101,6 +101,7 @@ def render(report: Report, work: str) -> str:
         f"     question for counsel: {o['question']}",
         f"   {first_approval['approval']} approved {first_approval['targets'][0]} only, so it "
         f"does not cover {fresh_approval['targets'][0]}; a fresh approval is requested",
+        f"   scripted: confirmed the copied selection, {report.reselected}",
         f"   scripted: accepted the packet's diff review, {report.reviewed}",
         f"   scripted: approved the fresh request {fresh_approval['approval']} for "
         f"{fresh_approval['targets'][0]}",

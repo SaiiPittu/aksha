@@ -117,7 +117,7 @@ def test_plain_notes_with_no_headings_give_candidates_and_a_dated_post_needs_cou
     request = "Prepare our stair-building invention candidates for counsel review."
     code, out = aksha(tmp_path, "run", request, "--agent", "patent", "--input",
                       str(UNSEEN / "notes"))  # fmt: skip
-    assert code == wire.EXIT_WAITING_INPUT and "options: n1, n2" in out, out
+    assert code == wire.EXIT_WAITING_INPUT and "option n1: " in out and "option n2: " in out, out
     portfolio = shown(tmp_path, "patent.portfolio")
     titles = {n["candidate"]: n["title"] for n in portfolio["notes"]}
     assert titles["n2"] == "pre-cut tread template"
@@ -134,7 +134,7 @@ def test_plain_notes_with_no_headings_give_candidates_and_a_dated_post_needs_cou
     assert template["implementation"]["status"] == "idea_only"
 
 
-def test_inputs_with_no_invention_end_the_patent_run_without_asking_an_empty_choice(
+def test_inputs_with_no_invention_record_an_empty_selection_without_asking(
     tmp_path: Path,
 ) -> None:
     request = "Prepare our invention candidates for counsel review."

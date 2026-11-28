@@ -172,6 +172,10 @@ A wrong value used to have two ways out: a person edited the file and uploaded i
 7. Open: an agent proposes a correction through the session API under `agent:<name>`; a tool an agent calls inside its run to propose one is not built. A correction to a converted upload (a PDF's text) writes the text as given, without the ingester.
 
 
+### Amendment CB1: copy_choice is exercised (28 Nov 2026, Proposed)
+
+With ADR-P04 CB1 a person's choice is saved with origin `choice`, so D7's `copy_choice` mode now happens: when what the choice was made from changes, the writer is re-entered, the runtime saves the earlier choice again (narrowed to the codes still offered) with origin `copy_choice`, and the save raises the diff review (D1). In the patent demo the rebuild run now raises two reviews, the selection's and then the packet's; the person confirms the copied selection. S4's fresh choice after a reject lists the writer's declared options (ADR-P17 D2a). Not built: holding readers keyed by the choice (`prepare` in the patent agent) behind the pending review. They read the selection's keys at the entry they read, so they rebuild from their own changed reads meanwhile; nothing is sent before the person approves the new packet.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

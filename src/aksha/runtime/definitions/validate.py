@@ -123,6 +123,11 @@ def validate_agent(
         extension_names=frozenset(named),
         granted=agent.reads,
         aliases=frozenset(a.name for a in agent.model_aliases),
+        answer_kinds=frozenset(
+            resolve_kind(t.interrupt.saves.kind, agent.name)
+            for _, t in walk_tasks(agent.tasks)
+            if t.interrupt is not None and t.interrupt.saves is not None
+        ),
     )
     return out.items + check_tree(agent.tasks, ctx)
 

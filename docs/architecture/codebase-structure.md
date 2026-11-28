@@ -225,6 +225,7 @@ src/aksha/
 │   │   ├── types.py                         TurnEndKind, TurnEnd (and its stop candidate), PositionOutcome, LoopSetup, DriveResult
 │   │   ├── classify.py                      classify_turn_end (the fixed priority), recorded_turn_end; pure
 │   │   ├── calls.py                         run_calls, run_position: the gate, the route, the skip rule, through the executor
+│   │   ├── answers.py                       save_from_answer: the runtime saves a declared choice from the person's answer
 │   │   ├── turn.py                          run_turn: prep, context, model step, call positions, the turn end
 │   │   ├── drive.py                         drive, drive_pass, control_point, LoopDriver (the RunDriver recovery calls)
 │   │   └── tier.py                          http_for, exec_for, with_records: tier 3 per call attempt, records on the step
@@ -253,7 +254,8 @@ src/aksha/
 │   │   ├── errors.py                        TreeInvalid, TaskUnknown, KeyInvalid
 │   │   ├── ports.py                         KeyLister (Protocol): a source collection's keys
 │   │   ├── tree.py                          compile_tree, CompiledTree, state_table
-│   │   ├── keys.py                          keys_of, keys.listed, list_source_keys
+│   │   ├── keys.py                          keys_of, keys.listed, list_source_keys, listed_key_refusal
+│   │   ├── choices.py                       answer_save_plan, chosen_by_person: a person's choice as an artifact
 │   │   ├── status.py                        RunState, instance_status, statuses, task_tree: a projection
 │   │   ├── view.py                          TaskView: all a completion check may read
 │   │   ├── checks.py                        run_check: a raising check is a FAIL

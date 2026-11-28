@@ -662,42 +662,30 @@ class PatentFake(RuleGenerationModel):
         )
 
     def _select(self, ctx: Context) -> GenerationResult:
+        """Ask the person to choose, with a summary; the options and the save are the runtime's.
+
+        With no candidate the runtime records the empty choice and nothing is asked; once
+        the person answered (or, in a rebuild, the runtime copied their earlier choice for
+        their review) the Task finishes.
+        """
         table = ctx.read("table")
         assert table is not None
-        options = [r["candidate"] for r in table[1]["rows"]]
-        if not options:  # nothing to choose from: say so, never ask an empty choice
-            content = {"selected": [], "table": table[0], "based_on": {}, "chosen_by": "none",
-                       "note": "no invention candidate was found among the inputs"}  # fmt: skip
-            return _reply(
-                _call("save_artifact", 1, kind="selection", content=content),
-                _call("finish", 1, summary="no candidate to select"),
-            )
-        chosen = [a.strip() for a in ctx.answers if a.strip() in options]
-        if not chosen and ctx.rebuild_old is not None:
-            chosen = [c for c in ctx.rebuild_old.get("selected", []) if c in options]
-        if not chosen:
-            lines = "; ".join(f"{r['candidate']}: {r['next_action']}" for r in table[1]["rows"])
-            q = f"Which candidate should be prepared for counsel review? {lines}"
-            review = table[1].get("review")
-            if review:  # the batched review: the drop list and the audit beside the choice
-                drops = ", ".join(f"{d['key']} ({d['reason']})" for d in review["dropped"])
-                audit = review["audit"]
-                misses = ", ".join(audit["misses"])
-                q += (f". Dropped after triage: {drops or 'none'}. Audit of the drops: "
-                      f"{audit['miss_rate'] or 'none'} sampled were worth the deep work"
-                      + (f" ({misses}, re-opened)." if misses else "."))  # fmt: skip
-            return _reply(_call("ask", 1, question=q, options=options))
-        based = {r["candidate"]: r["recommendation"] for r in table[1]["rows"]}
-        content = {
-            "selected": chosen[-1:],
-            "table": table[0],
-            "based_on": based,
-            "chosen_by": "person",
-        }
-        return _reply(
-            _call("save_artifact", 1, kind="selection", content=content),
-            _call("finish", 1, summary=f"selected {chosen[-1]}"),
-        )
+        rows = table[1]["rows"]
+        if not rows:
+            return _reply(_call("finish", 1, summary="no candidate to select"))
+        if ctx.answers or ctx.rebuild_old is not None:
+            return _reply(_call("finish", 1, summary="the person's selection is saved"))
+        lines = "; ".join(f"{r['candidate']}: {r['next_action']}" for r in rows)
+        q = f"Which candidates should be prepared for counsel review? {lines}"
+        review = table[1].get("review")
+        if review:  # the batched review: the drop list and the audit beside the choice
+            drops = ", ".join(f"{d['key']} ({d['reason']})" for d in review["dropped"])
+            audit = review["audit"]
+            misses = ", ".join(audit["misses"])
+            q += (f". Dropped after triage: {drops or 'none'}. Audit of the drops: "
+                  f"{audit['miss_rate'] or 'none'} sampled were worth the deep work"
+                  + (f" ({misses}, re-opened)." if misses else "."))  # fmt: skip
+        return _reply(_call("ask", 1, question=q))
 
     # --- per selected candidate ---------------------------------------------------------
 

@@ -47,7 +47,13 @@ from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
 from aksha.runtime.artifacts.lineage import reads_to_record
-from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, SaveRequest, WriterId
+from aksha.runtime.artifacts.types import (
+    ArtifactVersion,
+    InputRef,
+    Origin,
+    SaveRequest,
+    WriterId,
+)
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
@@ -94,7 +100,8 @@ from aksha.runtime.policy.types import Allow, GateInput, StopPolicyNarrowing
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.sandbox.exec import BoxedExec, ExecUnit
 from aksha.runtime.storage.rows import ArtifactRow
-from aksha.runtime.tasks.keys import keys_of
+from aksha.runtime.tasks.choices import ANSWER_ONLY, ASK_FIRST, answer_kinds
+from aksha.runtime.tasks.keys import KEY_INVALID, keys_of, listed_key_refusal
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.timers.clock import recorded_date
@@ -123,6 +130,9 @@ SAVING_EFFECTS = frozenset({"store", "exec"})
 
 NEVER_RETRIED = frozenset({"egress_refused"})
 """Codes no retry policy retries: a refused destination is refused again (ADR-P26 D4)."""
+
+NOTHING_TO_CHOOSE = "nothing_to_choose"
+"""The code of an ``ask`` on a declared choice whose options are empty: nothing is asked."""
 
 UNRECORDED_DEFINITION = "unrecorded"
 """The definition hash an approval body names when neither the loop nor the run has one."""
@@ -347,6 +357,7 @@ def _dispatched(
     outcome: ToolOutcome,
     returned: tuple[ReturnedText, ...] = (),
     dates: tuple[InputRef, ...] = (),
+    origin: Origin | None = None,
 ) -> StepOutput:
     """A body's outcome as its step records it: saves, minted spans and the capped view.
 
@@ -383,8 +394,13 @@ def _dispatched(
         task = setup.task(ref)
         writes = frozenset(setup.tree.kind(w) for w in task.writes)
         writer = WriterId(setup.agent.name, ref.task_path, ref.key)
+        runtime_only = answer_kinds(setup.tree)
         for asked in outcome.saves:
             name = store.kind_name(asked.kind, writer.agent)
+            if name in runtime_only and asked.answer is None:  # the choice binding (ADR-P04)
+                msg = (f"{name} is saved by the runtime from the person's answer, never by a "
+                       f"tool: {ASK_FIRST}")  # fmt: skip
+                return _shown(ToolOutcome(Err(ANSWER_ONLY, msg, paths=("/kind",))), cap)
             request, refusal = _own_key(setup, view, ref, asked, name, writes)
             if refusal is not None:
                 return _shown(ToolOutcome(refusal), cap)
@@ -392,11 +408,15 @@ def _dispatched(
                 saved = store.save(
                     view, request, writer=writer, run=ref.run, instance=ref.instance,
                     step=str(step), writes=writes, pending_reads=read,
-                    origin=save_origin(view, name, request.key),
+                    origin=origin or save_origin(view, name, request.key),
                 )  # fmt: skip
             except SaveRefused as refused:
                 err = Err(refused.code, refused.message, paths=refused.paths)
                 return _shown(ToolOutcome(err), cap)
+            unreadable = listed_key_refusal(setup.tree, name, saved.version.content)
+            if unreadable is not None:
+                return _shown(ToolOutcome(Err(KEY_INVALID, unreadable[1],
+                                              paths=(unreadable[0],))), cap)  # fmt: skip
             events.extend(saved.events)
             rows.extend(saved.rows)
             if not saved.replayed:
@@ -476,9 +496,17 @@ def _asked(
     declared = setup.task(ref).interrupt
     if declared is None:  # the gate offers ask only with a declared interrupt
         return _shown(ToolOutcome(Err("not_in_task", "this Task declares no interrupt")), cap)
-    ident = f"I-{highest(setup.view().events, 'I') + 1:04d}"
+    now = setup.view()
+    ident = f"I-{highest(now.events, 'I') + 1:04d}"
+    options = None
+    if declared.options is not None:  # a choice whose options the definition builds
+        options = tuple(declared.options(TaskView(now, setup.tree, ref)))
+        if not options:
+            message = "there is nothing to choose from: finish, and the runtime records that"
+            return _shown(ToolOutcome(Err(NOTHING_TO_CHOOSE, message)), cap)
     try:
-        request = ask_request(declared, args, run=ref.run, instance=ref.instance)
+        request = ask_request(declared, args, run=ref.run, instance=ref.instance,
+                              options=options)  # fmt: skip
     except (KeyError, ValueError) as bad:  # e.g. a choice with no options: the model's to fix
         message = f"this ask cannot be raised: {bad}"
         return _shown(ToolOutcome(Err("schema", message, paths=("/",))), cap)

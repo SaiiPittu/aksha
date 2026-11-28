@@ -44,6 +44,7 @@ def _version(view: LogView, event: Event, blobs: BlobStore | None) -> ArtifactVe
         step=event.step,
         event_seq=event.seq,
         primary_inputs=tuple(InputRef.from_json(r) for r in p.get("primary_inputs", ())),
+        answer=None if p.get("answer") is None else str(p["answer"]),
     )
 
 

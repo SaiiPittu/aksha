@@ -13,7 +13,7 @@ session (``session`` set, no run: the request router's ``route`` question, S5).
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal
@@ -49,15 +49,52 @@ InterruptState = Literal["open", "resolved", "voided"]
 ScopeName = Literal["instance", "run", "session"]
 
 
+ChoiceOptions = Callable[[Any], Sequence[tuple[str, str]]]
+"""Pure: ``TaskView -> ((code, label), ...)``, the options of a declared choice, built by code."""
+
+
+@dataclass(frozen=True)
+class AnswerSave:
+    """The artifact the runtime saves from a person's answer to a declared choice.
+
+    ``kind`` is a kind the Task writes; no tool may save it (``answer_only``), and no
+    other Task may write it. ``field`` is the top-level field that holds the chosen codes:
+    the runtime writes it, as a list of the codes in option order, and the completion
+    check ``chosen_by_person`` compares it with the answer. ``build`` is pure,
+    ``(TaskView, chosen codes) -> content``; what it returns at ``field`` is replaced.
+    """
+
+    kind: str
+    field: str
+    build: Callable[[Any, tuple[str, ...]], Mapping[str, Any]]
+
+
 @dataclass(frozen=True)
 class DeclaredInterrupt:
     """An interrupt a Task declares; it adds the implicit ``ask`` tool.
 
-    ``label`` is the agent's word for it, rendered to people and never branched on.
+    ``label`` is the agent's word for it, rendered to people and never branched on. A
+    ``choice`` may declare its ``options`` in code (codes and labels, read from the Task's
+    view when the model asks); the model then writes only the question, a summary, and may
+    not list options itself. ``multiple`` lets the person choose any subset of the
+    options, none included. ``saves`` makes the runtime, not the model, save an artifact
+    from the answer (``AnswerSave``): the person's choice is the content.
     """
 
     kind: Literal["input", "choice"]
     label: str
+    options: ChoiceOptions | None = None
+    multiple: bool = False
+    saves: AnswerSave | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse options, ``multiple`` or ``saves`` on anything but a choice."""
+        if self.kind != "choice" and (
+            self.options is not None or self.multiple or self.saves is not None
+        ):
+            raise ValueError("only a choice declares options, multiple or saves")
+        if self.saves is not None and self.options is None:
+            raise ValueError("a choice that saves its answer declares its options in code")
 
 
 ApprovalFacts = Callable[[Any, Mapping[str, object]], Mapping[str, str]]

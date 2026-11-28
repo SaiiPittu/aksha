@@ -13,9 +13,11 @@ from aksha.runtime.tasks.keys import (
     keys_listed_fact,
     keys_of,
     list_source_keys,
+    listed_key_refusal,
     source_keys_listed,
 )
-from aksha.runtime.tasks.types import artifact_keys, source_keys
+from aksha.runtime.tasks.tree import compile_tree
+from aksha.runtime.tasks.types import CheckResult, Task, artifact_keys, source_keys
 from tests.support.tasks import TaskLog
 
 
@@ -57,6 +59,26 @@ def test_keys_an_instance_id_cannot_carry_are_left_out_and_named() -> None:
     assert keys_of(log.view(), source) == ("ok",)
     assert invalid_keys(log.view(), source) == ("", "a/b", "c[1]")
     assert not is_valid_key("x]") and is_valid_key("P-0001")
+
+
+def test_listed_objects_with_no_key_are_named_not_dropped() -> None:
+    """On main a list of objects with no key or id fanned out to zero instances silently."""
+    log = TaskLog()
+    log.save("selection", None, {"ids": [{"candidate": "C1"}, {"candidate": "C4"}]})
+    source = artifact_keys("demo.selection", "ids")
+    assert keys_of(log.view(), source) == ()
+    assert invalid_keys(log.view(), source) == ("[item 0]", "[item 1]")
+
+
+def test_a_save_listing_an_unreadable_key_is_refused() -> None:
+    tree = compile_tree("demo", (
+        Task("pick", writes=("selection",), done=lambda v: CheckResult(True)),
+        Task("work", per=artifact_keys("selection", "ids"), done=lambda v: CheckResult(True)),
+    ))  # fmt: skip
+    bad = listed_key_refusal(tree, "demo.selection", {"ids": ["C1", {"candidate": "C4"}]})
+    assert bad is not None and bad[0] == "/content/ids/1"
+    assert listed_key_refusal(tree, "demo.selection", {"ids": ["C1", {"key": "C4"}]}) is None
+    assert listed_key_refusal(tree, "demo.other", {"ids": [{}]}) is None
 
 
 def test_source_keys_follow_listing_and_later_source_changes() -> None:

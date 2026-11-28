@@ -115,6 +115,16 @@ A second run of the same agent asked the same thing redid every step, or, before
 5. R1e, the setting. `Agent.reuse` is `on` (the default) or `off` (`reuse_unknown` otherwise) and is hashed into the definition. `AKSHA_REUSE=off` turns it off for every run a process starts. `run.started{reuse: "off"}` records it, and a run that records nothing reuses. A rebuild run never reuses, because the rebuild plan decides what it re-enters.
 
 
+### Amendment CB1: the choice binding, built (28 Nov 2026, Proposed)
+
+The `ArtifactKind.choice: ChoiceBinding` sketched in the interface is built on the Task instead, as `DeclaredInterrupt.saves = AnswerSave(kind, field, build)` (ADR-P17 D2a), because the binding belongs to the question that asks, not to the kind.
+
+1. A kind a declared choice saves is the runtime's alone: the agent loop refuses a tool's save of it `answer_only`, the loader refuses another Task that writes it (`answer_kind_written_elsewhere`) and a choice that saves a kind its Task does not write (`answer_save_not_written`), and `save_artifact` is not described with it.
+2. At the start of each turn of such an instance (`loop/answers.py`), the runtime saves the kind when one is due (`tasks/choices.answer_save_plan`): the newest answered choice of this instance that no version names yet (origin `choice`); in a rebuild, the person's earlier choice narrowed to the codes still offered (origin `copy_choice`, so ADR-P05 D7's diff review goes to the person); or, when the declared options are empty, an empty choice with nothing asked. The save is the reserved step `.../tNN/c01/derived`, through the one save path, with the Task's declared reads and the answer's statement as its reads; the version records the answer (`artifact.saved{answer}`, `ArtifactVersion.answer`). The content is `build(view, chosen)` with `field` set to the chosen codes.
+3. The completion check `chosen_by_person` passes when the current version was saved from an answered choice of this instance and holds exactly the chosen codes, when it is a copied choice (current once accepted, or pending the person's review), or when there was nothing to choose and it is empty. A version whose reads changed fails until the runtime copies it.
+
+Origin `choice` is now written, and `copy_choice` is now exercised by a rebuild.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

@@ -206,11 +206,6 @@ def _plain(value: Any) -> Any:
     return value
 
 
-def selection_saved(view: Any) -> CheckResult:
-    """The person's selection is saved."""
-    return CheckResult(view.latest("selection") is not None, "save the person's selection")
-
-
 def _forms(view: Any) -> dict[str, Any]:
     """This candidate's filled forms, by template."""
     prefix = f"{view.key}~"

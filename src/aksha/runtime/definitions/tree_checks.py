@@ -39,6 +39,7 @@ class TreeContext:
     extension_names: frozenset[str]
     granted: tuple[str, ...]
     aliases: frozenset[str]
+    answer_kinds: frozenset[str] = frozenset()
 
 
 def is_function(value: object) -> bool:
@@ -203,6 +204,7 @@ def _rest(task: Task, path: str, ctx: TreeContext, out: Refusals) -> None:
         out.add("per", "per_not_key_source", message, path)
     elif isinstance(per, KeySource) and not _key_source_ok(per, ctx):
         out.add("per", "per_kind_unknown", f"{per.name!r} is not a known kind with a path", path)
+    _answer_saves(task, path, ctx, out)
     if task.done is not None and not is_function(task.done):
         out.add("done", "check_not_callable", "a completion check must be a function", path)
     if task.done is None and not task.children:
@@ -231,3 +233,21 @@ def stop_policy_message(opt: object) -> str:
     """Why ``opt`` is refused, listing the built-in names."""
     name = getattr(opt, "name", opt)
     return f"{name!r} is not a built-in stop policy ({', '.join(sorted(BUILTIN_STOP_POLICIES))})"
+
+
+def _answer_saves(task: Task, path: str, ctx: TreeContext, out: Refusals) -> None:
+    """A choice that saves its answer saves a kind the Task writes, and only it writes.
+
+    A kind a declared choice saves is the runtime's alone (no tool may save it), so another
+    Task that writes it could never save it, and its check could never pass.
+    """
+    writes = {resolve_kind(w, ctx.namespace) for w in task.writes}
+    saves = task.interrupt.saves if task.interrupt is not None else None
+    saved = None if saves is None else resolve_kind(saves.kind, ctx.namespace)
+    if saves is not None and saved not in writes:
+        message = f"the choice saves {saves.kind!r}, which this Task does not write"
+        out.add("interrupt", "answer_save_not_written", message, path)
+    for kind in sorted(writes & ctx.answer_kinds):
+        if kind != saved:
+            message = f"{kind!r} is saved from a person's answer by another Task's choice"
+            out.add("writes", "answer_kind_written_elsewhere", message, path)

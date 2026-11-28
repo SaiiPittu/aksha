@@ -87,6 +87,7 @@ class Report:
     runs: dict[str, dict[str, Any]] = field(default_factory=dict)
     asked: list[str] = field(default_factory=list)
     reviewed: str = ""
+    reselected: str = ""
     first: dict[str, dict[str, str]] = field(default_factory=dict)
     change: dict[str, Any] = field(default_factory=dict)
     after: dict[str, dict[str, str]] = field(default_factory=dict)
@@ -269,7 +270,7 @@ def act_2_change(rt: DemoRuntime, sources: Path, report: Report) -> None:
 
 
 def act_3_rebuild(rt: DemoRuntime, script: Script, report: Report) -> str:
-    """Rebuild what the change reached, accept the packet's diff review, approve the send.
+    """Rebuild what the change reached, accept the two diff reviews, approve the send.
 
     Returns the rebuild run that now waits to send the new packet.
     """
@@ -278,13 +279,17 @@ def act_3_rebuild(rt: DemoRuntime, script: Script, report: Report) -> str:
         for result in drive_rebuilds(rt.setup(agent), rt.executor(), ids):
             report.runs[result.run] = {"agent": agent, "cause": "rebuild",
                                        "outcome": result.outcome}  # fmt: skip
-    reviews = list(open_reviews(_view(rt)).values())
-    _require(len(reviews) == 1, reviews)
-    (review,) = reviews
-    receipt = accept_review(rt.store, DEMO_OWNER, review.interrupt, review.card_hash, ids,
-                            tools=rt.send_tools)  # fmt: skip
-    _require(receipt.accepted, receipt)
-    report.reviewed = f"{review.old} -> {review.revision}"
+    # Two diff reviews: the person's selection, copied by the runtime onto the new table
+    # (the person chose it; only the person confirms it), and the rebuilt packet.
+    reviews = sorted(open_reviews(_view(rt)).values(), key=lambda r: r.seq)
+    _require([r.old.kind for r in reviews] == ["patent.selection", "patent.packet"], reviews)
+    for review in reviews:
+        receipt = accept_review(rt.store, DEMO_OWNER, review.interrupt, review.card_hash, ids,
+                                tools=rt.send_tools)  # fmt: skip
+        _require(receipt.accepted, receipt)
+    selection, packet = reviews
+    report.reselected = f"{selection.old} -> {selection.revision}"
+    report.reviewed = f"{packet.old} -> {packet.revision}"
     opened = drive_rebuilds(rt.patent, rt.executor(), ids)
     held = [r for r in opened if r.state == "held"]
     _require(len(held) == 1, opened)

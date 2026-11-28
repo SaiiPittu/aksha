@@ -53,8 +53,12 @@ recorded result instead of saving twice. The checks, in order, each refusing wit
    ``supersedes`` relation (new version to old, no evidence: the relation is lineage, which
    only the runtime records) to the save's ``relation.saved`` facts.
 
-Phrase rules, validators (S1), derived kinds (D9), lifecycle and choice bindings are not
-built; nor is a kind's ``save="tool_only"``, which needs the tool's name on the request.
+A request that names the answer it is saved from (``SaveRequest.answer``, set only by the
+runtime's answer save, ``loop/answers.py``: the choice binding of ADR-P04) records it on
+the version; the agent loop refuses a tool's save of a kind a declared choice saves.
+
+Phrase rules, validators (S1), derived kinds (D9) and lifecycle are not built; nor is a
+kind's ``save="tool_only"``, which needs the tool's name on the request.
 """
 
 from __future__ import annotations
@@ -371,6 +375,8 @@ class ArtifactStore:
             "writer": writer.as_json(),
             "origin": origin,
         }
+        if request.answer is not None:
+            payload["answer"] = request.answer
         envelope = {"run": run, "instance": instance, "step": step}
         events: list[NewEvent] = [NewEvent("artifact.saved", payload, **envelope)]
         for n, (rkind, label, src, dst, evidence) in enumerate(checked):
@@ -384,6 +390,7 @@ class ArtifactStore:
             owner=view.owner, ref=ref, content=content, content_hash=hashed,
             canonical_hash=canonical, reads=lineage, reads_hash=r_hash, writer=writer,
             origin=origin, run=run, step=step, event_seq=0, primary_inputs=primary,
+            answer=request.answer,
         )  # fmt: skip
         return Saved(version, events=tuple(events), rows=(row,))
 

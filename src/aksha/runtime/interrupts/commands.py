@@ -14,7 +14,11 @@ refused ``already_decided``, and an approval's decision carries the dedup key
    ``router/commands.py`` answers it, because the run opens in the answer's transaction
    (ADR-P23 D4). An ``input`` with several
    questions takes ``answers`` keyed by question ID (S2), and each answer of an
-   instance-scoped interrupt is minted as its own statement span (ADR-P13). A blocked
+   instance-scoped ``input`` or ``choice`` is minted as its own statement span (ADR-P13),
+   so what is built from it has the answer in its lineage. A choice's answer must be one
+   of its options (``not_an_option``); a ``multiple`` choice takes any subset of them,
+   ``none`` included, as ``choices`` or as text (``"C1, C4"``). Every choice's resolution
+   records ``chosen``, the codes in option order. A blocked
    instance is reset in the same transaction (``completion_check.reset{cause: answer}``).
 2. :func:`approve` grants an approval for the signature the person was shown. Refusals:
    ``signature_mismatch`` (another signature), ``target_changing`` (a target is invalidated,
@@ -139,6 +143,35 @@ def _answers(i: InterruptView, args: Mapping[str, Any]) -> dict[str, str] | Comm
     return out
 
 
+NONE_CHOSEN = "none"
+"""The answer that chooses none of a ``multiple`` choice's options."""
+
+
+def _picked(
+    i: InterruptView, args: Mapping[str, Any], options: tuple[str, ...]
+) -> tuple[str, ...] | CommandRefused:
+    """The codes a ``multiple`` choice's answer picks, in option order, or a refusal.
+
+    ``choices`` lists them; otherwise ``text`` does, separated by commas or spaces, and
+    ``none`` (or nothing) picks none. Every code must be an option (``not_an_option``).
+    """
+    listed = args.get("choices")
+    if listed is None:
+        text = args.get("text")
+        if text is None:
+            given = args.get("answers") or {}
+            text = next(iter(dict(given).values()), None)
+        if text is None:
+            return CommandRefused(ANSWER_MISSING, f"{i.id} needs the chosen codes, or none")
+        words = [w for w in str(text).replace(",", " ").split() if w]
+        listed = [] if [w.lower() for w in words] == [NONE_CHOSEN] else words
+    codes = [str(c) for c in listed]
+    unknown = [c for c in codes if c not in options]
+    if unknown:
+        return CommandRefused(NOT_AN_OPTION, f"{i.id} offers {list(options)}, not {unknown}")
+    return tuple(o for o in options if o in codes)
+
+
 def answer_spec(tree: CompiledTree | None = None) -> CommandSpec:
     """The ``answer`` command; ``tree`` lets it reset a blocked instance it answers."""
 
@@ -153,15 +186,27 @@ def answer_spec(tree: CompiledTree | None = None) -> CommandSpec:
             # ADR-P23 D4: the router's question opens its run in the answer's transaction.
             return CommandRefused(EXPLICIT_COMMAND_REQUIRED,
                                   f"{i.id} is answered with answer_route")  # fmt: skip
-        found = _answers(i, command.args)
-        if isinstance(found, CommandRefused):
-            return found
         options = tuple(str(o) for o in i.payload.get("options", ()))
-        if i.kind in ("choice", "route") and any(a not in options for a in found.values()):
-            return CommandRefused(NOT_AN_OPTION, f"{i.id} offers {list(options)}")
+        fields: dict[str, Any] = {}
+        if i.kind == "choice" and i.payload.get("multiple") is True:
+            picked = _picked(i, command.args, options)
+            if isinstance(picked, CommandRefused):
+                return picked
+            questions = [str(q["id"]) for q in i.payload.get("questions", ())]
+            found: dict[str, str] = {(questions or ["q1"])[0]: ", ".join(picked) or NONE_CHOSEN}
+            fields["chosen"] = list(picked)
+        else:
+            answered = _answers(i, command.args)
+            if isinstance(answered, CommandRefused):
+                return answered
+            found = answered
+            if i.kind in ("choice", "route") and any(a not in options for a in found.values()):
+                return CommandRefused(NOT_AN_OPTION, f"{i.id} offers {list(options)}")
+            if i.kind == "choice":
+                fields["chosen"] = list(dict.fromkeys(found.values()))
         by = str(command.args["by"])
-        events: list[NewEvent] = [_resolved(i, by, answers=found)]
-        if i.run is not None and i.instance is not None and i.kind == "input":
+        events: list[NewEvent] = [_resolved(i, by, answers=found, **fields)]
+        if i.run is not None and i.instance is not None and i.kind in ("input", "choice"):
             events.extend(_statements(span_index(view), i, found, str(command.command_id)))
         if tree is not None and i.run is not None and i.instance is not None:
             ref = InstanceRef.parse(i.run, i.instance)
@@ -197,13 +242,20 @@ def answer(
     tree: CompiledTree | None = None,
     command_id: str | None = None,
     session: str | None = None,
+    choices: tuple[str, ...] | list[str] | None = None,
 ) -> CommandReceipt:
-    """A person answers an ``input``, ``choice`` or ``route`` interrupt (module doc, item 1)."""
+    """A person answers an ``input``, ``choice`` or ``route`` interrupt (module doc, item 1).
+
+    ``choices`` lists the codes chosen on a ``multiple`` choice (an empty list chooses
+    none); ``text`` may give them instead, as ``"C1, C4"`` or ``"none"``.
+    """
     args: dict[str, Any] = {"interrupt": interrupt_id, "by": by}
     if text is not None:
         args["text"] = text
     if answers is not None:
         args["answers"] = dict(answers)
+    if choices is not None:
+        args["choices"] = [str(c) for c in choices]
     command = _command("answer", owner, args, command_id, session, interrupt_id)
     return dispatch(store, command, answer_spec(tree))
 

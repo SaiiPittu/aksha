@@ -63,7 +63,7 @@ The Task tree has three stages. Each step ends only when its completion check pa
 **Recommend and select.**
 
 5. `recommend` also reads the Research Agent's `research.needs` and `research.findings`, declared as cross-agent reads by kind. It must cite each by its exact version, and only under `business_importance`.
-6. `table` gathers every recommendation; `select` raises a `choice` interrupt and saves the person's `selection` before anything else runs.
+6. `table` gathers every recommendation; `select` always raises a `choice` interrupt whose options are the table's candidates with their recommendations, built by code, and the run waits. The person chooses any of them, or none. The runtime, not the model, saves the `selection` from the answer: `selected` is the list of chosen codes, which `prepare`, `packet` and `send` fan out over. The model only writes the question's summary; its own save of a selection is refused `answer_only`.
 
 **Prepare forms and hand off.**
 
@@ -82,7 +82,7 @@ flowchart TB
     PA --> REC["deep: recommend by rule table"]
     RES[("Research outputs, read by exact version")] -.->|"business importance only"| REC
     REC --> TABLE["table: all four recommendations"]
-    TABLE --> SEL[/"select: person's choice, saved first"/]
+    TABLE --> SEL[/"select: the person chooses; the runtime saves it"/]
     SEL --> FORM["prepare: fill_form checks each field"]
     FORM --> PKT["packet: versioned, counsel section first"]
     PKT --> APP[/"approval: this packet version and recipient"/]
@@ -91,7 +91,7 @@ flowchart TB
 
 Take from this that choosing a candidate authorizes nothing to leave the system: the send has its own approval, and a new packet version needs a new one.
 
-Every step is an event. In the offline demo of 28 Nov 2026 (section 6) the patent run `R-0002` raised `I-0002` on `candidate[C2]/extract` at event 626 ("C2: the note leaves Minimum distance from a vent undecided. What is it?"). It moved on to `candidate[C3]/extract` at event 631 while C2 waited. It saved the selection at event 1179, the two forms at events 1264 and 1267 and `patent.packet/C1@v1` at event 1285, requested `A-0001` at event 1298 and enqueued the send only after the grant, at event 1310. The test `tests/agents/test_patent_episodes.py::test_the_selection_comes_before_any_form_and_one_send_happens` checks that order.
+Every step is an event. In the offline demo of 28 Nov 2026 (section 6, rerun after the person-selects fix) the patent run `R-0002` raised `I-0002` on `candidate[C2]/extract` at event 629 ("C2: the note leaves Minimum distance from a vent undecided. What is it?"). It moved on to `candidate[C3]/extract` at event 632 while C2 waited. `select` asked the person `I-0003` at event 1176, with the table's four candidates as the options; the scripted person answered `C1` at event 1181, and the runtime saved the selection from that answer (origin `choice`) at event 1186. The two forms followed at events 1273 and 1276 and `patent.packet/C1@v1` at event 1294; `A-0001` was requested at event 1307 and the send enqueued only after the grant, at event 1319. The test `tests/agents/test_patent_episodes.py::test_the_selection_comes_before_any_form_and_one_send_happens` checks that order.
 
 ## 4. Evidence and decision rules
 
@@ -156,6 +156,8 @@ The cause is the same harness bug the research run (b) hit ([03-research-agent.m
 Two gaps the run exposed are not yet on that list. First, the live reader's publication IDs, shown in step 2. Second, the accepted version 3 has the right `next_action`, but its free-text summary still opens "Take C1 to counsel first." The check binds the action field, not the prose beside it.
 
 ### After the fixes
+
+Run (d), 28 Nov 2026, the same prompt on `openai/gpt-6.2-sol` at main `b2dacd9`, store `aksha-live/live-chat-patent-after2-selfselected/aksha.sqlite`, run `R-0001`: it ended `complete` in 12.6 minutes with no question asked. All four candidates got extraction, prior art, comparison and a recommendation (all four `collect_more_evidence`). Then, in `select` (events 906 to 922), the model saved `patent.selection` itself as `{"selected": [{"candidate": "C1", ...}, {"candidate": "C4", ...}]}`, the check (it only asked that a selection exist) passed, and the fan-out over `selected` read no key from a list of objects, so `prepare`, `packet` and `send` ran zero instances. The fix: the person chooses (the `select` Task always asks, with options built from the table), the runtime saves the selection from the answer as a list of codes, the check `chosen_by_person` compares the two, and a key-source list holding an item no key can be read from is refused `key_invalid` instead of fanning out to nothing. `tests/agents/test_patent_selection.py` replays the live reply and checks it is refused while the run waits for the person.
 
 To be added: run (c) repeated on the fixed code, with its run ID, outcome, the selection and approval IDs, and the packet versions it saved. The repeated runs are reported first under [After the fixes](06-evals-and-live-runs.md#after-the-fixes) on the live-runs page.
 
