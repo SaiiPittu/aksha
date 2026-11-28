@@ -174,7 +174,7 @@ Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or
 
 The top four, as of 28 Nov 2026. The full list is in [docs/limitations.md](docs/limitations.md).
 
-1. **No agent has completed a task on a real model.** Every result comes from rule-based fakes, and every confidence threshold is unfitted.
+1. **One live run so far.** The Research Agent has run one whole task on a real model (GPT-6.2 Sol), ending partial; the Patent Agent has not run live, the evals run only on rule-based fakes, and every confidence threshold is unfitted.
 2. **The only system of record is a mock.** An approved send goes to a development mailbox, a JSON file that reaches no one.
 3. **A headless run sends without approval.** `aksha run --headless` is opt-in, recorded on `run.started` and needs a sandbox, but it turns the approval route into the outbox route ([trust boundary](docs/architecture/trust-boundary.md)).
 4. **Erasure is open.** `forget` hides a memory from recall but erases nothing from the append-only store (P30).
