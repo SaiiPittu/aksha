@@ -303,6 +303,9 @@ src/aksha/
 │   │   ├── streams.py                       subscribe, Synchronized, Resync, decode: the session stream
 │   │   ├── capabilities.py                  CapabilityRecord, derived from the session, never stored
 │   │   └── views.py                         run and session status, the run inspector
+│   ├── forms/                               P10 F1 the shared form tools
+│   │   ├── __init__.py                      what it holds
+│   │   └── tools.py                         FormSpec, read_form, fill_form, form_refusal: blank forms filled, checked in code
 │   ├── interrupts/                          P17 interrupts, suspension and approvals
 │   │   ├── __init__.py                      what is built, what is planned
 │   │   ├── types.py                         kinds, InterruptRequest, InterruptView, ActionBody, ApprovalView, Refusal
@@ -468,10 +471,10 @@ src/aksha/
 │   │   └── prompts/                         the instructions and one prompt per Task
 │   └── patent/                              the patent-disclosure agent (example)
 │       ├── __init__.py                      what it does and never does
-│       ├── agent.py                         AGENT: kinds, the Task tree, build_agent(world)
-│       ├── world.py                         SourceWorld: inputs recognised by content, typed views, record parts, search
-│       ├── tools.py                         the shared reads, plus the domain's: publications, templates, fill_form, send_packet
-│       ├── rules.py                         the rule table, families, form refusals
+│       ├── agent.py                         AGENT: kinds, the Task tree, build_agent()
+│       ├── world.py                         KINDS; SourceWorld, the offline model's typed views over what the tools returned
+│       ├── tools.py                         the shared tools' reading (READING, FORMS), plus its one action: send_packet
+│       ├── rules.py                         the rule table, families, required fields missing
 │       ├── checks.py                        pure completion checks
 │       ├── portfolio.py                     SPEC: the candidates under the supervisor above eight; card, worth
 │       ├── fakes.py                         PatentFake: the rule-based generation model, a test double; general rules

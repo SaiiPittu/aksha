@@ -155,7 +155,7 @@ Three design reviews in the three stress reviews walked the Research Agent (the 
 | Agent | Verdict as written | The scenario | What this ADR now says |
 |---|---|---|---|
 | Research | Needs a runtime change | The 40-call budget runs out during `fetch_extract[COMP-04]`; the founder does not want to grant more | S1 `finalize` ends the run `partial` with a competitor table (ADR-P24) |
-| Patent | Fits | `fetch_publication` times out on attempt 2, the process dies, attempt 3 runs after restart | Nothing new: attempts are counted from the event store (D3) |
+| Patent | Fits | `read_document` on a publication times out on attempt 2, the process dies, attempt 3 runs after restart | Nothing new: attempts are counted from the event store (D3) |
 | Coding | Needs a runtime change | Four crashes in six hours, each after progress, end the run `crash_loop` | S2 adopts ADR-P02 D8's restart rule |
 
 Verdict after the amendments: fits for all three once S1 and S2 land. Both are first-milestone work: S1 for the product requirements, S2 because it is one projection either way.

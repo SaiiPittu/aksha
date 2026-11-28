@@ -11,18 +11,18 @@ or folder.
    into the ``portfolio``'s plan: which candidates, whether to search prior art, which
    forms to fill, whether to send, and how many top business priorities count as top.
 2. ``candidate``, the supervisor Task over the listed candidates (``portfolio.py``, the
-   portfolio kit): ``extract[Cn]`` for every candidate (the triage tier, the only Task
-   that reads the raw records; it asks the person, an ``input`` interrupt on that
-   instance only, for a value the note leaves undecided), then ``deep[Cn]``, whose
-   children each read what the one before saved: ``prior_art`` (search the uploaded
-   publications and the web, fetch what matches and leave the noise, families by
-   priority), ``compare`` (the element-by-family matrix) and ``recommend`` (the rule
-   table, and the research outputs that bear on business importance, read by artifact ID
-   and version and cited for business importance only). With at most eight candidates
-   every one gets deep work and the supervisor takes no turn. Above that, the supervisor
-   reads the work board and commits rounds of directives: which candidates get deep work
-   and which are dropped with a reason; code caps the deep tier and its budget and gives
-   deep work to an audit sample of the drops.
+   portfolio kit): ``extract[Cn]`` for every candidate (the triage tier, the only Task that
+   reads the raw records; it asks the person, an ``input`` interrupt on that instance only,
+   for a value the note leaves undecided), then ``deep[Cn]``, whose children each read what
+   the one before saved: ``prior_art`` (search the uploaded publications with
+   ``search_inputs`` over their kind and the web, read what matches and leave the noise,
+   families by priority number), ``compare`` (the element-by-family matrix) and
+   ``recommend`` (the rule table, and the research outputs that bear on business importance,
+   read by artifact ID and version and cited for business importance only). With at most
+   eight candidates every one gets deep work and the supervisor takes no turn. Above that,
+   the supervisor reads the work board and commits rounds of directives: which candidates
+   get deep work and which are dropped with a reason; code caps the deep tier and its budget
+   and gives deep work to an audit sample of the drops.
 3. ``table`` gathers every recommendation and, when the supervisor decided, the batched
    review of its decisions, the drop list and the audit; ``select`` always puts the choice
    to the person (a ``choice`` interrupt whose options are the table's candidates with
@@ -31,7 +31,8 @@ or folder.
    The runtime, not the model, saves the selection from the answer: the codes the person
    chose. With no candidate at all nothing is asked and an empty selection is recorded.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills each blank
-   form the plan names (every one found, when it names none) through the form tool,
+   form the plan names (every one found, when it names none) through the harness's form
+   tool (``read_form``, ``fill_form``),
    ``packet`` assembles the counsel-review packet and ``send`` sends it when the plan
    says to, which needs a person's approval of that exact packet version.
 
@@ -66,7 +67,7 @@ from aksha.runtime.api import (
 
 from . import checks, portfolio, rules
 from .tools import build_tools
-from .world import COLLECTIONS, SOURCE_NAME, SourceWorld
+from .world import COLLECTIONS, SOURCE_NAME
 from .world import KINDS as DOC_KINDS
 
 OBJECT: dict[str, Any] = {"type": "object"}
@@ -226,20 +227,14 @@ EXTRACT = Task(
 DEEP = Task(
     "deep",
     extracts=True,
-    tools=("search_publications", "fetch_publication", "web_search", "fetch_url", SAVE),
+    tools=("search_inputs", "read_document", "web_search", "fetch_url", SAVE),
     writes=("prior_art", "comparison", "recommendation"),
     children=(
         Task(
             "prior_art",
             extracts=True,
             reads=("extraction", "portfolio"),
-            tools=(
-                "search_publications",
-                "fetch_publication",
-                "web_search",
-                "fetch_url",
-                SAVE,
-            ),
+            tools=("search_inputs", "read_document", "web_search", "fetch_url", SAVE),
             writes=("prior_art",),
             done=checks.prior_art_saved,
         ),
@@ -282,7 +277,7 @@ def tasks() -> tuple[Task, ...]:
         Task(
             "scope",
             extracts=True,
-            tools=("list_inputs", "search_inputs", "read_document", "list_templates", "todo", SAVE),
+            tools=("list_inputs", "search_inputs", "read_document", "read_form", "todo", SAVE),
             writes=("portfolio",),
             done=checks.portfolio_saved,
         ),
@@ -324,14 +319,7 @@ def tasks() -> tuple[Task, ...]:
             per=PER_SELECTED,
             extracts=True,
             reads=("extraction", "comparison", "recommendation", "prior_art", "portfolio"),
-            tools=(
-                "list_inputs",
-                "search_inputs",
-                "read_document",
-                "list_templates",
-                "read_template",
-                "fill_form",
-            ),
+            tools=("list_inputs", "search_inputs", "read_document", "read_form", "fill_form"),
             writes=("form",),
             done=checks.forms_filled,
         ),
@@ -464,14 +452,15 @@ MODEL_ALIASES = (
     ),
 )
 """The fast-class aliases the tools ask (``world.py``): the decide alias and one schema per
-document kind, asked by the shared input tools (``tools.READING``) and the domain tools.
+document kind, asked by the shared input and form tools (``tools.READING``,
+``tools.FORMS``).
 Which model answers each is configuration (fakes offline; a native or an adapted general
 model live). Which column of a table holds what, and which candidate a row is about, the
 generation model reads itself."""
 
 
-def build_agent(world: SourceWorld) -> Agent:
-    """The agent with its read tools bound to ``world``."""
+def build_agent() -> Agent:
+    """The agent: declarations, its tools the harness's shared ones and its send."""
     return Agent(
         name="patent",
         purpose=(
@@ -488,7 +477,7 @@ def build_agent(world: SourceWorld) -> Agent:
         invalidation_keys="citations",
         reads=(*(f"record:{c}" for c in COLLECTIONS), *rules.RESEARCH_KINDS),
         artifacts=KINDS,
-        tools=(*build_tools(world), commit_tool(portfolio.SPEC), ToolUse(SAVE)),
+        tools=(*build_tools(), commit_tool(portfolio.SPEC), ToolUse(SAVE)),
         tasks=tasks(),
         # Sized for a portfolio of about twenty candidates under the supervisor: triage for
         # every one and deep work for about ten (measured on the twenty-candidate portfolio
@@ -512,4 +501,4 @@ def build_agent(world: SourceWorld) -> Agent:
     )
 
 
-AGENT = build_agent(SourceWorld())
+AGENT = build_agent()

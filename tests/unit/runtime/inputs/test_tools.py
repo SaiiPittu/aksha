@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -306,6 +307,25 @@ def test_search_ranks_passages_mints_nothing_and_records_its_hit_set(source: Sou
     assert read.kind == "query" and got.data["recorded"] == f"query:{read.id}@{read.version}"
     none = _call("search_inputs", source, {"query": "absent words", "match": "all"})
     assert isinstance(none, Ok) and none.data["hits"] == []
+
+
+def test_search_by_kind_searches_only_the_inputs_of_those_kinds() -> None:
+    """A search over one kind hits and records only those inputs: another kind moves nothing."""
+    source = Source({"input/note.md": NOTE, "input/plain.txt": "The probe is cheap.\n"})
+    by_kind = replace(READING, search_kinds=True)
+    every = _call("search_inputs", source, {"query": "probe"})
+    notes = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]}, reading=by_kind)
+    assert isinstance(every, Ok) and isinstance(notes, Ok)
+    assert every.data["inputs_hit"] == ["input/note.md", "input/plain.txt"]
+    assert notes.data["inputs_hit"] == ["input/note.md"] and notes.data["inputs_searched"] == 1
+    source.texts["input/other.txt"] = "Another probe page.\n"  # a new input of another kind
+    again = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]}, reading=by_kind)
+    assert isinstance(again, Ok) and again.reads == notes.reads
+    assert "kinds" in _tools(by_kind)["search_inputs"].spec.schema["properties"]
+    # off by default: an agent that does not search by kind keeps its recorded tool list
+    assert "kinds" not in _tools()["search_inputs"].spec.schema["properties"]
+    refused = _call("search_inputs", source, {"query": "probe", "kinds": ["note"]})
+    assert isinstance(refused, Err) and refused.code == "no_kinds"
 
 
 def test_a_window_is_cut_to_fit_the_agent_result_cap() -> None:

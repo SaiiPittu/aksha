@@ -694,15 +694,19 @@
         {
           "id": "R-30",
           "requirement": "Search related references and fetch publication text, including independent claims.",
-          "how": "`search_publications` and `fetch_publication` read the uploaded publications, claims included.",
+          "how": "The shared `search_inputs` over the `prior_art_publication` kind searches the uploaded publications, and the shared `read_document` reads each, claims included (its `publication_biblio` extraction).",
           "evidence": [
             {
               "kind": "path",
-              "ref": "src/aksha/agents/patent/tools.py"
+              "ref": "src/aksha/runtime/inputs/tools.py"
             },
             {
               "kind": "test",
               "ref": "tests/agents/test_patent_units.py::test_st9_claims_at_the_end_of_the_text_are_read"
+            },
+            {
+              "kind": "test",
+              "ref": "tests/agents/test_patent_units.py::test_only_the_c1_search_changes_with_the_new_publication"
             },
             {
               "kind": "test",
@@ -863,7 +867,7 @@
         {
           "id": "R-39",
           "requirement": "Fill a structured invention disclosure and a mock filing-information worksheet through a tool.",
-          "how": "`fill_form` writes each field against the blank template, which decides what is required.",
+          "how": "The harness's `fill_form` writes each field against the blank form, which decides what is required; the patent agent declares its forms as data (`FormSpec`).",
           "evidence": [
             {
               "kind": "test",
@@ -871,7 +875,7 @@
             },
             {
               "kind": "test",
-              "ref": "tests/agents/test_patent_units.py::test_form_refusals"
+              "ref": "tests/unit/runtime/forms/test_tools.py::test_fill_form_refuses_a_fill_the_rules_forbid"
             }
           ],
           "status": "met"
@@ -1206,7 +1210,7 @@
         {
           "id": "R-57",
           "requirement": "Provide executable mock adapters for document reading, search, page and publication fetching, review queries, form writing and artifact storage.",
-          "how": "Shared input and web tools, the patent domain tools and `save_artifact` all run offline against a world.",
+          "how": "Shared input, web and form tools, the patent agent's send and `save_artifact` all run offline against a world.",
           "evidence": [
             {
               "kind": "path",
@@ -1234,7 +1238,7 @@
             },
             {
               "kind": "test",
-              "ref": "tests/agents/test_patent_units.py::test_the_agent_keeps_only_domain_tools_of_its_own"
+              "ref": "tests/agents/test_patent_units.py::test_the_agent_keeps_only_its_one_external_effect_of_its_own"
             }
           ],
           "status": "met"
@@ -1749,7 +1753,7 @@
         {
           "id": "R-80",
           "requirement": "Insufficient evidence blocks readiness even when the user asks to mark a candidate complete.",
-          "how": "Insisting does not unblock a check, and `fill_form` refuses to mark a counsel field complete.",
+          "how": "Insisting does not unblock a check, and the harness's `fill_form` refuses to mark a counsel field complete.",
           "evidence": [
             {
               "kind": "test",

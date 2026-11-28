@@ -78,6 +78,8 @@ The same run shows each rule on a real event:
 | Weak read | The portfolio read `reviews.json` without citing it: noticed, not rebuilt | `evidence.noticed`, seq 1347 |
 | Early cutoff on searches | 19 searches and listings re-ran; only `patent.search_publications` for "background" and "sensor" found new hits | `query.reexecuted`, seq 1327 to 1345; seq 1337 has `"changed":true` |
 
+The run above predates the shared publication search. Since 28 Nov 2026 the patent agent searches the uploaded publications with the shared `search_inputs` over the `prior_art_publication` kind, one recorded query per group of terms, so the same demo on branch `refactor/patent-shared-tools` re-ran 21 searches and listings (`query.reexecuted`, seq 1341 to 1361), and the 2 that found new hits are C1's two searches, for "background" (seq 1351) and "sensor" (seq 1356). It rebuilt and kept the same 17 outputs each, measured with `AKSHA_HOME=<private temp dir> aksha demo`, exit 0.
+
 In this run no rebuilt output came out equal to its old version (the demo prints "0 rebuilt version came out equal"), so the cutoff on rebuilt outputs is proven by tests, not by the demo. Keyed on every read instead of on citations, the same change would have reopened 27 outputs, not 17.
 
 ```mermaid

@@ -1,7 +1,10 @@
-"""The patent agent's input reader: typed views over whatever records the person gave it.
+"""The patent agent's document kinds, and the offline model's reading of the inputs.
 
-Every read tool goes through :class:`SourceWorld`, which reads the records of the
-``inputs`` source through the runtime's record reader and never expects a file name, a
+:data:`KINDS` and :data:`DECIDE` are the agent's declared document kinds and decide alias:
+the harness's input and form tools read with them (``tools.READING``, ``tools.FORMS``).
+No tool reads through :class:`SourceWorld`: the offline model (``fakes_views``) builds one
+over the texts the shared tools returned and works its views out in its own turn, as a
+live model reads those texts itself. It never expects a file name, a
 folder, a heading wording or a column name. Structure comes from code (``segment``,
 ``read_rows``: blocks, rows and cells, each an exact range of the raw text); what a record
 *holds* comes from the agent's fast-class aliases, asked through ``ToolContext.models``.
@@ -22,7 +25,8 @@ Alias                  Class           What it answers about one record
                                        about, when no cell holds a candidate's ID
 ``priorities``         extraction      the ranked business priorities, in rank order
 ``template_fields``    extraction      a blank form's title and fields, which are required and
-                                       which only counsel completes
+                                       which only counsel completes (read by the harness's
+                                       form tool, ``read_form``)
 ``publication_biblio`` extraction      a publication's number, kind, office, title, dates,
                                        priority claims, status wordings, claims and text
 =====================  ==============  ======================================================
@@ -35,17 +39,13 @@ from their name. Dates are read as people write them (``parse_date``) and kept a
 beside the ISO value. A referenced document is found by its name's words among the input
 names, whatever its extension or separators.
 
-A read returns a *view* of one record (or of some rows of a table) and names what it read:
-a whole record at its version, or a record part (``where_part``: the rows of one
-candidate) at that part's version (``part_version``). The views' quotes are exact
-substrings of the raw record; the tools draft a span over every passage a view quotes, so
-the runtime mints it and a completion check verifies every quote an artifact saves
-(``checks.quotes_grounded``).
+A view's quotes are exact substrings of the raw record, which ``read_document`` minted as
+units when the model read it, so a completion check verifies every quote an artifact saves
+(``checks.ungrounded``).
 """
 
 from __future__ import annotations
 
-import hashlib
 import itertools
 import json
 import re
@@ -144,17 +144,6 @@ TABLE_KINDS = frozenset({"contributor_record", "disclosure_record", "meeting_not
 
 class NotInWorld(LookupError):
     """A record the tool was asked for is not among the inputs."""
-
-
-def query_version(hits: Sequence[Any]) -> str:
-    """A recorded query's version: the hash of its hits as a sorted set."""
-    text = json.dumps(sorted({json.dumps(h, sort_keys=True) for h in hits}), separators=(",", ":"))
-    return "q-" + hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
-
-
-def query_id(tool: str, args: Mapping[str, Any]) -> str:
-    """The recorded query's ID: ``patent.<tool>?<canonical JSON arguments>``."""
-    return f"patent.{tool}?" + json.dumps(dict(args), sort_keys=True, separators=(",", ":"))
 
 
 def day_first(text: str) -> str | None:
@@ -1271,52 +1260,6 @@ class SourceWorld:
             return {"file": rel, "items": out}
         return {"file": None, "items": []}
 
-    def templates(self) -> dict[str, Any]:
-        """Every form template among the inputs: its ID, its title and its record."""
-        out = []
-        for rel in self.records():
-            if self.kind(rel) != "form_template":
-                continue
-            read, segs = self._extract("template_fields", rel)
-            if not read.values.get("fields"):
-                continue
-            raw = self.raw(rel)
-            meta = {s.attrs.get("key"): s.attrs.get("value") for s in segs if s.kind == "meta"}
-            tid = meta.get("template_id") or slug(stem(rel)).lower()
-            title = read.text(raw, "title").strip() or stem(rel)
-            out.append({"template": tid, "form": title, "file": rel})
-        return {"templates": sorted(out, key=lambda t: t["template"])}
-
-    def template(self, name: str) -> dict[str, Any]:
-        """A blank form template's fields: which are required, which only counsel completes."""
-        rel = next(
-            (t["file"] for t in self.templates()["templates"] if t["template"] == name), None
-        )
-        if rel is None:
-            raise NotInWorld(f"no form template {name!r} among the inputs")
-        read, segs = self._extract("template_fields", rel)
-        raw = self.raw(rel)
-        required = {t.strip() for t, _, _ in read.items(raw, "required")}
-        counsel = {t.strip() for t, _, _ in read.items(raw, "counsel_only")}
-        fields = []
-        for i, (text, s, _e) in enumerate(read.items(raw, "fields"), start=1):
-            name_ = text.strip()
-            seg = next((g for g in segs if g.start <= s <= g.end), None)
-            guidance = None
-            if seg is not None and seg.kind == "row" and len(seg.cells) > 1:
-                guidance = seg.cells[-1][0] if seg.cells[-1][0] != name_ else None
-            fields.append(
-                {
-                    "n": i,
-                    "field": name_,
-                    "required": name_ in required,
-                    "default_status": "needs_counsel_confirmation" if name_ in counsel else None,
-                    "guidance": guidance,
-                }
-            )
-        meta = {s.attrs.get("key"): s.attrs.get("value") for s in segs if s.kind == "meta"}
-        return {"file": rel, "template_id": meta.get("template_id") or name, "fields": fields}
-
     # --- publications -------------------------------------------------------------------
 
     def _publication(
@@ -1360,13 +1303,6 @@ class SourceWorld:
     def publication_ids(self) -> list[str]:
         """Every publication's number, from its own content."""
         return sorted(self._publication_records())
-
-    def publication_path(self, pub: str) -> str:
-        """The record of publication ``pub``."""
-        found = self._publication_records().get(pub)
-        if found is None:
-            raise NotInWorld(f"no publication {pub}")
-        return found[0]
 
     def publication(self, pub: str) -> dict[str, Any]:
         """One publication: numbers, dates, URL, status wordings verbatim, claims, text.
@@ -1459,9 +1395,3 @@ class SourceWorld:
             if all(any(t.casefold() in hay for t in g) for g in groups):
                 hits.append({"id": p["id"], "title": p["title"]})
         return hits
-
-    def quoted(self, record: str) -> list[SpanDraft]:
-        """Drafts over the passages of ``record`` a view may quote: one per segment."""
-        found = self.found(record)
-        _, drafts = passages(found, self.fmt(record))
-        return drafts

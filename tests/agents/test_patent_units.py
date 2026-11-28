@@ -16,7 +16,7 @@ from aksha.agents.patent import checks, rules
 from aksha.agents.patent.agent import AGENT
 from aksha.agents.patent.fakes import ADAPTERS, parse
 from aksha.agents.patent.fakes_views import readers, view
-from aksha.agents.patent.tools import build_tools
+from aksha.agents.patent.tools import FORMS, build_tools
 from aksha.agents.patent.world import NotInWorld, OneRecord, SourceWorld
 from aksha.runtime.api import Err, GenerationRequest, Message, Ok, ToolCall, ToolContext
 from aksha.runtime.grounding.parts import part_version
@@ -51,8 +51,8 @@ def _ctx(key: str | None = "C1", root: Path = V1) -> ToolContext:
                        _folder(root), models=_models())  # fmt: skip
 
 
-def _tools(world: SourceWorld | None = None) -> dict[str, Any]:
-    return {t.spec.name: t for t in build_tools(world or SourceWorld(TODAY))}
+def _tools() -> dict[str, Any]:
+    return {t.spec.name: t for t in build_tools()}
 
 
 def _changed(tmp_path: Path) -> Path:
@@ -100,17 +100,21 @@ def test_only_the_c1_search_changes_with_the_new_publication(tmp_path: Path) -> 
         "C3": [["overlap"]],
         "C4": [["passive infrared", "PIR"], ["battery"]],
     }
-    search = _tools()["search_publications"].body
+    search = _tools()["search_inputs"].body  # the shared search, over the publications' kind
     root = _changed(tmp_path)
 
-    def version(c: str, at: Path) -> str:
-        out = search(_ctx(c, at), {"all_of": queries[c]}).result
-        assert isinstance(out, Ok)
-        (read,) = out.reads
-        assert read.kind == "query" and read.id.startswith("patent.search_publications?")
-        return read.version
+    def versions(c: str, at: Path) -> list[str]:
+        out = []
+        for terms in queries[c]:
+            args = {"terms": terms, "kinds": ["prior_art_publication"]}
+            got = search(_ctx(c, at), args).result
+            assert isinstance(got, Ok)
+            (read,) = got.reads
+            assert read.kind == "query" and read.id.startswith("patent.search_inputs?")
+            out.append(read.version)
+        return out
 
-    assert {c for c in queries if version(c, V1) != version(c, root)} == {"C1"}
+    assert {c for c in queries if versions(c, V1) != versions(c, root)} == {"C1"}
 
 
 def test_a_record_part_is_versioned_by_exactly_its_rows() -> None:
@@ -188,7 +192,16 @@ def test_inputs_are_found_by_content_in_a_world_with_another_layout() -> None:
     assert row["agreement_documents"] == [{"ref": "SYN-AA-2025-04", "found": False}]
     events = {r["disclosure_id"]: r for r in w.disclosure_rows("TD-3")["rows"]}
     assert events["SYN-EV-04"]["date"] is None
-    forms = {t["template"] for t in w.templates()["templates"]}
+    folder = _folder(sources("tilldew"))
+    ctx = ToolContext("o1", "patent", "prepare", None, "R-0001/prepare/t01/c01", 1, folder,
+                      models=_models("read_form"))  # fmt: skip
+    listed = _tools()["list_inputs"].body(ctx, {"kinds": ["form_template"]}).result
+    assert isinstance(listed, Ok)
+    forms = set()
+    for item in listed.data["inputs"]:
+        got = _tools()["read_form"].body(ctx, {"template": item["ref"]}).result
+        assert isinstance(got, Ok)
+        forms.add(got.data["template"])
     assert forms == {"tilldew-idf", "tilldew-filing-sheet"}
     assert [i["relates_to"] for i in w.priorities()["items"]] == ["TD-1", "TD-3", "TD-2"]
     # The publications are on the world's web, not among the inputs: each is read by
@@ -283,8 +296,18 @@ def test_families_group_by_any_shared_priority_number(w1: SourceWorld) -> None:
     }
 
 
+WORKSHEET = "input/templates/filing-information-worksheet.md"
+
+
+def _worksheet() -> dict[str, Any]:
+    """The worksheet as the shared form tool reads it (``read_form``)."""
+    got = _tools()["read_form"].body(_ctx(), {"template": WORKSHEET}).result
+    assert isinstance(got, Ok)
+    return dict(got.data)
+
+
 def _ws_fields(**over: Any) -> list[dict[str, Any]]:
-    t = _world().template("filing-information-worksheet")
+    t = _worksheet()
     out = [{"field": f["field"], "value": None, "status": "missing"} for f in t["fields"]]
     for f in out:
         if f["field"] in over:
@@ -292,16 +315,14 @@ def _ws_fields(**over: Any) -> list[dict[str, Any]]:
     return out
 
 
-def test_form_refusals() -> None:
-    t = _world().template("filing-information-worksheet")
-    assert rules.form_refusal(t, _ws_fields()) is None
-    done = {"proposed_inventors": {"value": ["A"], "status": "complete"}}
-    assert rules.form_refusal(t, _ws_fields(**done))[0] == "counsel_decides"  # type: ignore[index]
-    empty = {"working_title": {"value": "", "status": "complete"}}
-    assert rules.form_refusal(t, _ws_fields(**empty))[0] == "complete_needs_value"  # type: ignore[index]
-    assert rules.form_refusal(t, _ws_fields()[1:])[0] == "fields_mismatch"  # type: ignore[index]
-    bad = {"representative": {"status": "done"}}
-    assert rules.form_refusal(t, _ws_fields(**bad))[0] == "status_invalid"  # type: ignore[index]
+def test_the_patent_forms_are_declared_as_data_for_the_shared_form_tool() -> None:
+    """Which fields only counsel completes is the worksheet's, read by the shared tool."""
+    t = _worksheet()
+    assert t["template"] == "filing-information-worksheet" and t["ref"] == WORKSHEET
+    counsel = [f["field"] for f in t["fields"] if f["default_status"]]
+    assert "proposed_inventors" in counsel and "applicant" in counsel
+    assert t["statuses"] == list(rules.FIELD_STATUSES)
+    assert FORMS.confirm_status == "needs_counsel_confirmation"
 
 
 # --- the tools ---------------------------------------------------------------------------
@@ -310,21 +331,26 @@ def test_form_refusals() -> None:
 def test_fill_form_refuses_marking_a_counsel_field_complete() -> None:
     fill = _tools()["fill_form"].body
     args = {
-        "template": "filing-information-worksheet",
-        "candidate": "C1",
+        "template": WORKSHEET,
+        "key": "C1",
         "fields": _ws_fields(applicant={"value": "Stillroom", "status": "complete"}),
     }
     out = fill(_ctx(), args)
-    assert isinstance(out.result, Err) and out.result.code == "counsel_decides"
+    assert isinstance(out.result, Err) and out.result.code == "confirm_only"
+    assert "counsel" in out.result.message
     assert out.saves == ()  # "mark it complete" changes nothing
+    asked = {"value": "x", "status": "complete", "counsel_question": "Is this the title?"}
+    out = fill(_ctx(), {**args, "fields": _ws_fields(working_title=asked)})
+    assert isinstance(out.result, Err) and out.result.code == "confirm_only"
     ok = fill(_ctx(), {**args, "fields": _ws_fields()})
     assert isinstance(ok.result, Ok) and len(ok.saves) == 1
     (save,) = ok.saves
     assert (save.kind, save.key, save.content["counts"]["missing"]) == (
         "form", "C1~filing-information-worksheet", 11,
     )  # fmt: skip
+    assert save.content["candidate"] == "C1"
     other = fill(_ctx("C2"), {**args, "fields": _ws_fields()})
-    assert isinstance(other.result, Err) and other.result.code == "wrong_candidate"
+    assert isinstance(other.result, Err) and other.result.code == "wrong_key"
 
 
 def test_send_needs_an_approval_and_goes_through_the_outbox() -> None:
@@ -530,9 +556,7 @@ def test_fill_form_records_required_from_the_template_not_the_model() -> None:
     fields = _ws_fields()
     for f in fields:
         f["required"] = False  # the model claims nothing is required
-    out = _tools()["fill_form"].body(
-        _ctx(), {"template": "filing-information-worksheet", "candidate": "C1", "fields": fields}
-    )
+    out = _tools()["fill_form"].body(_ctx(), {"template": WORKSHEET, "key": "C1", "fields": fields})
     (save,) = out.saves
     required = {f["field"]: f["required"] for f in save.content["fields"]}
     assert required["applicant"] is True and required["representative"] is False
@@ -575,8 +599,8 @@ def test_parse_reads_the_instance_reads_answers_and_starts_over_after_finish() -
 
 
 def test_the_tools_read_only_through_the_call_reader() -> None:
-    out = _tools()["list_templates"].body(
-        ToolContext("o1", "patent", "scope", None, "R-0001/scope/t01/c01", 1), {}
+    out = _tools()["read_form"].body(
+        ToolContext("o1", "patent", "scope", None, "R-0001/scope/t01/c01", 1), {"template": "x"}
     )
     assert isinstance(out.result, Err) and out.result.code == "not_found"
     listed = _tools()["list_inputs"].body(
@@ -588,12 +612,15 @@ def test_the_tools_read_only_through_the_call_reader() -> None:
     assert dated.disclosure_rows("C1") == _world().disclosure_rows("C1")
 
 
-def test_the_agent_keeps_only_domain_tools_of_its_own() -> None:
-    names = {t.spec.name for t in build_tools(SourceWorld(TODAY))}
-    shared = {"web_search", "fetch_url", "list_inputs", "read_document", "search_inputs", "todo"}
-    domain = {"search_publications", "fetch_publication", "list_templates", "read_template",
-              "fill_form", "send_packet"}  # fmt: skip
-    assert names == shared | domain
+def test_the_agent_keeps_only_its_one_external_effect_of_its_own() -> None:
+    """Every read and the form tool are the harness's; the agent's own tool is the send."""
+    tools = build_tools()
+    names = {t.spec.name for t in tools}
+    shared = {"web_search", "fetch_url", "list_inputs", "read_document", "search_inputs", "todo",
+              "read_form", "fill_form"}  # fmt: skip
+    assert names == shared | {"send_packet"}
+    own = [t.spec.name for t in tools if t.body.__module__ == "aksha.agents.patent.tools"]
+    assert own == ["send_packet"]
 
 
 def test_a_forms_counts_are_computed_from_its_fields_at_every_save() -> None:

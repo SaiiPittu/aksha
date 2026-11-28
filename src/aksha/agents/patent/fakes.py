@@ -178,6 +178,50 @@ def _reply(*calls: ToolCall) -> GenerationResult:
     return GenerationResult(None, calls, "tool_calls")
 
 
+PUBLICATION = "prior_art_publication"
+"""The document kind of an uploaded publication (``world.KINDS``)."""
+FORM_TEMPLATE = "form_template"
+"""The document kind of a blank form (``tools.FORMS``)."""
+
+
+def _searched(ctx: Context, terms: Sequence[str]) -> dict[str, Any] | None:
+    """The latest ``search_inputs`` result for ``terms`` over the publications."""
+    got = [d for a, d in ctx.ok("search_inputs")
+           if a.get("terms") == list(terms) and a.get("kinds") == [PUBLICATION]]  # fmt: skip
+    return got[-1] if got else None
+
+
+def _query_id(data: Mapping[str, Any]) -> str:
+    """A recorded query's ID, from the ``query:<id>@<version>`` a result names it by."""
+    return str(data.get("recorded", "")).removeprefix("query:").rpartition("@")[0]
+
+
+def _listed(ctx: Context, kinds: Sequence[str]) -> dict[str, Any] | None:
+    """The latest ``list_inputs`` result of exactly ``kinds``."""
+    got = [d for a, d in ctx.ok("list_inputs") if a == {"kinds": list(kinds)}]
+    return got[-1] if got else None
+
+
+def _forms_read(ctx: Context, blank: Mapping[str, Any]) -> dict[str, dict[str, Any]] | None:
+    """Each listed blank form ``read_form`` read, by ref; None until every one was asked.
+
+    A listed input the form tool refuses (no field to fill) is no blank form: left out.
+    """
+    refs = [str(i["ref"]) for i in blank.get("inputs", ())]
+    asked = {str(a.get("template")) for n, a, _ in ctx.results if n == "read_form"}
+    if any(r not in asked for r in refs):
+        return None
+    got = {str(a["template"]): d for a, d in ctx.ok("read_form")}
+    return {r: got[r] for r in refs if r in got}
+
+
+def _form_reads(ctx: Context, blank: Mapping[str, Any]) -> list[ToolCall]:
+    """The ``read_form`` calls still to make for the listed blank forms."""
+    asked = {str(a.get("template")) for n, a, _ in ctx.results if n == "read_form"}
+    refs = [str(i["ref"]) for i in blank.get("inputs", ()) if str(i["ref"]) not in asked]
+    return [_call("read_form", 90 + i, template=r) for i, r in enumerate(refs, 1)]
+
+
 def _norm(text: str) -> str:
     return " ".join(text.split())
 
@@ -423,14 +467,18 @@ class PatentFake(RuleGenerationModel):
 
     def _scope(self, ctx: Context) -> GenerationResult:
         listed = ctx.ok("list_candidates")
-        if not listed:
-            return _reply(_call("list_candidates", 1), _call("list_templates", 1))
+        blank = _listed(ctx, [FORM_TEMPLATE])
+        if not listed or blank is None:
+            asks = [] if blank is not None else [_call("list_inputs", 90, kinds=[FORM_TEMPLATE])]
+            return _reply(_call("list_candidates", 1), *asks)
         rows = listed[-1][1]["candidates"]
         unread = list(listed[-1][1].get("unread", []))
         if unread and not ctx.called("read_linked"):  # the fast readers left these: read them
             return _reply(*(_call("read_linked", i, path=p) for i, p in enumerate(unread, 1)))
-        forms = ctx.ok("list_templates")[-1][1] if ctx.ok("list_templates") else {}
-        templates = forms.get("templates", [])
+        forms = _forms_read(ctx, blank)
+        if forms is None:
+            return _reply(*_form_reads(ctx, blank))
+        templates = sorted(forms.values(), key=lambda d: str(d["template"]))
         plan = plan_of(ctx.request, [r["candidate"] for r in rows], templates)
         listed_count = len(rows)
         rows = [r for r in rows if r["candidate"] in plan["candidates"]]
@@ -439,9 +487,13 @@ class PatentFake(RuleGenerationModel):
         # elsewhere in an input is noticed, and a new candidate or form reopens it.
         coverage = [_coverage("every invention candidate the inputs hold", listed_count,
                               listed[-1][1].get("query"))]  # fmt: skip
-        if forms:
-            coverage.append(_coverage("every blank form the inputs hold", len(templates),
-                                      forms.get("query")))  # fmt: skip
+        coverage.append(
+            _coverage(
+                "every blank form the inputs hold",
+                len(templates),
+                _query_id({"recorded": blank.get("query", "")}) or None,
+            )
+        )
         content = {
             "plan": plan,
             "candidates": [r["candidate"] for r in rows],
@@ -557,38 +609,55 @@ class PatentFake(RuleGenerationModel):
         ext = ctx.read("extraction")
         assert ext is not None, "prior_art reads the extraction"
         groups = ext[1]["search"]
-        if not ctx.called("search_publications"):
-            return _reply(
-                _call("search_publications", 1, all_of=groups),
-                _call("web_search", 1, query=web_query(groups), limit=WEB_LIMIT),
-            )
-        search = next(d for a, d in ctx.ok("search_publications") if a.get("all_of") == groups)
-        if not ctx.called("fetch_publication") and not ctx.called("fetch_url"):
-            known = {_norm(str(h.get("title") or "")).lower() for h in search["hits"]}
-            urls = choose_results([d for _, d in ctx.ok("web_search")], known)
-            calls = [_call("fetch_publication", i, id=h["id"])
-                     for i, h in enumerate(search["hits"], 1)]  # fmt: skip
-            calls += [_call("fetch_url", i, url=u) for i, u in enumerate(urls, 1)]
-            if calls:
-                return _reply(*calls)
-        pubs = [d for _, d in ctx.ok("fetch_publication")]
+        # The search: one search_inputs per term group over the publications, so each is a
+        # recorded query whose version moves only when the publications it hits change.
+        searches = [_searched(ctx, g) for g in groups]
+        if any(x is None for x in searches) or not ctx.called("web_search"):
+            calls = [_call("search_inputs", i, terms=g, kinds=[PUBLICATION], limit=1)
+                     for i, (g, x) in enumerate(zip(groups, searches, strict=True), 1)
+                     if x is None]  # fmt: skip
+            if not ctx.called("web_search"):
+                calls.append(_call("web_search", 1, query=web_query(groups), limit=WEB_LIMIT))
+            return _reply(*calls)
+        found = [set(x["inputs_hit"]) for x in searches if x is not None]
+        hit = sorted(set.intersection(*found)) if found else []
+        need = fakes_views.refs_needed(ctx.results, hit)
+        if need:  # every input that holds a term of each group: read in full
+            return _reply(*(_call(n, 100 + i, **a) for i, (n, a) in enumerate(need, 1)))
+        models = fakes_views.readers()
+        world = fakes_views.seen_world(ctx.results, models)
+        hits = world.search(groups) if hit else []
+        pubs = [world.publication(h["id"]) for h in hits]
         numbers = sorted({str(cl["number"]) for p in pubs for cl in p.get("priority_claims", ())})
-        asked = [a for a, _ in ctx.ok("search_publications") if a.get("all_of") != groups]
-        if numbers and not asked:  # a family's other members: searched by its priority number
-            return _reply(*(_call("search_publications", i + 2, all_of=[[n]])
-                            for i, n in enumerate(numbers)))  # fmt: skip
+        by_number = {n: _searched(ctx, [n]) for n in numbers}
+        calls = [_call("search_inputs", 200 + i, terms=[n], kinds=[PUBLICATION], limit=1)
+                 for i, (n, x) in enumerate(by_number.items(), 1) if x is None]  # fmt: skip
+        if not ctx.called("fetch_url"):
+            known = {_norm(str(h.get("title") or "")).lower() for h in hits}
+            urls = choose_results([d for _, d in ctx.ok("web_search")], known)
+            calls += [_call("fetch_url", i, url=u) for i, u in enumerate(urls, 1)]
+        if calls:  # a family's other members, searched by its priority number; the web reads
+            return _reply(*calls)
+        family = sorted({r for x in by_number.values() if x is not None for r in x["inputs_hit"]})
+        need = fakes_views.refs_needed(ctx.results, family)
+        if need:
+            return _reply(*(_call(n, 300 + i, **a) for i, (n, a) in enumerate(need, 1)))
+        world = fakes_views.seen_world(ctx.results, models)
         fetched = {p["id"] for p in pubs}
-        siblings = sorted({h["id"] for a, d in ctx.ok("search_publications")
-                           if a.get("all_of") != groups for h in d["hits"]} - fetched)  # fmt: skip
-        if siblings and not any(a.get("id") in siblings for a, _ in ctx.ok("fetch_publication")):
-            return _reply(*(_call("fetch_publication", 100 + i, id=x)
-                            for i, x in enumerate(siblings)))  # fmt: skip
+        siblings = sorted({h["id"] for n in numbers for h in world.search([[n]])} - fetched)
+        pubs += [world.publication(x) for x in siblings]
+        done = [x for x in searches if x is not None]
+        search: dict[str, Any] = {
+            "query": [_query_id(x) for x in done],
+            "hits": hits,
+            "publications_searched": done[0]["inputs_searched"] if done else 0,
+        }
         have = {p["id"] for p in pubs}
         web = [d for _, d in ctx.ok("fetch_url")
                if d.get("kind") == "publication" and d.get("id") not in have
                and matches(groups, d)]  # fmt: skip
         pubs += web
-        hits = [*search["hits"], *({"id": d["id"], "title": d["title"]} for d in web)]
+        hits = [*hits, *({"id": d["id"], "title": d["title"]} for d in web)]
         content = prior_art(c, {**search, "hits": hits}, pubs)
         content["web"] = {
             "queries": [a.get("query") for a, _ in ctx.ok("web_search")],
@@ -704,18 +773,18 @@ class PatentFake(RuleGenerationModel):
         ext = ctx.read("extraction")
         assert ext is not None
         plan = (ctx.read("portfolio") or ("", {}))[1].get("plan", {})
-        if not ctx.called("list_templates"):
-            return _reply(_call("list_templates", 1))
-        listed = ctx.ok("list_templates")[-1][1]["templates"]
-        wanted = [str(t) for t in plan.get("forms", ())]
-        names = [t["template"] for t in listed if not wanted or t["template"] in wanted]
+        blank = _listed(ctx, [FORM_TEMPLATE])
+        if blank is None:
+            return _reply(_call("list_inputs", 90, kinds=[FORM_TEMPLATE]))
+        forms = _forms_read(ctx, blank)
         ids = sorted({r["person_id"] for r in ext[1]["contributors"]})
-        if not ctx.called("read_template") or (ids and not ctx.called("read_people")):
-            reads = [_call("read_template", i, template=t) for i, t in enumerate(names, 1)]
+        if forms is None or (ids and not ctx.called("read_people")):
             ask = [_call("read_people", 1, person_ids=ids)] if ids else []
-            return _reply(*ask, *reads)
+            return _reply(*ask, *_form_reads(ctx, blank))
         people = {p["person_id"]: p for _, d in ctx.ok("read_people") for p in d["people"]}
-        templates = {a["template"]: d for a, d in ctx.ok("read_template")}
+        wanted = [str(t) for t in plan.get("forms", ())]
+        templates = {d["template"]: d for d in sorted(forms.values(), key=lambda d: d["template"])}
+        names = [t for t in templates if not wanted or t in wanted]
         cmp_, rec, art = ctx.read("comparison"), ctx.read("recommendation"), ctx.read("prior_art")
         assert cmp_ is not None and rec is not None and art is not None
         calls = []
@@ -723,7 +792,7 @@ class PatentFake(RuleGenerationModel):
             pool = [*disclosure_fields(ext[1], cmp_, art, people, templates[t]),
                     *worksheet_fields(ext[1], cmp_, people, templates[t])]  # fmt: skip
             form = fit(templates[t], pool)
-            calls.append(_call("fill_form", i, template=t, candidate=c, fields=form))
+            calls.append(_call("fill_form", i, template=templates[t]["ref"], key=c, fields=form))
         return _reply(*calls, _call("finish", 1, summary=f"{len(calls)} forms filled"))
 
     def _packet(self, ctx: Context) -> GenerationResult:

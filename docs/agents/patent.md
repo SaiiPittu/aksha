@@ -23,19 +23,19 @@ The agent prepares; it never decides a legal question. See [the legal boundary](
 
 | Task | Tools it lists | Plus |
 |---|---|---|
-| `scope` | `list_inputs`, `search_inputs`, `read_document`, `list_templates`, `todo`, `save_artifact` | `finish` |
+| `scope` | `list_inputs`, `search_inputs`, `read_document`, `read_form`, `todo`, `save_artifact` | `finish` |
 | `candidate` (supervisor) | `commit_round` | `finish` |
 | `extract[Cn]` | `list_inputs`, `search_inputs`, `read_document`, `todo`, `save_artifact` | `finish`, `ask` |
-| `deep[Cn]/prior_art` | `search_publications`, `fetch_publication`, `web_search`, `fetch_url`, `save_artifact` | `finish` |
+| `deep[Cn]/prior_art` | `search_inputs`, `read_document`, `web_search`, `fetch_url`, `save_artifact` | `finish` |
 | `deep[Cn]/compare` | `save_artifact` | `finish` |
 | `deep[Cn]/recommend` | `save_artifact` | `finish` |
 | `table` | `save_artifact` | `finish` |
 | `select` | none | `finish`, `ask` (question only: the options and the save are the runtime's) |
-| `prepare[Cn]` | `list_inputs`, `search_inputs`, `read_document`, `list_templates`, `read_template`, `fill_form` | `finish` |
+| `prepare[Cn]` | `list_inputs`, `search_inputs`, `read_document`, `read_form`, `fill_form` | `finish` |
 | `packet[Cn]` | `save_artifact` | `finish` |
 | `send[Cn]` | `send_packet`, `save_artifact` | `finish` |
 
-`prepare` does not list `save_artifact`: a filled form can only be saved by `fill_form`, which checks it against the blank template in code. `select` lists no tool at all: the person chooses, and the runtime saves the `selection` from the answer (below). Schemas and limits are in [tools-and-schemas.md](tools-and-schemas.md).
+Every tool but `send_packet` is the harness's, shared with any agent that lists it; the agent declares only how they read for it (`tools.READING`, its document kinds, and `tools.FORMS`, its blank forms). The uploaded publications are inputs of the kind `prior_art_publication`: `prior_art` searches them with `search_inputs` and `kinds: ["prior_art_publication"]`, one search per group of alternative terms, reads each hit with `read_document` (with `extract=true` its `publication_biblio` fields: numbers, dates, priority claims, status wordings, claims), and searches again by each priority number a hit claims to find the family's other members. The blank forms are inputs of the kind `form_template`: `read_form` shows a form's fields exactly as `fill_form` checks them, which are required and which only counsel completes. `prepare` does not list `save_artifact`: a filled form can only be saved by `fill_form`, which checks it against the blank form in code. `select` lists no tool at all: the person chooses, and the runtime saves the `selection` from the answer (below). Schemas and limits are in [tools-and-schemas.md](tools-and-schemas.md).
 
 ## The Task graph
 
@@ -167,7 +167,7 @@ Above eight candidates, `portfolio.columns` computes a card per candidate from i
 | `recommendation` | by candidate | `candidate`, `next_action`, `why` | |
 | `table` | no | `rows` | One row per candidate with a recommendation |
 | `selection` | no, reviewable | `selected` (candidate codes), `based_on` (the table ref) | The person's choice, saved only by the runtime from the answer; `recommendations` keeps each chosen code's next action, read from its recommendation |
-| `form` | `<candidate>~<template>` | `template`, `candidate`, `fields`, `counts` | Saved only by `fill_form`; each field `complete`, `missing` or `needs_counsel_confirmation` |
+| `form` | `<candidate>~<template>` | `template`, `candidate`, `fields`, `counts` | The kind comes from the harness (`form_kind`) and is saved only by the harness's `fill_form`; each field `complete`, `missing` or `needs_counsel_confirmation`, and `counts` is recomputed by the harness on save |
 | `packet` | by candidate, reviewable | `candidate`, `scope_note`, `sections` | The first section is titled `Needs counsel confirmation` |
 | `handoff` | by candidate | `candidate`, `packet`, `status` | The send receipt, or `held` when the plan does not send |
 | `directive`, `round` | from the portfolio extension | | The supervisor's decisions |
@@ -176,7 +176,7 @@ Above eight candidates, `portfolio.columns` computes a card per candidate from i
 
 1. Each read tool mints a span over every passage it returns (`excerpts.minted`).
 2. Facts in `extraction`, `prior_art`, `comparison`, `recommendation` and `packet` are written as `{file, quote}`. The checks refuse any quote that is not inside a passage minted for that file.
-3. `fill_form` records the blank template's version as a read, so a changed template reopens the form.
+3. `fill_form` records the blank form's version as a read, so a changed form reopens the filled one.
 4. `table` reads every `patent.recommendation` and `patent.extraction`; `packet` reads every `patent.form` for its candidate plus the comparison, recommendation, extraction and prior art. Those reads are recorded with their versions, so a packet names exactly which versions it was built from.
 
 ## The legal boundary
@@ -187,7 +187,7 @@ Above eight candidates, `portfolio.columns` computes a card per candidate from i
 | Says an element is `not_found` in this search | Calls a feature new or novel | `rules.STATES`, `comparison_saved`; `test_no_forbidden_output_anywhere` |
 | Recommends one of three next actions from a rule table | Gives a patentability or freedom-to-operate opinion or a score | `rules.next_action`, `recommendation_follows_rules` |
 | Lists possible coverage directions as questions for counsel | Drafts claims | Instructions; `test_no_forbidden_output_anywhere` |
-| Marks inventorship, ownership and outside contributions `needs_counsel_confirmation` | Decides inventorship or ownership | `rules.form_refusal` refuses `complete` on a counsel field (`counsel_decides`); `test_fill_form_refuses_marking_a_counsel_field_complete`, `test_consultant_suggestion_is_raised_for_counsel` |
+| Marks inventorship, ownership and outside contributions `needs_counsel_confirmation` | Decides inventorship or ownership | the harness's `form_refusal` (`runtime/forms/tools.py`) refuses `complete` on a field only counsel completes (`confirm_only`), with counsel declared as the confirmer in `tools.FORMS`; `test_fill_form_refuses_marking_a_counsel_field_complete`, `test_consultant_suggestion_is_raised_for_counsel` |
 | Keeps a packet not ready while a required field is `missing` | Fills a field with a guess | `packet_saved`; `test_gaps_are_asked_never_filled` |
 | Sends a review packet to counsel after approval | Files anything | `send_packet` goes only to the `counsel_mail` system through the outbox |
 

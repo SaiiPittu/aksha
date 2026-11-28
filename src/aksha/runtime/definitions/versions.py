@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "3.1"
+API_VERSION = "3.2"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -106,6 +106,10 @@ can accept both majors (``">=2.0,<4"``).
 builds and whose answer the runtime saves), ``SaveRequest.answer`` and
 and ``ArtifactVersion.answer``. A kind a declared choice saves is the runtime's alone: a
 tool's save of it is refused ``answer_only``.
+3.2 (28 Nov 2026, ADR-P10 F1) added the harness's form tools: ``form_tools`` and
+``FormSpec`` (``read_form`` and ``fill_form``, the field statuses and the rules that refuse
+a fill), ``FORM_TOOLS`` and ``form_counts``, and the trailing field
+``InputReading.search_kinds`` (``search_inputs`` over some document kinds; off by default).
 """
 
 Version = tuple[int, int]

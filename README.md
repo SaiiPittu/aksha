@@ -76,7 +76,7 @@ make venv && make check   # lint, type check and every test, offline; about 6 mi
 | | Research | Patent |
 |---|---|---|
 | Job | Who sells camera-free occupancy sensing, at what price, and what customers ask for | Which invention candidates to take to counsel, and a disclosure packet for the chosen one |
-| Tools | The six shared tools: `list_inputs`, `read_document`, `search_inputs`, `web_search`, `fetch_url`, `todo` | The shared tools plus `search_publications`, `fetch_publication`, `list_templates`, `read_template`, `fill_form`, `send_packet` |
+| Tools | The six shared tools: `list_inputs`, `read_document`, `search_inputs`, `web_search`, `fetch_url`, `todo` | The shared tools, the shared form tools `read_form` and `fill_form`, and its one action of its own, `send_packet` |
 | Outputs | `research.scope`, `competitors`, one `profile` per company, `matrix`, `needs`, `findings`, `tests` | Per candidate `extraction`, `prior_art`, `comparison`, `recommendation`; `portfolio`, `table`, `selection`, `form`, `packet`, `handoff` |
 | People in the loop | A question when the segment or geography is missing | The candidate choice, then an approval on `send_packet` bound to the packet version and recipient |
 | Docs | [docs/agents/research.md](docs/agents/research.md) | [docs/agents/patent.md](docs/agents/patent.md) |
