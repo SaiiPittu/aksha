@@ -140,9 +140,7 @@ The restart that the demo does not show (R-84) is in the tests: a crash during i
 
 ## 6. Model-in-the-loop performance
 
-Status on 28 Nov 2026: no live model run has applied a change set or been killed mid-send. The three live runs of 28 Nov 2026 ([06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model)) never reached a change set or a send. The recorded research run has no send step and ended partial with two evidence tasks unverified. The two interactive runs ended partial (research) and blocked (patent), both stopped by a harness bug that is being fixed: a task instance started for one key, such as one company or one candidate, is never told which key it is. Neither store holds a `source.changed` or an `outbox.enqueued` event. The guarantees above do not depend on the model: they hold for whatever the model writes, because invalidation, approval signatures and the outbox are runtime code.
-
-When the fixed runs are repeated, they are reported under "After the fixes" on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#after-the-fixes).
+Status on 28 Nov 2026: no live model run has applied a change set or been killed mid-send. On 28 Nov 2026 both agents completed the assignment's example prompts on GPT-6.2 Sol, after the fixes in #114 to #122 ([06-evals-and-live-runs.md](06-evals-and-live-runs.md#after-the-fixes)). Neither run was asked to change its inputs or to send: the research task has no send step, and the patent request asked only to prepare the packet, so it saved the packet and held it unsent. A follow-up in the patent store asking for the send ended blocked before any send (see [examples/live/patent-2026-11-28/](../../examples/live/patent-2026-11-28/README.md)). Neither exported store holds a `source.changed` or an `outbox.enqueued` event. The guarantees above do not depend on the model: they hold for whatever the model writes, because invalidation, approval signatures and the outbox are runtime code, and `aksha demo` shows them offline.
 
 ## Evidence for each claim
 
