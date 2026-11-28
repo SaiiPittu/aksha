@@ -120,7 +120,7 @@ How one evaluation runs:
    - the check raised, or a child is blocked: `fail` at once.
 
    A finish while a person's follow-up is pending is `continue` with the person's words, and is not a veto.
-5. Apply limits, outer to inner, to a proposed `continue`. The Run policy's budget comes first: a spent dimension (model turns, tool calls or active milliseconds; research declares 90, 140 and 600,000) becomes the budget interrupt, a `hold` a person answers by granting more or finalizing. Then the Task policy's two limits: the turn limit (default 10, research sets 4 to 6 per Task) and the stop-veto limit (default 3: the third refused finish since entry is `fail`).
+5. Apply limits, outer to inner, to a proposed `continue`. The Run policy's budget comes first: a spent dimension (model turns, tool calls or active milliseconds; research declares 90, 140 and 600,000) becomes the budget interrupt, a `hold` a person answers by granting more or finalizing. Then the Task policy's two limits: the turn limit (default 10, research sets 4 to 6 per Task; when it bites after a leaf's turn, the leaf's completion check runs first on what is saved, and a pass ends the instance `done`, ADR-P16 S5) and the stop-veto limit (default 3: the third refused finish since entry is `fail`).
 6. Commit one transaction: `stop.decided` and what it implies, such as `completion_check.evaluated`, `task.entered` or `run.ended`.
 
 A `fail` leaves the instance `blocked`. A run ends with one of these outcomes. The first three come from `run_outcome` in `src/aksha/runtime/tasks/scheduler.py`, which the Run policy reads; `failed` comes from the Run policy on a run fault or the restart limit, and `stopped` from the hold predicate in `src/aksha/runtime/stop_policy/evaluation.py`:

@@ -53,7 +53,7 @@ from aksha.runtime.tasks.view import TaskView
 FIRST_KEYS = 5
 """How many failing keys an evaluation names (the rest are counted)."""
 
-EvaluatedOn = Literal["entry", "finish", "parent"]
+EvaluatedOn = Literal["entry", "finish", "parent", "limit"]
 
 
 def evaluate_completion(view: LogView, tree: CompiledTree, ref: InstanceRef) -> Evaluation:

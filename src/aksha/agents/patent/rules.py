@@ -163,6 +163,18 @@ def computed_form(content: dict[str, Any]) -> dict[str, Any]:
     return content
 
 
+def computed_recommendation(content: dict[str, Any]) -> dict[str, Any]:
+    """A recommendation's ``business_importance.note``, written by code at every save.
+
+    The sentence is fixed (``RESEARCH_NOTE``), so the model is never asked to copy it: a
+    save that leaves it out, or words it differently, stores the rule's sentence.
+    """
+    part = content.get(BUSINESS_PART)
+    if isinstance(part, dict):
+        part["note"] = RESEARCH_NOTE
+    return content
+
+
 def required_missing(form: Mapping[str, Any]) -> list[str]:
     """The required fields of a filled form that are ``missing``: the packet is not ready."""
     return [

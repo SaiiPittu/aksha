@@ -173,6 +173,7 @@ KINDS = (
                 artifact_kinds=frozenset(rules.RESEARCH_KINDS),
             ),
         ),
+        compute=rules.computed_recommendation,  # business_importance.note is the code's
     ),
     ArtifactKind("table", _schema("rows")),
     ArtifactKind("selection", _schema("selected", "based_on"), reviewable=True),

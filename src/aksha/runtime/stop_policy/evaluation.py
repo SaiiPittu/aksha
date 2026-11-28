@@ -177,6 +177,9 @@ def evaluate_stop(view: StopView, c: StopCandidate) -> StopDecision:
                 by, new = hit
                 replaced = ((policy.ref, "continue"), new)
                 trail.append((by.ref, new.kind))
+                if new.facts:  # a limit's own check evaluation (ADR-P16 S5)
+                    facts.extend(new.facts)
+                    working = with_facts(working, new.facts)
                 policy, verdict = by, new
         if verdict.kind == "pass":
             if level == 0:

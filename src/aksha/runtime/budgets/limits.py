@@ -16,11 +16,12 @@ timer starts        3 / 5 m  an agent's runs opened by a timer inside the window
 A run's ``run.started{turn_factor}`` multiplies its turn limits (:func:`turn_factor`).
 
 "Bites" means the next turn, veto or resume would exceed the limit: the turn limit lets
-ten turns run and fails the eleventh, the stop-veto limit gives the first two refused
-finishes back to the model as the next turn's message and fails the instance on the third
-(so a limit of 1 fails the first refusal and the check's message never reaches the model),
-and the restart limit lets three resumes run and ends the run on the fourth (ADR-P02 D8:
-"above 3 the run stops").
+ten turns run and ends the instance instead of the eleventh (DONE when its completion check
+passes on what the ten turns saved, FAIL otherwise, ADR-P16 S5), the stop-veto limit gives
+the first two refused finishes back to the model as the next turn's message and fails the
+instance on the third (so a limit of 1 fails the first refusal and the check's message never
+reaches the model), and the restart limit lets three resumes run and ends the run on the
+fourth (ADR-P02 D8: "above 3 the run stops").
 
 The turn limit, like the stop-veto limit, counts one entry's work: a rebuild re-entry
 (ADR-P05 D7) writes a new ``task.entered`` and starts the count again. Counted over the
