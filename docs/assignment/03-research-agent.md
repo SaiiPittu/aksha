@@ -145,7 +145,7 @@ The interactive patent run (c) of the same day hit the same bug ([04-patent-agen
 Run (b) repeated on 28 Nov 2026 on `main` at `b2dacd9`, after the fixes #114 (keyed instances told their key), #115 (fast answers asked once per run), #116 (empty market and world framing) and #117 (a limit runs the check; no per-Task turn limits, decision 42). Same model, settings, prompt and upload as run (b).
 
 1. The agent asked `I-0001`: "What problem should the comparison focus on? The supplied reviews mention sensors in meeting rooms, but the request doesn't specify the use case." The answer named camera-free occupancy sensing for office meeting rooms, for facility managers of mid-size EU office buildings.
-2. It ended `complete` (`completion_checks_passed`) in about 8.5 minutes, with 57 model calls, 3 searches, 12 fetches and 147 citations bound. `aksha verify`: chain ok, 576 events.
+2. It ended `complete` (`completion_checks_passed`) in 8.7 minutes, with 57 model calls, 3 searches, 12 fetches and 147 citations bound. `aksha verify`: chain ok, 576 events.
 3. It saved 5 competitors, and all 5 match the answer key, including the acquisition: the Brightfield Analytics and Corvane pages merged by a `same_entity_as` relation (event 125). Each of the 5 `evidence` instances saved its profile under its own key. The needs count battery life in 7 of 40 unique reviews, the key's count, where run (b) saved every theme as 0 of 40.
 
 The run's events, inspector output, outputs and trace are in [examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md). The before and after table is under [After the fixes](06-evals-and-live-runs.md#after-the-fixes) on the live-runs page. The bundled recording of run (a) is stale until re-recorded.

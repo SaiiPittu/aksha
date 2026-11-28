@@ -251,7 +251,7 @@ The final run, 28 Nov 2026, had the settings of run (b): `openai/gpt-6.2-sol` th
 
 1. Question: `I-0001` (event 28), "What problem should the comparison focus on? The supplied reviews mention sensors in meeting rooms, but the request doesn't specify the use case."
 2. Answer (event 33): camera-free occupancy sensing for office meeting rooms, for facility managers of mid-size EU office buildings, with privacy, counting accuracy, installation effort and battery life weighed as much as price.
-3. What it did, in about 8.5 minutes: 57 model calls, 3 web searches, 12 fetches and 147 citations bound. It saved the scope, 5 competitors (`kelvra-systems`, `veyra-labs`, `noctra`, `tallyway`, `corvane-group`), 5 profiles each under its own key, the needs (42 rows, 40 unique, battery life in 7 of 40, the key's count), the matrix, 8 findings with 4 unknowns marked `not_checked`, and 5 tests with thresholds marked `proposal`.
+3. What it did, in 8.7 minutes: 57 model calls, 3 web searches, 12 fetches and 147 citations bound. It saved the scope, 5 competitors (`kelvra-systems`, `veyra-labs`, `noctra`, `tallyway`, `corvane-group`), 5 profiles each under its own key, the needs (42 rows, 40 unique, battery life in 7 of 40, the key's count), the matrix, 8 findings with 4 unknowns marked `not_checked`, and 5 tests with thresholds marked `proposal`.
 4. The acquisition trap, K5 in the key: it merged the Brightfield Analytics and Corvane pages with a `same_entity_as` relation (event 125) citing "Corvane Presence P1 is the new name for OccuPoint. Brightfield Analytics joined Corvane Group on 12 May 2026, and the product line continues under the Corvane brand."
 5. How it ended: `complete` at event 575; `aksha verify` printed `chain ok: 576 events`.
 
