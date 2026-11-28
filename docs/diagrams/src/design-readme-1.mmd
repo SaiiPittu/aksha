@@ -1,9 +1,0 @@
-flowchart TB
-  subgraph Product["01-product: the product chain"]
-    PG["Problem and goals"] --> PE["Personas"] --> SC["Scenarios"] --> US["User stories"] --> FE["Features"] --> RQ["Requirements"]
-  end
-  RQ --> AR["Architecture"]
-  AR --> PR["Primitives catalogue"]
-  PR --> AD["ADRs"]
-  DL["Decisions log"] -.-> PG
-  DL -.-> AD

@@ -8,11 +8,6 @@ Nothing below is a stored status column. Every state is computed by a pure reduc
 
 State type: `RunState = Literal["running", "waiting", "ended"]` in [`runtime/session/views.py`](../../src/aksha/runtime/session/views.py). The outcome of an ended run is the `run.ended` payload's `outcome`: `complete`, `partial`, `blocked`, `failed` or `stopped`.
 
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-1.png -->
-![A run ends only through run.ended, and a run that waits writes nothing](../diagrams/architecture-3-lifecycles-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: A run ends only through run.ended, and a run that waits writes nothing
@@ -36,8 +31,6 @@ stateDiagram-v2
   waiting --> stopped: run.stop_requested, then run.ended stopped
 ```
 
-</details>
-
 Caption: `waiting` is not stored; a run reads `waiting` while one of its interrupts is open and `ended` once a `run.ended` exists. Notice that `partial` and `blocked` are real endings with their unknowns and blockers in the payload, so a run that lacks evidence never reads `complete`.
 
 | State | Event that puts the run there | Code |
@@ -55,11 +48,6 @@ A budget limit raises a `budget` interrupt (`budget.reached`). A person answers 
 ## 2. Task instance
 
 State type: `InstanceStatus = Literal["new", "running", "suspended", "done", "blocked", "withdrawn"]` in [`runtime/tasks/types.py`](../../src/aksha/runtime/tasks/types.py). The reducer is `RunState.status` in [`runtime/tasks/status.py`](../../src/aksha/runtime/tasks/status.py).
-
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-2.png -->
-![A done instance is entered again only by a rebuild, and only by a recorded fact](../diagrams/architecture-3-lifecycles-2.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 ---
@@ -79,8 +67,6 @@ stateDiagram-v2
   withdrawn --> new: key returns
 ```
 
-</details>
-
 Caption: every arrow is an event, so the scheduler, a restart and a reader all compute the same status (`test_status_equals_full_rebuild`). Notice that `done` is not final: a rebuild re-enters the instance with `task.entered{cause: rebuild}`, which is how invalidated work reruns without a new Task.
 
 | State | Event that puts the instance there |
@@ -97,11 +83,6 @@ Two derived marks sit beside the status: *unreached* (a `new` instance whose nee
 ## 3. Interrupt and approval
 
 State types: `InterruptState = Literal["open", "resolved", "voided"]` and `ApprovalState = Literal["requested", "granted", "rejected", "voided", "revoked", "used"]` in [`runtime/interrupts/types.py`](../../src/aksha/runtime/interrupts/types.py). Reducers: `interrupts` and `approvals` in [`runtime/interrupts/reducers.py`](../../src/aksha/runtime/interrupts/reducers.py). An approval and its interrupt share one ID.
-
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-3.png -->
-![An approval is used only by the outbox entry it names, and an edit is a new approval](../diagrams/architecture-3-lifecycles-3.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 ---
@@ -126,8 +107,6 @@ stateDiagram-v2
   }
 ```
 
-</details>
-
 Caption: only `granted` moves to `used`, and only when an `outbox.enqueued` names the approval, so a rejected, voided or revoked approval can never reach a send. Notice that every arrow out of a final state is ignored by `_move` in the reducer, so a late grant cannot revive a revoked approval.
 
 | Approval state | Event | Who writes it |
@@ -151,11 +130,6 @@ Tests: `test_approve_needs_the_shown_signature`, `test_reject_changes_nothing`, 
 
 State type: `OutboxState = Literal["enqueued", "dispatched", "completed", "abandoned", "outcome_unknown"]` in [`runtime/outbox/types.py`](../../src/aksha/runtime/outbox/types.py). Reducer: `Outbox` in [`runtime/outbox/outbox.py`](../../src/aksha/runtime/outbox/outbox.py); the worker is [`runtime/outbox/worker.py`](../../src/aksha/runtime/outbox/worker.py).
 
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-4.png -->
-![An effect is decided before it is sent, and a crash is settled by asking, not resending](../diagrams/architecture-3-lifecycles-4.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: An effect is decided before it is sent, and a crash is settled by asking, not resending
@@ -174,8 +148,6 @@ stateDiagram-v2
   outcome_unknown --> [*]
 ```
 
-</details>
-
 Caption: the entry and its idempotency key commit with the decision that wanted the effect, before any call, so a crash at any later point leaves a row that recovery can finish. Notice the two crash paths: a `reconcile` entry is asked by key and records the receipt the system already holds, while an `at_most_once` entry that was claimed is closed `outcome_unknown` and never sent again.
 
 | State | Event | Note |
@@ -191,11 +163,6 @@ Tests: [`tests/unit/runtime/outbox/test_worker.py`](../../tests/unit/runtime/out
 ## 5. Artifact version freshness
 
 State type: `Freshness = Literal["current", "invalidated", "dirty", "current_by_cutoff"]`, computed from per-read states `ReadState = Literal["same", "equivalent", "moved", "unsettled", "gone", "weak"]`, both in [`runtime/invalidation/types.py`](../../src/aksha/runtime/invalidation/types.py). The view is `invalidation_view` in [`runtime/invalidation/view.py`](../../src/aksha/runtime/invalidation/view.py). A version is never edited: a rebuild saves a new version, and the freshness of every reader is recomputed.
-
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-5.png -->
-![An equal rebuild stops the cascade at the next reader](../diagrams/architecture-3-lifecycles-5.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 ---
@@ -224,8 +191,6 @@ stateDiagram-v2
   }
 ```
 
-</details>
-
 Caption: the reader waits in `dirty` until the rebuild of what it read settles, and only then is judged, so one change never reopens work whose input came out the same. Notice that v1 stays `invalidated` for good; it is v2, saved by the rebuild run, that readers compare against.
 
 | Freshness | When the view gives it | Event behind it |
@@ -240,11 +205,6 @@ A rebuilt version of a human-reviewed output opens a diff review (an interrupt o
 ## 6. Document ingestion
 
 The steps are named in [`extensions/ingest/ingest.py`](../../src/aksha/extensions/ingest/ingest.py); the rungs are `Rung = Literal["parse_fast", "parse_layout", "parse_vision"]` and the gap reasons `GapReason = Literal["refused", "locked", "unsupported", "unreadable", "cancelled"]` in [`extensions/ingest/types.py`](../../src/aksha/extensions/ingest/types.py). The facts are `document.stored`, `document.gap` and `document.refused`, written by the `inputs` writer in one transaction with the upload's `source.changed` (boundary U8), as [`src/aksha/uploads.py`](../../src/aksha/uploads.py) lays out.
-
-<!-- diagram: docs/diagrams/architecture-3-lifecycles-6.png -->
-![A document the parser cannot read is a recorded gap, never an empty text](../diagrams/architecture-3-lifecycles-6.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 ---
@@ -263,8 +223,6 @@ stateDiagram-v2
   gap --> [*]
   refused --> [*]
 ```
-
-</details>
 
 Caption: every path ends in a fact the model is told about, because a gap or a refusal is served as the document's header alone. Notice that the parser runs in a worker process under time, memory and CPU caps, so a hostile file becomes a gap named `parser_timeout`, `parser_memory` or `parser_crashed` instead of a crashed upload.
 

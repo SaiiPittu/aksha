@@ -57,11 +57,6 @@ The contrast coding agent is the stress test for the boundary. It needs a sandbo
 
 Worked example, the contrast coding agent with no core edit. Its folder declares `push_branch` (external, receiver `git_remote`, recovery `reconcile` by comparing the remote ref with the intended commit), `shell` (exec, network off), artifact kinds `patch` and `test_report`, a typed relation `tested_at` from a test report to the commit it ran on, and a Task tree `plan → edit → test → push`. The `test` Task's completion check is `lambda view: (r := view.latest("coding.test_report")).failed == 0 and view.freshness(r) == "current"` (S5): a pure function over artifacts, because the exec tool already ran the suite and saved the report. It imports the `bwrap` sandbox extension by name. Every piece is a contribution to an interface the core already has, so `test_third_agent_runtime_hash_unchanged` passes with this agent in place of the conformance agent.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p20-extension-api-and-agent-definition-1.png -->
-![ADR-P20: Decision](../../diagrams/design-adr-adr-p20-extension-api-and-agent-definition-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TB
   subgraph L3["Agent definitions (agents/name/)"]
@@ -84,8 +79,6 @@ flowchart TB
   L2 -->|"contributes data through"| API
   API --> LD --> IF
 ```
-
-</details>
 
 Caption: every arrow points inward; the runtime core imports nothing from the two outer layers, and contributions reach the core only through interfaces it already has.
 

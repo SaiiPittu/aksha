@@ -6,11 +6,6 @@ Aksha is one runtime that hosts pluggable agents. Today it loads two, a research
 
 ## Diagram: every outside system is behind an adapter with an offline stand-in
 
-<!-- diagram: docs/diagrams/architecture-0-context-1.png -->
-![Every outside system is behind an adapter with an offline stand-in](../diagrams/architecture-0-context-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: Every outside system is behind an adapter with an offline stand-in
@@ -35,8 +30,6 @@ flowchart LR
   AK -->|"outbox only"| SYS
   AK --> BOX
 ```
-
-</details>
 
 Caption: every arrow out of Aksha crosses a port that has an offline adapter, which is why `AKSHA_MODE=fake` runs end to end with no network. Notice that the mock systems are reached only through the outbox, so a send is always a recorded, keyed effect and never a direct call.
 

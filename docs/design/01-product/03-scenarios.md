@@ -23,11 +23,6 @@ These twelve walkthroughs are the product's acceptance tests in story form. Each
 
 "First milestone" uses the priorities in [features](05-features.md): Must is in the 27 Nov 2026 cut, Should is stubbed or built if there is room, and Later is designed only.
 
-<!-- diagram: docs/diagrams/design-01-product-03-scenarios-1.png -->
-![The frame: twelve scenarios, three agents, every primitive family](../../diagrams/design-01-product-03-scenarios-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart LR
   S1["1 Research<br/>happy path"] --> S11["11 Blocked source,<br/>partial"]
@@ -41,8 +36,6 @@ flowchart LR
   S5["5 Headless job<br/>in a sandbox"]
   S10["10 Trace to<br/>OTLP"]
 ```
-
-</details>
 
 Caption: scenarios 1 and 2 are the base states most others start from; 5, 8 and 10 stand alone.
 
@@ -119,11 +112,6 @@ Starting state: scenario 1 done, and scenario 2 done up to step 9 except the sen
 8. Only then does `packet[C1]` rebuild. A pending `packet/C1@v2` sits beside v1, with the changed inputs and a field-level redline: the new contributor, the new counsel question, family E in the prior-art matrix. The counts stay 18 complete, 0 missing, 7 for counsel.
 9. The founder accepts the packet's diff review. The accept makes `packet/C1@v2` current and asks for a fresh approval of the new action, under a new signature; it does not grant one. Only the founder's approval of that signature creates it.
 
-<!-- diagram: docs/diagrams/design-01-product-03-scenarios-2.png -->
-![Scenario 4. A changed input invalidates exactly the affected work](../../diagrams/design-01-product-03-scenarios-2.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   participant F as Founder
@@ -143,8 +131,6 @@ sequenceDiagram
   R-->>F: diff review: packet v2 with redline
   F->>R: accept, then approve the new signature
 ```
-
-</details>
 
 Caption: the approval is revoked only once the packet is confirmed out of date, and the packet's diff review opens only after the selection's.
 
@@ -204,11 +190,6 @@ A fast classification model answers first and is not sure; the slow model answer
 
 Starting state: the patent fixtures with scripted models. `compare[C1]` binds a verifier model alias, `classify.support`, to a native classification model with an accept threshold of 0.9 and a reject threshold of 0.2. It also declares that an adapted model may answer, with its own accept threshold of 0.85. The comparison artifact is machine-only. The answer key says C1's second feature is `partial` in family A.
 
-<!-- diagram: docs/diagrams/design-01-product-03-scenarios-3.png -->
-![Scenario 7. System 1 abstains and System 2 decides](../../diagrams/design-01-product-03-scenarios-3.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   autonumber
@@ -226,8 +207,6 @@ sequenceDiagram
   C->>C: 0.90 >= 0.85, accept
   C->>S: cell saved partial, decided by adapted, both steps recorded
 ```
-
-</details>
 
 Caption: the fast model answers first and abstains; the slow model answers the same typed question under its own thresholds; every step is recorded.
 

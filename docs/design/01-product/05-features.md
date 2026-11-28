@@ -25,11 +25,6 @@ How the priorities map onto the primitives catalogue's "first milestone" column:
 
 A feature can be Must while one part of it is Later; the Notes column says which part.
 
-<!-- diagram: docs/diagrams/design-01-product-05-features-1.png -->
-![The frame: 41 features, seven areas](../../diagrams/design-01-product-05-features-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TB
   subgraph G["G. Example agents"]
@@ -61,8 +56,6 @@ flowchart TB
   C --> A
   D --> A
 ```
-
-</details>
 
 Caption: agents reach the runtime through the loader, people through the session API, and every control and safety feature rests on the event store and the artifact store.
 

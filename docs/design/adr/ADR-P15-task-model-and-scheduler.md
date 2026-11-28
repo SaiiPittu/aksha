@@ -50,11 +50,6 @@ Seven decisions. D1 to D3 and D5 are the maintainer's (items 2, 4, 7, 8, 10). D4
 
 The tree's lifecycle for one instance, every arrow a fact already in the event store:
 
-<!-- diagram: docs/diagrams/design-adr-adr-p15-task-model-and-scheduler-1.png -->
-![ADR-P15: Decision](../../diagrams/design-adr-adr-p15-task-model-and-scheduler-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 stateDiagram-v2
   [*] --> new: its key appears in the key source
@@ -68,8 +63,6 @@ stateDiagram-v2
   new --> withdrawn: its key leaves the source
   suspended --> withdrawn: its key leaves the source
 ```
-
-</details>
 
 Caption: no arrow is a write of a status; each is an event another primitive already records, so the reducer that computes status cannot disagree with the event store after a crash.
 

@@ -1,8 +1,0 @@
-flowchart LR
-  REC["source record<br/>publications/SYN-PUB-0011@v1"] -->|"derived_from"| EX["patent.extraction/C1@v2"]
-  REC -->|"family_member_of,<br/>citation: shared priority"| FAM["patent.family/E@v1"]
-  FAM -->|"derived_from"| CMP["patent.comparison/C1@v2"]
-  EX -->|"derived_from"| CMP
-  RF["research.findings@v3 (pinned)"] -->|"derived_from"| CMP
-  SNAP["coding.snapshot/repo@v7"] -->|"derived_from"| TR["coding.test_report@v4"]
-  PATCH["coding.patch/P2@v1"] -->|"derived_from"| SNAP

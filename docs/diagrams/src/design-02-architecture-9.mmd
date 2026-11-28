@@ -1,6 +1,0 @@
-flowchart TB
-  MOD["agents/patent/<br/>agent.py, checks.py, prompts/"] --> LD["Agent loader"]
-  LD -->|"scan imports: only aksha.runtime.api<br/>and named extensions"| V["Definition validation<br/>(fixed order of refusals)"]
-  V -->|"refusal: module, Task, field, code"| ERR["LoadError"]
-  V -->|"valid"| H["Agent definition version hash<br/>over module, prompts, policies"]
-  H --> RS["run.started records the hash"]

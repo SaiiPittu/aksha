@@ -115,11 +115,6 @@ def summary_saved(view: Any) -> CheckResult:
 
 ## How the loader takes it in
 
-<!-- diagram: docs/diagrams/agents-authoring-1.png -->
-![An agent folder is scanned, validated and hashed before any event is written](../diagrams/agents-authoring-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: An agent folder is scanned, validated and hashed before any event is written
@@ -135,8 +130,6 @@ flowchart TB
     REFUSE -- no --> HASH["definition_hash"]
     HASH --> RUN(["run.started records the hash"])
 ```
-
-</details>
 
 Notice that every refusal is collected and raised together as one `LoadError`, so a broken definition never writes an event. The definition hash covers the agent's files, so a run that crashed under one definition is ended `definition_changed` instead of resumed under an edited one.
 

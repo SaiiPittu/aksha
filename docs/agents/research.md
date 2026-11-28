@@ -46,11 +46,6 @@ Schemas, effect classes, limits and idempotency are in [tools-and-schemas.md](to
 
 ## The Task graph
 
-<!-- diagram: docs/diagrams/agents-research-1.png -->
-![Every research output waits on a completion check, and only scope can stop for a person](../diagrams/agents-research-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: Every research output waits on a completion check, and only scope can stop for a person
@@ -66,8 +61,6 @@ flowchart TD
     VOICE --> REPORT
     REPORT --> DONE{{"run completion<br/>outputs_exist"}}
 ```
-
-</details>
 
 Notice that `evidence` fans out over `competitors.companies` and runs with `on_child_blocked="partial"`, so one blocked company leaves an explicit unknown instead of blocking the report. The only point where the run waits for a person is the `input` interrupt declared on `scope`; this agent has no external effect and so no approval point.
 

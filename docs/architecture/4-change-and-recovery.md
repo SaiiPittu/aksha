@@ -8,11 +8,6 @@ Three things happen to a running system that a demo of the happy path never show
 
 When a source changes, the one writer of source facts, `record_source_changes` in [`invalidation/sources.py`](../../src/aksha/runtime/invalidation/sources.py), records `source.changed` for every record that moved. For an agent that keys on citations (`invalidation_keys = "citations"` on `run.started`), a moved read is strong only when the version's claims rest on it: a cited span whose text changed (`excerpts.rechecked`), the scope of an absence or coverage claim, or an extraction definition. Every other moved read is weak and produces `evidence.noticed`, not a rebuild ([`invalidation/keying.py`](../../src/aksha/runtime/invalidation/keying.py)).
 
-<!-- diagram: docs/diagrams/architecture-4-change-and-recovery-1.png -->
-![1. An input changes: citation keys and early cutoff](../diagrams/architecture-4-change-and-recovery-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   title A change reopens only what its claims rest on, and an equal rebuild stops there
@@ -41,8 +36,6 @@ sequenceDiagram
   end
 ```
 
-</details>
-
 Caption: the only stored facts are the change, the rebuild run and the new save; staleness and the cutoff are recomputed by `invalidation_view` each time, so a crash in the middle of this cannot leave a stale mark wrong. Notice that an approval whose target moved is revoked in the same transaction as the change, so a send cannot slip through before the rebuild.
 
 What a person sees:
@@ -59,11 +52,6 @@ Tests: `test_a_changed_uncited_paragraph_does_not_reopen`, `test_a_changed_cited
 ## 2. A crash in the middle of a send
 
 The patent agent's `send_packet` tool declares `EffectSpec("counsel_mail", ("/packet", "/recipient"), "reconcile")` in [`agents/patent/tools.py`](../../src/aksha/agents/patent/tools.py). So its idempotency key is fixed by the packet and the recipient, and recovery may ask the mailbox whether a key landed. The demo kills the process with a real `SIGKILL` right after the mailbox has written its row and before the runtime has recorded the receipt ([`interfaces/demo/child.py`](../../src/aksha/interfaces/demo/child.py)).
-
-<!-- diagram: docs/diagrams/architecture-4-change-and-recovery-2.png -->
-![2. A crash in the middle of a send](../diagrams/architecture-4-change-and-recovery-2.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -91,8 +79,6 @@ sequenceDiagram
   OW-->>R: nothing left to send
 ```
 
-</details>
-
 Caption: the entry and its key are committed before the call, so after the kill there is always a `dispatched` row for recovery to find. Notice that the landed phase runs before the unlanded phase, so an entry that did land is closed from its receipt and never reaches the code path that would send it.
 
 If the mailbox had not written the row, the unlanded phase sends it once under the same key, after checking that the approval and its targets still hold. An `at_most_once` effect that was claimed is closed `outcome_unknown` instead, because nothing can be asked. Tests: `test_the_sigkill_mid_send_recovers_to_exactly_one_send_per_packet` in [`tests/integration/test_demo.py`](../../tests/integration/test_demo.py); `test_crash_after_send_intent_sends_once_after_restart`, `test_crash_after_send_before_outcome_records_the_receipt_from_lookup` and `test_send_retried_3x_restart_1x_one_row` in [`tests/integration/test_outbox.py`](../../tests/integration/test_outbox.py); `test_every_commit_point_recovers_to_one_result_per_step` in [`tests/integration/test_sigkill_recovery.py`](../../tests/integration/test_sigkill_recovery.py). Depth: [ADR-P03](../design/adr/ADR-P03-transactional-outbox-and-idempotency-keys.md).
@@ -100,11 +86,6 @@ If the mailbox had not written the row, the unlanded phase sends it once under t
 ## 3. A restart with work open
 
 `recover_on_startup` in [`execution/recovery.py`](../../src/aksha/runtime/execution/recovery.py) runs before the process accepts a command, in a fixed order per owner. It then classifies each open run as one of `RunClass = Literal["stop_requested", "definition_changed", "suspended", "held", "in_flight"]` ([`execution/types.py`](../../src/aksha/runtime/execution/types.py)). In-flight runs are resumed lazily by `resume_owner`, before that owner's next mutating command or on `aksha resume`.
-
-<!-- diagram: docs/diagrams/architecture-4-change-and-recovery-3.png -->
-![3. A restart with work open](../diagrams/architecture-4-change-and-recovery-3.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -130,8 +111,6 @@ sequenceDiagram
   D->>X: replay the interrupted turn
   X-->>D: recorded steps return their results, the rest run
 ```
-
-</details>
 
 Caption: a suspended run is not touched at all, so a person who was asked a question before the crash sees the same question after it. Notice that the resume record is a `stop.decided` like any other, judged by the restart limit, so a run that crashes on every resume ends `failed` with reason `restart_limit` instead of looping.
 

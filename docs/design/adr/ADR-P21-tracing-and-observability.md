@@ -154,11 +154,6 @@ The event store records what happened in an agent run; it does not record how th
 
 Both export over OTLP to the same backend, and they are joined by trace and span IDs, so an operator can go from "this request was slow" to "this is the run it started" and back.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p21-tracing-and-observability-1.png -->
-![Two telemetry planes (decision 21, 25 Nov 2026)](../../diagrams/design-adr-adr-p21-tracing-and-observability-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart LR
   subgraph P2["Plane 2: live instrumentation (adapters and interfaces)"]
@@ -177,8 +172,6 @@ flowchart LR
   P2 -- "OTLP, live (BatchSpanProcessor)" --> B["one OTLP backend"]
   BT -- "OTLP, after each segment" --> B
 ```
-
-</details>
 
 Caption: The two planes meet only at IDs; the event store holds one correlation reference per command, never spans, metrics or logs.
 

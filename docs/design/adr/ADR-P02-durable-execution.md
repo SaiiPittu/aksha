@@ -51,11 +51,6 @@ I propose eleven decisions. D1 to D3 and D5 to D9 carry v2 forward under the new
 
 Work reuse when a new run meets earlier work: in the first milestone a new run adopts existing artifacts only when the whole agent definition version hash is unchanged, so a prompt edit re-runs every Task instance (v2 SR-7 lean B). A hash per Task, adopting under an unchanged Task hash, is the general design and makes a prompt edit cost only what it touches.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p02-durable-execution-1.png -->
-![ADR-P02: Decision](../../diagrams/design-adr-adr-p02-durable-execution-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TD
   K["Process starts"] --> L["Take the lock, check schema version"]
@@ -75,8 +70,6 @@ flowchart TD
   RB --> DONE["recovery.completed"]
   IF -.->|"owner's next command"| RR["Resume record: Run frame judges first,<br/>then the turn resumes or the lost turn end is evaluated"]
 ```
-
-</details>
 
 Caption: every arrow out of "Classify" either ends the run inside a resume record, writes nothing, or waits for the owner; recovery never starts a turn for a suspended run or a stopped one.
 

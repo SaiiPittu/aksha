@@ -6,7 +6,7 @@ BIN := $(VENV)/bin
 # git ignores. An installed aksha uses the per-user data folder instead (aksha doctor).
 export AKSHA_HOME ?= var
 
-.PHONY: venv venv-postgres test test-serial test-postgres lint format typecheck check demo dist release-check diagrams
+.PHONY: venv venv-postgres test test-serial test-postgres lint format typecheck check demo dist release-check
 
 ## Create .venv and install the package with the dev group, the server, the trace exporter
 ## and the ingest extension's parsers (so their tests run rather than skip).
@@ -74,11 +74,6 @@ dist:
 release-check: dist $(BIN)/python
 	AKSHA_DIST=dist $(BIN)/pytest -p no:cacheprovider tests/package
 
-## Render every Mermaid diagram in the docs to docs/diagrams/*.png and show the image above
-## its collapsed source, for readers whose viewer does not render Mermaid (the GitHub mobile
-## app). Needs Node.js (npx) and Chrome or Chromium. Only changed diagrams are rendered again.
-diagrams:
-	python3 scripts/render_diagrams.py
 
 $(BIN)/python:
 	$(MAKE) venv

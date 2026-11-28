@@ -39,11 +39,6 @@ The demo's full report, as JSON, is [examples/outputs/demo-report.json](../examp
 
 ## What the change reopens
 
-<!-- diagram: docs/diagrams/examples-1.png -->
-![The new evidence reopens C1's chain and every recommendation, and leaves C2's extraction and the company profiles alone](diagrams/examples-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: The new evidence reopens C1's chain and every recommendation, and leaves C2's extraction and the company profiles alone
@@ -62,8 +57,6 @@ flowchart TB
   ext --> prior --> comp --> rec --> sel --> pkt --> appr
   ext2 --> sel
 ```
-
-</details>
 
 Notice that only outputs that read a moved record are rebuilt: the consultant email, the disclosure history and the new publication reach C1's chain and `research.needs`, and every patent recommendation, C2's included, reopens because it reads the research needs and findings; C2's extraction, prior art and comparison and the company profiles keep their v1. The rebuilt packet is a new version, so the old approval does not cover it and `approval.requested` asks again for `patent.packet/C1@v2`.
 

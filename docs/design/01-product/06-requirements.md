@@ -6,11 +6,6 @@ This page closes the product chain. Each functional requirement (FR) says what a
 
 ## The frame: how to read a requirement
 
-<!-- diagram: docs/diagrams/design-01-product-06-requirements-1.png -->
-![The frame: how to read a requirement](../../diagrams/design-01-product-06-requirements-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TB
   PE["Persona"] --> ST["User story<br/>(DEV-04)"]
@@ -20,8 +15,6 @@ flowchart TB
   RQ --> SC["Scenario<br/>(2, 6)"]
   SC --> TE["Test"]
 ```
-
-</details>
 
 Caption: read left to right for why a requirement exists, and right to left for what a failing test breaks.
 

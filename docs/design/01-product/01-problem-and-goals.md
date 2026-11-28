@@ -14,11 +14,6 @@ This page is the first link in the product chain. It states the problem, the goa
 | Operator | Runs many agents, runs and items at once, often unattended | Status kept by models, one review card per item, runs that loop forever on restart | One table derived from the record, review batched by kind of judgement, budgets enforced in code |
 | Reviewer of agent output | Answers an agent's questions, approves a send, or reads what an agent produced | Outputs that cite nothing, gaps filled with guesses, approved work quietly replaced | Every claim tied to an excerpt, gaps named as gaps, changes shown as a redline |
 
-<!-- diagram: docs/diagrams/design-01-product-01-problem-and-goals-1.png -->
-![The frame: three kinds of user, one runtime, many agents](../../diagrams/design-01-product-01-problem-and-goals-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TB
   subgraph People
@@ -52,8 +47,6 @@ flowchart TB
   SRV --> RT
   Agents -->|"declarations only"| RT
 ```
-
-</details>
 
 Caption: people reach the runtime only through the session API, and agents reach it only through what they declare.
 

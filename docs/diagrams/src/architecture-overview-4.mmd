@@ -1,6 +1,0 @@
-flowchart TB
-  SUP["Supervisor Task<br/>reads the board, commits rounds"] -->|"directive per item"| DEEP
-  BOARD[("Work board<br/>rendered from the store, capped")] --> SUP
-  TRI["Triage tier<br/>every item"] --> BOARD
-  DEEP["Deep tier<br/>admitted items + audit sample"] --> BOARD
-  TRI --> DEEP

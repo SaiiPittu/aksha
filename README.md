@@ -124,11 +124,6 @@ The same conversation runs in the terminal with `aksha chat --agent research --i
 
 ## Architecture at a glance
 
-<!-- diagram: docs/diagrams/readme-1.png -->
-![Every client goes through one session API, and every tool call passes the policy gate before it can touch the record](docs/diagrams/readme-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: Every client goes through one session API, and every tool call passes the policy gate before it can touch the record
@@ -145,8 +140,6 @@ flowchart TB
   OUTBOX --> MAIL["Mock mailbox<br/>adapters/systems"]
   EXEC -->|"single writer"| STORE[("Event store<br/>append-only, hash-chained")]
 ```
-
-</details>
 
 Caption: the agents are data loaded into the loop, so no box in the runtime names an agent. Notice that the only path to the mailbox runs through the gate and the outbox, and only the step executor writes the store.
 

@@ -44,11 +44,6 @@ My lean, with the Accepted part marked:
 7. The model call goes through the Task's generation model alias (PR-07), the request is built by context assembly (PR-08), and its hash is the step's argument hash, so a resumed turn either returns the recorded reply or fails with `step_mismatch`. It never silently sends a different request.
 8. An agent cannot replace the loop in v1. Its extension points are its tools, its Task tree with completion checks, the stop policies it opts into, its context policy parameters and its model aliases. A replaceable loop is worth revisiting only when a third agent needs a turn shape this one cannot express (see "Where this stops").
 
-<!-- diagram: docs/diagrams/design-adr-adr-p06-agent-loop-and-turn-1.png -->
-![ADR-P06: Decision](../../diagrams/design-adr-adr-p06-agent-loop-and-turn-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   autonumber
@@ -77,8 +72,6 @@ sequenceDiagram
   L-->>D: TurnEnd(kind = tool_results)
   D->>E: The turn end
 ```
-
-</details>
 
 Caption: The loop asks projections for its inputs and the step executor for every write, and the only arrow that leads to another turn passes through stop-policy evaluation.
 

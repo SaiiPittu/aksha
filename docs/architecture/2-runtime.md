@@ -6,11 +6,6 @@ The runtime is one package per primitive under [`src/aksha/runtime/`](../../src/
 
 ## Diagram: the loop decides nothing about stopping; stop policy and the gate do
 
-<!-- diagram: docs/diagrams/architecture-2-runtime-1.png -->
-![The loop decides nothing about stopping; stop policy and the gate do](../diagrams/architecture-2-runtime-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: The loop decides nothing about stopping; stop policy and the gate do
@@ -37,8 +32,6 @@ flowchart TB
   ES --> INV --> SP
 ```
 
-</details>
-
 Caption: `drive` only alternates two calls, `evaluate_stop` and `run_turn`, and every decision about what runs next is a `stop.decided` fact that stop policy commits. Notice that the invalidation view feeds stop policy, not the loop, so stale work can stop a finish without the loop knowing about invalidation.
 
 | Component | Job | Code | ADR |
@@ -56,11 +49,6 @@ Caption: `drive` only alternates two calls, `evaluate_stop` and `run_turn`, and 
 | Invalidation view | Which versions are stale, computed from the log | [`runtime/invalidation/view.py`](../../src/aksha/runtime/invalidation/view.py) | [P05](../design/adr/ADR-P05-invalidation.md) |
 
 ## Diagram: one turn writes only through the step executor
-
-<!-- diagram: docs/diagrams/architecture-2-runtime-2.png -->
-![Diagram: one turn writes only through the step executor](../diagrams/architecture-2-runtime-2.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -99,8 +87,6 @@ sequenceDiagram
   T-->>D: turn end, rebuilt from recorded steps
   D->>SP: the turn end as the next candidate
 ```
-
-</details>
 
 Caption: the gate judges each call against the log as it stood before that call, so a resumed turn is judged exactly as the first time. Notice that `run_turn` returns nothing it remembers: its turn end is rebuilt from recorded step events, so a crash anywhere in the turn loses no decision.
 

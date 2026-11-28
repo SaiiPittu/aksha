@@ -44,11 +44,6 @@ I propose eight decisions. D1 to D3 and D6 to D7 carry v2 forward under the new 
 7. D7, reconciliation order and refusal. Recovery reconciles entries that landed before the source check and entries that did not land after it (ADR-P02 D5). An entry that did not land is finished with the same key only if its target is still current and its recomputed approval signature is equal; otherwise it is abandoned with `outbox.abandoned{hash_mismatch}` or `{target_invalidated}`. A person's approval is never spent on an action that changed.
 8. D8, bounded receiver retries counted from the event store. A transient failure from the system of record is retried under the tool's step policy, each retry passing D1's pre-delivery re-check first; a timeout on a dispatched `at_most_once` entry is never retried and stays `outcome_unknown` (D4); attempts are counted from `step.failed` events, so a restart never resets them. With retries used up, the entry is abandoned with `retries_exhausted`, the document keeps its lifecycle state, and it appears in the person's pending list.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p03-transactional-outbox-and-idempotency-keys-1.png -->
-![ADR-P03: Decision](../../diagrams/design-adr-adr-p03-transactional-outbox-and-idempotency-keys-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   participant C as client
@@ -66,8 +61,6 @@ sequenceDiagram
   C->>RT: handoff(command_id=X) again after a timeout
   RT-->>C: AlreadyRecorded: The stored receipt
 ```
-
-</details>
 
 Caption: two keys do two jobs. The command ID makes a retried click the same click; the idempotency key makes a regenerated run's send the same send.
 

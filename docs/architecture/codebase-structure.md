@@ -9,11 +9,6 @@ If you know Express: the runtime is your service layer, a port is the interface 
 
 ## The layers and the dependency rule
 
-<!-- diagram: docs/diagrams/architecture-codebase-structure-1.png -->
-![The layers and the dependency rule](../diagrams/architecture-codebase-structure-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart LR
   subgraph OUT["Outer layers"]
@@ -39,8 +34,6 @@ flowchart LR
   API --> DOM
   DOM --> PORTS
 ```
-
-</details>
 
 Caption: every arrow is an allowed import, and every arrow ends at or inside the runtime; nothing inside `src/aksha/runtime/` points out.
 

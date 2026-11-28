@@ -25,11 +25,6 @@ Read the product chain first, because every later document answers a requirement
 
 The code layout, the dependency rule between layers and how to add an agent are in [`../architecture/codebase-structure.md`](../architecture/codebase-structure.md), which lands with the first code change.
 
-<!-- diagram: docs/diagrams/design-readme-1.png -->
-![Aksha design documents: Reading order](../diagrams/design-readme-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 flowchart TB
   subgraph Product["01-product: the product chain"]
@@ -41,8 +36,6 @@ flowchart TB
   DL["Decisions log"] -.-> PG
   DL -.-> AD
 ```
-
-</details>
 
 Caption: each product document traces to the one before it, the requirements trace to primitives, and the decisions log settles what every layer cites.
 

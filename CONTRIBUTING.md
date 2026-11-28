@@ -14,7 +14,6 @@ make lint           # ruff check and ruff format --check
 make typecheck      # mypy --strict over src/aksha/ and tests/
 make check          # all three
 make demo           # the change-and-recovery demo
-make diagrams       # render each Mermaid diagram in the docs to a PNG in docs/diagrams/ (needs Node.js and Chrome)
 ```
 
 Tests are in `tests/`: `unit/` mirrors the package, `contract/` runs each port's suite against every adapter, `integration/` runs primitives together (including a real SIGKILL recovery harness and the CLI and HTTP server), `agents/` runs the example agents on the fixture worlds, and `architecture/` enforces the dependency rule. The PostgreSQL tests use `AKSHA_TEST_POSTGRES_DSN`, or start a throwaway container from a local `postgres:16` image that is never pulled.

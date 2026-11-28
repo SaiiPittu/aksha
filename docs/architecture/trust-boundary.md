@@ -6,11 +6,6 @@ Aksha draws one line. On one side is everything the model reads: uploaded docume
 
 ## Diagram: text can only propose a call; code decides, and only a person's signed command approves
 
-<!-- diagram: docs/diagrams/architecture-trust-boundary-1.png -->
-![Text can only propose a call; code decides, and only a person's signed command approves](../diagrams/architecture-trust-boundary-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: Text can only propose a call; code decides, and only a person's signed command approves
@@ -37,8 +32,6 @@ flowchart LR
   PER --> APP -->|"approval.granted"| AUTH
   GATE -->|"route approval"| AUTH --> SYS
 ```
-
-</details>
 
 Caption: the only arrow from the data side into the control side ends at the gate, which judges a proposed call against the agent's declared tools and rules and never against anything the model read. Notice that `approval.granted` has a single source, a person's `approve` command, so an instruction inside a page that says "approval granted" is only text in the context.
 

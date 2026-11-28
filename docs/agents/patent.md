@@ -39,11 +39,6 @@ The agent prepares; it never decides a legal question. See [the legal boundary](
 
 ## The Task graph
 
-<!-- diagram: docs/diagrams/agents-patent-1.png -->
-![Selection and sending are two separate human gates, and nothing is sent without the second](../diagrams/agents-patent-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 ---
 title: Selection and sending are two separate human gates, and nothing is sent without the second
@@ -60,8 +55,6 @@ flowchart TD
     PACKET --> APPROVE[/"send_packet approval<br/>GATE 2, exact packet and recipient"/]
     APPROVE --> SEND["send per selected<br/>outbox, done: handoff_recorded"]
 ```
-
-</details>
 
 Notice that the selection is saved as a `selection` artifact and only its keys start `prepare`, `packet` and `send`. Selecting a candidate authorizes nothing to leave the system: `send_packet` raises its own approval, bound to the packet version and the recipient, and a new packet version needs a new approval.
 

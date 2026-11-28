@@ -1,5 +1,0 @@
-flowchart TB
-  G["genesis<br/>hash of store_id"] --> E1["seq 1<br/>prev_hash = genesis<br/>hash = H1"]
-  E1 --> E2["seq 2<br/>prev_hash = H1<br/>hash = H2"]
-  E2 --> E3["seq 3<br/>prev_hash = H2<br/>hash = H3"]
-  E3 -. "copied every N events" .-> A["anchor sink<br/>(seq 3, H3)<br/>outside the store"]

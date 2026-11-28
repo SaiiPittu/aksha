@@ -55,11 +55,6 @@ Worked example, a double-clicked Approve after a dropped connection. The browser
 
 Worked example, a reconnect. A browser tab holds cursor 412 and sleeps; the run commits up to 450. On reconnect the tab subscribes with `after_seq=412`. The server replays 413 to 450, the client refetches the views those 38 events name, the server sends `Synchronized(450)` and the tab hides its "reconnecting" banner, then live events follow from 451. One of the 38 is `run.stop_requested`, a type the cached web build predates: it decodes as `Unknown`, the cursor moves past it, and nothing breaks.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p19-session-api-1.png -->
-![ADR-P19: Decision](../../diagrams/design-adr-adr-p19-session-api-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   autonumber
@@ -80,8 +75,6 @@ sequenceDiagram
   C->>S: subscribe(after_seq 4127) after a reconnect
   S-->>C: replay 4128..4150, then Synchronized(4150), then live
 ```
-
-</details>
 
 Caption: The receipt returns at the first commit, the work continues on the single writer, which drains the queue after every turn, and the client follows the work through the stream.
 

@@ -52,11 +52,6 @@ Eight decisions. D1 rests on P-2 and D7 on P-4 and item 5; the rest are my propo
 
 The life of one approval, every arrow one event:
 
-<!-- diagram: docs/diagrams/design-adr-adr-p17-interrupts-and-approvals-1.png -->
-![ADR-P17: Decision](../../diagrams/design-adr-adr-p17-interrupts-and-approvals-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 stateDiagram-v2
   [*] --> requested: approval.requested and interrupt.raised (body, signature)
@@ -73,8 +68,6 @@ stateDiagram-v2
   revoked --> [*]
   used --> [*]
 ```
-
-</details>
 
 Caption: only a person reaches granted, rejected or an edit's voided; only the runtime reaches revoked; a changed fact after the grant leaves the approval granted but unusable until a fresh approval under the new signature.
 

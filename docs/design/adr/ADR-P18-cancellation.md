@@ -59,11 +59,6 @@ The hardest stress test, traced. The Patent Agent's `handoff_request[C1]` has as
 
 After 206: no model step started; `A-0001` is still `requested` and decidable from the pending list; `hold_reason` for (owner, Patent Agent) is `stopped_by_person` until the person's next Patent command; a second kill and restart writes nothing. Under v2's LC-2, recovery would have written nothing at 204 to 206, and the run would have stayed open and held on P-0009 with the person's stop unrecorded in any decision.
 
-<!-- diagram: docs/diagrams/design-adr-adr-p18-cancellation-1.png -->
-![ADR-P18: Decision](../../diagrams/design-adr-adr-p18-cancellation-1.png)
-
-<details><summary>Diagram source (Mermaid)</summary>
-
 ```mermaid
 sequenceDiagram
   participant P as Person (web UI)
@@ -81,8 +76,6 @@ sequenceDiagram
   V->>E: one transaction: interrupt.voided P-0009, run.ended stopped, stop.decided w062
   E-->>P: event stream: run.ended stopped
 ```
-
-</details>
 
 Caption: The acknowledgement promises only that the request is recorded; the run ends in a stop decision that recovery writes, so the person's intent outlives the process that received it.
 
