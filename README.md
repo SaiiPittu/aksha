@@ -7,6 +7,8 @@ Aksha is a headless agent harness in Python. One shared runtime runs many agents
 
 [Assignment requirements and evidence](docs/requirements.md) · [Architecture](docs/architecture/README.md) · [Agents](docs/agents/research.md) · [Add an agent](docs/agents/authoring.md) · [Examples](docs/examples.md) · [Limitations](docs/limitations.md)
 
+> **Reviewing this assignment?** Start with [docs/assignment/README.md](docs/assignment/README.md). It is a short reviewer's guide: a two-minute check, six targeted tests, the runtime and agent boundary, each agent's evidence rules, change and crash recovery, and honest results on held-out worlds and live model runs, each claim tied to a path, a test or a real event ID.
+
 ## Three agents, one runtime (the rule of three)
 
 The runtime follows one rule: no abstraction enters it until three different agents fit that abstraction with no agent-specific code in the runtime. Two document agents alone could pass with a design that is only a document pipeline, so the third agent is chosen to work differently. The three are the Research Agent (built), the Patent Agent (built) and a contrast coding agent (designed, not built). The coding agent would edit a Git repository in a sandbox, run its tests and push a branch after approval. It presses on what the two document agents do not: long contexts, a shell in a sandbox, a completion check that runs the tests, and cancellation mid-edit.
@@ -161,12 +163,13 @@ These are fake-model numbers. They test the harness and the offline rules, not a
 
 ## Live models
 
-Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. So far the adapters have been smoke-tested on one Gemini model. Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). On 28 Nov 2026 the Research Agent ran a whole task on GPT-6.2 Sol: 392 model calls in 28 minutes, ending partial with two competitors left unknown rather than guessed. That recording ships in `src/aksha/data/recordings/research-live-gpt/` and replays offline with no key. The evals have not yet run live. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
+Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or any chat-completions server, with keys read from the provider's own environment variable and never recorded. So far the adapters have been smoke-tested on one Gemini model. Live research runs found two problems that are now fixed: retries too short for a provider under load ([#99](https://github.com/SaiiPittu/aksha/pull/99)), and a model that was never told how to write a citation ([#100](https://github.com/SaiiPittu/aksha/pull/100)). On 28 Nov 2026 the Research Agent ran a whole task on GPT-6.2 Sol: 392 model calls in 27.6 minutes, ending partial with two competitors left unknown rather than guessed. That recording ships in `src/aksha/data/recordings/research-live-gpt/` and replays offline with no key. The evals have not yet run live. Settings and detail: [docs/live-mode.md](docs/live-mode.md).
 
 ## Documentation map
 
 | Page | What it holds |
 |---|---|
+| [Reviewer's guide](docs/assignment/README.md) | For the assignment's reviewers: what to run, what to read and what each claim rests on |
 | [Assignment requirements and evidence](docs/requirements.md) | Every assignment requirement, how it is met, and the paths, tests and commands that show it |
 | [Architecture](docs/architecture/README.md) | Layered pages from context to recovery, the data model and the trust boundary |
 | [Agents](docs/agents/research.md) | The [research](docs/agents/research.md) and [patent](docs/agents/patent.md) agents, [tools and schemas](docs/agents/tools-and-schemas.md), [adding an agent](docs/agents/authoring.md) |
