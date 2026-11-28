@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -684,3 +684,30 @@ def test_a_recommendation_saved_without_the_note_passes_its_check() -> None:
         _View(recommendation=dict(bare), extraction=ext, comparison=cmp_)
     )
     assert not result.ok and rules.BUSINESS_PART in result.message
+
+
+def test_an_option_label_is_the_next_action_when_the_why_is_structured() -> None:
+    """A live model saved a recommendation whose why was an object: the label showed the
+    object's Python text. The label is the next action, with the why only when it is text."""
+
+    class Version:
+        def __init__(self, content: dict[str, Any]) -> None:
+            self.content, self.ref = content, "patent.table@v1"
+
+    class View:
+        recs: ClassVar[dict[str, dict[str, Any]]] = {
+            "C1": {"next_action": "collect_more_evidence", "why": {"gaps": ["bench log"]}},
+            "C2": {"next_action": "prioritize_counsel_review", "why": "Built and  tested."},
+        }
+
+        def latest(self, kind: str, key: str | None = None) -> Version | None:
+            if kind == "table":
+                return Version({"rows": [{"candidate": "C1"}, {"candidate": "C2"}]})
+            return Version(self.recs[key]) if key in self.recs else None
+
+    assert rules.selection_options(View()) == (
+        ("C1", "collect_more_evidence"),
+        ("C2", "prioritize_counsel_review: Built and tested."),
+    )
+    saved = rules.selection_from_answer(View(), ("C1",))
+    assert saved["recommendations"] == {"C1": "collect_more_evidence"}

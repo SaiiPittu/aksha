@@ -64,11 +64,17 @@ class Source:
 
 
 class Kind(RuleClassificationModel):
-    """``intake`` for a record with a heading, ``other`` for anything else."""
+    """``intake`` for a record with a heading, ``other`` for anything else; it abstains (an
+    even split) on a record whose ref says ``undecided``, as a live fast classifier does."""
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         q = request.questions[0]
         pick = "intake" if "headings:" in request.state else "other"
+        if "undecided" in request.state:
+            even = {o: Decimal(1) / len(q.options) for o in q.options}
+            return ClassificationResult(
+                answers=((q.name, ClassAnswer(pick, distribution_ppm(even))),)
+            )
         rest = (Decimal(1) - Decimal("0.95")) / (len(q.options) - 1)
         probs = {o: Decimal("0.95") if o == pick else rest for o in q.options}
         return ClassificationResult(answers=((q.name, ClassAnswer(pick, distribution_ppm(probs))),))
@@ -359,3 +365,53 @@ def test_fill_form_takes_a_forms_name_and_points_errors_at_template(source: Sour
     twice = Source({FORM: INTAKE, "input/forms/copy.md": INTAKE})
     both = _call("read_form", twice, {"template": "site-intake"}).result
     assert isinstance(both, Err) and both.code == "ambiguous_ref" and both.paths == ("/template",)
+
+
+# --- a fast classifier is an optimisation, never a gatekeeper ---------------------------
+
+UNDECIDED = "input/forms/undecided-disclosure.md"
+
+
+def test_a_blank_form_the_classifier_abstains_on_is_read_and_filled_by_its_structure(
+    source: Source,
+) -> None:
+    """The live failure: the fast kind decision abstained on a blank form, so it was listed as
+    no form and every fill was refused. Its fields, extracted as for a decided form, make it
+    one; the result says it was recognised by structure."""
+    from aksha.runtime.inputs.tools import input_tools
+
+    source.texts[UNDECIDED] = INTAKE
+    listing = {t.spec.name: t for t in input_tools("checklist", READING)}["list_inputs"].body
+    assert listing is not None
+    listed = listing(_ctx(source), {"kinds": ["intake"]}).result
+    assert isinstance(listed, Ok)
+    rows = {r["ref"]: r for r in listed.data["inputs"]}
+    assert (rows[UNDECIDED]["kind"], rows[UNDECIDED]["decided"]) == ("other", False)
+    assert rows[UNDECIDED]["note"].startswith("kind undecided")  # listed, marked, not hidden
+    assert "input/notes.txt" not in rows  # confidently another kind: still not listed
+    assert "note" not in rows[FORM]
+    read = _call("read_form", source, {"template": UNDECIDED}).result
+    assert isinstance(read, Ok) and read.data["recognised_by"] == "structure"
+    assert [f["field"] for f in read.data["fields"]] == ["Site name", "Floor plan", "Sign-off"]
+    assert "recognised_by" not in _call("read_form", source, {"template": FORM}).result.data
+    args = {"template": UNDECIDED, "key": "S1", "fields": _fields()}
+    filled = _call("fill_form", source, args)
+    assert isinstance(filled.result, Ok) and filled.result.data["recognised_by"] == "structure"
+    (save,) = filled.saves
+    assert save.content["file"] == UNDECIDED
+    assert save.content["counts"] == {"complete": 1, "missing": 1, "needs_review": 1}
+    refused = _call("fill_form", source, {**args, "fields": _fields()[1:]}).result
+    assert isinstance(refused, Err) and refused.code == "fields_mismatch"  # rules still hold
+
+
+def test_a_record_confidently_read_as_another_kind_is_still_refused(source: Source) -> None:
+    """Structure decides only when the classifier abstains: a record it confidently read as
+    another kind is refused with the same message, even when it has form fields."""
+    source.texts["input/boxes.txt"] = "- [ ] Site name (required)\n"  # no heading: other
+    for ref in ("input/boxes.txt", "input/notes.txt"):
+        out = _call("fill_form", source, {"template": ref, "key": "S1", "fields": _fields()})
+        assert isinstance(out.result, Err) and out.result.code == "not_a_form" and not out.saves
+        assert out.result.message.startswith(f"{ref} is read as other, not a blank form")
+    source.texts["input/undecided-notes.txt"] = NOTE  # undecided, and no form field in it
+    out = _call("read_form", source, {"template": "input/undecided-notes.txt"}).result
+    assert isinstance(out, Err) and out.code == "not_a_form" and "undecided" in out.message

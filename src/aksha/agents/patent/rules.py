@@ -199,7 +199,9 @@ def selection_options(view: Any) -> tuple[tuple[str, str], ...]:
         if code in {c for c, _ in out}:
             continue
         src = _recommended(view, code, row)
-        label = f"{src.get('next_action', '')}: {src.get('why', '')}".strip(": ")
+        why = src.get("why")  # a live model may save a structured why: the action alone then
+        why = " ".join(why.split()) if isinstance(why, str) else ""
+        label = f"{src.get('next_action') or ''}: {why}".strip(": ")
         out.append((code, label))
     return tuple(out)
 

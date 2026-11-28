@@ -68,6 +68,11 @@ class Kind(RuleClassificationModel):
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         q = request.questions[0]
         pick = "note" if "format: markdown" in request.state else "other"
+        if "undecided" in request.state:  # abstains: an even split, as a live classifier can
+            even = {o: Decimal(1) / len(q.options) for o in q.options}
+            return ClassificationResult(
+                answers=((q.name, ClassAnswer(pick, distribution_ppm(even))),)
+            )
         rest = (Decimal(1) - Decimal("0.95")) / (len(q.options) - 1)
         probs = {o: Decimal("0.95") if o == pick else rest for o in q.options}
         return ClassificationResult(answers=((q.name, ClassAnswer(pick, distribution_ppm(probs))),))
@@ -163,6 +168,20 @@ def test_the_environment_s_note_on_the_records_comes_with_every_input_result(
         assert isinstance(got, Ok) and got.data["environment"] == note, name
         bare = _call(name, source, dict(args))
         assert isinstance(bare, Ok) and "environment" not in bare.data, name
+
+
+def test_a_kind_filter_keeps_an_input_whose_kind_is_undecided(source: Source) -> None:
+    """An abstention never hides an input: a kind-filtered listing keeps it, marked."""
+    source.texts["input/undecided.txt"] = "Plain words.\n"
+    got = _call("list_inputs", source, {"kinds": ["note"]})
+    assert isinstance(got, Ok)
+    rows = {r["ref"]: r for r in got.data["inputs"]}
+    assert set(rows) == {"input/note.md", "input/undecided.txt"}  # not t.csv: confidently other
+    assert rows["input/undecided.txt"]["decided"] is False
+    assert rows["input/undecided.txt"]["note"].startswith("kind undecided")
+    assert "note" not in rows["input/note.md"]
+    every = _call("list_inputs", source, {})
+    assert isinstance(every, Ok) and all("note" not in r for r in every.data["inputs"])
 
 
 def test_a_listing_version_is_its_hit_set(source: Source) -> None:

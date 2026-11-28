@@ -24,8 +24,14 @@ kind's extraction schema list the form's fields, the agent declares as data
     field only the confirmer completes, or marks complete a field with an open question.
     Whether a field is required is the form's, never the model's; the counts are computed.
 
-A form whose kind is another, or whose extraction names no field, is refused, so a model
-cannot fill a form that is not among the inputs.
+A form whose kind the fast classifier confidently decided is another, or whose extraction
+names no field, is refused, so a model cannot fill a form that is not among the inputs. The
+classifier is an optimisation, never a gatekeeper: when it abstains on a record (its kind is
+undecided), the record is recognised by its structure instead. The form kind's extraction
+runs over it as it would over a decided form, and the record is a blank form when that
+yields at least one form field. Such a form shows ``recognised_by: "structure"`` in the
+``read_form`` and ``fill_form`` results; an undecided record with no form field is refused
+``not_a_form``.
 """
 
 from __future__ import annotations
@@ -105,10 +111,13 @@ class BlankForm:
     title: str
     fields: tuple[FormField, ...]
     drafts: tuple[SpanDraft, ...] = ()
+    recognised_by: str = "kind"
+    """``kind``: the fast classifier decided the form's kind; ``structure``: it abstained,
+    and the form kind's extraction found at least one form field in it."""
 
     def as_json(self, spec: FormSpec) -> dict[str, Any]:
         """The form as ``read_form`` shows it."""
-        return {
+        shown = {
             "template": self.name,
             "form": self.title,
             "ref": self.ref,
@@ -125,6 +134,9 @@ class BlankForm:
             ],
             "statuses": list(spec.statuses),
         }
+        if self.recognised_by != "kind":
+            shown["recognised_by"] = self.recognised_by
+        return shown
 
 
 # --- reading a blank form ----------------------------------------------------------------
@@ -234,15 +246,17 @@ def read_blank_form(
         return Err("no_forms", "this agent declares no blank form kind to read", item=record)
     fmt = sniff_format(record, found.text)
     state = document_preview(record, fmt, found.text, segments_of(found.text, fmt))
-    decided = decide_kind(ctx.models, reading.decide, reading.kinds, state)[0]
-    if decided != spec.template_kind:
-        return Err(
-            "not_a_form",
-            f"{record} is read as {decided}, not a blank form: list_inputs with kinds "
-            f"[{spec.template_kind!r}] lists the blank forms",
-            paths=("/template",),
-            item=record,
-        )
+    kind_name, settled, _ = decide_kind(ctx.models, reading.decide, reading.kinds, state)
+    refusal = Err(
+        "not_a_form",
+        f"{record} is read as {kind_name}, not a blank form: list_inputs with kinds "
+        f"[{spec.template_kind!r}] lists the blank forms",
+        paths=("/template",),
+        item=record,
+    )
+    if settled and kind_name != spec.template_kind:
+        return refusal  # the classifier confidently read another kind
+    by_structure = kind_name != spec.template_kind  # it abstained: the fields decide
     segs, drafts = line_passages(found, fmt)
     judged = ctx.models.extract(kind.extract, found, drafts) if drafts else ()
     _, ranges, _ = accepted_ranges(judged, drafts)
@@ -261,6 +275,13 @@ def read_blank_form(
         if seg is not None and seg.kind == "row" and len(seg.cells) > 1:
             guidance = seg.cells[-1][0] if seg.cells[-1][0] != name else None
         fields.append(FormField(i, name, name in required, name in confirm, guidance))
+    if not fields and by_structure:
+        return replace(
+            refusal,
+            message=f"{record}'s kind is undecided and it holds no form field, so it is not "
+            f"a blank form: list_inputs with kinds [{spec.template_kind!r}] lists the blank "
+            "forms",
+        )
     if not fields:
         return Err(
             "no_fields", f"{record} holds no field to fill", paths=("/template",), item=record
@@ -276,6 +297,7 @@ def read_blank_form(
         title or _stem(record),
         tuple(fields),
         tuple(drafts),
+        "structure" if by_structure else "kind",
     )
 
 
@@ -391,7 +413,9 @@ def fill_form(
     }
     saved = form_key(key, form.name)
     read = InputRef("record", form.ref, form.version)
-    data = {"saved": f"{spec.saves}/{saved}", "counts": counts}
+    data: dict[str, Any] = {"saved": f"{spec.saves}/{saved}", "counts": counts}
+    if form.recognised_by != "kind":
+        data["recognised_by"] = form.recognised_by
     return ToolOutcome(Ok(data, reads=(read,)), saves=(SaveRequest(spec.saves, saved, content),))
 
 

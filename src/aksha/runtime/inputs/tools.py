@@ -11,9 +11,13 @@ document kinds (:class:`InputReading`, declared data):
     The inputs with their format, size (characters and lines), version, a table's columns
     and, when the agent
     declares a decide alias, their document kind (ADR-P07 G3) and the kinds of their
-    sections (G4). A recorded query (ADR-P05 D6): its version hashes what it listed, so an
-    input added later re-executes it. ``as_of`` is the date the run counts to (a recorded
-    time read, ADR-P25 B2), so a model counts days to a recorded date. Mints nothing.
+    sections (G4). ``kinds`` keeps the inputs of those kinds and, because a fast
+    classifier is an optimisation and never a gatekeeper, also every input whose kind (or
+    a section's) the decision abstained on (``decided: false``), with a note that its kind
+    is undecided, so an agent can still read it by its ref. A recorded query (ADR-P05
+    D6): its version hashes what it listed, so an input added later re-executes it.
+    ``as_of`` is the date the run counts to (a recorded time read, ADR-P25 B2), so a model
+    counts days to a recorded date. Mints nothing.
 
 ``read_document(ref, offset?, limit?, section?, cells?, where?, extract?)``
     One input through its representation (what the ingest extension serves at the input's
@@ -347,6 +351,18 @@ def _decide(
     return row
 
 
+UNDECIDED_NOTE = (
+    "kind undecided: the fast classifier did not settle this input's kind, so it is listed "
+    "for the kinds you asked for; read it to see whether it is one"
+)
+"""The note on an input a kind-filtered listing keeps although its kind is undecided."""
+
+
+def _undecided(row: Mapping[str, Any]) -> bool:
+    """Whether the decision abstained on the record, or on one of its sections."""
+    return not row["decided"] or any(not s["decided"] for s in row.get("sections", ()))
+
+
 def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading) -> ToolOutcome:
     """The inputs, by ref (module doc); filtered by kind and format, then paged."""
     kinds = {str(k) for k in args.get("kinds", ())}
@@ -379,7 +395,9 @@ def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading
             row.update(_decide(ctx, reading, found, fmt, segments_of(found.text, fmt)))
             held = {row["kind"], *(s["kind"] for s in row.get("sections", ()))}
             if kinds and not kinds & held:
-                continue
+                if not _undecided(row):
+                    continue
+                row["note"] = UNDECIDED_NOTE  # an abstention never hides an input
         rows.append(row)
     keys = [
         f"{x['ref']}:{x.get('kind', '')}:"
