@@ -76,6 +76,23 @@ def world_key(world: str) -> Mapping[str, Any]:
     return found
 
 
+OPEN_BENCHES: set[ResearchBench] = set()
+"""Benches whose store is open: closed after each test (``tests/agents/research/conftest.py``),
+so no SQLite connection is left for the garbage collector to finalise inside a later test."""
+
+
+def open_benches() -> set[ResearchBench]:
+    """The benches whose store is open now."""
+    return set(OPEN_BENCHES)
+
+
+def close_benches_opened_since(before: set[ResearchBench]) -> None:
+    """Close every bench opened after ``before`` was taken (a shared fixture's stays open)."""
+    for bench in list(OPEN_BENCHES):
+        if bench not in before:
+            bench.close()
+
+
 class ResearchBench:
     """One owner's store, the loaded research agent and the loop's setup over one world."""
 
@@ -107,6 +124,7 @@ class ResearchBench:
         self.request = request
         self.blobs = FilesystemBlobStore(tmp / "blobs")
         self.store: EventStore = open_store(self.path, self.clock, writer=True)
+        OPEN_BENCHES.add(self)
         self.setup = self._setup(self.store)
         self.executor = StepExecutor(self.store, OWNER, self.clock)
 
@@ -205,4 +223,5 @@ class ResearchBench:
         return end.payload
 
     def close(self) -> None:
+        OPEN_BENCHES.discard(self)
         self.store.close()
