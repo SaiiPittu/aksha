@@ -74,7 +74,7 @@ Each has a self-test mutant (`noise-cited`, `spam-read`, `search-skipped`), so e
 
 The recorded run takes place in a store inside the folder, so the person's own store is untouched and the run's IDs start fresh. `aksha replay FOLDER` opens a fresh store, binds every alias to an adapter that answers from `models.jsonl` (run mode `replay`), serves the web from the recorded answers, fixes the clock at the recorded start, uploads the recorded inputs, sends the message, answers as recorded, writes its outputs and its trace, and compares the outputs. A call the recording does not hold is refused, `replay_missing`, and a generation asked something else is `replay_mismatch`: a replay never invents an answer.
 
-A recording made from a fake run ships in `src/aksha/data/recordings/research-occupancy/` and is replayed by `tests/integration/test_record_replay.py`. A live recording is made the same way once a model and a search key are configured, and replays with neither; one made on GPT-6.2 Sol ships in `src/aksha/data/recordings/research-live-gpt/` and is replayed by the same test file.
+A recording made from a fake run ships in `src/aksha/data/recordings/research-occupancy/` and is replayed by `tests/integration/test_record_replay.py`. A live recording is made the same way once a model and a search key are configured, and replays with neither; one made on GPT-6.2 Sol ships in `src/aksha/data/recordings/research-live-gpt/` and is replayed by the same test file; that recording is stale until re-recorded (each keyed instance's context now names its key), and its test is marked as an expected failure.
 
 ## Limits
 

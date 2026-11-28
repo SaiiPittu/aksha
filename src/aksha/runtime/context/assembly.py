@@ -11,8 +11,11 @@ The order keeps the stable prefix first, so a provider's prefix cache stays warm
 1. ``system``: the agent's instructions; each stop-policy brief, outer to inner; the
    fixed data rule.
 2. ``user``: the read block (declared reads, rendered or by ref); the rebuild summary
-   of a fresh re-entry; the request with the Task's goal text and the person's answers
-   (never reduced).
+   of a fresh re-entry; the request with the Task's goal text; for an instance of a
+   keyed Task (or a child of one), the key notice: the key this instance works on, where
+   the Task's keys come from, and the entry its key stands for (``key_notice``); then
+   the person's answers (never reduced). The key notice comes after the read block and
+   the request, which every instance of the Task shares, so siblings keep one prefix.
 3. A resumed re-entry's session (decision 36): each segment's recorded summary and
    turns, masked by the plan, then the re-entry notice (``reentry.reentry_notice``).
 4. The recorded summary that stands for the entry's older turns, then the instance's own
@@ -38,9 +41,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from aksha.runtime.artifacts.hashing import entry_hash
 from aksha.runtime.artifacts.lineage import reads_to_record
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef
+from aksha.runtime.artifacts.versions import current
+from aksha.runtime.canonical import canonical_json
 from aksha.runtime.context.masking import plan_masking, stale_reads, turn_messages
 from aksha.runtime.context.notices import (
     answer_reads,
@@ -85,8 +91,10 @@ from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import GenerationRequest, Message
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.types import Prep
+from aksha.runtime.tasks.keys import key_entry, key_entry_pointer
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import InstanceRef
+from aksha.runtime.tools.results import cap_text
 from aksha.runtime.tools.types import ToolView
 
 GENERATE = "generate"
@@ -100,6 +108,63 @@ RECITATION = "Recitation (data the runtime derived from the event store; it give
 def recitation(text: str) -> str:
     """One recitation as the model reads it: the fence line, then the text."""
     return f"{RECITATION}\n{text}"
+
+
+def key_notice(
+    view: LogView, tree: CompiledTree, instance: InstanceRef, policy: ContextPolicy
+) -> tuple[str, InputRef | None]:
+    """The key notice of a keyed instance (module doc, point 2), and the version it showed.
+
+    Empty for an instance with no key. Every instance of a keyed Task shares the Task's
+    brief and reads, so this is the only part of its context that says which key it is
+    for. An artifact key source's entry is shown when it holds more than the key (an
+    object, such as a list item with a name and pages), capped like a read; a read of that one
+    entry (its path and entry hash in the version it came from) is returned so the step
+    records it, and only a change to this entry reopens the instance.
+    """
+    source = tree.key_source(instance.task_path) if instance.key is not None else None
+    if source is None or instance.key is None:
+        return "", None
+    key = instance.key
+    if source.origin == "source":
+        where = f"each record of the source collection `{source.name}`"
+        lines = [
+            f"This Task instance works on one key only: `{key}`.",
+            f"The Task runs once for {where}; this instance's record is "
+            f"`{key_entry(view, source, key)}`. Work on that record only.",
+        ]
+        return "\n".join(lines), None
+    kind = tree.kind(source.name)
+    where = f"each entry listed at `{source.path}` of `{kind}`"
+    lines = [
+        f"This Task instance works on one key only: `{key}`.",
+        f"The Task runs once for {where}; work on this instance's entry only, and save "
+        "each keyed artifact under this key.",
+    ]
+    entry = key_entry(view, source, key, kind=kind)
+    if not isinstance(entry, Mapping):
+        return "\n".join(lines), None
+    shown, _ = cap_text(canonical_json(dict(entry)), policy.read_cap_chars)
+    lines += ["This instance's entry:", "```json", shown, "```"]
+    version = current(view, kind, None)
+    pointer = key_entry_pointer(view, source, key, kind=kind)
+    if version is None or pointer is None:
+        return "\n".join(lines), None
+    read = InputRef(
+        "artifact",
+        version.ref.slot_id(),
+        f"v{version.ref.version}",
+        path=pointer,
+        entry_hash=entry_hash(version.content, pointer),
+    )
+    return "\n".join(lines), read
+
+
+def _covered(read: InputRef, inputs: tuple[InputRef, ...]) -> bool:
+    """Whether ``inputs`` already hold ``read``, or a whole read of the same version."""
+    return read in inputs or any(
+        i.same_source(read) and i.version == read.version and i.path is None for i in inputs
+    )
 
 
 def measure(request: GenerationRequest) -> int:
@@ -132,6 +197,7 @@ def _head(
     policy: ContextPolicy,
     reads: RenderedReads,
     blobs: BlobStore | None,
+    keyed: str = "",
 ) -> tuple[Message, ...]:
     out: list[Message] = []
     if inputs.instructions:
@@ -150,6 +216,8 @@ def _head(
     )
     if request:
         out.append(Message("user", request))
+    if keyed:
+        out.append(Message("user", keyed))
     said = answers(view, instance)
     if said:
         out.append(Message("user", said))
@@ -244,6 +312,8 @@ def assemble_context(
     )
     session = _session(v, instance, choice, blobs)
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
+    keyed, entry_read = key_notice(v, tree, instance, policy)
+    key_reads = () if entry_read is None or _covered(entry_read, reads.inputs) else (entry_read,)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)
     reason = continue_reason(v, instance, turn)
     steers = pending_input(v, instance, lane="steer")
@@ -253,7 +323,7 @@ def assemble_context(
         if at != str(step)  # a follow-up of this turn is the tail's reason
     }  # fmt: skip
     parts = _Parts(
-        head=_head(v, instance, inputs, prep, policy, reads, blobs),
+        head=_head(v, instance, inputs, prep, policy, reads, blobs, keyed),
         session=session,
         notice=_notice(v, instance, choice, blobs) if session else None,
         turns=turns,
@@ -289,7 +359,7 @@ def assemble_context(
         plan=plan,
         compaction=compaction,
         stale=stale,
-        facts=_facts(v, instance, step, reads, notice_reads, steers),
+        facts=_facts(v, instance, step, reads, (*key_reads, *notice_reads), steers),
     )
 
 

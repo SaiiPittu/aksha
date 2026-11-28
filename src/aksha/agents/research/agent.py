@@ -422,7 +422,6 @@ AGENT = Agent(
             done=checks.profile_done,
             brief="prompts/evidence.md",
             on_child_blocked="partial",
-            max_finish_vetoes=1,
             turn_limit=4,
         ),
         Task(

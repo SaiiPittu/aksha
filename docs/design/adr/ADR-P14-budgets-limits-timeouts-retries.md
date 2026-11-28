@@ -49,7 +49,7 @@ The contrast coding agent is where a reset counter does damage: it runs long, cr
    | Limit | Default | Counted from | When it bites |
    |---|---|---|---|
    | Turn limit per Task instance | 10 | Authorised turns of that instance since it was last entered (a rebuild re-entry starts the count again, like the stop-veto limit) | The Task fails with "turn limit reached" |
-   | Stop-veto limit per instance entry | 3 | Completion-check refusals since the instance was entered | The Task is blocked, with the failing checks listed |
+   | Stop-veto limit per instance entry | 3 | Completion-check refusals since the instance was entered, the one being judged included (so the first two refusals are given back to the model and the third fails) | The Task is blocked, with the failing checks listed |
    | Restart limit (S2: ADR-P02 D8's rule) | 3 | Resume records since the run's last progress (a completed tool step or a saved artifact) | The run ends `failed, restart_limit` through a stop decision, never by boot directly |
    | Automatic-start limit (new, designed) | 3 in 5 minutes per run | Resume records, rebuild-run starts and continuation records, with their recorded timestamps (v2 dropped `run.resumed`, LC-3, so the resume record is the fact) | Further automatic starts are refused and the run is held for a person |
 

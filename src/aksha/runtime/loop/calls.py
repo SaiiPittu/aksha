@@ -47,7 +47,7 @@ from typing import Any
 
 from aksha.runtime.artifacts.errors import SaveRefused
 from aksha.runtime.artifacts.lineage import reads_to_record
-from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, WriterId
+from aksha.runtime.artifacts.types import ArtifactVersion, InputRef, SaveRequest, WriterId
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
@@ -94,6 +94,7 @@ from aksha.runtime.policy.types import Allow, GateInput, StopPolicyNarrowing
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.sandbox.exec import BoxedExec, ExecUnit
 from aksha.runtime.storage.rows import ArtifactRow
+from aksha.runtime.tasks.keys import keys_of
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.timers.clock import recorded_date
@@ -113,6 +114,9 @@ STORE_UNAVAILABLE = "store_unavailable"
 
 SAVE_NOT_ALLOWED = "class_violation"
 """The code of a save returned by a tool whose effect class may not save."""
+
+KEY_NOT_OWN = "key_not_own"
+"""The code of a keyed instance's save under a key its key source gives a sibling."""
 
 SAVING_EFFECTS = frozenset({"store", "exec"})
 """The effect classes whose bodies may ask for saves (ADR-P10)."""
@@ -365,8 +369,11 @@ def _dispatched(
         task = setup.task(ref)
         writes = frozenset(setup.tree.kind(w) for w in task.writes)
         writer = WriterId(setup.agent.name, ref.task_path, ref.key)
-        for request in outcome.saves:
-            name = store.kind_name(request.kind, writer.agent)
+        for asked in outcome.saves:
+            name = store.kind_name(asked.kind, writer.agent)
+            request, refusal = _own_key(setup, view, ref, asked, name, writes)
+            if refusal is not None:
+                return _shown(ToolOutcome(refusal), cap)
             try:
                 saved = store.save(
                     view, request, writer=writer, run=ref.run, instance=ref.instance,
@@ -408,6 +415,44 @@ def _dispatched(
     extra = {SPANS_FIELD: cited} if cited else None
     out = _shown(outcome, cap, events=(*events, *minted.minted.events), extra=extra)
     return StepOutput(out.value, out.outcome, out.code, out.events, tuple(rows))
+
+
+def _own_key(
+    setup: LoopSetup,
+    view: LogView,
+    ref: InstanceRef,
+    request: SaveRequest,
+    name: str,
+    writes: frozenset[str],
+) -> tuple[SaveRequest, Err | None]:
+    """A keyed instance's save of a keyed kind, held to the instance's own key.
+
+    An instance of a keyed Task (or a child of one) works on one key. A save of a keyed
+    kind it writes that names no key is saved under that key. A save under another key
+    its key source lists is refused ``key_not_own``: that slot belongs to a sibling
+    instance, and the first writer of a slot owns it, so one wrong-key save would lock the
+    sibling out of its own artifact. A key the source does not list is left to the store.
+    """
+    kind = setup.artifacts.kinds.get(name) if setup.artifacts is not None else None
+    if ref.key is None or kind is None or not kind.keyed or name not in writes:
+        return request, None
+    if request.key is None:
+        return replace(request, key=ref.key), None
+    if request.key == ref.key:
+        return request, None
+    source = setup.tree.key_source(ref.task_path)
+    if source is None:
+        return request, None
+    listed = keys_of(
+        view, source, kind=None if source.origin == "source" else setup.tree.kind(source.name)
+    )
+    if request.key not in (listed or ()):
+        return request, None
+    msg = (
+        f"this instance works on key {ref.key!r}; save {request.kind} under that key, "
+        f"not {request.key!r}"
+    )
+    return request, Err(KEY_NOT_OWN, msg)
 
 
 def _asked(

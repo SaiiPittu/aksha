@@ -7,7 +7,7 @@ view (or the events of one) and derives the number, so a restart never resets it
 Limit               Default  Counted from                                        Bites when
 ==================  =======  ==================================================  ==============
 turn limit          10       turns authorised since the instance was entered     used >= limit
-stop-veto limit     3        vetoes since the instance was last entered          used >= limit
+stop-veto limit     3        refused finishes since entry, this one included     used >= limit
 restart limit       3        resume records since the run's last progress        used >= limit
 automatic starts    3 / 5 m  automatic starts recorded inside the window          used >= count
 timer starts        3 / 5 m  an agent's runs opened by a timer inside the window  used >= count
@@ -16,8 +16,11 @@ timer starts        3 / 5 m  an agent's runs opened by a timer inside the window
 A run's ``run.started{turn_factor}`` multiplies its turn limits (:func:`turn_factor`).
 
 "Bites" means the next turn, veto or resume would exceed the limit: the turn limit lets
-ten turns run and fails the eleventh, and the restart limit lets three resumes run and
-ends the run on the fourth (ADR-P02 D8: "above 3 the run stops").
+ten turns run and fails the eleventh, the stop-veto limit gives the first two refused
+finishes back to the model as the next turn's message and fails the instance on the third
+(so a limit of 1 fails the first refusal and the check's message never reaches the model),
+and the restart limit lets three resumes run and ends the run on the fourth (ADR-P02 D8:
+"above 3 the run stops").
 
 The turn limit, like the stop-veto limit, counts one entry's work: a rebuild re-entry
 (ADR-P05 D7) writes a new ``task.entered`` and starts the count again. Counted over the
@@ -135,6 +138,8 @@ def limit_reached(
 
     With ``instance`` None only the run's restart limit is read. The stop policy applies
     the hits to a proposed CONTINUE (ADR-P16 D3); a hit is a trail entry, not an event.
+    The stop-veto count is that of a finish about to be refused: the recorded vetoes plus
+    this one, as ``TaskPolicy.limit`` counts it against ``Task.max_finish_vetoes``.
     """
     hits: list[LimitHit] = []
     if instance is not None:
@@ -142,7 +147,7 @@ def limit_reached(
         allowed = limits.turn_limit * turn_factor(view, run)
         if turns >= allowed:
             hits.append(LimitHit("turn_limit", turns, allowed, instance))
-        vetoes = vetoes_since_entry(view, run, instance)
+        vetoes = vetoes_since_entry(view, run, instance) + 1  # the refusal being judged
         if vetoes >= limits.stop_veto_limit:
             hits.append(LimitHit("stop_veto_limit", vetoes, limits.stop_veto_limit, instance))
     resumes = resumes_since_progress(view, run)
