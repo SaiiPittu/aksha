@@ -55,40 +55,51 @@ from .commit import TOOL, commit_round, commit_spec, commit_tool
 from .kinds import DIRECTIVE, ROUND, STATES, kinds
 from .spec import PortfolioSpec, Tier
 
-EXTENSION = Extension(name="portfolio", version="0.1.0", requires_api=">=2.16,<3")
+EXTENSION = Extension(name="portfolio", version="0.1.0", requires_api=">=3.0,<4")
 """The kit contributes nothing by itself: an agent declares the kinds in its own namespace
 (``kinds()``) and binds ``commit_round`` to its ``PortfolioSpec`` (``commit_tool``)."""
 
 
-def turn_ceiling(task: Task) -> int:
+def turn_ceiling(task: Task) -> int | None:
     """The most model turns one instance of ``task`` and its descendants may take.
 
     A Task that works (a leaf, or a parent with a brief) may take its ``turn_limit``; a
-    parent without a brief takes none of its own. The runtime fails an instance at its
-    limit, so this sum bounds one item's cost at the tier (an agent-wide limit only lowers
-    it).
+    parent without a brief takes none of its own. The runtime ends an instance at its
+    limit, so this sum bounds one item's cost at the tier. None when a working Task
+    declares no turn limit (the default since decision 42): nothing then bounds one item,
+    and the run budget is the backstop.
     """
-    own = task.turn_limit if (not task.children or task.brief) else 0
-    return own + sum(turn_ceiling(c) for c in task.children)
+    works = not task.children or bool(task.brief)
+    if works and task.turn_limit is None:
+        return None
+    total = task.turn_limit if works and task.turn_limit is not None else 0
+    for child in task.children:
+        below = turn_ceiling(child)
+        if below is None:
+            return None
+        total += below
+    return total
 
 
 def supervisor_task(
-    spec: PortfolioSpec, *, triage: Task, deep: Task, brief: str, turn_limit: int = 6
+    spec: PortfolioSpec, *, triage: Task, deep: Task, brief: str, turn_limit: int | None = None
 ) -> Task:
     """The supervisor Task over ``triage`` and ``deep``, both keyed by the item listing.
 
     ``triage`` runs for every item; ``deep`` waits for every triage instance (``needs``)
     and runs only for the items the deep filter keeps. The supervisor's own turns are
     offered only ``commit_round``: no read, search, fetch or save tool, so it cannot do
-    item work (the gate enforces the Task's tool list). The deep tier's declared effort
-    must cover its Tasks' turn limits (:func:`turn_ceiling`), so ``over_budget`` at commit
-    is a real bound and not an estimate the workers can overrun.
+    item work (the gate enforces the Task's tool list). When the deep tier's Tasks declare
+    turn limits, its declared effort must cover them (:func:`turn_ceiling`), so
+    ``over_budget`` at commit is a real bound and not an estimate the workers can overrun.
+    When they declare none (the default since decision 42), the effort is the planned cost
+    of one item: admission still counts it, and the run budget bounds what workers spend.
     """
     kind, path = spec.items
     if triage.id != spec.triage or deep.id != spec.deep.task:
         raise ValueError("the triage and deep Tasks must be the ones the spec names")
     ceiling = turn_ceiling(deep)
-    if spec.deep.effort < ceiling:
+    if ceiling is not None and spec.deep.effort < ceiling:
         raise ValueError(
             f"the {spec.deep.id} tier declares an effort of {spec.deep.effort} turns but its "
             f"Tasks' turn limits allow {ceiling}: the deep budget would bound nothing"

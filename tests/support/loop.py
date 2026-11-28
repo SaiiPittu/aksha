@@ -104,7 +104,7 @@ def _send_facts(view: object, args: Mapping[str, object]) -> Mapping[str, str]:
     return {"to": str(args["recipient_id"])}
 
 
-def agent(bodies: Bodies, *, turn_limit: int = 250) -> Agent:
+def agent(bodies: Bodies, *, turn_limit: int | None = 250) -> Agent:
     """The ``coder`` agent with spy bodies."""
     specs = (
         ToolSpec("read_file", AGENT, "read", "Read a file.", PATH),
@@ -204,7 +204,7 @@ class Bench:
         bodies: Bodies | None = None,
         *,
         budget: Mapping[str, int] | None = None,
-        turn_limit: int = 250,
+        turn_limit: int | None = 250,
         instructions: str = "You edit code.",
     ) -> None:
         self.path = path

@@ -108,7 +108,7 @@ class Limits:
     (ADR-P02 D3), so the composition root injects it, and jitter without one is refused.
     """
 
-    turn_limit: int = 10
+    turn_limit: int | None = None
     stop_veto_limit: int = 3
     restart_limit: int = 3
     auto_starts: tuple[int, int] = (3, 300_000)

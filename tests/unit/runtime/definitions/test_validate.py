@@ -74,7 +74,7 @@ MINTING = ToolDecl(
 )
 
 CASES: list[tuple[str, str | None, str, Callable[[Agent], Agent]]] = [
-    ("api_mismatch", None, "requires_api", lambda a: replace(a, requires_api=">=3")),
+    ("api_mismatch", None, "requires_api", lambda a: replace(a, requires_api=">=4")),
     ("requires_api_invalid", None, "requires_api", lambda a: replace(a, requires_api="two")),
     ("name_invalid", None, "name", lambda a: replace(a, name="Toy Agent")),
     ("unknown_extension", None, "extensions", lambda a: replace(a, extensions=("echo", "nope"))),
@@ -321,7 +321,7 @@ def test_an_own_tool_is_usable_by_its_local_name(echo: tuple[LoadedExtension, ..
 
 
 def test_the_api_refusal_comes_first(echo: tuple[LoadedExtension, ...], tmp_path: Path) -> None:
-    broken = _task(replace(AGENT, requires_api=">=3"), "summarise", writes=("nope",))
+    broken = _task(replace(AGENT, requires_api=">=4"), "summarise", writes=("nope",))
     codes = [r.code for r in validate_agent(broken, module=MODULE, extensions=echo)]
     assert codes[0] == "api_mismatch" and "write_kind_unknown" in codes
 
@@ -329,7 +329,7 @@ def test_the_api_refusal_comes_first(echo: tuple[LoadedExtension, ...], tmp_path
 def test_api_refusals_accept_the_current_version() -> None:
     from aksha.runtime.definitions.validate import api_refusals
 
-    assert api_refusals("m", ">=2.0,<3") == []
+    assert api_refusals("m", ">=3.0,<4") == []
     assert [r.code for r in api_refusals("m", "<1")] == ["api_mismatch"]
 
 

@@ -608,3 +608,34 @@ def test_a_forms_counts_are_computed_from_its_fields_at_every_save() -> None:
         "missing": 2,
         "needs_counsel_confirmation": 0,
     }
+
+
+def test_the_research_note_is_written_by_code_at_every_save() -> None:
+    """ADR-P04 K1: a sentence fixed by code is the kind's, never asked of the model."""
+    (rec,) = [k for k in AGENT.artifacts if k.name == "recommendation"]
+    assert rec.compute is rules.computed_recommendation
+    for given in (None, "research shows demand", rules.RESEARCH_NOTE):
+        part = {**_business(), "note": given}
+        out = rec.compute({**_rec(), "business_importance": part})
+        assert out["business_importance"]["note"] == rules.RESEARCH_NOTE
+    missing = {k: v for k, v in _business().items() if k != "note"}
+    out = rec.compute({**_rec(), "business_importance": missing})
+    assert out["business_importance"]["note"] == rules.RESEARCH_NOTE
+
+
+def test_a_recommendation_saved_without_the_note_passes_its_check() -> None:
+    """The save path's ``computed`` writes the note, so the model never words it."""
+    from aksha.runtime.artifacts.store import computed
+
+    (kind,) = [k for k in AGENT.artifacts if k.name == "recommendation"]
+    ext, cmp_ = _ext(), _cmp("not_found")
+    for note in (None, "research shows demand"):
+        saved = computed(kind, {**_rec(), "business_importance": {**_business(), "note": note}})
+        view = _View(recommendation=dict(saved), extraction=ext, comparison=cmp_)
+        assert checks.recommendation_follows_rules(view).ok
+    # Without the part at all, nothing is written and the check still asks for it.
+    bare = computed(kind, {"next_action": "prioritize_counsel_review"})
+    result = checks.recommendation_follows_rules(
+        _View(recommendation=dict(bare), extraction=ext, comparison=cmp_)
+    )
+    assert not result.ok and rules.BUSINESS_PART in result.message

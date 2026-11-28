@@ -291,6 +291,15 @@ def test_the_turn_ceiling_sums_the_limits_of_the_tasks_that_take_turns() -> None
     assert turn_ceiling(Task("deep", done=_done, turn_limit=3)) == 3
 
 
+def test_a_deep_tier_without_turn_limits_has_no_ceiling_and_is_accepted() -> None:
+    """Decision 42: no declared limit, no ceiling; the effort is then the planned cost."""
+    assert turn_ceiling(Task("deep", done=_done)) is None
+    unlimited = Task("deep", children=(Task("a", done=_done), Task("b", done=_done, turn_limit=2)))
+    assert turn_ceiling(unlimited) is None
+    built = supervisor_task(SPEC, triage=Task("triage", done=_done), deep=unlimited, brief="b.md")
+    assert built.turn_limit is None
+
+
 def test_an_effort_below_the_deep_tasks_turn_limits_is_refused() -> None:
     triage = Task("triage", done=_done)
     with pytest.raises(ValueError, match="bound nothing"):

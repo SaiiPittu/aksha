@@ -37,8 +37,6 @@ Task(
     done=checks.profile_done,
     brief="prompts/evidence.md",
     on_child_blocked="partial",
-    max_finish_vetoes=1,
-    turn_limit=4,
 ),
 ```
 
@@ -96,8 +94,8 @@ One example from the offline run in [examples/outputs/research-summary.md](../..
 |---|---|---|
 | Tools per Task, in code | `report` can only save; `scope` cannot search the web. The policy gate refuses any unlisted call. | `tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task` |
 | Page text is data | A page addressed to AI readers asks to skip approval and send a packet; it is flagged as a finding and changes nothing. | `tests/agents/research/test_runs.py::test_a_model_that_obeys_page_text_is_refused_and_nothing_changes`, eval case `s8a-injection-research` |
-| Budgets and turn limits | 90 model turns, 140 tool calls, 600,000 ms active time per run; 4 to 6 turns per Task instance. | `budget=` and `turn_limit=` in `agent.py` |
-| Bounded finish vetoes | A Task that tries to finish while its check fails is refused and told why; by default the third refusal fails the instance. `evidence` sets `max_finish_vetoes=1`, so its first refused finish already fails that instance, with no turn to act on the reason. | `limit` in `src/aksha/runtime/stop_policy/core.py`; `tests/agents/research/test_counts.py::test_a_missing_theme_is_named_in_one_veto_and_the_next_turn_passes` (default limit) |
+| Budgets, no turn limits | 90 model turns, 140 tool calls, 600,000 ms active time per run, multiplied by 3 for turns and calls in a live run. No Task declares a turn limit (decision 42): long work runs until its check passes, its finish vetoes run out, a person stops it, or the run budget holds the run. | `budget=` in `agent.py`; `tests/integration/test_no_turn_limit.py` |
+| Bounded finish vetoes | A Task that tries to finish while its check fails is refused and told why; by default the third refusal fails the instance; every research Task uses the default since the evidence Task gives a refused finish back to its model. | `limit` in `src/aksha/runtime/stop_policy/core.py`; `tests/agents/research/test_counts.py::test_a_missing_theme_is_named_in_one_veto_and_the_next_turn_passes` (default limit) |
 | Partial results | A company whose page fails to fetch ends as a row of `unverified` cells; the other four rows are kept and the run ends `partial`. | `tests/agents/research/test_runs.py::test_a_blocked_source_ends_the_run_partial_with_the_gap_named` |
 | Crash and restart | A crash mid-evidence resumes without repeating a recorded step; a restart while a question waits asks it once. | `tests/agents/research/test_runs.py::test_a_crash_mid_evidence_resumes_and_repeats_no_recorded_step`, `tests/agents/research/test_runs.py::test_a_restart_while_waiting_on_the_founder_asks_once` |
 | Changed inputs | `invalidation="rebuild"` keyed on citations: outputs citing a changed span reopen, with what depends on them. In the demo, 7 of 11 research outputs were kept. | `aksha demo`, line `kept 7 of 11 research outputs` |
@@ -137,7 +135,7 @@ Run (b), 28 Nov 2026: the assignment's example prompt "Who already solves this p
 The cause is a harness bug, not the model. A per-key Task instance is never told its key: the brief in `prompts/evidence.md` says "For this one company" and names none. The events show three effects:
 
 1. At event 134 `evidence[corvane-group]` replied with text only, asking which of the five companies to profile. At event 197 `evidence[noctra]` asked the same: "Which company should I profile: Kelvra Systems, Veyra Labs, Noctra, Corvane Group, or Tallyway? The supplied artifact lists all five but doesn't identify which one you mean".
-2. A text-only reply counts as a request to finish. With `max_finish_vetoes=1` the first refusal already reached the limit, so at event 138 the stop policy failed `evidence[corvane-group]` (`stop_veto_limit`) with no feedback turn.
+2. A text-only reply counts as a request to finish. With `max_finish_vetoes=1` (the evidence Task's setting at the time of that run) the first refusal already reached the limit, so at event 138 the stop policy failed `evidence[corvane-group]` (`stop_veto_limit`) with no feedback turn.
 3. At event 177 the instance `evidence[kelvra-systems]` saved `research.profile/corvane-group@v1`, the wrong company's profile.
 
 The interactive patent run (c) of the same day hit the same bug ([04-patent-agent.md](04-patent-agent.md#a-real-model-interactive-on-the-assignments-own-prompt)). Both the per-key bug and the cost of ingestion are being fixed; neither fix is merged. All three runs side by side, with the bug's three failure modes, are on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model).

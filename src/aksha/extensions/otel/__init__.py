@@ -12,4 +12,4 @@ from __future__ import annotations
 
 from aksha.runtime.api import Extension
 
-EXTENSION = Extension(name="otel", version="0.1.0", requires_api=">=2.0,<3")
+EXTENSION = Extension(name="otel", version="0.1.0", requires_api=">=2.0,<4")

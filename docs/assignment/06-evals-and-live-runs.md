@@ -147,7 +147,7 @@ export AKSHA_SEARCH=world:stillroom             # the world's offline web, with 
 aksha example stillroom stillroom-inputs        # copy the world's 22 input files
 ```
 
-Every other setting was its default: six retries per model step with backoff, a one-hour active-time budget, and turn limits multiplied by 3 for a live run (`AKSHA_LIVE_TURN_FACTOR`). The recording of run (a) stores these limits in its `recording.json`. The full list of settings is on the [live-mode page](../live-mode.md).
+Every other setting was its default: six retries per model step with backoff, a one-hour active-time budget, and turn limits multiplied by 3 for a live run (`AKSHA_LIVE_TURN_FACTOR`). Since decision 42 (28 Nov 2026, after these runs) the agents declare no per-Task turn limit, so the factor now scales only the run budget's turns and tool calls. The recording of run (a) stores these limits in its `recording.json`. The full list of settings is on the [live-mode page](../live-mode.md).
 
 ### Run (a): one-shot research, recorded and replayable
 
@@ -193,7 +193,7 @@ Run (c) also shows a harness guarantee holding under a real model: the model's w
 
 ### The per-key bug, and what is being fixed
 
-A Task is one node of an agent's task tree, and a keyed Task runs once per key, such as once per company (`evidence[noctra]`) or once per candidate (`candidate[C2]/extract`). The scheduler entered each instance with its key, but nothing in the instance's model request said which key it was: the prompt says "For this one company" and the context shows the whole competitor list. The model then did one of three things: asked which company, profiled another one, or saved under another key. When an instance tries to finish without passing its completion check, the stop policy vetoes the finish. The research `evidence` instances are allowed one veto (`max_finish_vetoes=1`), so the first one failed them with no feedback turn; the patent `extract` instances have the default of three, and each failed at its third (events 309, 355 and 393 in run (c)).
+A Task is one node of an agent's task tree, and a keyed Task runs once per key, such as once per company (`evidence[noctra]`) or once per candidate (`candidate[C2]/extract`). The scheduler entered each instance with its key, but nothing in the instance's model request said which key it was: the prompt says "For this one company" and the context shows the whole competitor list. The model then did one of three things: asked which company, profiled another one, or saved under another key. When an instance tries to finish without passing its completion check, the stop policy vetoes the finish. The research `evidence` instances were allowed one veto at the time of that run (`max_finish_vetoes=1`), so the first one failed them with no feedback turn; the patent `extract` instances have the default of three, and each failed at its third (events 309, 355 and 393 in run (c)).
 
 ```mermaid
 ---
@@ -253,6 +253,6 @@ Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
 - Held-out re-runs, measured 28 Nov 2026 with a private `AKSHA_HOME`: `aksha eval run rimefold` (exit 1, 7 of 8), `aksha eval run quillmere` (exit 1, 3 of 7), `aksha eval run research` (exit 0, 6 of 6).
 - Run (a): 27.6 minutes as measured by the run's operator; its stored events span 27.5 minutes, from the first event to `run.ended`. Files: `src/aksha/data/recordings/research-live-gpt/` (`recording.json`, `models.jsonl` with 352 `doc_kind`, 38 `generate` and 2 `page_facts` calls, `search.jsonl`, `fetch.jsonl`); `aksha replay src/aksha/data/recordings/research-live-gpt --out replay-live`, measured; `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs`. Event numbers from the run's store, which the replay reproduces.
 - Runs (b) and (c): the maintainer's live stores, kept outside the repository and read from a copy with `aksha status`, `aksha verify` (324 and 527 events, chain ok), `aksha inspect R-0001`, `aksha show` and `aksha trace R-0001 --out <folder>`; event numbers from each store's `events` table.
-- Rule table, completion checks and prompts: `src/aksha/agents/patent/rules.py`, `src/aksha/agents/patent/checks.py`, `src/aksha/agents/research/agent.py` (`max_finish_vetoes=1` on `evidence`), `src/aksha/agents/research/prompts/evidence.md`.
+- Rule table, completion checks and prompts: `src/aksha/agents/patent/rules.py`, `src/aksha/agents/patent/checks.py`, `src/aksha/agents/research/agent.py` (`evidence` uses the default `max_finish_vetoes`, three), `src/aksha/agents/research/prompts/evidence.md`.
 - Test count: `.venv/bin/python -m pytest --collect-only -q` after `make venv` printed `3742 tests collected`, 28 Nov 2026.
 - Earlier live fixes: [live-mode page](../live-mode.md), and commit `5b11d46` for the schema fix.

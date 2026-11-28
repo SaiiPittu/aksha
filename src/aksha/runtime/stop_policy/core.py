@@ -18,9 +18,14 @@ Task           one per Task instance on the stack. A leaf: entry (DONE when its 
                FAIL at once for ``check_raised`` and ``child_blocked``). A parent takes no
                turns: it is DONE once its children settle and its check passes. A
                supervisor follows the supervisor rule (ADR-P15 D7). A re-entry of a leaf
-               records its re-entry mode, resume or fresh (decision 36). Its limit fails the
-               instance at the turn limit and at the stop-veto limit (the retry cap: the
-               ``max_finish_vetoes``-th refused finish since entry is FAIL). A finish
+               records its re-entry mode, resume or fresh (decision 36). Its limit ends the
+               instance at the turn limit and fails it at the stop-veto limit (the retry
+               cap: the ``max_finish_vetoes``-th refused finish since entry is FAIL). A
+               turn limit reached on a leaf's ``tools`` or ``malformed`` candidate, or on
+               ``next`` when the still-active leaf is picked again, ends it as a finish
+               would (ADR-P16 S5): its completion check runs on what is saved, recorded
+               ``on: limit``, and the instance is DONE when it passes, FAIL otherwise; a
+               follow-up or steer pending for it keeps the FAIL. A finish
                while a person's follow-up or steer for the instance is pending is a
                CONTINUE whose reason is the person's text (ADR-P27 D4), before the
                completion check, and no veto: the stop-veto limit does not count it.
@@ -76,6 +81,12 @@ BUDGET_REACHED = "budget.reached"
 MALFORMED_REASON = "Your last reply could not be read; answer again."
 FAULT_REASON = "fault"
 OVERFLOW_REASON = "context_overflow"
+AFTER_TURN = frozenset({"tools", "malformed", "next"})
+"""The candidates on which a Task limit first evaluates the leaf's check (ADR-P16 S5).
+
+``tools`` and ``malformed`` end the leaf's own turn; ``next`` for an instance is the
+scheduler picking the still-active leaf again, after a hold is answered or a resume.
+"""
 
 
 def run_ref(run: str) -> str:
@@ -303,17 +314,22 @@ class TaskPolicy:
         return PASS
 
     def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
-        """The turn limit (times the run's recorded turn factor), then the stop-veto limit."""
+        """The turn limit (times the run's recorded turn factor), then the stop-veto limit.
+
+        A Task declares no turn limit by default (decision 42): its instances then run until
+        their check passes, the stop-veto limit, a person or the run budget ends them.
+        """
         if proposed.resumes_turn:
             return None
         ref = self.instance
         task = view.tree.node(ref.task_path).task
         turns = turns_since_entry(view.log, ref.run, ref.instance)
-        allowed = task.turn_limit * turn_factor(view.log, ref.run)
-        if turns >= allowed:
+        declared = task.turn_limit
+        allowed = None if declared is None else declared * turn_factor(view.log, ref.run)
+        if allowed is not None and turns >= allowed:
             reason = f"turn limit {allowed} reached"
             counts = (("turns", turns), ("allowed", allowed))
-            return Verdict("fail", reason, code="turn_limit", counts=counts)
+            return self._at_limit(view, c, proposed, reason, "turn_limit", counts)
         if c.kind == "finish" and c.instance == ref and proposed.code != PERSON_INPUT:
             vetoes = vetoes_since_entry(view.log, ref.run, ref.instance) + 1
             if vetoes >= task.max_finish_vetoes:
@@ -321,3 +337,33 @@ class TaskPolicy:
                 counts = (("vetoes", vetoes), ("allowed", task.max_finish_vetoes))
                 return Verdict("fail", reason, code="stop_veto_limit", counts=counts)
         return None
+
+    def _at_limit(
+        self,
+        view: StopView,
+        c: StopCandidate,
+        proposed: Verdict,
+        reason: str,
+        code: str,
+        counts: tuple[tuple[str, int], ...],
+    ) -> Verdict:
+        """A limit ends a leaf as its finish would: DONE when its check passes on what is saved.
+
+        Only on a candidate for this instance that follows one of its turns: ``tools`` or
+        ``malformed`` at the end of its own turn, or ``next`` when the scheduler picks the
+        still-active leaf again (after a hold is answered, or a resume). On a finish or an
+        entry the judge has just evaluated the check, and it failed. A follow-up or steer
+        still pending for the instance keeps the FAIL, since it would veto a finish
+        (ADR-P27 D4). The evaluation is recorded ``on: limit``, with the check's message
+        when it fails.
+        """
+        ref = self.instance
+        node = view.tree.node(ref.task_path)
+        after_turn = c.kind in AFTER_TURN and c.instance == ref
+        if not node.is_leaf or not after_turn or pending_input(view.log, ref):
+            return Verdict("fail", reason, code=code, counts=counts)
+        evaluation = evaluate_in(run_state(view.log, view.tree, ref.run), ref)
+        fact = (evaluated_fact(ref, evaluation, on="limit"),)
+        if evaluation.ok:
+            return Verdict("done", reason, facts=fact, code=code, counts=counts)
+        return Verdict("fail", reason, facts=fact, code=code, counts=counts)

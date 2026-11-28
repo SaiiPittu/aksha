@@ -62,22 +62,22 @@ Inside `deep[Cn]` the three children run in order: `prior_art`, then `compare` (
 
 Dependencies, as declared:
 
-| Task | Runs per | Needs | Writes | Completion check | Turn limit |
-|---|---|---|---|---|---|
-| `scope` | once | none | `portfolio` | `portfolio_saved` | 8 |
-| `candidate` | once (supervisor) | none | `directive`, `round` | `portfolio_goal` | 8 |
-| `extract` | each key in `portfolio.candidates` | none | `extraction` | `extraction_saved` | 8 |
-| `deep` | each admitted key | `extract` | through its children | its children's | 8 |
-| `deep/prior_art` | its parent's key | none | `prior_art` | `prior_art_saved` | 6 |
-| `deep/compare` | its parent's key | `prior_art` | `comparison` | `comparison_saved` | 2 |
-| `deep/recommend` | its parent's key | `compare` | `recommendation` | `recommendation_follows_rules` | 2 |
-| `table` | once | `candidate` | `table` | `table_saved` | 8 |
-| `select` | once | `table` | `selection` | `selection_saved` | 8 |
-| `prepare` | each key in `selection.selected` | none | `form` | `forms_filled` | 8 |
-| `packet` | each selected key | `prepare` | `packet` | `packet_saved` | 8 |
-| `send` | each selected key | `packet` | `handoff` | `handoff_recorded` | 8 |
+| Task | Runs per | Needs | Writes | Completion check |
+|---|---|---|---|---|
+| `scope` | once | none | `portfolio` | `portfolio_saved` |
+| `candidate` | once (supervisor) | none | `directive`, `round` | `portfolio_goal` |
+| `extract` | each key in `portfolio.candidates` | none | `extraction` | `extraction_saved` |
+| `deep` | each admitted key | `extract` | through its children | its children's |
+| `deep/prior_art` | its parent's key | none | `prior_art` | `prior_art_saved` |
+| `deep/compare` | its parent's key | `prior_art` | `comparison` | `comparison_saved` |
+| `deep/recommend` | its parent's key | `compare` | `recommendation` | `recommendation_follows_rules` |
+| `table` | once | `candidate` | `table` | `table_saved` |
+| `select` | once | `table` | `selection` | `selection_saved` |
+| `prepare` | each key in `selection.selected` | none | `form` | `forms_filled` |
+| `packet` | each selected key | `prepare` | `packet` | `packet_saved` |
+| `send` | each selected key | `packet` | `handoff` | `handoff_recorded` |
 
-A Task that sets no turn limit takes the Task default of 10, and the agent-wide `Limits(turn_limit=8)` also applies to every instance, so those Tasks stop at 8 turns. A run records a turn factor that multiplies both limits (`turn_factor` in [`src/aksha/runtime/budgets/limits.py`](../../src/aksha/runtime/budgets/limits.py)).
+No Task declares a turn limit, and the agent sets no agent-wide one (decision 42, ADR-P15 S8): an instance takes turns until its completion check passes on a finish, three refused finishes block it (the stop-veto limit), a person stops it, or the run budget below holds the run. A live run's turn factor (`AKSHA_LIVE_TURN_FACTOR`) therefore scales only the run budget's model turns and tool calls.
 
 ### What each completion check refuses
 
@@ -198,8 +198,9 @@ A complete packet is not filing approval. Counsel and the authorized client deci
 | Limit | Value |
 |---|---|
 | Run budget | 160 model turns, 900 tool calls |
-| Default Task turn limit | 8 |
-| Deep tier | at most 10 candidates, `DEEP_EFFORT = 10` turns each, `DEEP_BUDGET = 100` turns |
+| Task turn limit | none declared; the run budget is the backstop (decision 42) |
+| Stop-veto limit | 3 refused finishes per instance entry |
+| Deep tier | at most 10 candidates, `DEEP_EFFORT = 10` planned turns each (an admission estimate, not a cap), `DEEP_BUDGET = 100` turns |
 | Tool result cap and read cap | 60,000 characters each |
 | Context limit | 600,000 characters, with a high water mark of 400,000 and a low water mark of 300,000 |
 | Read retry | 600,000 ms timeout, one retry |

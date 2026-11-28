@@ -46,7 +46,7 @@ class RunsStarted:
 EXTENSION = Extension(
     name="echo",
     version="0.1.0",
-    requires_api=">=2.0,<3",
+    requires_api=">=2.0,<4",
     tools=(
         ToolDecl(
             ToolSpec(

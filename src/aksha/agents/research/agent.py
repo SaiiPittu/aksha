@@ -27,7 +27,6 @@ from aksha.runtime.api import (
     ContextPolicy,
     DeclaredInterrupt,
     FieldSpec,
-    Limits,
     ModelAlias,
     Read,
     RelationKind,
@@ -410,7 +409,6 @@ AGENT = Agent(
             interrupt=DeclaredInterrupt("input", "question"),
             extracts=True,
             brief="prompts/scope.md",
-            turn_limit=6,
         ),
         Task(
             "discover",
@@ -429,7 +427,6 @@ AGENT = Agent(
             extracts=True,
             done=checks.discover_done,
             brief="prompts/discover.md",
-            turn_limit=6,
         ),
         Task(
             "evidence",
@@ -442,7 +439,6 @@ AGENT = Agent(
             done=checks.profile_done,
             brief="prompts/evidence.md",
             on_child_blocked="partial",
-            turn_limit=4,
         ),
         Task(
             "voice",
@@ -453,7 +449,6 @@ AGENT = Agent(
             extracts=True,
             done=checks.needs_done,
             brief="prompts/voice.md",
-            turn_limit=5,
         ),
         Task(
             "report",
@@ -464,13 +459,13 @@ AGENT = Agent(
             done=checks.report_done,
             brief="prompts/report.md",
             finalizer=True,
-            turn_limit=4,
         ),
     ),
     completion=(checks.outputs_exist,),
     model_aliases=MODEL_ALIASES,
+    # No Task declares a turn limit (decision 42): long live work runs to its check, and
+    # this budget is the runaway backstop (live mode triples the counts, an hour at least).
     budget=Budget(model_turns=90, tool_calls=140, active_ms=600_000),
-    limits=Limits(turn_limit=6),
     context_policy=ContextPolicy(
         result_cap_chars=24_000,
         read_cap_chars=24_000,

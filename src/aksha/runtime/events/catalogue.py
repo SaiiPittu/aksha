@@ -1347,7 +1347,7 @@ COMPLETION_CHECK_EVALUATED = EventTypeSpec(
         "properties": {
             "task": _TASK_PATH,
             "key": _TASK_KEY,
-            "on": {"enum": ["entry", "finish", "parent"]},
+            "on": {"enum": ["entry", "finish", "parent", "limit"]},
             "check": {"type": "string"},
             "ok": {"type": "boolean"},
             "message": {"type": "string"},

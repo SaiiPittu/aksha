@@ -12,7 +12,9 @@
 4. Switches for the triggers: ``taint`` makes the record read return instruction-like
    text, ``repeat`` makes ``extract`` read its record three times, ``extract_turn_limit``
    and ``boom`` make the request run's ``extract[C1]`` end blocked (at the turn limit, or
-   by a completion check that raises), after it saved its version, and ``overflow`` makes
+   by a completion check that raises), after it saved its version. At the turn limit the
+   check runs on that version (ADR-P16 S5), so the version is marked ``partial`` and
+   ``whole_check`` refuses it: the limit still fails the instance. And ``overflow`` makes
    its third turn end ``context_overflow`` (the provider refuses the request) after a
    second turn that saved without finishing.
 5. ``big`` makes the request run's ``extract[C1]`` reply in turn 1 with a text over the
@@ -59,6 +61,13 @@ def boom_check(view: TaskView) -> CheckResult:
     return CheckResult(ok=own is not None, message="save extract first")
 
 
+def whole_check(view: TaskView) -> CheckResult:
+    """``has_own("extract")``, but a saved extraction marked ``partial`` does not pass."""
+    own = view.own("extract")
+    ok = own is not None and not own.content.get("partial")
+    return CheckResult(ok=ok, message="save the whole extract first")
+
+
 class ResumeRig(Rig):
     """The rebuild bench with a two-turn ``extract`` and a declared resume policy."""
 
@@ -82,13 +91,15 @@ class ResumeRig(Rig):
         self.overflow = overflow
         self.big = big
         self.stop_after_save = extract_turn_limit is not None or overflow
+        self.partial = extract_turn_limit is not None
         self.after_read: dict[str, Callable[[], object]] = {}
         self.model.rule = self.reply
         base = agent(self.world)
         tasks: list[Task] = []
         for t in base.tasks:
             if t.id == "extract":
-                t = replace(t, done=boom_check if boom else has_own("extract"))
+                check = boom_check if boom else whole_check if self.partial else None
+                t = replace(t, done=check or has_own("extract"))
                 if extract_turn_limit is not None:
                     t = replace(t, turn_limit=extract_turn_limit)
             tasks.append(t)
@@ -149,6 +160,8 @@ class ResumeRig(Rig):
                 return ContextOverflow(message="the provider refused the request as too long")
             if self.boom and step.run == "R-0001" and key == "C1":
                 content["boom"] = True
+            if self.partial and step.run == "R-0001" and key == "C1":
+                content["partial"] = True
             save = call("save_artifact", kind="extract", key=key, content=content)
             if self.stop_after_save and step.run == "R-0001" and key == "C1":
                 return tools_reply(save)  # no finish: the turn limit ends it

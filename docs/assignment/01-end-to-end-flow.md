@@ -82,11 +82,11 @@ One known gap: a routed run records no budget of its own, so it runs on the runt
 
 ## 2. The agent declares a Task tree; the runtime schedules it
 
-The research agent is a definition, not code the runtime calls ([`src/aksha/agents/research/agent.py`](../../src/aksha/agents/research/agent.py)). Its Task tree, each Task with its own tool list, completion check and turn limit:
+The research agent is a definition, not code the runtime calls ([`src/aksha/agents/research/agent.py`](../../src/aksha/agents/research/agent.py)). Its Task tree, each Task with its own tool list and completion check (no Task declares a turn limit, decision 42):
 
 1. `scope`: settle segment, geography and boundary; may ask a question.
 2. `discover`: needs `scope`; finds and resolves the competitors; writes `research.competitors`.
-3. `evidence`: one instance per company key in `research.competitors`, for example `evidence[c01-kelvra-systems]`; writes `research.profile/<company>`. A blocked company is tolerated (`on_child_blocked="partial"`), and the first refused finish ends the instance (`max_finish_vetoes=1`).
+3. `evidence`: one instance per company key in `research.competitors`, for example `evidence[c01-kelvra-systems]`; writes `research.profile/<company>`. A blocked company is tolerated (`on_child_blocked="partial"`), and the third refused finish ends the instance (the default).
 4. `voice`: needs `scope`; writes `research.needs` from the reviews.
 5. `report`: needs `evidence` and `voice`; writes the matrix, findings and proposed tests.
 
@@ -120,7 +120,7 @@ How one evaluation runs:
    - the check raised, or a child is blocked: `fail` at once.
 
    A finish while a person's follow-up is pending is `continue` with the person's words, and is not a veto.
-5. Apply limits, outer to inner, to a proposed `continue`. The Run policy's budget comes first: a spent dimension (model turns, tool calls or active milliseconds; research declares 90, 140 and 600,000) becomes the budget interrupt, a `hold` a person answers by granting more or finalizing. Then the Task policy's two limits: the turn limit (default 10, research sets 4 to 6 per Task) and the stop-veto limit (default 3: the third refused finish since entry is `fail`).
+5. Apply limits, outer to inner, to a proposed `continue`. The Run policy's budget comes first: a spent dimension (model turns, tool calls or active milliseconds; research declares 90, 140 and 600,000) becomes the budget interrupt, a `hold` a person answers by granting more or finalizing. Then the Task policy's two limits: the turn limit (none by default since decision 42, and research declares none, so the budget is its backstop; a Task that declares one is ended there, and when it bites after a leaf's turn the leaf's completion check runs first on what is saved, so a pass ends the instance `done`, ADR-P16 S5) and the stop-veto limit (default 3: the third refused finish since entry is `fail`).
 6. Commit one transaction: `stop.decided` and what it implies, such as `completion_check.evaluated`, `task.entered` or `run.ended`.
 
 A `fail` leaves the instance `blocked`. A run ends with one of these outcomes. The first three come from `run_outcome` in `src/aksha/runtime/tasks/scheduler.py`, which the Run policy reads; `failed` comes from the Run policy on a run fault or the restart limit, and `stopped` from the hold predicate in `src/aksha/runtime/stop_policy/evaluation.py`:
@@ -219,7 +219,7 @@ The demo printed `recovery asked the mailbox by key 1 time, sent 0 times` and `m
 Everything above holds whatever the model replies, because the fakes and a real model go through the same gate, executor, checks and stop policy. What a real model achieves inside those rules is a separate result, reported in full on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model). Three points from those runs bear on this page's stages:
 
 1. A failed check fed back and then passed (stage 4). In run (b), interactive research, `report`'s first finish was refused by `report_done`, whose message said the proposed tests needed `threshold.status` set to `proposal` (seq 306). Stop policy turned it into `continue` with that message (seq 307), the model saved `research.tests@v2`, and the next finish passed (seq 322).
-2. The stop-veto limit ended work instead of accepting it (stage 4). In run (b), `evidence[corvane-group]` replied with text only, asking which company to profile (seq 134). That reply was a finish, `profile_done` refused it (seq 135), and because `evidence` sets `max_finish_vetoes=1`, the instance failed on that first refused finish with no feedback turn (seq 138). The cause is a harness bug, being fixed: a keyed instance is never told its key.
+2. The stop-veto limit ended work instead of accepting it (stage 4). In run (b), `evidence[corvane-group]` replied with text only, asking which company to profile (seq 134). That reply was a finish, `profile_done` refused it (seq 135), and because `evidence` set `max_finish_vetoes=1` at the time of that run, the instance failed on that first refused finish with no feedback turn (seq 138). The cause is a harness bug, being fixed: a keyed instance is never told its key.
 3. The run outcome named its gaps. Run (b) ended `partial`, each `evidence[...]` listed as `unverified` (seq 323), and run (c), interactive patent, ended `blocked`, naming `candidate[C2]/extract`, `candidate[C3]/extract` and `candidate[C4]/extract` (seq 526). Neither wrote a guessed answer.
 
 ## Run it yourself

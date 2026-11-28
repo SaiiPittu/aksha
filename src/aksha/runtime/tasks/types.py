@@ -94,7 +94,7 @@ class Task:
     extracts: bool = False
     stop_policies: tuple[StopPolicyOptIn, ...] = ()
     brief: str | None = None
-    turn_limit: int = 10
+    turn_limit: int | None = None
     max_finish_vetoes: int = 3
     on_child_blocked: Literal["block", "partial"] = "block"
     finalizer: bool = False

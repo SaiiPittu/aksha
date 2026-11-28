@@ -24,7 +24,7 @@ def test_agent_carries_the_amended_fields() -> None:
 def test_agent_defaults() -> None:
     a = Agent(name="x", purpose="p", instructions="i.md", reads=(), artifacts=())
     assert (a.requires_api, a.fakes, a.phrases, a.budget) == (
-        ">=2.0,<3",
+        ">=3.0,<4",
         "fakes",
         "phrases.json",
         None,

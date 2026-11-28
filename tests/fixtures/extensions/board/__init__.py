@@ -63,6 +63,6 @@ def ledger(*, state_dir: Path) -> BoardLedger:
 EXTENSION = Extension(
     name="board",
     version="0.1.0",
-    requires_api=">=2.2,<3",
+    requires_api=">=2.2,<4",
     systems=(SystemOfRecordSpec("ledger", ledger),),
 )
