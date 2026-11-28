@@ -53,7 +53,7 @@
      {
       "field": "public_disclosures",
       "form": "patent.form/C1~invention-disclosure-form@v1",
-      "question": "DISC-01 was public 262 days before today. Does any grace period apply?"
+      "question": "DISC-01 was public 263 days before today. Does any grace period apply?"
      },
      {
       "field": "outside_resources",
@@ -70,7 +70,7 @@
      "Who are the inventors of each element?",
      "Do the employment, contractor and consulting agreements assign each contribution?",
      "An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?",
-     "DISC-01 was public 262 days before today. Does any grace period apply?"
+     "DISC-01 was public 263 days before today. Does any grace period apply?"
     ],
     "title": "Needs counsel confirmation"
    },

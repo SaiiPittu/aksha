@@ -295,19 +295,23 @@ def answers(view: LogView, instance: InstanceRef) -> str:
     return "Answers from the person:\n" + "\n".join(out)
 
 
-def answer_reads(view: LogView, instance: InstanceRef) -> tuple[InputRef, ...]:
+def answer_reads(
+    view: LogView, instance: InstanceRef, *, also: tuple[str, ...] = ()
+) -> tuple[InputRef, ...]:
     """The person's current statements :func:`answers` shows ``instance``, as lineage inputs.
 
     One ``statement`` input per question of each interrupt the instance raised, named by
     the interrupt and the answer (its span's version), so a version saved after reading
     the answer has the answer in its lineage and an amendment invalidates it (ADR-P27 D5).
+    ``also`` names further interrupts whose answers count (one raised for the instance's
+    writer in another run, which the runtime saves from).
     """
     raised = {
         str(e.payload["interrupt"])
         for e in view.events
         if e.type == "interrupt.raised" and e.run == instance.run
         and e.instance == instance.instance
-    }  # fmt: skip
+    } | set(also)  # fmt: skip
     if not raised:
         return ()
     current: dict[tuple[str, str], str] = {}

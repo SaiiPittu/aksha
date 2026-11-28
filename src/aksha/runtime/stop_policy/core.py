@@ -49,6 +49,7 @@ from aksha.runtime.budgets.limits import (
 )
 from aksha.runtime.context.reentry import choose_reentry
 from aksha.runtime.context.types import effective_policy
+from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.finalization.state import finalizing
 from aksha.runtime.inputs.reducers import pending_input
 from aksha.runtime.inputs.types import QueuedInput
@@ -62,6 +63,7 @@ from aksha.runtime.stop_policy.types import (
     StopView,
     Verdict,
 )
+from aksha.runtime.tasks.choices import STALE, declared_saves, refused_answer, stale_choice
 from aksha.runtime.tasks.completion import evaluate_in, evaluated_fact
 from aksha.runtime.tasks.rebuilds import rebuild_targets
 from aksha.runtime.tasks.scheduler import (
@@ -76,6 +78,7 @@ from aksha.runtime.tasks.scheduler import (
 from aksha.runtime.tasks.status import RunState, run_state
 from aksha.runtime.tasks.supervisor import is_supervisor, supervisor_step
 from aksha.runtime.tasks.types import SETTLED, InstanceRef
+from aksha.runtime.tasks.view import TaskView
 
 BUDGET_REACHED = "budget.reached"
 MALFORMED_REASON = "Your last reply could not be read; answer again."
@@ -153,6 +156,10 @@ class RunPolicy:
             return Verdict("stop", reason, outcome="partial", facts=facts)
         blocked = ", ".join(outcome.blockers)
         reason = f"blocked: {blocked}" if blocked else "blocked"
+        refused = [f"{b}: {why}" for b in outcome.blockers
+                   if (why := refused_answer(view.log, self.run, b)) is not None]  # fmt: skip
+        if refused:  # the runtime's save of a person's answer was refused: say why (ADR-P17 D2)
+            reason = f"{reason} ({'; '.join(refused)})"
         return Verdict("stop", reason, outcome="blocked", facts=facts)
 
     def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
@@ -251,11 +258,41 @@ class TaskPolicy:
             if node.is_leaf:
                 return Verdict("continue", facts=entry.facts)
             return Verdict("pass", facts=entry.facts)  # its children are picked next
+        if node.is_leaf and c.kind != "resume":
+            again = self._asks_again(view, node.is_leaf)
+            if again:  # ADR-P17 D2: the person chose from options that have since changed
+                return Verdict("continue", STALE, facts=again)
         if node.is_leaf:
             return self._leaf(view, c, state)
         if is_supervisor(node.task):
             return self._supervisor(view, c, state)
         return self._parent(state)
+
+    def _asks_again(self, view: StopView, leaf: bool) -> tuple[NewEvent, ...]:
+        """The re-entry of an instance whose person's newest choice is stale, once.
+
+        The runtime does not save an answer whose options changed after it was given
+        (``tasks.choices.is_stale``); it re-enters the instance (``task.entered{cause:
+        rebuild}``), so the reads it recorded before the change are no longer its lineage
+        and it asks again with the options as they are now. Only a stale answer resolved
+        after the instance's last entry re-enters it, so it is re-entered once per answer.
+        """
+        ref = self.instance
+        tv = TaskView(view.log, view.tree, ref)
+        if declared_saves(tv) is None:
+            return ()
+        stale = stale_choice(tv)
+        if stale is None:
+            return ()
+        entered = max((e.seq for e in view.log.events if e.type == "task.entered"
+                       and e.run == ref.run and e.instance == ref.instance), default=0)  # fmt: skip
+        if stale.seq < entered:
+            return ()
+        choice = None
+        if leaf:
+            policy = effective_policy(view.context_policy)
+            choice = choose_reentry(view.log, view.tree, ref, policy, blobs=view.blobs).as_json()
+        return reentry(view.log, view.tree, ref.run, writer_of(view.tree, ref), choice=choice)
 
     def _leaf(self, view: StopView, c: StopCandidate, state: RunState) -> Verdict:
         ref = self.instance

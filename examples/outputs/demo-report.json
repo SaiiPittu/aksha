@@ -2,19 +2,19 @@
  "acts": [
   [
    "first runs",
-   8.47
+   22.88
   ],
   [
    "change",
-   0.79
+   2.59
   ],
   [
    "rebuild",
-   8.17
+   30.82
   ],
   [
    "kill and recover",
-   3.68
+   11.67
   ]
  ],
  "runs": {
@@ -55,6 +55,7 @@
   "patent asked which candidate to prepare: chose C1"
  ],
  "reviewed": "patent.packet/C1@v1 -> patent.packet/C1@v2",
+ "reselected": "patent.selection@v1 -> patent.selection@v2",
  "first": {
   "research": {
    "research.competitors": "research.competitors@v1",
@@ -342,9 +343,9 @@
  },
  "chain": {
   "ok": true,
-  "events": 1912,
-  "head": "sha256:0af763909b8949c23fdf990633d00d0a9432ec6835e684344aa1dd7afd99f0be",
+  "events": 1935,
+  "head": "sha256:e24e9ec07f292e5c04c26f8d9c9ecf9f8ffbb3159792275a08c0a0064ab63ebf",
   "break": null
  },
- "seconds": 22.13
+ "seconds": 71.05
 }

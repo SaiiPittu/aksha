@@ -10,6 +10,7 @@ summary, and finishes once the person answered.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,8 @@ from aksha.runtime.loop.types import DriveResult, LoopSetup
 from aksha.runtime.models.routing import bind_aliases
 from aksha.runtime.models.types import GenerationRequest, GenerationResult
 from aksha.runtime.projections.view import LogView, load_view
+from aksha.runtime.storage.chain import content_hash
+from aksha.runtime.storage.rows import ArtifactRow
 from aksha.runtime.tasks.choices import chosen_by_person
 from aksha.runtime.tasks.tree import CompiledTree, compile_tree
 from aksha.runtime.tasks.types import CheckResult, Task
@@ -321,3 +324,119 @@ def test_a_model_options_argument_is_refused_on_a_declared_choice(tmp_path: Path
         assert asked and asked[0]["outcome"] == "error" and asked[0]["code"] == "schema"
     finally:
         b.store.close()
+
+
+def _save_menu(b: Bench, codes: list[str]) -> None:
+    """A new menu version, saved as the menu's writer would: the options change under a choice."""
+    name = f"{AGENT}.menu"
+    version = 1 + sum(
+        1 for e in b.view().events if e.type == "artifact.saved" and e.payload["kind"] == name
+    )
+    content = {"items": [{"code": c, "label": f"dish {c}"} for c in codes]}
+    digest = content_hash(content)
+    ref = f"{name}@v{version}"
+    payload = {
+        "ref": ref, "kind": name, "key": None, "version": version, "content_hash": digest,
+        "canonical_hash": digest, "origin": "task",
+        "writer": {"agent": AGENT, "task_path": "menu", "key": None},
+    }  # fmt: skip
+    row = ArtifactRow(ref, name, None, version, content, digest, digest)
+    b.clock.advance(1)
+    b.store.append(OWNER, "U2", [NewEvent("artifact.saved", payload, run=RUN, instance="menu")],
+                   [row])  # fmt: skip
+
+
+def test_an_answer_given_after_the_options_changed_is_not_saved_and_the_person_is_asked_again(
+    tmp_path: Path,
+) -> None:
+    def asks_from_now(request: GenerationRequest) -> GenerationResult:
+        if request.step_id.split("/")[1] != "pick":
+            return Toy(["A", "B", "C"])(request)
+        tail = next((m.text or "" for m in reversed(request.messages) if m.role == "user"), "")
+        if "ask again" in tail or not _answered(request):
+            return tools_reply(call("ask", question="Which dishes?"))
+        return tools_reply(call("finish", summary="the person picked"))
+
+    b = Bench(tmp_path / "s.sqlite", Toy(["A", "B", "C"]))
+    b.model.rule = asks_from_now
+    try:
+        assert b.drive().state == "held"
+        first = b.open_choice()
+        assert list(first.payload["drawn_from"]) == [f"{AGENT}.menu@v1"]
+        _save_menu(b, ["A", "B", "D"])  # the menu changes while the person decides
+        b.answer("A, C")  # valid against what the person was shown
+        assert b.drive().state == "held"
+        assert b.pick() is None, "the stale answer is never saved"
+        again = b.open_choice()
+        assert again.id != first.id
+        assert list(again.payload["options"]) == ["A", "B", "D"]
+        assert list(again.payload["drawn_from"]) == [f"{AGENT}.menu@v2"]
+        entered = [e.payload for e in b.view().events
+                   if e.type == "task.entered" and e.instance == "pick"]  # fmt: skip
+        assert entered[-1]["cause"] == "rebuild"  # its reads before the change are reset
+        b.answer("D")
+        result = b.drive()
+        assert (result.state, result.outcome) == ("ended", "complete")
+        pick = b.pick()
+        assert list(pick.content["chosen"]) == ["D"] and pick.answer == again.id
+        assert pick.content["from"] == f"{AGENT}.menu@v2"
+    finally:
+        b.store.close()
+
+
+def test_a_refused_answer_save_ends_the_instance_blocked_with_the_code(tmp_path: Path) -> None:
+    def bad_build(view: TaskView, chosen: tuple[str, ...]) -> dict[str, Any]:
+        return {"wrong": True}  # the field is set to the codes, but ``need`` is missing
+
+    strict = ArtifactKind("pick", {"type": "object", "required": ["chosen", "need"]},
+                          reviewable=True)  # fmt: skip
+    agent = picker()
+    tasks = list(agent.tasks)
+    pick = tasks[1]
+    assert pick.interrupt is not None and pick.interrupt.options is not None
+    tasks[1] = replace(
+        pick, interrupt=replace(pick.interrupt, saves=AnswerSave("pick", "chosen", bad_build))
+    )
+    agent = replace(agent, artifacts=(MENU, strict, WORK), tasks=tuple(tasks))
+    b = Bench(tmp_path / "s.sqlite", Toy(["A", "B"]), agent)
+    try:
+        b.drive()
+        b.answer("A")
+        result = b.drive()
+        assert (result.state, result.outcome) == ("ended", "blocked")
+        steps = [e for e in b.view().events if e.type == "step.completed"
+                 and str(e.step or "").endswith("/c01/derived")]  # fmt: skip
+        assert len(steps) == 1, "the refused save is tried once, never again"
+        assert steps[0].payload["outcome"] == "error" and steps[0].payload["code"] == "schema"
+        assert "answer_save_refused (schema)" in str(b.ended()["reason"])
+        assert "need" in str(b.ended()["reason"])  # the refusal's message, not a retry loop
+        assert b.pick() is None and b.work_keys() == []
+    finally:
+        b.store.close()
+
+
+def test_a_single_choice_with_no_options_records_the_empty_choice(tmp_path: Path) -> None:
+    agent = picker()
+    tasks = list(agent.tasks)
+    pick = tasks[1]
+    assert pick.interrupt is not None
+    tasks[1] = replace(pick, interrupt=replace(pick.interrupt, multiple=False))
+    b = Bench(tmp_path / "s.sqlite", Toy([]), replace(agent, tasks=tuple(tasks)))
+    try:
+        result = b.drive()
+        assert result.outcome == "complete"
+        assert not interrupts(b.view())
+        assert list(b.pick().content["chosen"]) == [] and b.pick().answer == ""
+    finally:
+        b.store.close()
+
+
+def test_an_empty_answer_is_refused_not_recorded_as_none(bench: Bench) -> None:
+    bench.drive()
+    for text in ("", "   ", " , "):
+        receipt = answer(bench.store, OWNER, bench.open_choice().id, by="person", text=text,
+                         tree=bench.tree)  # fmt: skip
+        assert not receipt.accepted and receipt.refused == "answer_missing", text
+    receipt = answer(bench.store, OWNER, bench.open_choice().id, by="person", choices=[],
+                     tree=bench.tree)  # fmt: skip
+    assert receipt.accepted  # an explicit empty list is a choice of none

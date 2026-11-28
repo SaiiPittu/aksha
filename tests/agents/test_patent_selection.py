@@ -121,3 +121,97 @@ def test_choosing_none_is_recorded_and_the_run_ends_with_nothing_prepared(tmp_pa
         assert _keys(r, "form") == [] and _keys(r, "packet") == []
     finally:
         r.close()
+
+
+def _rows_with(r: PatentRig, edit: Any) -> None:
+    """Rewrite the rows of the model's table save with ``edit(rows) -> rows``."""
+    fake = r.model.generate
+
+    def edited(request: GenerationRequest) -> GenerationResult:
+        reply = fake(request)
+        if request.step_id.split("/")[1] != "table":
+            return reply
+        calls = []
+        for c in reply.tool_calls:
+            args = dict(c.arguments)
+            if c.name == "save_artifact" and "rows" in dict(args.get("content") or {}):
+                content = dict(args["content"])
+                content["rows"] = edit([dict(row) for row in content["rows"]])
+                args["content"] = content
+            calls.append(ToolCall(c.call_id, c.name, args))
+        return GenerationResult(reply.text, tuple(calls), reply.finish)
+
+    r.model.generate = edited  # type: ignore[method-assign]
+
+
+def test_the_labels_come_from_the_recommendations_not_the_table_text(tmp_path: Path) -> None:
+    """A live model saved rows holding only the candidate; the labels were empty (I-0001)."""
+    r = PatentRig(tmp_path / "aksha.sqlite")
+    _rows_with(r, lambda rows: [{"candidate": row["candidate"]} for row in rows])
+    try:
+        r.run_to_selection()
+        (choice,) = r.open_interrupts("choice")
+        codes = list(choice.payload["options"])
+        actions = {c: r.content("recommendation", c)["next_action"] for c in codes}
+        labels = dict(zip(codes, choice.payload["option_labels"], strict=True))
+        assert all(labels[c].startswith(f"{actions[c]}: ") for c in codes), labels
+        assert r.choose("C1, C4").accepted
+        r.drive()
+        content: Any = r.content("selection")
+        assert dict(content["recommendations"]) == {c: actions[c] for c in ("C1", "C4")}
+    finally:
+        r.close()
+
+
+def test_an_invented_or_mislabelled_row_does_not_reach_the_person(tmp_path: Path) -> None:
+    r = PatentRig(tmp_path / "aksha.sqlite")
+    edits: list[int] = []
+
+    def once(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if edits:
+            return rows
+        edits.append(1)
+        for row in rows:
+            row["next_action"] = "prioritize_counsel_review"  # the model steers the choice
+        return [*rows, {"candidate": "C9", "next_action": "prioritize_counsel_review"}]
+
+    _rows_with(r, once)
+    try:
+        r.run_to_selection()
+        failed = [e.payload for e in r.events("completion_check.evaluated")
+                  if e.instance == "table" and e.payload.get("check") == "table_saved"
+                  and e.payload.get("code")]  # fmt: skip
+        assert failed, "a row for a candidate with no recommendation fails the table check"
+        (choice,) = r.open_interrupts("choice")
+        codes = list(choice.payload["options"])
+        assert "C9" not in codes
+        for code, label in zip(codes, choice.payload["option_labels"], strict=True):
+            assert label.startswith(r.content("recommendation", code)["next_action"])
+    finally:
+        r.close()
+
+
+def test_a_rejected_copy_is_chosen_again_and_the_fresh_answer_is_saved(tmp_path: Path) -> None:
+    from aksha.runtime.invalidation.commands import reject_review
+
+    r = PatentRig(tmp_path / "aksha.sqlite")
+    try:
+        a = r.run_to_approval("C1")
+        assert r.approve(a.approval_id, a.signature).accepted
+        assert r.change(tmp_path / "changed").accepted
+        r.drive()  # the open run rebuilds in place; the copied selection waits on the person
+        (copied,) = [v for v in r.reviews().values() if v.old.kind == "patent.selection"]
+        receipt = reject_review(r.store, r.setup.owner, copied.interrupt, copied.card_hash,
+                                r.ids, tree=r.setup.tree)  # fmt: skip
+        assert receipt.accepted
+        (fresh,) = r.open_interrupts("choice")
+        assert fresh.payload["reason"] == "review_rejected"
+        assert r.choose("C1, C2").accepted
+        r.rebuild()  # the writer is entered again and saves from the fresh answer
+        selection = r.current("selection")
+        assert selection is not None and selection.origin == "choice"
+        assert selection.answer == fresh.id
+        assert list(selection.content["selected"]) == ["C1", "C2"]
+        assert not [v for v in r.reviews().values() if v.old.kind == "patent.selection"]
+    finally:
+        r.close()

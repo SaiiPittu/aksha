@@ -22,6 +22,9 @@ the saved codes with the answer.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from aksha.runtime.artifacts.types import SaveRequest
 from aksha.runtime.context.notices import answer_reads
 from aksha.runtime.context.reads import declared_versions
@@ -30,14 +33,16 @@ from aksha.runtime.execution.types import Deadline, StepId, StepOutput
 from aksha.runtime.loop.calls import _dispatched, tool_policy
 from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.policy.events import args_hash
-from aksha.runtime.tasks.choices import answer_content, answer_save_plan
+from aksha.runtime.tasks.choices import (
+    ANSWER_SUB,
+    answer_content,
+    answer_save_plan,
+    refusal_text,
+)
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tasks.view import TaskView
 from aksha.runtime.tools.loader_added import SAVE_TOOL
 from aksha.runtime.tools.types import Ok, ToolOutcome
-
-ANSWER_SUB = "derived"
-"""The sub-step of the turn's first call position the answer save is recorded under."""
 
 
 def answer_step(ref: InstanceRef, turn: int) -> StepId:
@@ -47,23 +52,31 @@ def answer_step(ref: InstanceRef, turn: int) -> StepId:
 
 def save_from_answer(
     setup: LoopSetup, executor: DurableStepExecutor, ref: InstanceRef, turn: int
-) -> None:
-    """Save the instance's choice from the person's answer, if one is due (module doc)."""
+) -> str | None:
+    """Save the instance's choice from the person's answer, if one is due (module doc).
+
+    Returns None, or, when the save was refused (its schema, a read that changed, an
+    unreadable key, another writer of the slot), the reason the turn ends the instance
+    with: ``answer_save_refused (<code>): <message>``. Neither the model nor a retry can
+    fix what the person's answer produced, so the instance ends blocked and says why, and
+    the plan never tries that answer again (``tasks.choices.answer_save_plan``).
+    """
     task = setup.task(ref)
     if task.interrupt is None or task.interrupt.saves is None:
-        return
+        return None
     step = answer_step(ref, turn)
-    if executor.recorded(step) is not None:
-        return
+    recorded = executor.recorded(step)
+    if recorded is not None:
+        return _refusal(recorded.outcome, recorded.code, recorded.value)
     view = setup.view()
     tv = TaskView(view, setup.tree, ref)
     plan = answer_save_plan(tv)
     if plan is None:
-        return
+        return None
     content = answer_content(tv, plan)
     reads = (
         *(v.ref.as_input() for v in declared_versions(view, setup.tree, ref, blobs=setup.blobs)),
-        *answer_reads(view, ref),
+        *answer_reads(view, ref, also=(plan.answer,) if plan.answer else ()),
     )
     request = SaveRequest(plan.kind, plan.key, content, answer=plan.answer)
     data = {"kind": plan.kind, "chosen": list(plan.chosen), "answer": plan.answer or None,
@@ -75,4 +88,11 @@ def save_from_answer(
         return _dispatched(setup, ref, step, spec, outcome, origin=plan.origin)
 
     extra = {"route": "answer", "counted": False}
-    executor.step(step, "tool", SAVE_TOOL, args_hash(data), work, tool_policy(spec), extra=extra)
+    done = executor.step(
+        step, "tool", SAVE_TOOL, args_hash(data), work, tool_policy(spec), extra=extra
+    )
+    return _refusal(done.outcome, done.code, done.value)
+
+
+def _refusal(outcome: str, code: str | None, value: Mapping[str, Any] | None) -> str | None:
+    return None if outcome == "ok" else refusal_text(code, value)

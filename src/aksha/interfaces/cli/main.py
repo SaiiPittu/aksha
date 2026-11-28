@@ -179,7 +179,9 @@ def _asked(ctx: Context, w: Waiting) -> None:
     elif w.options:
         ctx.say(f"    options: {', '.join(w.options)}")
     if w.multiple:
-        ctx.say(f'    choose any of them: aksha answer {w.interrupt_id} "CODE, CODE" (or none)')
+        ctx.say(
+            f'    choose any of them: aksha answer {w.interrupt_id} "CODE, CODE" (or the word none)'
+        )
 
 
 def _refused(ctx: Context, receipt: CommandReceipt, session: str | None = None) -> int:

@@ -332,10 +332,25 @@ class _Walk:
         )
 
     def rejected(self) -> frozenset[str]:
-        """Old versions whose last review was rejected and whose slot saw no save since."""
+        """Old versions whose last review was rejected and whose slot saw no save since.
+
+        A rejection whose fresh choice (``interrupt.raised{reason: review_rejected}``, read
+        by name) the person has answered no longer blocks: the writer is entered again and
+        saves from that answer (ADR-P05 S4, ADR-P17 D2).
+        """
+        fresh: dict[str, str] = {}
+        answered: set[str] = set()
+        for e in self.view.events:
+            p = e.payload
+            if e.type == "interrupt.raised" and p.get("reason") == "review_rejected":
+                fresh[str(p.get("interrupt"))] = str(p.get("old"))
+            elif e.type == "interrupt.resolved" and str(p.get("interrupt")) in fresh:
+                answered.add(fresh[str(p["interrupt"])])
         out: set[str] = set()
         for r in reviews(self.view):
             if r.outcome != "rejected" or r.closed_seq is None:
+                continue
+            if str(r.old) in answered:
                 continue
             since = [
                 v

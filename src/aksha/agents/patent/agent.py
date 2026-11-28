@@ -26,7 +26,8 @@ or folder.
 3. ``table`` gathers every recommendation and, when the supervisor decided, the batched
    review of its decisions, the drop list and the audit; ``select`` always puts the choice
    to the person (a ``choice`` interrupt whose options are the table's candidates with
-   their recommendations, built by code; any subset, none included) and the run waits.
+   their recommendations, built by code: each label is the candidate's code-checked
+   recommendation, not the table's text; any subset, none included) and the run waits.
    The runtime, not the model, saves the selection from the answer: the codes the person
    chose. With no candidate at all nothing is asked and an empty selection is recorded.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills each blank
@@ -302,7 +303,8 @@ def tasks() -> tuple[Task, ...]:
         Task(
             "select",
             needs=("table",),
-            reads=("table",),
+            # The recommendations are read too: the options' labels are theirs, not the table's.
+            reads=("table", Read("patent.recommendation", keys="all")),
             tools=(),
             writes=("selection",),
             # The person chooses which candidates go to counsel: the options are the

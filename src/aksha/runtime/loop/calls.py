@@ -57,6 +57,7 @@ from aksha.runtime.artifacts.types import (
 from aksha.runtime.budgets.limits import attempt_number
 from aksha.runtime.budgets.meter import meter
 from aksha.runtime.budgets.types import Backoff
+from aksha.runtime.context.reads import declared_versions
 from aksha.runtime.context.reentry import INSTRUCTION_FLAG
 from aksha.runtime.context.turns import SPANS_FIELD, as_of
 from aksha.runtime.definitions.names import resolve_kind
@@ -499,14 +500,19 @@ def _asked(
     now = setup.view()
     ident = f"I-{highest(now.events, 'I') + 1:04d}"
     options = None
+    drawn: tuple[str, ...] = ()
     if declared.options is not None:  # a choice whose options the definition builds
         options = tuple(declared.options(TaskView(now, setup.tree, ref)))
         if not options:
             message = "there is nothing to choose from: finish, and the runtime records that"
             return _shown(ToolOutcome(Err(NOTHING_TO_CHOOSE, message)), cap)
+        # What the options were built from: an answer to them is saved only while these are
+        # still the current versions (tasks.choices.is_stale).
+        drawn = tuple(str(v.ref) for v in declared_versions(now, setup.tree, ref,
+                                                            blobs=setup.blobs))  # fmt: skip
     try:
         request = ask_request(declared, args, run=ref.run, instance=ref.instance,
-                              options=options)  # fmt: skip
+                              options=options, drawn_from=drawn)  # fmt: skip
     except (KeyError, ValueError) as bad:  # e.g. a choice with no options: the model's to fix
         message = f"this ask cannot be raised: {bad}"
         return _shown(ToolOutcome(Err("schema", message, paths=("/",))), cap)

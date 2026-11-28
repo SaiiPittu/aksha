@@ -47,19 +47,19 @@
     "topic": "ownership"
    },
    {
-    "question": "DISC-02 on 2026-04-15, 226 days before today: who could see it? The record does not say whether it was public.",
+    "question": "DISC-02 on 2026-04-15, 227 days before today: who could see it? The record does not say whether it was public.",
     "status": "needs_counsel_confirmation",
     "topic": "disclosure"
    }
   ],
   "disclosures": [
    {
-    "as_of": "2026-11-27",
-    "counsel_question": "DISC-02 on 2026-04-15, 226 days before today: who could see it? The record does not say whether it was public.",
+    "as_of": "2026-11-28",
+    "counsel_question": "DISC-02 on 2026-04-15, 227 days before today: who could see it? The record does not say whether it was public.",
     "date": "2026-04-15",
     "describes_fully": false,
     "disclosure_id": "DISC-02",
-    "elapsed_days": 226,
+    "elapsed_days": 227,
     "event_type": "customer pilot",
     "file": "input/disclosures/history.csv",
     "own_disclosure": true,

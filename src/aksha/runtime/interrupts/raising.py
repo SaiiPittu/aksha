@@ -54,6 +54,7 @@ def ask_request(
     run: str,
     instance: str,
     options: Sequence[tuple[str, str]] | None = None,
+    drawn_from: Sequence[str] = (),
 ) -> InterruptRequest:
     """The interrupt an ``ask`` call raises on the instance whose Task declared ``declared``.
 
@@ -62,7 +63,9 @@ def ask_request(
     ``options``: the model's, or, when the Task declares them in code, ``options`` (the
     ``(code, label)`` pairs its ``DeclaredInterrupt.options`` gave), and then a model's own
     ``options`` argument is refused (``ValueError``). Declared options also record their
-    labels (``option_labels``) and whether any subset may be chosen (``multiple``).
+    labels (``option_labels``), whether any subset may be chosen (``multiple``) and
+    ``drawn_from``, the refs of the Task's declared reads the options were built from, so
+    an answer given after one of them changed is not saved (``tasks.choices.is_stale``).
     """
     listed = args.get("questions")
     if listed:
@@ -76,7 +79,8 @@ def ask_request(
                              "question only")  # fmt: skip
         pairs = tuple((str(c), str(label)) for c, label in (options or ()))
         codes = tuple(c for c, _ in pairs)
-        extra = {"option_labels": [label for _, label in pairs], "multiple": declared.multiple}
+        extra = {"option_labels": [label for _, label in pairs], "multiple": declared.multiple,
+                 "drawn_from": [str(d) for d in drawn_from]}  # fmt: skip
     else:
         codes = tuple(str(o) for o in args.get("options", ()))
     return InterruptRequest(

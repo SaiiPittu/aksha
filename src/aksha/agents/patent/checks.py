@@ -175,7 +175,7 @@ def research_cited(view: Any, content: Mapping[str, Any]) -> CheckResult:
 
 
 def table_saved(view: Any) -> CheckResult:
-    """The recommendation table covers every candidate that has a recommendation."""
+    """The recommendation table has one row for each candidate with a recommendation, no more."""
     table = view.latest("table")
     if table is None:
         return CheckResult(False, "save the recommendation table")
@@ -186,6 +186,12 @@ def table_saved(view: Any) -> CheckResult:
         return CheckResult(
             False, f"the table has no row for candidates {missing}: add one row per candidate "
             f"with a recommendation ({sorted(want)})", count=len(missing),
+        )  # fmt: skip
+    extra = sorted(str(c) for c in have - want if c)
+    if extra:  # the person chooses from the rows: a row with no recommendation is not a choice
+        return CheckResult(
+            False, f"the table has rows for {extra}, which have no recommendation: list only "
+            f"the candidates with one ({sorted(want)})", count=len(extra),
         )  # fmt: skip
     if not supervised(view, SPEC):
         return CheckResult(True)

@@ -34,6 +34,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 from aksha.runtime.artifacts.versions import version
+from aksha.runtime.context.reads import declared_versions
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.interrupts.approvals import ApprovalTool, request_events, retarget
@@ -218,8 +219,9 @@ def _fresh_choice(
     if not pairs:
         return {}
     question = "The rebuilt choice was rejected: choose again."
+    drawn = [str(v.ref) for v in declared_versions(view, tree, ref)]
     return {"options": [c for c, _ in pairs], "option_labels": [label for _, label in pairs],
-            "multiple": declared.multiple, "label": declared.label,
+            "multiple": declared.multiple, "label": declared.label, "drawn_from": drawn,
             "questions": [{"id": SINGLE_QUESTION, "text": question}]}  # fmt: skip
 
 

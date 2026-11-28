@@ -20,7 +20,7 @@ Next actions order work for counsel; none is a legal view.
 
 ## Saved selection (`patent.selection`)
 
-Selected C1, chosen by person, from patent.table@v1.
+Selected C1, chosen by the person (the runtime saved it from their answer), from patent.table@v1.
 
 ## Comparison matrix for C1 (`patent.comparison/C1`)
 
@@ -72,7 +72,7 @@ not_found means this search showed no reference for the element; it is not a fin
 | difference_from_known_approaches | complete | {"comparison": "patent.comparison/C1@v1", "note": "not found is not new"} | patent.comparison/C1@v1 |
 | contributors | needs_counsel_confirmation | [{"contributed": "Wrote the gated baseline update rule and the engineering note", "date": "2026-01-14", "employer": "Stillroom", "name": "Asha Rao", "person_id": "P-01", "role": "firmware lead"}, {"co | input/contributors/records.csv |
 | conception_date_and_records | complete | {"date": "2026-01-14", "record": "input/notes/C1-self-calibration.md"} | input/notes/C1-self-calibration.md |
-| public_disclosures | needs_counsel_confirmation | [{"date": "2026-03-10", "disclosure_id": "DISC-01", "elapsed_days": 262, "event_type": "trade-show demo", "public": "yes", "status": "needs_counsel_confirmation"}] | input/disclosures/history.csv |
+| public_disclosures | needs_counsel_confirmation | [{"date": "2026-03-10", "disclosure_id": "DISC-01", "elapsed_days": 263, "event_type": "trade-show demo", "public": "yes", "status": "needs_counsel_confirmation"}] | input/disclosures/history.csv |
 | outside_resources | needs_counsel_confirmation | [{"agreement": "CA-2025-11", "agreement_document": "referenced_not_found", "effective": "2025-12-01", "person_id": "P-05"}] | input/contributors/records.csv |
 | implementation_evidence | complete | {"evidence": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.", "missing_documents": [], "status": "built_and_teste | input/notes/C1-self-calibration.md |
 | figure_list | needs_counsel_confirmation | (empty) |  |
@@ -85,7 +85,7 @@ not_found means this search showed no reference for the element; it is not a fin
 - question for counsel: Who are the inventors of each element?
 - question for counsel: Do the employment, contractor and consulting agreements assign each contribution?
 - question for counsel: An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?
-- question for counsel: DISC-01 was public 262 days before today. Does any grace period apply?
+- question for counsel: DISC-01 was public 263 days before today. Does any grace period apply?
 - `applicant` (C1~filing-information-worksheet@v1): Counsel to confirm.
 - `proposed_inventors` (C1~filing-information-worksheet@v1): Who are the inventors?
 - `ownership_and_assignments` (C1~filing-information-worksheet@v1): Counsel to confirm.
@@ -93,7 +93,7 @@ not_found means this search showed no reference for the element; it is not a fin
 - `earlier_public_disclosures` (C1~filing-information-worksheet@v1): Counsel to confirm.
 - `jurisdictions_of_interest` (C1~filing-information-worksheet@v1): Counsel to confirm.
 - `contributors` (C1~invention-disclosure-form@v1): Who are the inventors of each element?
-- `public_disclosures` (C1~invention-disclosure-form@v1): DISC-01 was public 262 days before today. Does any grace period apply?
+- `public_disclosures` (C1~invention-disclosure-form@v1): DISC-01 was public 263 days before today. Does any grace period apply?
 - `outside_resources` (C1~invention-disclosure-form@v1): An outside contributor suggested F2, F3 before the internal note. Who are the inventors, and does their agreement affect ownership?
 - `figure_list` (C1~invention-disclosure-form@v1): The note has no drawings. Which figures should an application include?
 

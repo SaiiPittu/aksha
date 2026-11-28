@@ -4,7 +4,9 @@ A turn, in order, each part read from projections of the event store and every w
 made through the durable step executor:
 
 0. On a Task whose declared choice saves an artifact, the runtime's save from the
-   person's answer, when one is due (``loop/answers.py``), recorded as its own step.
+   person's answer, when one is due (``loop/answers.py``), recorded as its own step. A
+   refused save ends the turn as a ``fault`` naming the refusal, so the instance ends
+   blocked with the code and message instead of retrying a save nothing can fix.
 1. The stop-policy stack's preparation for the instance (``prep_for``), read from the log
    as it stood before the turn's first step, so a resumed turn prepares the same request:
    brief lines for the context, and a tool narrowing the registry and the gate apply.
@@ -85,7 +87,9 @@ def run_turn(
     setup: LoopSetup, executor: DurableStepExecutor, ref: InstanceRef, turn: int
 ) -> TurnEnd:
     """Run (or resume) turn ``turn`` of ``ref`` and return its end (module doc)."""
-    save_from_answer(setup, executor, ref, turn)  # a person's choice, saved by the runtime
+    refused = save_from_answer(setup, executor, ref, turn)  # a person's choice, saved by code
+    if refused is not None:  # nothing the model does fixes it: the instance ends, saying why
+        return TurnEnd(ref.run, ref.instance, turn, "fault", refused, setup.view().seq_read)
     step = StepId(ref.run, ref.instance, turn=turn)
     before = as_of(as_of(setup.view(), step), step.compaction())
     prep = prep_for(stop_view(setup, ref.run, before), ref)

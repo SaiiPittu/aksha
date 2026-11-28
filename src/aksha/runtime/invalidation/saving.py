@@ -11,7 +11,8 @@ step's own transaction (U2):
    version is changing (invalidated or dirty) is a pending revision, never current: the
    same result raises its diff review (``interrupt.raised{kind: review}``), so readers see
    the old version until a person accepts (D1). An equal revision still gets its review,
-   led by the changed reads (D5).
+   led by the changed reads (D5). A version saved from the person's own answer (origin
+   ``choice``) raises none: the person decided it just now (ADR-P17 D2).
 3. :func:`step_confirmations`: the reviews above, then the revocations and review voids
    the step's facts confirm (``confirm.confirmations``, D9), to append with them.
 
@@ -55,6 +56,8 @@ def review_facts(
     """The diff reviews ``saved`` raise (module doc, rule 2), one per replaced version."""
     out: list[NewEvent] = []
     for revision in saved:
+        if revision.origin == "choice":  # the person's own answer, just given: no review
+            continue
         old = current(view, revision.ref.kind, revision.ref.key)
         if old is None or old.ref.version >= revision.ref.version:
             continue

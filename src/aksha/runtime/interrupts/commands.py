@@ -17,7 +17,8 @@ refused ``already_decided``, and an approval's decision carries the dedup key
    instance-scoped ``input`` or ``choice`` is minted as its own statement span (ADR-P13),
    so what is built from it has the answer in its lineage. A choice's answer must be one
    of its options (``not_an_option``); a ``multiple`` choice takes any subset of them,
-   ``none`` included, as ``choices`` or as text (``"C1, C4"``). Every choice's resolution
+   ``none`` included, as ``choices`` or as text (``"C1, C4"``, or the word ``none``; an
+   empty answer is refused ``answer_missing``). Every choice's resolution
    records ``chosen``, the codes in option order. A blocked
    instance is reset in the same transaction (``completion_check.reset{cause: answer}``).
 2. :func:`approve` grants an approval for the signature the person was shown. Refusals:
@@ -152,8 +153,10 @@ def _picked(
 ) -> tuple[str, ...] | CommandRefused:
     """The codes a ``multiple`` choice's answer picks, in option order, or a refusal.
 
-    ``choices`` lists them; otherwise ``text`` does, separated by commas or spaces, and
-    ``none`` (or nothing) picks none. Every code must be an option (``not_an_option``).
+    ``choices`` lists them (an empty list picks none); otherwise ``text`` does, separated
+    by commas or spaces, and only the word ``none`` picks none: an empty or blank answer
+    is refused (``answer_missing``), so an accidental empty submit is never recorded as a
+    choice of nothing. Every code must be an option (``not_an_option``).
     """
     listed = args.get("choices")
     if listed is None:
@@ -164,6 +167,8 @@ def _picked(
         if text is None:
             return CommandRefused(ANSWER_MISSING, f"{i.id} needs the chosen codes, or none")
         words = [w for w in str(text).replace(",", " ").split() if w]
+        if not words:
+            return CommandRefused(ANSWER_MISSING, f"{i.id} needs the chosen codes, or 'none'")
         listed = [] if [w.lower() for w in words] == [NONE_CHOSEN] else words
     codes = [str(c) for c in listed]
     unknown = [c for c in codes if c not in options]

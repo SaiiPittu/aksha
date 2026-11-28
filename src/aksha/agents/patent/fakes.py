@@ -192,7 +192,9 @@ class Context:
     reads: dict[str, tuple[str, dict[str, Any]]] = field(default_factory=dict)
     results: list[tuple[str, dict[str, Any], dict[str, Any]]] = field(default_factory=list)
     answers: list[str] = field(default_factory=list)
+    questions: list[str] = field(default_factory=list)
     rebuild_old: dict[str, Any] | None = None
+    tail: str = ""
     request: str = ""
     recitation: str = ""
 
@@ -234,6 +236,7 @@ def parse(request: GenerationRequest) -> Context:
                 ctx.reads[ref.rsplit("@", 1)[0]] = (ref, json.loads(body))
         elif msg.role == "user" and text.startswith("Answers from the person:"):
             ctx.answers += re.findall(r"^A: (.+)$", text, flags=re.M)
+            ctx.questions += re.findall(r"^Q: (.+)$", text, flags=re.M)
         elif (
             msg.role == "user"
             and not ctx.request
@@ -242,6 +245,8 @@ def parse(request: GenerationRequest) -> Context:
             )
         ):
             ctx.request = text.split("\n\nTask: ", 1)[0]
+        if msg.role == "user":
+            ctx.tail = text  # the last user message: a refused finish's reason, when one is
         if msg.role == "user" and text.startswith(RECITATION):
             ctx.recitation = text
         if msg.role == "user" and text.startswith("Rebuild: your earlier version"):
@@ -664,20 +669,25 @@ class PatentFake(RuleGenerationModel):
     def _select(self, ctx: Context) -> GenerationResult:
         """Ask the person to choose, with a summary; the options and the save are the runtime's.
 
-        With no candidate the runtime records the empty choice and nothing is asked; once
-        the person answered (or, in a rebuild, the runtime copied their earlier choice for
-        their review) the Task finishes.
+        The question names the table it was asked from. With no candidate the runtime
+        records the empty choice and nothing is asked. Once the person answered a question
+        asked from the current table, or, in a rebuild, the runtime copied their earlier
+        choice for their review, the Task finishes. When the runtime says the person must
+        choose (again), or the newest answer was given on an older table, it asks again.
         """
         table = ctx.read("table")
         assert table is not None
-        rows = table[1]["rows"]
+        ref, content = table
+        rows = content["rows"]
         if not rows:
             return _reply(_call("finish", 1, summary="no candidate to select"))
-        if ctx.answers or ctx.rebuild_old is not None:
+        told = "ask again" in ctx.tail or "call ask" in ctx.tail
+        on_this_table = bool(ctx.questions) and f"(from {ref})" in ctx.questions[-1]
+        if not told and (on_this_table or ctx.rebuild_old is not None):
             return _reply(_call("finish", 1, summary="the person's selection is saved"))
-        lines = "; ".join(f"{r['candidate']}: {r['next_action']}" for r in rows)
-        q = f"Which candidates should be prepared for counsel review? {lines}"
-        review = table[1].get("review")
+        lines = "; ".join(f"{r['candidate']}: {r.get('next_action', '')}" for r in rows)
+        q = f"Which candidates should be prepared for counsel review (from {ref})? {lines}"
+        review = content.get("review")
         if review:  # the batched review: the drop list and the audit beside the choice
             drops = ", ".join(f"{d['key']} ({d['reason']})" for d in review["dropped"])
             audit = review["audit"]

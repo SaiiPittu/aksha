@@ -1083,6 +1083,11 @@ INTERRUPT_RAISED = EventTypeSpec(
                 },
             },
             "options": {"type": "array", "items": {"type": "string"}},
+            # ADR-P17 D2: a declared choice's labels, whether any subset may be chosen, and
+            # the refs of the reads its options were built from (``tasks.choices.is_stale``).
+            "option_labels": {"type": "array", "items": {"type": "string"}},
+            "multiple": {"type": "boolean"},
+            "drawn_from": {"type": "array", "items": {"type": "string"}},
             "label": {"type": "string"},
             "approval": {"type": "string", "minLength": 1},
             "signature": {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"},

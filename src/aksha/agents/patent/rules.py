@@ -221,17 +221,31 @@ def _table_rows(view: Any) -> list[Mapping[str, Any]]:
     return [r for r in rows if isinstance(r, Mapping) and r.get("candidate")]
 
 
+def _recommended(view: Any, code: str, row: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """The code-checked recommendation of ``code`` (the table row only when there is none)."""
+    rec = view.latest("recommendation", code)
+    if rec is not None:
+        found: Mapping[str, Any] = rec.content
+        return found
+    return row or {}
+
+
 def selection_options(view: Any) -> tuple[tuple[str, str], ...]:
     """The choice the person makes: each table row's candidate, with its next action and why.
 
-    The options are the code's, read from the table, so the person always sees every
-    candidate the table lists and the model cannot leave one out or add one.
+    The table gives only the codes (``checks.table_saved`` holds them to the candidates
+    with a recommendation, no more and no fewer); each label is read from the candidate's
+    code-checked recommendation, never from the text the model wrote in the table, so the
+    model cannot leave a candidate out, add one, or word its recommendation for it.
     """
     out: list[tuple[str, str]] = []
     for row in _table_rows(view):
         code = str(row["candidate"])
-        if code not in {c for c, _ in out}:
-            out.append((code, f"{row.get('next_action', '')}: {row.get('why', '')}".strip()))
+        if code in {c for c, _ in out}:
+            continue
+        src = _recommended(view, code, row)
+        label = f"{src.get('next_action', '')}: {src.get('why', '')}".strip(": ")
+        out.append((code, label))
     return tuple(out)
 
 
@@ -240,15 +254,17 @@ def selection_from_answer(view: Any, chosen: tuple[str, ...]) -> dict[str, Any]:
 
     ``selected`` (written by the runtime too) is the list of chosen candidate codes, which
     ``prepare``, ``packet`` and ``send`` fan out over; ``recommendations`` keeps each
-    chosen candidate's next action as the table stood when the person chose.
+    chosen candidate's next action, from its recommendation, as it stood when the person
+    chose.
     """
     table = view.latest("table")
-    rows = _table_rows(view)
-    actions = {str(r["candidate"]): r.get("next_action") for r in rows}
+    rows = {str(r["candidate"]): r for r in _table_rows(view)}
     out: dict[str, Any] = {
         "selected": list(chosen),
         "based_on": "" if table is None else str(table.ref),
-        "recommendations": {c: actions.get(c) for c in chosen},
+        "recommendations": {
+            c: _recommended(view, c, rows.get(c)).get("next_action") for c in chosen
+        },
     }
     if not rows:
         out["note"] = "no invention candidate was found among the inputs; nothing was asked"
