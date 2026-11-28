@@ -37,7 +37,7 @@ Two things change. A closer prior-art publication appears (a new family). The ou
 
 ## 3. Only the affected work reopens
 
-Invalidation follows what each output actually read. Everything built on C1's extraction and prior art is rebuilt: the comparison, the recommendation, both forms, the packet and its handoff. C2, C3 and C4 and most research outputs read nothing that moved, so they are kept as they were.
+Invalidation follows what each output actually read. Everything built on C1's extraction and prior art is rebuilt: the comparison, the recommendation, both forms, the packet and its handoff. C2, C3 and C4 keep their extraction, prior art and comparison, and 7 of the 11 research outputs are kept. The recommendations of C2, C3 and C4 reopen because each reads the research needs and findings, which moved, and their next actions come out unchanged.
 
 C1's next action moves from `prioritize_counsel_review` to `collect_more_evidence`. The recommendation explains why with the new evidence:
 

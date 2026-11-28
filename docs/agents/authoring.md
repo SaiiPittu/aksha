@@ -119,7 +119,7 @@ def summary_saved(view: Any) -> CheckResult:
 ---
 title: An agent folder is scanned, validated and hashed before any event is written
 ---
-flowchart LR
+flowchart TB
     PATH[["AKSHA_AGENTS folder"]] --> SCAN["scan_sources<br/>only aksha.runtime.api"]
     SCAN --> IMPORT["import AGENT"]
     IMPORT --> EXT["load the extensions it names"]

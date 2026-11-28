@@ -11,7 +11,7 @@ An agent's definition is the same offline and live: its system prompt, its Task 
 | What the person asks | the request (an eval case's `opening`) |
 | What the person uploads | the world's `sources/` (a user's own folder, live) |
 | The web the agent can search and fetch | the world's `web.json` and `web/` (a search API and the real web, live) |
-| What counts as right | the world's `key.json` and the suite's graders |
+| What counts as right | the world's `key.json` and the eval set's graders |
 | What the offline model is told about the market | `web.json`'s `fake` hints (nothing, live) |
 
 So one research agent runs the stillroom, tilldew and cindral tasks unchanged, and the same agent runs live once a model and a search API are configured. The architecture guard `tests/architecture/test_agent_generality.py` refuses any fixture value in an agent's logic or prompts.

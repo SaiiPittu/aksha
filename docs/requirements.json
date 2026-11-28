@@ -979,7 +979,7 @@
         {
           "id": "R-46",
           "requirement": "Required outputs: a recommendation table for all four candidates, comparison matrix, saved selection, completed forms and packets.",
-          "how": "The patent happy-path case checks each output against the world's key.",
+          "how": "The patent happy-path eval case checks each output against the world's key.",
           "evidence": [
             {
               "kind": "path",
@@ -1391,7 +1391,7 @@
             }
           ],
           "status": "partly met",
-          "reason": "On the held-out worlds the research agent passes 25 of 26 cases and the patent agent 17 of 24 in fake model mode (limitations item 19)."
+          "reason": "On the held-out worlds the research agent passes 25 of 26 eval cases and the patent agent 17 of 24 in fake model mode (limitations item 19)."
         }
       ]
     },

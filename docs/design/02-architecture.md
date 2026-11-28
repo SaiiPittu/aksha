@@ -369,7 +369,7 @@ The event store (ADR-P01, Proposed) is an append-only table of facts that happen
 The store is hash-chained (decision 20, built now rather than later). Each event carries `prev_hash`, the hash of the event before it, and `hash`, a SHA-256 over the canonical JSON of its own record. The first event's `prev_hash` is a genesis hash derived from a random store ID, so two stores never share a chain. An anchor copies the latest `(seq, hash)` to a sink outside the store that the store's writer cannot rewrite.
 
 ```mermaid
-flowchart LR
+flowchart TB
   G["genesis<br/>hash of store_id"] --> E1["seq 1<br/>prev_hash = genesis<br/>hash = H1"]
   E1 --> E2["seq 2<br/>prev_hash = H1<br/>hash = H2"]
   E2 --> E3["seq 3<br/>prev_hash = H2<br/>hash = H3"]
@@ -391,7 +391,7 @@ This is the rule the whole design rests on: store facts, derive interpretations.
 An agent is a Python module that holds one `Agent` value (decision 2, Accepted; ADR-P20, Proposed with three parts Accepted). Its structure is declared data that the runtime can inspect: its purpose text, the artifacts it writes, the relations between them, its Task tree, its tools, its stop-policy opt-ins, its model aliases, its budget and limits, its context policy and the extensions it uses by name. Its behaviour, such as completion checks, is plain pure Python functions the declarations name.
 
 ```mermaid
-flowchart LR
+flowchart TB
   MOD["agents/patent/<br/>agent.py, checks.py, prompts/"] --> LD["Agent loader"]
   LD -->|"scan imports: only aksha.runtime.api<br/>and named extensions"| V["Definition validation<br/>(fixed order of refusals)"]
   V -->|"refusal: module, Task, field, code"| ERR["LoadError"]

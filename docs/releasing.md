@@ -11,7 +11,7 @@
 | Version | from the git tag `vX.Y.Z`, through setuptools-scm. An untagged build is `0.1.devN+g<commit>`, a local version PyPI refuses, so only a tag can produce an uploadable version. |
 | Python | 3.12 and newer |
 | Extras | `server` (`aksha serve`), `otel` (`aksha trace`), `postgres` (the PostgreSQL event store), `ingest` (the document parsers), `live` (LiteLLM, for live models). Development tools are a dependency group (`dev`), not an extra. |
-| Bundled data | the agents' prompts, and the synthetic worlds and eval suites under `src/aksha/data/`, so `aksha demo` and `aksha eval` work with no clone |
+| Bundled data | the agents' prompts, and the synthetic worlds and eval sets under `src/aksha/data/`, so `aksha demo` and `aksha eval` work with no clone |
 | Not in the sdist | `.claude/`, `.gemini/`, `.github/`, `scratch-pad/`, `web/`, `.coderabbit.yaml`, `AGENTS.md`, `CLAUDE.md`, `REVIEWING.md` (`MANIFEST.in`; `tests/package/test_wheel.py` fails if one appears) |
 
 ## Check a release locally

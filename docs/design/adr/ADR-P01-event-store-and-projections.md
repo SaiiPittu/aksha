@@ -102,7 +102,7 @@ The same harness has to serve one person on a laptop and an unattended software 
 A git commit names its parent commit by hash, and its own hash covers that parent hash. Change one old commit and its hash changes, so its child's parent pointer no longer matches, and the same holds for every commit after it. The event store does the same with one parent per event: event 41's hash covers event 40's hash. This is the one idea a blockchain shares with git. Aksha takes only that part: there are no peers, no consensus and no mining, and one writer process appends (D1).
 
 ```mermaid
-flowchart LR
+flowchart TB
   G["genesis<br/>hash of store_id"] --> E1["seq 1<br/>prev_hash = genesis<br/>hash = H1"]
   E1 --> E2["seq 2<br/>prev_hash = H1<br/>hash = H2"]
   E2 --> E3["seq 3<br/>prev_hash = H2<br/>hash = H3"]

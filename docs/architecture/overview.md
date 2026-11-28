@@ -132,7 +132,7 @@ flowchart TB
   TRI --> DEEP
 ```
 
-Caption: the supervisor steers by directives that only filter which items the deep tier takes, so re-deciding an item re-runs nothing that already ran. The kit is `extensions/portfolio/`; the decision is ADR-P15 S5 (Proposed), and the `portfolio` eval suite runs it on the 20-candidate `coldwick` world.
+Caption: the supervisor steers by directives that only filter which items the deep tier takes, so re-deciding an item re-runs nothing that already ran. The kit is `extensions/portfolio/`; the decision is ADR-P15 S5 (Proposed), and the `portfolio` eval set runs it on the 20-candidate `coldwick` world.
 
 ## Why a hash-chained event store
 

@@ -1,17 +1,17 @@
-# Evals: running, writing cases, and plugging in an agent
+# Evals: running, writing eval cases, and plugging in an agent
 
-*Status on 27 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each case k times in each of its worlds (and once per arm for a comparison case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their suites on the runtime with their fake models. There are 13 suites over 11 worlds; six of the worlds were written without sight of the agent code. On a fresh clone of main on 27 Nov 2026 the seven suites over the worlds the agents were built on all passed (the portfolio suite among them), the research agent passed 25 of 26 held-out cases and the patent agent 17 of 24 (3 of 23 before its reader and graders were made general); see "Results on 27 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build.*
+*Status on 27 Nov 2026: the eval runner (primitive P22) is built and tested in fake model mode. It runs the grader self-tests, then each eval case k times in each of its worlds (and once per arm for a comparison eval case) through a registered agent, grades every episode against that world's answer key or the change set's derived key, compares base and variant worlds, and writes the results as events with a report built from their projection. The Research and Patent Agents are registered and run their eval sets on the runtime with their fake models. There are 13 eval sets (`suites` in the code) over 11 worlds; six of the worlds were written without sight of the agent code and each has its own eval set; limitations item 19 says why the three patent worlds no longer count as held out. On a fresh clone of main on 27 Nov 2026 the seven development eval sets, over the worlds the agents were built on, all passed (the portfolio eval set among them), the research agent passed 25 of 26 held-out eval cases and the patent agent 17 of 24 (3 of 23 before its reader and graders were made general); see "Results on 27 Nov 2026" below. The eval design is a working document kept outside this repository; ADR-P22 records its decisions and the amendments from the build.*
 
-Each fixture world is an environment in the reinforcement-learning sense: a task (an eval case), a world state copied fresh for every episode, tools that read and write that state behind a path guard, and a grader the agent cannot reach. The agent is graded on what it leaves in the episode's event store, never on what it says it did.
+Each synthetic world is the eval's environment, in the reinforcement-learning sense: an eval case (`case` in the code; other eval writing often says "task", but Task is a runtime term here), a world state copied fresh for every episode (one trial of one eval case), tools that read and write that state behind a path guard, and a grader the agent cannot reach. The agent is graded on what it leaves in the episode's event store, never on what it says it did.
 
 ## Running
 
 ```text
-aksha eval list                      suites, their cases and the registered agents
+aksha eval list                      eval sets, their eval cases and the registered agents
 aksha eval selftest                  the grader self-tests for every world
-aksha eval run scripted              self-tests, then every case of the suite
+aksha eval run scripted              self-tests, then every eval case in the set
 aksha eval run research --agent scripted --case r-prices
-aksha eval run change --k 3          the resume-against-fresh case, once per arm
+aksha eval run change --k 3          the resume-against-fresh eval case, once per arm
 aksha eval report <AKSHA_HOME>/evals/scripted-0 --suite scripted
 aksha eval key-check                 recompute every key's anchors and counts
 aksha eval lock stillroom            rewrite a world's world.lock.json after an edit
@@ -30,13 +30,13 @@ aksha eval lock stillroom            rewrite a world's world.lock.json after an 
 
 An output folder holds one run. A folder an earlier run wrote (it carries `.aksha-eval-run`) is cleared before the next run starts, so a results row never points at a bundle another run rewrote; a non-empty folder that no run wrote is refused with `out_not_empty`.
 
-Exit codes: 0 when every case passed and the self-tests held, 1 when a case failed, 2 when anything was ungradeable or a self-test failed, 64 for a usage error, 65 for a refused input (an unknown suite, agent, world or criterion).
+Exit codes: 0 when every eval case passed and the self-tests held, 1 when an eval case failed, 2 when anything was ungradeable or a self-test failed, 64 for a usage error, 65 for a refused input (an unknown eval set, agent, world or criterion).
 
-The first line of `report.txt` is always the self-test result with its mutation coverage, and the second the mode label. In fake model mode the rates are plumbing checks, not reliability, and trap results are harness plumbing: the report never prints a trap tally from fake mode. The mode is recorded per episode; a run that mixes modes says so, and the trap tally counts only live or replayed episodes. With two or more world clusters the suite's pass rate carries a clustered standard error and a 95% interval; with one cluster (today's two worlds are a base and its variant) the report gives counts only. pass^k uses k = min(3, n - 1) over n rollouts and prints the k and n it used (`pass^3 (n=5)`). Every result row carries the agent's definition hash (`agent_definition_hash`).
+The first line of `report.txt` is always the self-test result with its mutation coverage, and the second the mode label. In fake model mode the rates are plumbing checks, not reliability, and trap results are harness plumbing: the report never prints a trap tally from fake mode. The mode is recorded per episode; a run that mixes modes says so, and the trap tally counts only live or replayed episodes. With two or more world clusters the eval set's pass rate carries a clustered standard error and a 95% interval; with one cluster (for example `stillroom` and its variant `stillroom-v2`) the report gives counts only. pass^k uses k = min(3, n - 1) over n rollouts and prints the k and n it used (`pass^3 (n=5)`). Every result row carries the agent's definition hash (`agent_definition_hash`).
 
-## Writing a case
+## Writing an eval case
 
-A suite is a folder `src/aksha/data/suites/<suite>/` holding `suite.toml` and one TOML file per case:
+An eval set is a folder `src/aksha/data/suites/<suite>/` holding `suite.toml` and one TOML file per eval case:
 
 ```toml
 id = "r-duplicate-competitor"
@@ -57,7 +57,7 @@ faults = "flaky-pages"               # a fault profile from suite.toml, optional
 xfail = false                        # a bad case committed before its fix
 ```
 
-A comparison case adds arms and the pairs to compare (decision 36's resume against fresh, `src/aksha/data/suites/change/`):
+A comparison eval case adds arms and the pairs to compare (decision 36's resume against fresh, `src/aksha/data/suites/change/`):
 
 ```toml
 compare = [["resume", "fresh"]]
@@ -77,13 +77,13 @@ reentry = "resume"
 premise_exempt = ["research.scope"]  # added to the resume policy; a new definition hash
 ```
 
-Each arm runs every rollout of the case under `<out>/_arms/<arm>/` and is graded on its own. Its rows carry the arm and the definition hash it ran under, and the agent's measures of its runs (`metrics`: model turns, tool calls, tokens, context characters, and each rebuild re-entry's mode and reason). The report prints one row per arm and an arms table with the compared pairs' differences. A case with arms has relation `none`. Only an agent registered with an `armed` builder runs arms; the research and patent adapters have one.
+Each arm runs every rollout of the eval case under `<out>/_arms/<arm>/` and is graded on its own. Its rows carry the arm and the definition hash it ran under, and the agent's measures of its runs (`metrics`: model turns, tool calls, tokens, context characters, and each rebuild re-entry's mode and reason). The report prints one row per arm and an arms table with the compared pairs' differences. An eval case with arms has relation `none`. Only an agent registered with an `armed` builder runs arms; the research and patent adapters have one.
 
-A case never copies an expected value: `expect` points into each world's key, so one case runs unchanged in a base world and its variants. The pairing rules are checked when the suite loads: a `real_failure` case is `bad` with a `bug:` or `run:` source; a `planted_trap` case names a trap present in every world it lists and expects it; a `control` case is `hand_written`. An unknown criterion is refused.
+An eval case never copies an expected value: `expect` points into each world's key, so one eval case runs unchanged in a base world and its variants. The pairing rules are checked when the eval set loads: a `real_failure` eval case is `bad` with a `bug:` or `run:` source; a `planted_trap` case names a trap present in every world it lists and expects it; a `control` case is `hand_written`. An unknown criterion is refused.
 
 ## The graders
 
-The cascade runs in this order, so the first failure the verdict names is the most basic one. The gate and the invariants run on every episode, and the invariants are always `must`, whether or not the case lists them: a double send fails even a case about prices. The other layers run the criteria the case lists.
+The cascade runs in this order, so the first failure the verdict names is the most basic one. The gate and the invariants run on every episode, and the invariants are always `must`, whether or not the eval case lists them: a double send fails even an eval case about prices. The other layers run the criteria the eval case lists.
 
 1. Gate: the episode store's own chain check held, the bundle's `chain.jsonl` walks from the store's genesis to its recorded head and `events.jsonl` is exactly the chain's `episode.*` events, the events fold, the world lock matched. Otherwise the episode is `ungradeable` with `store_fold_failed` or `world_lock_mismatch`.
 2. Invariants: `inv.one_row_per_key` (at most one delivery per effect key) and `no_unbound_send` (every delivery has its own granted approval, bound to the exact target version, action and recipient it sends; an approval covers one send).
@@ -96,18 +96,18 @@ A criterion that cannot run is `ungradeable`, never a pass or a fail: a missing 
 
 ## Self-tests
 
-Before any score counts, every grader runs against bundles made by agents that read the key, which live in `aksha/evals/selftest/` and are never registered as an agent under test: the oracle (must pass every criterion), five perturbed oracles (lists reordered, enums recased, extra fields, amounts written with their currency, an alias as the name; each must grade as the oracle does), the null bundle (must fail and keep every invariant, and is graded as each case of the suite: a case must fail it unless it sets `needs_action = false`), the lister (must fail `research.competitor_count`, `patent.matrix` and `trap.T-DUP`), the hedger (must fail `precision.known_values`) and one mutant per criterion (each must fail the criterion it names). As of 26 Nov 2026 every gradeable criterion has a mutant that kills it (33 of 33); `precision.abstention_count` stays ungradeable until the key gains `counts.abstentions`. The relation self-test checks that the two worlds' oracles pass `rel.directional` and that a variant which ignored the change fails it.
+Before any pass rate counts, every grader runs against bundles made by agents that read the key, which live in `aksha/evals/selftest/` and are never registered as an agent under test: the oracle (must pass every criterion), five perturbed oracles (lists reordered, enums recased, extra fields, amounts written with their currency, an alias as the name; each must grade as the oracle does), the null bundle (must fail and keep every invariant, and is graded as each eval case in the set: an eval case must fail it unless it sets `needs_action = false`), the lister (must fail `research.competitor_count`, `patent.matrix` and `trap.T-DUP`), the hedger (must fail `precision.known_values`) and one mutant per criterion (each must fail the criterion it names). As of 26 Nov 2026 every gradeable criterion has a mutant that kills it (33 of 33); `precision.abstention_count` stays ungradeable until the key gains `counts.abstentions`. The relation self-test checks that the two worlds' oracles pass `rel.directional` and that a variant which ignored the change fails it.
 
 ## Invariance and directional runs
 
-A case with `relation = "invariance"` or `"directional"` is compared rollout by rollout between each variant world it lists and the variant's base. Outputs are carried into the variant's names by the rename map in the variant's `spec.yaml` and the path map derived from it, and compared without code-point offsets, which a rename shifts. The keys say where the variant moves the answer: a candidate whose recommendation or matrix differs between the keys, and a family the variant adds, are left out of the unchanged set.
+An eval case with `relation = "invariance"` or `"directional"` is compared rollout by rollout between each variant world it lists and the variant's base. Outputs are carried into the variant's names by the rename map in the variant's `spec.yaml` and the path map derived from it, and compared without code-point offsets, which a rename shifts. The keys say where the variant moves the answer: a candidate whose recommendation or matrix differs between the keys, and a family the variant adds, are left out of the unchanged set.
 
 1. `rel.invariant`: every output outside the changed set equals its base.
 2. `rel.same_verdict`: the variant's verdict equals the base's.
 3. `rel.same_calls`: the same tool calls in the same order under the path map, so an agent that branches on a name is caught even when its outputs agree.
 4. `rel.directional`: the unchanged set holds, and each changed candidate's recommendation or matrix differs from its base.
 
-`stillroom-v2` renames and changes at once. Until a rename-only world exists, invariance cases use it and compare only what its key leaves unchanged.
+`stillroom-v2` renames and changes at once. Until a rename-only world exists, invariance eval cases use it and compare only what its key leaves unchanged.
 
 ## The bundle schema (provisional)
 
@@ -154,13 +154,13 @@ The agent under test is a port (`aksha.evals.ports.AgentUnderTest`): a `name`, a
 3. When the run ends, the adapter's `export` saves the agent's artifacts in the schema above, renaming fields and resolving span IDs to file, text and offsets; it computes nothing a grader checks. A patent family is named by its priority number (the key's letters are the key's own).
 4. It is registered in `aksha.app.eval_agents()` through `_RuntimeAdapter`, which declares the agent definition's hash, so result rows name the definition, not the adapter's source.
 
-`src/aksha/data/suites/scripted/` runs the same kind of cases through `ScriptedResearchAgent`, a small rule-based agent that reads the competitor pages and reviews and never the key; it is what the runner is tested with.
+`src/aksha/data/suites/scripted/` runs the same kind of eval cases through `ScriptedResearchAgent`, a small rule-based agent that reads the competitor pages and reviews and never the key; it is what the runner is tested with.
 
 ## Results on 27 Nov 2026
 
-From main (`f8b8f58`, after the super agent, the shared input tools, the general patent reader, the fast tests and the LiteLLM adapter), `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`), re-run on 27 Nov 2026 with the same per-case results as before. In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. No suite had an invariant failure.
+From main (`f8b8f58`, after the super agent, the shared input tools, the general patent reader, the fast tests and the LiteLLM adapter), `make venv`, then `aksha eval run <suite>` (and `--k 3` for `change`), re-run on 27 Nov 2026 with the same per-case results as before. In fake model mode these are plumbing checks: the outputs of a rule-based model flow from tool to store to grader. They are not a reliability measure. No eval set had an invariant failure.
 
-| Suite | World, written blind | Cases passed | Self-tests | Exit code | Notes |
+| Eval set | World, written blind | Eval cases passed | Grader self-tests | Exit code | Notes |
 |---|---|---|---|---|---|
 | research | stillroom, stillroom-v2 | 6 of 6 | pass, 36 of 36 criteria killed | 0 | `rel.same_calls` holds on every invariance pair (ADR-P22 B23). |
 | patent | stillroom, stillroom-v2 | 8 of 8 | pass, 36 of 36 | 0 | |
@@ -176,14 +176,14 @@ From main (`f8b8f58`, after the super agent, the shared input tools, the general
 | brackwen | brackwen, yes | 7 of 9 | pass, 19 of 27 | 1 | Patent. The happy and partial-disclosure cases (matrix). |
 | portfolio | coldwick, no | 1 of 1 | pass, 4 of 21 | 0 | The patent agent under the supervisor Task on twenty candidates (ADR-P15 S5); the oracle builds the supervisor's outputs from the key, and one mutant kills each of the four portfolio checks. |
 
-Every suite's self-tests now pass: the oracle and the graders read field names and expectations from each world's key (ADR-P22 G7). A suite with a failing case exits 1. Each remaining gap is listed in [limitations item 19](../limitations.md) and is left failing on purpose rather than fixed with a rule that fits one world.
+Every eval set's grader self-tests now pass: the oracle and the graders read field names and expectations from each world's key (ADR-P22 G7). An eval set with a failing eval case exits 1. Each remaining gap is listed in [limitations item 19](../limitations.md) and is left failing on purpose rather than fixed with a rule that fits one world.
 
 ## Not built yet
 
-1. `render_renamed` and a rename-only world; the change set `demo-closer-art` with its derived key, so the change-and-recovery cases (`s6-*`) can run.
-2. A patent-side injection case: no source the patent agent reads carries an injected instruction yet.
-3. Self-test oracles for change cases: the oracle applies no change set, so the change checks are key gaps in the self-tests and are proven by unit tests instead.
-4. Crash steps, budgets, the control arm with stop policies off, and two-owner isolation cases.
+1. `render_renamed` and a rename-only world; the change set `demo-closer-art` with its derived key, so the change-and-recovery eval cases (`s6-*`) can run.
+2. A patent-side injection eval case: no source the patent agent reads carries an injected instruction yet.
+3. Self-test oracles for change eval cases: the oracle applies no change set, so the change checks are key gaps in the self-tests and are proven by unit tests instead.
+4. Crash steps, budgets, the control arm with stop policies off, and two-owner isolation eval cases.
 5. Replay and live modes, cost in tokens and dollars, and the tier 2 significance gate.
 6. Hand labels and calibration data for the judge criteria; until then every judge result annotates.
 7. The key additions the design lists: `counts.abstentions`, theme membership by review ID, a second cross-post fact, closest art per candidate, split matrix cells and named trap checks.

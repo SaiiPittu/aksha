@@ -26,7 +26,7 @@ Read the product chain first, because every later document answers a requirement
 The code layout, the dependency rule between layers and how to add an agent are in [`../architecture/codebase-structure.md`](../architecture/codebase-structure.md), which lands with the first code change.
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph Product["01-product: the product chain"]
     PG["Problem and goals"] --> PE["Personas"] --> SC["Scenarios"] --> US["User stories"] --> FE["Features"] --> RQ["Requirements"]
   end

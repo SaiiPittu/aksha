@@ -15,7 +15,7 @@ This page is the first link in the product chain. It states the problem, the goa
 | Reviewer of agent output | Answers an agent's questions, approves a send, or reads what an agent produced | Outputs that cite nothing, gaps filled with guesses, approved work quietly replaced | Every claim tied to an excerpt, gaps named as gaps, changes shown as a redline |
 
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph People
     AD["Agent developer"]
     OP["Operator"]
@@ -187,7 +187,7 @@ The catch: the coding agent is a design on paper, not a running agent, so its ve
 | Server | `aksha serve` runs the runtime as the backend: it owns the session API and is the single writer to the event store | Decision 22 | Accepted; the session API in P19 is Proposed |
 | Embedded CLI | The CLI is a client of the server; with no server running, `aksha run` starts the runtime in-process for that one command | Decision 22 | Accepted |
 | Headless mode | A run with nobody watching: it never asks (every ask becomes an allow), every deny rule still holds, and it runs inside a sandbox | Decisions 23 and 26 | Accepted |
-| Web app | A React client of the same session API that renders approval requests, evidence grids, redlines and the Task tree from runtime events | P19 | Proposed; a scaffold runs against a mock server, with no real backend yet |
+| Web app | A React client of the same session API that renders approval requests, evidence grids, redlines and the Task tree from runtime events | P19 | Proposed; built ([#101](https://github.com/SaiiPittu/aksha/pull/101)): `aksha serve --web web/dist` serves it against the real session API |
 
 The rule that holds them together: every interface reaches the runtime through one `dispatch(command)` entry point with idempotent receipts, so the same scenario driven through the CLI and the web app produces the same events apart from request IDs.
 

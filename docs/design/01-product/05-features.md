@@ -103,7 +103,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | F-23 | Cancellation: a durable stop request | Should | P18 | OPS-04 | Stub: the stop command and its honouring; the kill boundary for program-running tools is Later |
 | F-24 | Partial results and finalisation | Must | P24 | FND-03 | The "finalise" answer may be a stub |
 | F-25 | Steering and follow-up input in named lanes | Should | P27 | INV-02 | Stub: the refusal of a message with no lane, and the `amend` lane |
-| F-26 | Supervisor Task, work board and review by job | Later | P15, P16, P05 | OPS-01, OPS-02 | Built on 27 Nov 2026 as a slice, Proposed (ADR-P15 S5, ADR-P16 S4): `extensions/portfolio/`, the patent agent above eight candidates, the 20-candidate `coldwick` world and the `portfolio` eval suite. Measured offline with the fake model: 138 model turns against about 196 for deep work on every candidate (29% fewer), the planted wrong drop caught by the audit (miss rate 1 of 3). Model-written admission inside code bounds (SA-14) and the per-tier budget (SA-16) await the maintainer; the scale path's instructions, criteria changes, incremental board and pivot ranking are not built |
+| F-26 | Supervisor Task, work board and review by job | Later | P15, P16, P05 | OPS-01, OPS-02 | Built on 27 Nov 2026 as a slice, Proposed (ADR-P15 S5, ADR-P16 S4): `extensions/portfolio/`, the patent agent above eight candidates, the 20-candidate `coldwick` world and the `portfolio` eval set. Measured offline with the fake model: 138 model turns against about 196 for deep work on every candidate (29% fewer), the planted wrong drop caught by the audit (miss rate 1 of 3). Model-written admission inside code bounds (SA-14) and the per-tier budget (SA-16) await the maintainer; the scale path's instructions, criteria changes, incremental board and pivot ranking are not built |
 
 ## E. Interfaces and proof: how is an agent added, watched and tested?
 
@@ -112,7 +112,7 @@ Caption: agents reach the runtime through the loader, people through the session
 | F-27 | Session API: one dispatch entry point | Must | P19 | OPS-08, REV-04 | Must for the CLI; the web wiring is Should (F-34) |
 | F-28 | Agent loader and extension API | Must | P20 | DEV-01, DEV-02, DEV-03 | Partly built |
 | F-29 | Tracing over OTLP, two planes | Should | P21 | OPS-06 | Stub: `aksha inspect` ships; the OTLP exporter is an extension |
-| F-30 | Fake models, replay models and eval cases | Must | P22 | DEV-07 | The eval runner is Later |
+| F-30 | Fake models, replay models and eval cases | Must | P22 | DEV-07 | Built: the eval runner runs every eval set in fake model mode; replay and live eval modes are Later |
 | F-31 | Request router | Must | P23 | FND-01, DEV-01 | With a fake classifier in the first milestone |
 
 ## F. Deployment and operations: how is the runtime run?
@@ -121,7 +121,7 @@ Caption: agents reach the runtime through the loader, people through the session
 |---|---|---|---|---|---|
 | F-32 | Server and embedded modes | Must | P19; decision 22 | OPS-08 | `aksha serve` and `aksha run` share one runtime |
 | F-33 | Headless mode: never asks, denies hold | Should | P11, P12, P17; decisions 23 and 26 | OPS-05 | The mode and its record are Should; running it inside a real sandbox needs F-15, which is Later |
-| F-34 | Web app over the session API | Should | P19 | OPS-08, REV-05 | A scaffold runs against a mock server; it adds no runtime behaviour |
+| F-34 | Web app over the session API | Should | P19 | OPS-08, REV-05 | Built ([#101](https://github.com/SaiiPittu/aksha/pull/101)): a React client of the real session API, served by `aksha serve --web`; accounts live in the HTTP layer, not the runtime |
 | F-35 | Run inspector and chain verification | Must | P01, P21 | OPS-07 | `aksha inspect` and `aksha verify` |
 
 ## G. Example agents and fixtures: the proofs
@@ -139,13 +139,13 @@ Caption: agents reach the runtime through the loader, people through the session
 
 | Later or Should feature | If it stays out, what remains | Scenarios that wait for it |
 |---|---|---|
-| F-10 model routing by class | Extraction stays inside rule-based domain tools; the fake generation model runs the loop | 7 |
-| F-15 sandbox | The refusing backend; a program-running tool fails `sandbox_unavailable` | 5 |
-| F-23 cancellation | Ctrl-C is a crash, and the limitation is stated | 9 |
+| F-10 model routing by class | Built: extraction, classification and generation contracts with thresholds and an abstention band, rule-based fakes offline and LiteLLM in live mode | 7 |
+| F-15 sandbox | Built: bubblewrap on Linux and an optional E2B backend (`AKSHA_SANDBOX`); with neither available, a program-running tool fails `sandbox_unavailable` | 5 |
+| F-23 cancellation | Built: `aksha stop`, a first Ctrl-C during an embedded run asks the run to stop and exits 6, and the web app has a Stop run button; the `turn` scope is refused `scope_not_built` | 9 |
 | F-26 supervisor Task and board | Built as a Proposed slice (27 Nov 2026); at eight candidates or fewer selection reads the recommendation table as before | 6 |
 | F-29 OTLP export | `aksha inspect` shows the same facts locally | 10 |
-| F-33 headless mode | Runs are attended; approvals wait for a person | 5 |
-| F-34 web app | The CLI is the interface; the web app runs on its mock server | none |
+| F-33 headless mode | Built: `aksha run --headless` never asks, every deny holds, and the start is refused `sandbox_required` without a sandbox | 5 |
+| F-34 web app | Built ([#101](https://github.com/SaiiPittu/aksha/pull/101)); `aksha serve --web` serves it over the session API beside the CLI | none |
 
 ## Where this stops
 

@@ -571,8 +571,10 @@ def walkthrough(base: Path) -> str:
         "",
         "Invalidation follows what each output actually read. Everything built on C1's "
         "extraction and prior art is rebuilt: the comparison, the recommendation, both forms, "
-        "the packet and its handoff. C2, C3 and C4 and most research outputs read nothing "
-        "that moved, so they are kept as they were.",
+        "the packet and its handoff. C2, C3 and C4 keep their extraction, prior art and "
+        "comparison, and 7 of the 11 research outputs are kept. The recommendations of C2, "
+        "C3 and C4 reopen because each reads the research needs and findings, which moved, "
+        "and their next actions come out unchanged.",
         "",
         f"C1's next action moves from `{rec[0]['next_action']}` to `{rec[1]['next_action']}`. "
         "The recommendation explains why with the new evidence:",

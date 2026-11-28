@@ -4,7 +4,7 @@
 
 ## What runs
 
-The case is `src/aksha/data/suites/change/change-scope-resume-vs-fresh.toml`. The research agent runs as it ships, on its rule-based fake, against the Stillroom world. The person's request names the segment (offices), the agent asks for the geography, and the scripted user answers "EU". When that request run has finished and its outputs are exported, the change step applies the change set `scope-eu-uk`. It adds one dated line to the priorities note the scope Task reads: "the market research covers the European Union and the United Kingdom". The adapter records the source change in the runtime (`ApplySourceChange`), and the runtime opens one rebuild run and re-enters only the work that read the moved note, directly or through lineage. The same episode runs once per arm:
+The eval case is `src/aksha/data/suites/change/change-scope-resume-vs-fresh.toml`, in the `change` eval set. The research agent runs as it ships, on its rule-based fake, against the Stillroom world. The person's request names the segment (offices), the agent asks for the geography, and the scripted user answers "EU". When that request run has finished and its outputs are exported, the change step applies the change set `scope-eu-uk`. It adds one dated line to the priorities note the scope Task reads: "the market research covers the European Union and the United Kingdom". The adapter records the source change in the runtime (`ApplySourceChange`), and the runtime opens one rebuild run and re-enters only the work that read the moved note, directly or through lineage. The same episode runs once per arm:
 
 | Arm | `run.started{reentry}` | Resume policy | Definition hash |
 |---|---|---|---|
@@ -39,7 +39,7 @@ Compared with `fresh`, the `resume` arm takes the same model turns, 2 more tool 
 
 1. **Which mode is better.** Model turns, tool calls and context characters are properties of the rule-based fake. It decides the next call by fixed rules from what its context holds, so a resumed session that already holds a result skips a call by construction. A live model may read a resumed context differently, ignore the change notice, or repeat work.
 2. **Tokens.** The fake reports no usage, so every token count is 0. Context characters are the only size measure here. They are characters sent per model step, summed over the rebuild run, not tokens and not cost.
-3. **Reliability.** Identical rollouts make pass^k uninformative. The live run the case declares (k = 5) is what can separate the arms.
+3. **Reliability.** Identical rollouts make pass^k uninformative. The live run the eval case declares (k = 5) is what can separate the arms.
 4. **Generality.** This is one scenario, one world and one agent. The scope change moves only the reviews' geography filter, so the competitor work is untouched in every arm.
 
 ## Defects the comparison found and fixed
@@ -49,7 +49,7 @@ Running the resume arms on the shipped agent surfaced two defects in resume itse
 1. A read is recorded once per instance, so the note the scope Task read a second time (after a search had already recorded that version) carried no read on its tool result. When the note moved, that result was never masked as stale, and a resumed scope Task went on from the old text. Tool results now also name the records their cited spans quote.
 2. A resumed instance could not cite spans its own session had been shown. Those spans were shown to the session's instance in the earlier run, not to the new run's instance, so every save was refused `span_not_seen` until the stop policy gave up (`evaluation_loop`). The evidence of a resumed instance now counts its session's shown spans; a stale one is still refused.
 
-Before these fixes, both resume arms crashed on this case. After them, both pass.
+Before these fixes, both resume arms crashed on this eval case. After them, both pass.
 
 ## Reproduce
 

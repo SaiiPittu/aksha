@@ -1,13 +1,13 @@
 # Requirements and traceability
 
-*Status: intermediate design as of 26 Nov 2026. Every requirement below is designed. Parts of FR-01 to FR-07, FR-22 and FR-23 have code with tests on a branch in review (P01, P10, P11, P20); nothing else is built. Every threshold in a check is a proposal for the maintainer to accept or change, not a measured value.*
+*Status: intermediate design as of 26 Nov 2026. Every requirement below is designed. The build has moved on since this page was written: as of 27 Nov 2026, 29 of the 30 primitives are built and tested on main (see the [architecture overview](../../architecture/overview.md#the-primitives)), and this page has not been re-checked against the build. Every threshold in a check is a proposal for the maintainer to accept or change, not a measured value.*
 
 This page closes the product chain. Each functional requirement (FR) says what a feature must do; each non-functional requirement (NFR) says how well, with a check that can be measured. Every requirement traces back to the [user stories](04-user-stories.md) and [features](05-features.md) it serves, and the table at the end runs the whole chain from persona to scenario.
 
 ## The frame: how to read a requirement
 
 ```mermaid
-flowchart LR
+flowchart TB
   PE["Persona"] --> ST["User story<br/>(DEV-04)"]
   ST --> FE["Feature<br/>(F-20)"]
   FE --> RQ["Requirement<br/>(FR-26, NFR-02)"]
@@ -195,7 +195,7 @@ Reverse checks, done by hand on 26 Nov 2026:
 
 ## Where this stops
 
-1. Every requirement is designed; none has a passing test except the parts of FR-01 to FR-07, FR-22 and FR-23 on the branch in review.
+1. Every requirement was designed before the build, and this page has not been re-checked against it; [docs/requirements.md](../../requirements.md) maps the assignment requirements Aksha was built to onto code paths and passing tests.
 2. FR-39 records decisions 23 and 26: a headless run keeps every policy-gate check, and only asks become allows. What it does on an `input` interrupt, and whether it may start outside a sandbox, are open (see [architecture](../02-architecture.md), section 11).
 3. NFR-17's line budget waits for the maintainer's number. The design estimates available on 25 Nov 2026 already put the core near 2,000 lines before several optional packages; all such figures are estimates.
 4. The traceability table was checked by hand, not by a script.

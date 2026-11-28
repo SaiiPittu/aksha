@@ -3,9 +3,15 @@
 [![CI](https://github.com/SaiiPittu/aksha/actions/workflows/ci.yml/badge.svg)](https://github.com/SaiiPittu/aksha/actions/workflows/ci.yml)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue)](pyproject.toml)
 
-Aksha is a headless agent harness in Python. One shared runtime runs many agents, and each agent is defined as data in its own module. It ships with two agents, research and patent, which work on a synthetic venture that builds camera-free occupancy sensors (the `stillroom` world). Every fact either agent produces lands in one append-only, hash-chained event store, and every saved output records the versioned reads it was built from. When an input changes, only the work that depends on it is rebuilt.
+Aksha is a headless agent harness in Python. One shared runtime runs many agents, and each agent is defined as data in its own module. It ships with two built agents, research and patent, which work on a synthetic venture that builds camera-free occupancy sensors (the `stillroom` world). Every fact either agent produces lands in one append-only, hash-chained event store, and every saved output records the versioned reads it was built from. When an input changes, only the work that depends on it is rebuilt.
 
-[Requirements and evidence](docs/requirements.md) · [Architecture](docs/architecture/README.md) · [Agents](docs/agents/research.md) · [Add an agent](docs/agents/authoring.md) · [Examples](docs/examples.md) · [Limitations](docs/limitations.md)
+[Assignment requirements and evidence](docs/requirements.md) · [Architecture](docs/architecture/README.md) · [Agents](docs/agents/research.md) · [Add an agent](docs/agents/authoring.md) · [Examples](docs/examples.md) · [Limitations](docs/limitations.md)
+
+## Three agents, one runtime (the rule of three)
+
+The runtime follows one rule: no abstraction enters it until three different agents fit that abstraction with no agent-specific code in the runtime. Two document agents alone could pass with a design that is only a document pipeline, so the third agent is chosen to work differently. The three are the Research Agent (built), the Patent Agent (built) and a contrast coding agent (designed, not built). The coding agent would edit a Git repository in a sandbox, run its tests and push a branch after approval. It presses on what the two document agents do not: long contexts, a shell in a sandbox, a completion check that runs the tests, and cancellation mid-edit.
+
+On 25 Nov 2026 each of the 22 original primitive decision records (ADRs) was checked against all three agents. The coding agent is a design, not running code, so its verdicts come from reading interfaces and are the weakest evidence of the three. The running check is narrower: `test_third_agent_runtime_hash_unchanged` in [tests/architecture/test_extension_boundary.py](tests/architecture/test_extension_boundary.py) loads a third, toy agent and checks that every Python file under `src/aksha/runtime` hashes the same before and after. What each agent presses on is in [docs/design/rationale.md](docs/design/rationale.md), and the verdict counts per agent are in [section 7 of the problem and goals](docs/design/01-product/01-problem-and-goals.md#7-the-rule-of-three).
 
 ## See it work in under 2 minutes
 
@@ -52,9 +58,9 @@ The whole output, act by act, is in [examples/change-and-recovery.md](examples/c
 make venv && make check   # lint, type check and every test, offline; about 6 minutes on 8 cores
 ```
 
-## Requirements at a glance
+## Assignment requirements at a glance
 
-[docs/requirements.md](docs/requirements.md) is the one page to read. It maps 97 requirements to code paths, pytest node IDs and commands, and a test fails if any named path or test stops existing. Its summary as of 28 Nov 2026:
+[docs/requirements.md](docs/requirements.md) is the one page to read. It maps the 97 assignment requirements to code paths, pytest node IDs and commands, and a test fails if any named path or test stops existing. Its summary as of 28 Nov 2026:
 
 - **91 met, 6 partly met.** Every row that is not fully met says why, at the top of the page.
 - **One interface, routed.** The command line, an HTTP server, a web app and a terminal chat all drive one session API. A named agent skips the router; an unclear request gets a route question.
@@ -63,7 +69,7 @@ make venv && make check   # lint, type check and every test, offline; about 6 mi
 - **Research reused, never as novelty (R-36).** Each patent recommendation reads the research needs and findings by artifact ID and version, cites them for business importance only, and is refused if it names them as novelty or prior-art evidence.
 - **Partly met.** The change demo re-dates an existing contributor rather than adding a new one (R-83), and the demo restarts during the send, not before the rebuild (R-84). Held-out results are R-64.
 
-## Two agents on one runtime
+## The two built agents
 
 | | Research | Patent |
 |---|---|---|
@@ -94,7 +100,7 @@ AGENT = Agent(
 )
 ```
 
-Adding one never edits the runtime. `test_third_agent_runtime_hash_unchanged` in [tests/architecture/test_extension_boundary.py](tests/architecture/test_extension_boundary.py) loads `toy` and checks that every file under `src/aksha/runtime` hashes the same before and after. A fixture agent from outside `src` runs end to end in `tests/integration/test_cli.py`. The steps are in [docs/agents/authoring.md](docs/agents/authoring.md).
+Adding one never edits the runtime. `test_third_agent_runtime_hash_unchanged` in [tests/architecture/test_extension_boundary.py](tests/architecture/test_extension_boundary.py) loads `toy` and checks that every Python file under `src/aksha/runtime` hashes the same before and after. A fixture agent from outside `src` runs end to end in `tests/integration/test_cli.py`. The steps are in [docs/agents/authoring.md](docs/agents/authoring.md).
 
 ## Talk to it
 
@@ -122,7 +128,7 @@ The same conversation runs in the terminal with `aksha chat --agent research --i
 ---
 title: Every client goes through one session API, and every tool call passes the policy gate before it can touch the record
 ---
-flowchart LR
+flowchart TB
   CLI["aksha CLI<br/>interfaces/cli"] --> SES
   HTTP["HTTP server, web app, chat<br/>interfaces/http, interfaces/tui"] --> SES
   SES["Session API<br/>runtime/session"] --> ROUTER["Router<br/>runtime/router"]
@@ -147,9 +153,9 @@ The layered pages start at [docs/architecture/README.md](docs/architecture/READM
 ## Tests and evals
 
 - **Tests.** 3,720 collected offline: unit, contract, integration, architecture and agent tests (`make test`). The web app has its own Vitest and Playwright tests in `web/`.
-- **Evals.** `aksha eval list` and `aksha eval run <suite>` grade each case from the episode's event store, never from what the agent says it did ([docs/evals/README.md](docs/evals/README.md)).
-- **Core suites.** research, patent, scripted, change, tilldew, cindral and portfolio pass every case in fake model mode.
-- **Held-out suites.** Six worlds were written without sight of the agent code. The research agent passes 25 of 26 of their cases and the patent agent 17 of 24. The table per suite is in [docs/status.md](docs/status.md#results-on-the-held-out-worlds).
+- **Evals.** `aksha eval list` and `aksha eval run <suite>` run an eval set (`suite` in the code) and grade each eval case from the episode's event store (one episode is one trial of one eval case), never from what the agent says it did ([docs/evals/README.md](docs/evals/README.md)).
+- **Development eval sets.** research, patent, scripted, change, tilldew, cindral and portfolio, over the worlds the agents were built on, pass every eval case in fake model mode.
+- **Held-out eval sets.** Six worlds were written without sight of the agent code, each with its own eval set. The three patent worlds were read later, while the patent reader was made general, so they no longer count as held out ([limitations item 19](docs/limitations.md)). The research agent passes 25 of 26 of their eval cases and the patent agent 17 of 24. The table per eval set is in [docs/status.md](docs/status.md#results-on-the-held-out-worlds).
 
 These are fake-model numbers. They test the harness and the offline rules, not a model.
 
@@ -161,14 +167,14 @@ Offline is the default. `AKSHA_MODE=live` calls any provider through LiteLLM, or
 
 | Page | What it holds |
 |---|---|
-| [Requirements and evidence](docs/requirements.md) | Every requirement, how it is met, and the paths, tests and commands that show it |
+| [Assignment requirements and evidence](docs/requirements.md) | Every assignment requirement, how it is met, and the paths, tests and commands that show it |
 | [Architecture](docs/architecture/README.md) | Layered pages from context to recovery, the data model and the trust boundary |
 | [Agents](docs/agents/research.md) | The [research](docs/agents/research.md) and [patent](docs/agents/patent.md) agents, [tools and schemas](docs/agents/tools-and-schemas.md), [adding an agent](docs/agents/authoring.md) |
 | [Examples](docs/examples.md) | Conversations, every saved output and the change-and-recovery demo |
 | [Quick start](docs/quickstart.md) and [interfaces](docs/interfaces.md) | Every command with its output; the session API, server, CLI and tracing |
-| [Status](docs/status.md) | What is built, the eval results per suite and the roadmap |
+| [Status](docs/status.md) | What is built, the eval results per eval set and the roadmap |
 | [Live mode](docs/live-mode.md) | Settings for real models and what has run live |
-| [Evals](docs/evals/README.md) and [design](docs/design/README.md) | Writing cases; the primitives, decision records and decisions log |
+| [Evals](docs/evals/README.md) and [design](docs/design/README.md) | Writing eval cases; the primitives, decision records and decisions log |
 
 ## Known limitations and what comes next
 
@@ -179,7 +185,7 @@ The top four, as of 28 Nov 2026. The full list is in [docs/limitations.md](docs/
 3. **A headless run sends without approval.** `aksha run --headless` is opt-in, recorded on `run.started` and needs a sandbox, but it turns the approval route into the outbox route ([trust boundary](docs/architecture/trust-boundary.md)).
 4. **Erasure is open.** `forget` hides a memory from recall but erases nothing from the append-only store (P30).
 
-Next: a whole task and the evals on a real model, a real system of record behind the outbox, and a container sandbox backend. The roadmap with each item's status is in [docs/status.md](docs/status.md#roadmap).
+Next: a whole Patent Agent task and the evals on a real model, a real system of record behind the outbox, and a container sandbox backend. The roadmap with each item's status is in [docs/status.md](docs/status.md#roadmap).
 
 ## Development
 
