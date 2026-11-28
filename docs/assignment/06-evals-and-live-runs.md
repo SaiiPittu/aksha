@@ -191,7 +191,7 @@ The replay rebuilds the same 388 events, with the same types, Task instances, st
 
 Run (c) also shows a harness guarantee holding under a real model: the model's wording did not move the recommendation, because the rule table is code.
 
-### The per-key bug, and what is being fixed
+### The per-key bug, and how it was fixed
 
 A Task is one node of an agent's task tree, and a keyed Task runs once per key, such as once per company (`evidence[noctra]`) or once per candidate (`candidate[C2]/extract`). The scheduler entered each instance with its key, but nothing in the instance's model request said which key it was: the prompt says "For this one company" and the context shows the whole competitor list. The model then did one of three things: asked which company, profiled another one, or saved under another key. When an instance tries to finish without passing its completion check, the stop policy vetoes the finish. The research `evidence` instances were allowed one veto at the time of that run (`max_finish_vetoes=1`), so the first one failed them with no feedback turn; the patent `extract` instances have the default of three, and each failed at its third (events 309, 355 and 393 in run (c)).
 
