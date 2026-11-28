@@ -12,8 +12,8 @@ dynamic = ["version"]
 description = "A headless agent harness that thinks fast and slow: an event-sourced runtime with durable pauses, a policy gate and crash-safe effects."
 readme = "README.md"
 requires-python = ">=3.12"
-# license = "<SPDX id>" and license-files = ["LICENSE"] go here once the maintainer picks a
-# license (docs/releasing.md); the release workflow refuses to build without them.
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["agents", "agent-harness", "llm", "event-sourcing", "durable-execution", "evals"]
 classifiers = [
     "Development Status :: 3 - Alpha",

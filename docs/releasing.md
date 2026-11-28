@@ -26,7 +26,7 @@ This builds the sdist and the wheel into `dist/` (`uv build`), runs `twine check
 
 The workflow `.github/workflows/release.yml` cannot publish until these are done. Each is a decision or an account action for the maintainer; no agent and no script does them.
 
-1. **Choose a license.** Add a `LICENSE` file at the repository root, and in `pyproject.toml` under `[project]` add `license = "<SPDX identifier>"` and `license-files = ["LICENSE"]`. Do not add a `License ::` classifier; the SPDX string replaces it. The release workflow's first step refuses to build without both.
+1. **Choose a license.** Done on 28 Nov 2026: MIT (`LICENSE`, and `license = "MIT"` with `license-files = ["LICENSE"]` in `pyproject.toml`). There is no `License ::` classifier; the SPDX string replaces it.
 2. **Register pending trusted publishers.** On PyPI (pypi.org, Account settings, Publishing, "Add a new pending publisher") and again on TestPyPI (test.pypi.org), add a GitHub publisher with:
 
    | Field | PyPI | TestPyPI |

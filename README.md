@@ -194,4 +194,4 @@ The distribution is `aksha-harness`; the command and the import are `aksha`. Nev
 
 ## License
 
-No license has been chosen yet. Until one is, the code is published for reading, and no license is granted.
+MIT. See [LICENSE](LICENSE).
