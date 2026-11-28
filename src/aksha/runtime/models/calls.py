@@ -48,13 +48,18 @@ answer a failed attempt paid for (a failed step records no calls) is booked, usa
 by the attempt that completes, and every later use records no usage. So the run's spend
 counts each answer once, the step's ``model_calls`` summary counts every decision the body
 used, and a fake-mode run, whose answers spend nothing, writes the same bytes with or without
-the memo. Live and replay ask each request once, so a new recording replays exactly. The memo
+the memo. An attempt abandoned at its deadline (``execution.executor`` item 4) still runs on
+its worker thread beside the retry, so only the attempt the executor keeps writes to the memo:
+past its deadline an attempt remembers no answer and books nothing, the first answer stored
+for a request wins, and the memo is read and written under :attr:`FastAnswers.lock`. Live and
+replay ask each request once, so a new recording replays exactly. The memo
 is held in memory: a restarted process asks again, and the session forgets an ended run's
 memo.
 """
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable, MutableMapping, Sequence
 from dataclasses import replace
 from typing import Any
@@ -63,6 +68,7 @@ from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.errors import AkshaError
 from aksha.runtime.execution.errors import TransientStepError
+from aksha.runtime.execution.types import Deadline
 from aksha.runtime.grounding.types import CitationSpan, ReturnedText, SpanDraft
 from aksha.runtime.models.codec import (
     classification_result_json,
@@ -136,28 +142,35 @@ class FastAnswers:
     def __init__(self) -> None:
         """No run has been answered yet."""
         self._runs: dict[tuple[str, str], dict[MemoKey, Remembered]] = {}
+        self.lock = threading.Lock()
+        """Held around every read and write of a memo: an attempt abandoned at its deadline
+        (``execution.executor`` item 4) still runs on its worker thread beside the retry."""
 
     def of_run(self, owner: str, run: str) -> MutableMapping[MemoKey, Remembered]:
         """The memo of ``owner``'s ``run``: created empty on first use."""
-        return self._runs.setdefault((owner, run), {})
+        with self.lock:
+            return self._runs.setdefault((owner, run), {})
 
     def book(self, owner: str, run: str, keys: Iterable[MemoKey]) -> None:
         """Mark ``keys`` of ``run`` as booked: a completed step has recorded their usage."""
-        memo = self._runs.get((owner, run), {})
-        for k in keys:
-            if k in memo:
-                judged, entry, _ = memo[k]
-                memo[k] = (judged, entry, True)
+        with self.lock:
+            memo = self._runs.get((owner, run), {})
+            for k in keys:
+                if k in memo:
+                    judged, entry, _ = memo[k]
+                    memo[k] = (judged, entry, True)
 
     def forget(self, owner: str, run: str) -> None:
         """Drop the memo of ``owner``'s ``run`` (it ended, so nothing will read it again)."""
-        self._runs.pop((owner, run), None)
+        with self.lock:
+            self._runs.pop((owner, run), None)
 
     def retain(self, owner: str, runs: Iterable[str]) -> None:
         """Drop every memo of ``owner``'s runs that are not in ``runs`` (the open ones)."""
         keep = set(runs)
-        for o, r in [k for k in self._runs if k[0] == owner and k[1] not in keep]:
-            self.forget(o, r)
+        with self.lock:
+            for k in [k for k in self._runs if k[0] == owner and k[1] not in keep]:
+                del self._runs[k]
 
 
 class ToolModelCalls:
@@ -172,14 +185,21 @@ class ToolModelCalls:
         agent: str = "",
         code_version: str = "",
         answers: MutableMapping[MemoKey, Remembered] | None = None,
+        lock: threading.Lock | None = None,
+        deadline: Deadline | None = None,
     ) -> None:
         """Ask only ``allowed`` aliases of ``table``, for ``tool``'s body (of ``agent``).
 
         ``code_version`` is the agent definition hash a call with the tool's own schema
         depends on (``models.definitions.code_record``); empty, it records no such read.
-        ``answers`` is the run's memo (:meth:`FastAnswers.of_run`); None asks every time.
+        ``answers`` is the run's memo (:meth:`FastAnswers.of_run`), read and written under
+        ``lock`` (:attr:`FastAnswers.lock`); None asks every time. ``deadline`` is the
+        attempt's: once it has passed the executor drops this attempt's output, so an answer
+        it gets after that is not remembered.
         """
         self._answers = answers
+        self._lock = lock or threading.Lock()
+        self._deadline = deadline
         self._table = table
         self._allowed = allowed
         self._tool = tool
@@ -325,8 +345,12 @@ class ToolModelCalls:
         thresholds: str = "",
     ) -> tuple[Judgement, ...]:
         key = (alias, request_hash, thresholds)
-        if self._answers is not None and key in self._answers:
-            judged, held, booked = self._answers[key]
+        remembered: Remembered | None = None
+        if self._answers is not None:
+            with self._lock:
+                remembered = self._answers.get(key)
+        if remembered is not None:
+            judged, held, booked = remembered
             if booked or key in self.booked_here:
                 self.calls.append(_spent_nothing(held))
             else:
@@ -383,10 +407,18 @@ class ToolModelCalls:
             "exhausted": exhausted,
             "action": action,
         }
+        if self._answers is not None and not (self._deadline and self._deadline.expired()):
+            # The first answer stored wins: an abandoned attempt that finishes a call after
+            # the retry stored it neither replaces the retry's answer nor unbooks it.
+            with self._lock:
+                prior = self._answers.setdefault(key, (judged, made, False))
+            if prior[1] is not made:  # another attempt stored it first: use its answer
+                judged, held, booked = prior
+                made = _spent_nothing(held) if booked else held
+                exhausted, action = held["exhausted"], held["action"]
+            if prior[1] is made or not prior[2]:
+                self.booked_here.add(key)
         self.calls.append(made)
-        if self._answers is not None:
-            self._answers[key] = (judged, made, False)
-            self.booked_here.add(key)
         if exhausted and action == "fail":
             raise ModelCallFailed(message=f"{alias}: no answer accepted for {exhausted}")
         return judged

@@ -252,9 +252,11 @@ def run_position(
     hashed = args_hash(call.arguments)
     cap = setup.policy().result_cap_chars
 
-    def record(work: Callable[[], StepOutput], unit: ExecUnit | None = None) -> PositionOutcome:
+    def record(
+        work: Callable[[Deadline], StepOutput], unit: ExecUnit | None = None
+    ) -> PositionOutcome:
         def timed(deadline: Deadline) -> StepOutput:
-            return work()
+            return work(deadline)
 
         result = executor.step(step, "tool", call.name, hashed, timed, policy, extra=extra,
                                unit=unit)  # fmt: skip
@@ -283,7 +285,9 @@ def run_position(
 
         guarded = spec.edits is not None and guards_edits(run_mode(view, ref.run))
 
-        def dispatched(body: Callable[[ToolContext], ToolOutcome]) -> StepOutput:
+        def dispatched(
+            body: Callable[[ToolContext], ToolOutcome], deadline: Deadline
+        ) -> StepOutput:
             # An edit is checked first, inside the step, so a resumed step keeps its answer.
             if guarded and spec.edits is not None:
                 refused = edit_refusal(setup.view(), setup.reader, tool=spec.name,
@@ -303,7 +307,8 @@ def run_position(
                 exe = exec_for(setup, spec, str(step), attempt, unit, session)
             models = ToolModelCalls(setup.table, spec.model_aliases, spec.name, setup.owner,
                                     setup.agent.name, setup.definition_hash or "",
-                                    setup.answers.of_run(setup.owner, ref.run))  # fmt: skip
+                                    setup.answers.of_run(setup.owner, ref.run),
+                                    setup.answers.lock, deadline)  # fmt: skip
             outcome = body(ctx(reader, http, exe, dates, models))
             extra = (*dates.reads, *models.reads)  # definition reads (ADR-P05 M2) after dates
             out = _dispatched(setup, ref, step, spec, outcome, reader.returned, extra)
@@ -311,23 +316,26 @@ def run_position(
                 out = replace(out, value={**(out.value or {}), MODEL_CALLS_FIELD: models.records})
             done = with_records(out, http, exe)
             # The step completes with the usage of the answers it was the first to use; a
-            # later step records them with none (models.calls, FastAnswers).
-            setup.answers.book(setup.owner, ref.run, models.booked_here)
+            # later step records them with none (models.calls, FastAnswers). An attempt past
+            # its deadline books nothing: the executor drops its output, so no step.completed
+            # records that usage, and the retry books it instead.
+            if not deadline.expired():
+                setup.answers.book(setup.owner, ref.run, models.booked_here)
             return done
 
-        return record(lambda: dispatched(lambda c: call_body(decl, c, args)), unit)
+        return record(lambda d: dispatched(lambda c: call_body(decl, c, args), d), unit)
     if decision.route == "reserved" and call.name == "finish":
         done = ToolOutcome(Ok({"finish": "proposed"}))
-        return record(lambda: _shown(done, cap, signal="finish"))
+        return record(lambda _: _shown(done, cap, signal="finish"))
     if decision.route == "reserved":
-        return record(lambda: _asked(setup, ref, step, call.arguments, cap))
+        return record(lambda _: _asked(setup, ref, step, call.arguments, cap))
     if decision.route == "outbox" and spec.external is not None:
         result = executor.effect_step(step, call.name, call.arguments, spec.external, extra=extra)
         return _outcome(n, call.name, result)
     if decision.route == "approval":
         return _approval(setup, executor, ref, step, call, spec, view, started, record)
     msg = f"{call.name}: the {decision.route} route is not built in the agent loop yet"
-    return record(lambda: _shown(ToolOutcome(Err(ROUTE_NOT_BUILT, msg)), cap))
+    return record(lambda _: _shown(ToolOutcome(Err(ROUTE_NOT_BUILT, msg)), cap))
 
 
 def _dispatched(
@@ -487,7 +495,7 @@ def _approval(
     spec: ToolSpec,
     view: LogView,
     started: Mapping[str, Any],
-    record: Callable[[Callable[[], StepOutput]], PositionOutcome],
+    record: Callable[[Callable[[Deadline], StepOutput]], PositionOutcome],
 ) -> PositionOutcome:
     """Run an approved action, or ask a person to approve this exact one (ADR-P17 D5, D6)."""
     cap = setup.policy().result_cap_chars
@@ -497,7 +505,7 @@ def _approval(
     definition = definition or UNRECORDED_DEFINITION
     body = build_body(view, tool, call.arguments, definition_hash=definition)
     if isinstance(body, Refusal):
-        return record(lambda: _shown(ToolOutcome(Err(body.code, body.message)), cap))
+        return record(lambda _: _shown(ToolOutcome(Err(body.code, body.message)), cap))
     signature = approval_signature(body)
     granted = next(
         (a for a in approvals(view).values() if a.state == "granted" and a.signature == signature),
@@ -511,7 +519,7 @@ def _approval(
         )  # fmt: skip
         return _outcome(call.position, call.name, result)
 
-    def requested() -> StepOutput:
+    def requested(_: Deadline) -> StepOutput:
         now = setup.view()
         ident = f"A-{highest(now.events, 'A') + 1:04d}"
         facts = request_approval(now, tool, call.arguments, ident, definition_hash=definition,
