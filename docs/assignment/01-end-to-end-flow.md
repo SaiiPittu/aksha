@@ -86,7 +86,7 @@ The research agent is a definition, not code the runtime calls ([`src/aksha/agen
 
 1. `scope`: settle segment, geography and boundary; may ask a question.
 2. `discover`: needs `scope`; finds and resolves the competitors; writes `research.competitors`.
-3. `evidence`: one instance per company key in `research.competitors`, for example `evidence[c01-kelvra-systems]`; writes `research.profile/<company>`. A blocked company is tolerated (`on_child_blocked="partial"`), and the first refused finish ends the instance (`max_finish_vetoes=1`).
+3. `evidence`: one instance per company key in `research.competitors`, for example `evidence[c01-kelvra-systems]`; writes `research.profile/<company>`. A blocked company is tolerated (`on_child_blocked="partial"`), and the third refused finish ends the instance (the default).
 4. `voice`: needs `scope`; writes `research.needs` from the reviews.
 5. `report`: needs `evidence` and `voice`; writes the matrix, findings and proposed tests.
 
@@ -219,7 +219,7 @@ The demo printed `recovery asked the mailbox by key 1 time, sent 0 times` and `m
 Everything above holds whatever the model replies, because the fakes and a real model go through the same gate, executor, checks and stop policy. What a real model achieves inside those rules is a separate result, reported in full on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model). Three points from those runs bear on this page's stages:
 
 1. A failed check fed back and then passed (stage 4). In run (b), interactive research, `report`'s first finish was refused by `report_done`, whose message said the proposed tests needed `threshold.status` set to `proposal` (seq 306). Stop policy turned it into `continue` with that message (seq 307), the model saved `research.tests@v2`, and the next finish passed (seq 322).
-2. The stop-veto limit ended work instead of accepting it (stage 4). In run (b), `evidence[corvane-group]` replied with text only, asking which company to profile (seq 134). That reply was a finish, `profile_done` refused it (seq 135), and because `evidence` sets `max_finish_vetoes=1`, the instance failed on that first refused finish with no feedback turn (seq 138). The cause is a harness bug, being fixed: a keyed instance is never told its key.
+2. The stop-veto limit ended work instead of accepting it (stage 4). In run (b), `evidence[corvane-group]` replied with text only, asking which company to profile (seq 134). That reply was a finish, `profile_done` refused it (seq 135), and because `evidence` set `max_finish_vetoes=1` at the time of that run, the instance failed on that first refused finish with no feedback turn (seq 138). The cause is a harness bug, being fixed: a keyed instance is never told its key.
 3. The run outcome named its gaps. Run (b) ended `partial`, each `evidence[...]` listed as `unverified` (seq 323), and run (c), interactive patent, ended `blocked`, naming `candidate[C2]/extract`, `candidate[C3]/extract` and `candidate[C4]/extract` (seq 526). Neither wrote a guessed answer.
 
 ## Run it yourself

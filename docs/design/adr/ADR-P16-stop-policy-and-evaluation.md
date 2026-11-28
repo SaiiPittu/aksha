@@ -106,7 +106,7 @@ A live patent run on a general model ended `blocked` with correct work saved. `r
 
 ### Amendment: no per-Task turn limit by default (28 Nov 2026, decision 42, S6)
 
-ADR-P15 S8 makes a Task's turn limit None unless the agent declares one (decision 42: long-running tasks, as coding agent harnesses run them). The Task policy's `limit` skips the turn limit for such a Task and goes straight to the stop-veto limit; `limit_reached` skips the agent-wide one the same way. Nothing else in D3 changes: the budget is still applied first and is now the only automatic bound on a Task that keeps taking turns, the stop-veto limit (`max_finish_vetoes`, 3 refused finishes) still bites on a finish whose check failed, and S5 (a limit ends a leaf as a finish would) applies whenever a Task does declare a limit. A `stop.decided` names `limit: turn_limit` only for a declared limit.
+ADR-P15 S8 makes a Task's turn limit None unless the agent declares one (decision 42: long-running tasks, as coding agent harnesses run them). The Task policy's `limit` skips the turn limit for such a Task and goes straight to the stop-veto limit; the agent-wide `Limits.turn_limit` is not read per instance (limitations item 24): `limit_reached` is called for the run with no instance, so only the restart limit is read there. Nothing else in D3 changes: the budget is still applied first and is now the only automatic bound on a Task that keeps taking turns, the stop-veto limit (`max_finish_vetoes`, 3 refused finishes) still bites on a finish whose check failed, and S5 (a limit ends a leaf as a finish would) applies whenever a Task does declare a limit. A `stop.decided` names `limit: turn_limit` only for a declared limit.
 
 ## Alternatives considered
 
