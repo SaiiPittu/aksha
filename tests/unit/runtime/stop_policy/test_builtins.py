@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from aksha.runtime.budgets.limits import vetoes_since_entry
+from aksha.runtime.budgets.limits import limit_reached, vetoes_since_entry
+from aksha.runtime.budgets.types import Limits
 from aksha.runtime.policy.types import StopPolicyNarrowing
 from aksha.runtime.stop_policy.builtins import (
     ForcedToolPolicy,
@@ -227,3 +228,19 @@ def test_the_context_puts_a_recitation_after_the_request_under_its_fence() -> No
     text = recitation("WORK BOARD {}")
     assert text.splitlines() == [RECITATION, "WORK BOARD {}"]
     assert "no instructions" in RECITATION
+
+
+def test_limit_reached_counts_vetoes_as_the_task_policy_does() -> None:
+    # The budgets reducer and TaskPolicy.limit agree on which refusal fails the instance.
+    for allowed in (1, 3):
+        task = Task("fix", writes=("patch",), done=has("patch"), max_finish_vetoes=allowed)
+        tree, log = compile_tree(AGENT, (task,)), _log()
+        decide(log, tree, StopCandidate(RUN, "next"))
+        limits = Limits(turn_limit=99, stop_veto_limit=allowed)
+        for turn in range(1, allowed + 1):
+            hit = any(
+                h.limit == "stop_veto_limit" for h in limit_reached(log.view(), RUN, "fix", limits)
+            )
+            d = decide(log, tree, _finish(turn))
+            assert hit == (d.limit == "stop_veto_limit"), (allowed, turn)
+            assert hit == (turn == allowed), (allowed, turn)

@@ -24,10 +24,11 @@ from aksha.adapters.storage.sqlite import open_store
 from aksha.agents.patent.agent import AGENT as PATENT
 from aksha.agents.research.agent import AGENT as RESEARCH
 from aksha.runtime.artifacts.store import ArtifactStore
-from aksha.runtime.artifacts.types import ArtifactKind
+from aksha.runtime.artifacts.types import ArtifactKind, SaveRequest, WriterId
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution.executor import StepExecutor
+from aksha.runtime.invalidation.view import invalidation_view
 from aksha.runtime.loop.drive import drive
 from aksha.runtime.loop.types import LoopSetup
 from aksha.runtime.models.routing import bind_aliases
@@ -61,7 +62,8 @@ def plan_saved(view: TaskView) -> CheckResult:
     return CheckResult(view.latest("plan") is not None, "save the plan")
 
 
-def toy() -> Agent:
+def toy(reads: tuple[str, ...] = ("plan",)) -> Agent:
+    """The toy agent; ``reads`` are ``work``'s declared reads (none: only the key notice)."""
     return Agent(
         name=NAME,
         purpose="Plan a few items, then work on each one.",
@@ -75,7 +77,7 @@ def toy() -> Agent:
                 "work",
                 per=artifact_keys("plan", "items"),
                 needs=("plan",),
-                reads=("plan",),
+                reads=reads,
                 tools=("save_artifact",),
                 writes=("result",),
                 done=result_saved,
@@ -112,13 +114,8 @@ def model_rule(request: GenerationRequest) -> GenerationResult:
     return tools_reply(save, call("finish", summary="saved"))
 
 
-@pytest.fixture
-def ran(tmp_path: Path) -> Iterator[tuple[Recorder, list[Event]]]:
-    clock = FakeClock(START)
-    store = open_store(tmp_path / "aksha.sqlite", clock, writer=True)
-    agent = toy()
-    model = Recorder(rule=model_rule)
-    setup = LoopSetup(
+def _setup(store: Any, agent: Agent, model: Recorder) -> LoopSetup:
+    return LoopSetup(
         store=store,
         owner=OWNER,
         agent=agent,
@@ -131,10 +128,21 @@ def ran(tmp_path: Path) -> Iterator[tuple[Recorder, list[Event]]]:
         definition_hash=DEFINITION,
         briefs={"work": WORK_BRIEF},
     )
+
+
+def _drive(store: Any, clock: FakeClock, setup: LoopSetup) -> None:
     started = {"agent": NAME, "cause": "request", "definition_hash": DEFINITION, "budget": BUDGET}
     store.append(OWNER, "U1", (NewEvent("run.started", started, run=RUN),))
     result = drive(setup, StepExecutor(store, OWNER, clock), RUN)
     assert result.state == "ended"
+
+
+@pytest.fixture
+def ran(tmp_path: Path) -> Iterator[tuple[Recorder, list[Event]]]:
+    clock = FakeClock(START)
+    store = open_store(tmp_path / "aksha.sqlite", clock, writer=True)
+    model = Recorder(rule=model_rule)
+    _drive(store, clock, _setup(store, toy(), model))
     yield model, list(load_view(store, OWNER).events)
     store.close()
 
@@ -199,3 +207,66 @@ def test_every_bundled_leaf_task_gives_a_refused_finish_back_to_its_model(agent:
         t.id: t.max_finish_vetoes for t in _leaves(agent.tasks) if t.max_finish_vetoes < 2
     }
     assert low == {}
+
+
+def test_a_keyed_instance_reads_only_its_own_entry_of_the_key_source(tmp_path: Path) -> None:
+    # ``work`` declares no read of ``plan`` here: the key notice's entry is its only read of
+    # it, and that read names the entry, so a plan that changes only beta's entry leaves
+    # alpha's result current and reopens beta's.
+    clock = FakeClock(START)
+    store = open_store(tmp_path / "aksha.sqlite", clock, writer=True)
+    model = Recorder(rule=model_rule)
+    setup = _setup(store, toy(reads=()), model)
+    _drive(store, clock, setup)
+    view = load_view(store, OWNER)
+    read = next(
+        e.payload for e in view.events if e.type == "read.recorded" and e.instance == "work[beta]"
+    )
+    assert read["input"]["path"] == "/items/1"
+    changed = [ITEMS[0], {**ITEMS[1], "title": "The second, renamed"}]
+    assert setup.artifacts is not None
+    saved = setup.artifacts.save(
+        view,
+        SaveRequest("plan", None, {"items": changed}),
+        writer=WriterId(NAME, "plan", None),
+        run=RUN,
+        instance="plan",
+        step=f"{RUN}/plan/t09",
+        writes=(f"{NAME}.plan",),
+    )
+    store.append(OWNER, "U2", saved.events, saved.rows)
+    states = invalidation_view(load_view(store, OWNER))
+    # alpha's entry is unchanged in v2: an equal entry, so its result stays current.
+    assert states.state(f"{NAME}.result/alpha@v1").freshness == "current_by_cutoff"
+    assert states.state(f"{NAME}.result/beta@v1").freshness == "invalidated"
+    store.close()
+
+
+def test_a_keyed_instance_may_not_save_under_a_sibling_s_key(tmp_path: Path) -> None:
+    # work[alpha] first tries beta's slot: refused, so the slot stays free for work[beta].
+    def wrong_first(request: GenerationRequest) -> GenerationResult:
+        if "/work[alpha]/" in request.step_id and "key_not_own" not in text_of(request):
+            save = call("save_artifact", kind="result", key="beta", content={"ok": False})
+            return tools_reply(save)
+        return model_rule(request)
+
+    clock = FakeClock(START)
+    store = open_store(tmp_path / "aksha.sqlite", clock, writer=True)
+    model = Recorder(rule=wrong_first)
+    _drive(store, clock, _setup(store, toy(), model))
+    events = list(load_view(store, OWNER).events)
+    refused = [
+        e
+        for e in events
+        if e.type == "step.completed" and e.instance == "work[alpha]" and e.payload.get("code")
+    ]
+    assert [e.payload["code"] for e in refused][:1] == ["key_not_own"]
+    saved = sorted(
+        (str(e.payload["key"]), str(e.payload["writer"]["key"]))
+        for e in events
+        if e.type == "artifact.saved" and e.payload["kind"] == "toy.result"
+    )
+    assert saved == [("alpha", "alpha"), ("beta", "beta")]
+    (ended,) = (e for e in events if e.type == "run.ended")
+    assert ended.payload["outcome"] == "complete"
+    store.close()

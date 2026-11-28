@@ -41,11 +41,12 @@ def test_turn_limit_fail_at_11() -> None:
     assert limit_reached(log.view(), RUN, "b", Limits()) == ()
 
 
-def test_three_vetoes_then_blocked() -> None:
+def test_the_third_refusal_is_blocked() -> None:
     log = Log()
     log.entered()
-    for _ in range(2):
-        log.decided("continue", candidate="finish")
+    # Each check asks about the next refusal: two are given back, the third fails.
+    assert limit_reached(log.view(), RUN, "a", Limits(turn_limit=99)) == ()
+    log.decided("continue", candidate="finish")
     assert limit_reached(log.view(), RUN, "a", Limits(turn_limit=99)) == ()
     log.decided("continue", candidate="finish")
     hits = limit_reached(log.view(), RUN, "a", Limits(turn_limit=99))

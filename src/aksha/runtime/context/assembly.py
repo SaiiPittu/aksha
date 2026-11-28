@@ -41,6 +41,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from aksha.runtime.artifacts.hashing import entry_hash
 from aksha.runtime.artifacts.lineage import reads_to_record
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef
@@ -90,7 +91,7 @@ from aksha.runtime.invalidation.view import ReadChecker
 from aksha.runtime.models.types import GenerationRequest, Message
 from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.types import Prep
-from aksha.runtime.tasks.keys import key_entry
+from aksha.runtime.tasks.keys import key_entry, key_entry_pointer
 from aksha.runtime.tasks.tree import CompiledTree
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tools.results import cap_text
@@ -117,8 +118,9 @@ def key_notice(
     Empty for an instance with no key. Every instance of a keyed Task shares the Task's
     brief and reads, so this is the only part of its context that says which key it is
     for. An artifact key source's entry is shown when it holds more than the key (an
-    object, such as a list item with a name and pages), capped like a read; the version it
-    came from is returned so the step records it as a read.
+    object, such as a list item with a name and pages), capped like a read; a read of that one
+    entry (its path and entry hash in the version it came from) is returned so the step
+    records it, and only a change to this entry reopens the instance.
     """
     source = tree.key_source(instance.task_path) if instance.key is not None else None
     if source is None or instance.key is None:
@@ -145,7 +147,24 @@ def key_notice(
     shown, _ = cap_text(canonical_json(dict(entry)), policy.read_cap_chars)
     lines += ["This instance's entry:", "```json", shown, "```"]
     version = current(view, kind, None)
-    return "\n".join(lines), None if version is None else version.ref.as_input()
+    pointer = key_entry_pointer(view, source, key, kind=kind)
+    if version is None or pointer is None:
+        return "\n".join(lines), None
+    read = InputRef(
+        "artifact",
+        version.ref.slot_id(),
+        f"v{version.ref.version}",
+        path=pointer,
+        entry_hash=entry_hash(version.content, pointer),
+    )
+    return "\n".join(lines), read
+
+
+def _covered(read: InputRef, inputs: tuple[InputRef, ...]) -> bool:
+    """Whether ``inputs`` already hold ``read``, or a whole read of the same version."""
+    return read in inputs or any(
+        i.same_source(read) and i.version == read.version and i.path is None for i in inputs
+    )
 
 
 def measure(request: GenerationRequest) -> int:
@@ -294,7 +313,7 @@ def assemble_context(
     session = _session(v, instance, choice, blobs)
     reads = render_reads(v, tree, instance, policy, kinds or {}, blobs=blobs)
     keyed, entry_read = key_notice(v, tree, instance, policy)
-    key_reads = () if entry_read is None or entry_read in reads.inputs else (entry_read,)
+    key_reads = () if entry_read is None or _covered(entry_read, reads.inputs) else (entry_read,)
     kept = tuple(t for t in tools if prep.tools is None or t.name in prep.tools)
     reason = continue_reason(v, instance, turn)
     steers = pending_input(v, instance, lane="steer")
