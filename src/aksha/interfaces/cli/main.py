@@ -173,8 +173,15 @@ def _asked(ctx: Context, w: Waiting) -> None:
     for qid, text in w.questions:
         hint = f" (--answer {qid}=TEXT)" if several else ""
         ctx.say(f"    asks{hint}: {text}")
-    if w.options:
+    if w.options and len(w.option_labels) == len(w.options):
+        for code, label in zip(w.options, w.option_labels, strict=True):
+            ctx.say(f"    option {code}: {label}")
+    elif w.options:
         ctx.say(f"    options: {', '.join(w.options)}")
+    if w.multiple:
+        ctx.say(
+            f'    choose any of them: aksha answer {w.interrupt_id} "CODE, CODE" (or the word none)'
+        )
 
 
 def _refused(ctx: Context, receipt: CommandReceipt, session: str | None = None) -> int:

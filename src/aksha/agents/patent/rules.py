@@ -9,6 +9,9 @@
 5. :func:`research_misuse`: where a recommendation names a research output outside its
    business-importance part, which would use market research as novelty or prior-art
    evidence.
+6. :func:`selection_options` and :func:`selection_from_answer`: the choice put to the
+   person (the table's candidates with their recommendations) and the selection the
+   runtime saves from the codes they chose. The person decides; the agent never does.
 
 Nothing here gives a legal opinion: the rule table orders work for counsel; it does not
 judge novelty, and ``not_found`` only ever means "no reference in this search shows it".
@@ -210,3 +213,61 @@ def form_refusal(
                 f"{name}: a field with an open counsel question is not complete",
             )
     return None
+
+
+def _table_rows(view: Any) -> list[Mapping[str, Any]]:
+    table = view.latest("table")
+    rows = [] if table is None else table.content.get("rows", ())
+    return [r for r in rows if isinstance(r, Mapping) and r.get("candidate")]
+
+
+def _recommended(view: Any, code: str, row: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    """The code-checked recommendation of ``code`` (the table row only when there is none)."""
+    rec = view.latest("recommendation", code)
+    if rec is not None:
+        found: Mapping[str, Any] = rec.content
+        return found
+    return row or {}
+
+
+def selection_options(view: Any) -> tuple[tuple[str, str], ...]:
+    """The choice the person makes: each table row's candidate, with its next action and why.
+
+    The table gives only the codes (``checks.table_saved`` holds them to the candidates
+    with a recommendation, no more and no fewer); each label is read from the candidate's
+    code-checked recommendation, never from the text the model wrote in the table, so the
+    model cannot leave a candidate out, add one, or word its recommendation for it.
+    """
+    out: list[tuple[str, str]] = []
+    for row in _table_rows(view):
+        code = str(row["candidate"])
+        if code in {c for c, _ in out}:
+            continue
+        src = _recommended(view, code, row)
+        label = f"{src.get('next_action', '')}: {src.get('why', '')}".strip(": ")
+        out.append((code, label))
+    return tuple(out)
+
+
+def selection_from_answer(view: Any, chosen: tuple[str, ...]) -> dict[str, Any]:
+    """The selection the runtime saves from the person's answer: the codes they chose.
+
+    ``selected`` (written by the runtime too) is the list of chosen candidate codes, which
+    ``prepare``, ``packet`` and ``send`` fan out over; ``recommendations`` keeps each
+    chosen candidate's next action, from its recommendation, as it stood when the person
+    chose.
+    """
+    table = view.latest("table")
+    rows = {str(r["candidate"]): r for r in _table_rows(view)}
+    out: dict[str, Any] = {
+        "selected": list(chosen),
+        "based_on": "" if table is None else str(table.ref),
+        "recommendations": {
+            c: _recommended(view, c, rows.get(c)).get("next_action") for c in chosen
+        },
+    }
+    if not rows:
+        out["note"] = "no invention candidate was found among the inputs; nothing was asked"
+    elif not chosen:
+        out["note"] = "the person chose none of the candidates"
+    return out

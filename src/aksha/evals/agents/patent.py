@@ -68,7 +68,6 @@ GAP_ANSWERS: Mapping[str, str] = {
 GAP_DEFAULT = "Not decided yet; the note's author will confirm it."
 FIRST_FOR_COUNSEL = "prioritize_counsel_review"
 COUNSEL = "needs_counsel_confirmation"
-CANDIDATE = re.compile(r"([A-Za-z0-9][\w.-]*): (\w+)")
 
 
 class PatentUnderTest(RuntimeUnderTest):
@@ -89,9 +88,11 @@ class PatentUnderTest(RuntimeUnderTest):
     def answer(self, w: Waiting, question: str, text: str) -> str:
         """The gap answer, or the candidate the table puts first for counsel review."""
         if w.kind == "choice":
-            listed = [(c, a) for c, a in CANDIDATE.findall(text) if not w.options or c in w.options]
-            first = [c for c, action in listed if action == FIRST_FOR_COUNSEL]
-            return str((first or [c for c, _ in listed] or list(w.options) or [""])[0])
+            # The options are the table's candidates, each labelled with its next action by
+            # code (never parsed out of the model's question).
+            labelled = list(zip(w.options, w.option_labels, strict=False))
+            first = [c for c, label in labelled if label.startswith(f"{FIRST_FOR_COUNSEL}:")]
+            return str((first or list(w.options) or ["none"])[0])
         if w.kind == "input":
             return GAP_ANSWERS.get(self.world, GAP_DEFAULT)
         return super().answer(w, question, text)

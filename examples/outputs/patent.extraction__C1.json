@@ -94,19 +94,19 @@
     "topic": "outside contributor"
    },
    {
-    "question": "DISC-01 was public 262 days before today. Does any grace period apply?",
+    "question": "DISC-01 was public 263 days before today. Does any grace period apply?",
     "status": "needs_counsel_confirmation",
     "topic": "disclosure"
    }
   ],
   "disclosures": [
    {
-    "as_of": "2026-11-27",
-    "counsel_question": "DISC-01 was public 262 days before today. Does any grace period apply?",
+    "as_of": "2026-11-28",
+    "counsel_question": "DISC-01 was public 263 days before today. Does any grace period apply?",
     "date": "2026-03-10",
     "describes_fully": false,
     "disclosure_id": "DISC-01",
-    "elapsed_days": 262,
+    "elapsed_days": 263,
     "elements_shown": [
      "F2",
      "F3"
@@ -127,11 +127,11 @@
     "status": "needs_counsel_confirmation"
    },
    {
-    "as_of": "2026-11-27",
+    "as_of": "2026-11-28",
     "date": "2026-01-05",
     "describes_fully": false,
     "disclosure_id": "DISC-05",
-    "elapsed_days": 326,
+    "elapsed_days": 327,
     "event_type": "outside email",
     "file": "input/disclosures/history.csv",
     "own_disclosure": false,

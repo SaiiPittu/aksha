@@ -30,12 +30,12 @@ The agent prepares; it never decides a legal question. See [the legal boundary](
 | `deep[Cn]/compare` | `save_artifact` | `finish` |
 | `deep[Cn]/recommend` | `save_artifact` | `finish` |
 | `table` | `save_artifact` | `finish` |
-| `select` | `save_artifact` | `finish`, `ask` |
+| `select` | none | `finish`, `ask` (question only: the options and the save are the runtime's) |
 | `prepare[Cn]` | `list_inputs`, `search_inputs`, `read_document`, `list_templates`, `read_template`, `fill_form` | `finish` |
 | `packet[Cn]` | `save_artifact` | `finish` |
 | `send[Cn]` | `send_packet`, `save_artifact` | `finish` |
 
-`prepare` does not list `save_artifact`: a filled form can only be saved by `fill_form`, which checks it against the blank template in code. Schemas and limits are in [tools-and-schemas.md](tools-and-schemas.md).
+`prepare` does not list `save_artifact`: a filled form can only be saved by `fill_form`, which checks it against the blank template in code. `select` lists no tool at all: the person chooses, and the runtime saves the `selection` from the answer (below). Schemas and limits are in [tools-and-schemas.md](tools-and-schemas.md).
 
 ## The Task graph
 
@@ -56,7 +56,7 @@ flowchart TD
     APPROVE --> SEND["send per selected<br/>outbox, done: handoff_recorded"]
 ```
 
-Notice that the selection is saved as a `selection` artifact and only its keys start `prepare`, `packet` and `send`. Selecting a candidate authorizes nothing to leave the system: `send_packet` raises its own approval, bound to the packet version and the recipient, and a new packet version needs a new approval.
+Notice that the selection is saved as a `selection` artifact and only its keys start `prepare`, `packet` and `send`. The person makes it, never the model: the `select` Task always raises the choice, whose options are the table's candidates with their recommendations (`rules.selection_options`, built by code: the table gives only the codes, and each label is the candidate's code-checked recommendation, its `next_action` and `why`, never the text the model wrote in the table); the person may choose any of them, or none; and the runtime saves the selection from the answer (`DeclaredInterrupt(..., options=..., multiple=True, saves=AnswerSave("selection", "selected", rules.selection_from_answer))`). The model only asks, with a one-line summary for the question, and finishes. A model's own `save_artifact` of `selection` is refused `answer_only`. With no candidate at all nothing is asked and an empty selection is recorded; when the person chooses none, the run ends with that recorded and nothing prepared. Only the word `none` (or an explicit empty list of codes) chooses none; an empty answer is refused `answer_missing`. An answer given after the table changed under the question is not saved: the runtime re-enters `select` and the person is asked again with the options as they are now. A refused save of the answer ends `select` blocked and the run says why (`answer_save_refused (<code>): ...`). Recordings made before API 3.1 of the patent agent's `select` Task no longer replay: the model's selection save and its options argument are refused; record them again. Selecting a candidate authorizes nothing to leave the system: `send_packet` raises its own approval, bound to the packet version and the recipient, and a new packet version needs a new approval.
 
 Inside `deep[Cn]` the three children run in order: `prior_art`, then `compare` (needs `prior_art`), then `recommend` (needs `compare`). With eight candidates or fewer (`SUPERVISE_ABOVE = 8`) every candidate gets deep work and the supervisor takes no turn.
 
@@ -72,7 +72,7 @@ Dependencies, as declared:
 | `deep/compare` | its parent's key | `prior_art` | `comparison` | `comparison_saved` |
 | `deep/recommend` | its parent's key | `compare` | `recommendation` | `recommendation_follows_rules` |
 | `table` | once | `candidate` | `table` | `table_saved` |
-| `select` | once | `table` | `selection` | `selection_saved` |
+| `select` | once | `table` (reads `table` and every `recommendation`) | `selection` (saved by the runtime from the answer) | `chosen_by_person` (runtime) |
 | `prepare` | each key in `selection.selected` | none | `form` | `forms_filled` |
 | `packet` | each selected key | `prepare` | `packet` | `packet_saved` |
 | `send` | each selected key | `packet` | `handoff` | `handoff_recorded` |
@@ -88,8 +88,8 @@ No Task declares a turn limit, and the agent sets no agent-wide one (decision 42
 | `prior_art_saved` | No record; `skipped` while the plan asks for a search; an ungrounded quote. |
 | `comparison_saved` | A cell without an element, or whose `state` is not `disclosed`, `partial`, `not_found` or `not_checked`; an ungrounded quote. |
 | `recommendation_follows_rules` | The saved `next_action` differs from `rules.next_action` over the current extraction and comparison. |
-| `table_saved` | A candidate with a recommendation and no row; under the supervisor, a `review` that differs from the recorded decisions, drop list and audit. |
-| `selection_saved` | No `selection`. |
+| `table_saved` | A candidate with a recommendation and no row; a row for a candidate with no recommendation (the person chooses from the rows, so an invented code is refused); under the supervisor, a `review` that differs from the recorded decisions, drop list and audit. |
+| `chosen_by_person` | No `selection` saved from an answered choice of this instance; `selected` differs from the codes the person chose; the selection rests on work that changed and has not gone back to the person. A copied choice in a rebuild passes once it is in the person's review. |
 | `forms_filled` | A form the plan names is not filled for this candidate, or no form at all. |
 | `packet_saved` | The first section is not `Needs counsel confirmation`; no `scope_note`; no filled forms; an ungrounded quote; any required form field still `missing`. |
 | `handoff_recorded` | No handoff; `status: "held"` while the plan asks to send. |
@@ -114,7 +114,7 @@ The two human gates use different records:
 | Gate | Declared as | Events | What it binds |
 |---|---|---|---|
 | Missing detail | `DeclaredInterrupt("input", "missing detail")` on `extract` | `interrupt.raised`, `interrupt.resolved`, `interrupt.amended` | That one candidate's instance only |
-| Candidate selection | `DeclaredInterrupt("choice", "candidate selection")` on `select` | `interrupt.raised`, `interrupt.resolved` | The saved `selection` artifact, which keys the later Tasks |
+| Candidate selection | `DeclaredInterrupt("choice", "candidate selection", options=..., multiple=True, saves=...)` on `select` | `interrupt.raised{options, option_labels, multiple}`, `interrupt.resolved{chosen}`, then `artifact.saved{origin: choice, answer}` by the runtime's step `.../tNN/c01/derived` | The saved `selection` artifact, the chosen codes, which keys the later Tasks. In a rebuild the runtime copies the choice (origin `copy_choice`) and the person reviews it as a diff, but only when every chosen code is still offered and no new code is; otherwise the person is asked again. A rejected copy raises a fresh choice; once the person answers it, the writer is entered again and saves from that answer |
 | Send approval | `ApprovalRule` on `send_packet` | `approval.requested` with an `approval` interrupt (`interrupt.raised`), then `approval.granted`, `approval.rejected`, `approval.voided`, then `outbox.enqueued`, `outbox.claimed`, `outbox.completed` | The exact action: packet version and recipient (`key_fields = ("/packet", "/recipient")`) |
 
 Tests: [`tests/agents/test_patent_episodes.py`](../../tests/agents/test_patent_episodes.py) (`test_only_extract_c2_waits_for_its_gap_question`, `test_the_selection_comes_before_any_form_and_one_send_happens`, `test_no_send_without_an_approval_bound_to_the_packet_signature`, `test_the_fresh_approval_for_the_new_packet_sends_it_once`, `test_restart_mid_approval_and_mid_send_sends_once`).
@@ -166,7 +166,7 @@ Above eight candidates, `portfolio.columns` computes a card per candidate from i
 | `comparison` | by candidate | `candidate`, `cells` (`element`, `family`, `state`) | `state` is one of `rules.STATES` |
 | `recommendation` | by candidate | `candidate`, `next_action`, `why` | |
 | `table` | no | `rows` | One row per candidate with a recommendation |
-| `selection` | no, reviewable | `selected`, `based_on` | The person's choice |
+| `selection` | no, reviewable | `selected` (candidate codes), `based_on` (the table ref) | The person's choice, saved only by the runtime from the answer; `recommendations` keeps each chosen code's next action, read from its recommendation |
 | `form` | `<candidate>~<template>` | `template`, `candidate`, `fields`, `counts` | Saved only by `fill_form`; each field `complete`, `missing` or `needs_counsel_confirmation` |
 | `packet` | by candidate, reviewable | `candidate`, `scope_note`, `sections` | The first section is titled `Needs counsel confirmation` |
 | `handoff` | by candidate | `candidate`, `packet`, `status` | The send receipt, or `held` when the plan does not send |

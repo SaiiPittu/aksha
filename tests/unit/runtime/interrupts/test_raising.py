@@ -6,7 +6,12 @@ import pytest
 
 from aksha.runtime.events.catalogue import CORE_EVENT_TYPES, Catalogue
 from aksha.runtime.interrupts.raising import SINGLE_QUESTION, ask_request, raised, route_request
-from aksha.runtime.interrupts.types import DeclaredInterrupt, InterruptRequest, Question
+from aksha.runtime.interrupts.types import (
+    AnswerSave,
+    DeclaredInterrupt,
+    InterruptRequest,
+    Question,
+)
 
 CORE = Catalogue(CORE_EVENT_TYPES)
 
@@ -65,3 +70,32 @@ def test_extra_cannot_overwrite_the_envelope_fields() -> None:
     request = InterruptRequest("budget", run="R-1", extra={"kind": "input"})
     with pytest.raises(ValueError, match="every interrupt has"):
         raised(request, "budget-1")
+
+
+def _menu(view: object) -> tuple[tuple[str, str], ...]:
+    return (("C1", "prioritize: built"), ("C2", "collect: prototype"))
+
+
+def test_declared_options_replace_the_models_and_carry_their_labels() -> None:
+    declared = DeclaredInterrupt("choice", "pick", options=_menu, multiple=True)
+    request = ask_request(declared, {"question": "C1 is built; C2 a prototype."}, run="R-1",
+                          instance="pick", options=_menu(None))  # fmt: skip
+    payload = raised(request, "I-0004").payload
+    assert payload["options"] == ["C1", "C2"]
+    assert payload["option_labels"] == ["prioritize: built", "collect: prototype"]
+    assert payload["multiple"] is True
+    CORE.validate_payload("interrupt.raised", payload)
+
+
+def test_a_model_options_argument_is_refused_when_the_definition_sets_them() -> None:
+    declared = DeclaredInterrupt("choice", "pick", options=_menu)
+    with pytest.raises(ValueError, match="set by its definition"):
+        ask_request(declared, {"question": "?", "options": ["C9"]}, run="R-1", instance="pick",
+                    options=_menu(None))  # fmt: skip
+
+
+def test_only_a_choice_declares_options_or_saves() -> None:
+    with pytest.raises(ValueError, match="only a choice"):
+        DeclaredInterrupt("input", "gap", multiple=True)
+    with pytest.raises(ValueError, match="declares its options in code"):
+        DeclaredInterrupt("choice", "pick", saves=AnswerSave("pick", "chosen", lambda v, c: {}))

@@ -43,7 +43,7 @@
     "topic": "ownership"
    },
    {
-    "question": "DISC-03 was public 178 days before today. Does any grace period apply?",
+    "question": "DISC-03 was public 179 days before today. Does any grace period apply?",
     "status": "needs_counsel_confirmation",
     "topic": "disclosure"
    },
@@ -55,12 +55,12 @@
   ],
   "disclosures": [
    {
-    "as_of": "2026-11-27",
-    "counsel_question": "DISC-03 was public 178 days before today. Does any grace period apply?",
+    "as_of": "2026-11-28",
+    "counsel_question": "DISC-03 was public 179 days before today. Does any grace period apply?",
     "date": "2026-06-02",
     "describes_fully": true,
     "disclosure_id": "DISC-03",
-    "elapsed_days": 178,
+    "elapsed_days": 179,
     "event_type": "blog post",
     "file": "input/disclosures/history.csv",
     "own_disclosure": true,
@@ -73,7 +73,7 @@
     "status": "needs_counsel_confirmation"
    },
    {
-    "as_of": "2026-11-27",
+    "as_of": "2026-11-28",
     "counsel_question": "DISC-04: when was it sent, and to how many people? The record has no date.",
     "date": null,
     "describes_fully": false,

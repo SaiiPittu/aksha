@@ -245,6 +245,8 @@ ARTIFACT_SAVED = EventTypeSpec(
                 "additionalProperties": False,
             },
             "origin": {"enum": ["task", "derived", "choice", "copy_choice", "correction"]},
+            # ADR-P04 (choice binding): the answered choice a runtime answer save is from.
+            "answer": {"type": "string", "pattern": "^(I-[0-9]{4,})?$"},
             # ADR-P04 C1: the approved correction a ``correction`` version applies.
             "correction": {"type": "string", "pattern": "^K-[0-9]{4,}$"},
         },
@@ -446,7 +448,8 @@ STEP_STARTED = EventTypeSpec(
             "semantics": {"enum": ["at_least_once", "reconcile", "at_most_once"]},
             "on_unknown": {"enum": ["tell_model", "interrupt"]},
             "position": {"type": "integer", "minimum": 0},
-            "route": {"enum": ["dispatch", "outbox", "approval", "model", "reserved"]},
+            # ``answer``: the runtime's save from a person's answer (ADR-P04 choice binding).
+            "route": {"enum": ["dispatch", "outbox", "approval", "model", "reserved", "answer"]},
             "counted": {"type": "boolean"},
             # ADR-P03 D1: the idempotency key of the entry an effectful call enqueued.
             "outbox_key": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
@@ -1080,6 +1083,11 @@ INTERRUPT_RAISED = EventTypeSpec(
                 },
             },
             "options": {"type": "array", "items": {"type": "string"}},
+            # ADR-P17 D2: a declared choice's labels, whether any subset may be chosen, and
+            # the refs of the reads its options were built from (``tasks.choices.is_stale``).
+            "option_labels": {"type": "array", "items": {"type": "string"}},
+            "multiple": {"type": "boolean"},
+            "drawn_from": {"type": "array", "items": {"type": "string"}},
             "label": {"type": "string"},
             "approval": {"type": "string", "minLength": 1},
             "signature": {"type": "string", "pattern": "^v[0-9]+:[0-9a-f]{64}$"},
@@ -1133,6 +1141,8 @@ INTERRUPT_RESOLVED = EventTypeSpec(
             # ADR-P17 D4: who answered, the answer per question ID (S2), or the decision.
             "by": {"type": "string", "minLength": 1},
             "answers": {"type": "object", "additionalProperties": {"type": "string"}},
+            # ADR-P17 D2: the option codes a choice's answer chose, in option order.
+            "chosen": {"type": "array", "items": {"type": "string"}},
             # ADR-P24 D4: ``finalized`` answers a budget interrupt with ``finalize``.
             "decision": {"enum": ["granted", "rejected", "finalized"]},
         },

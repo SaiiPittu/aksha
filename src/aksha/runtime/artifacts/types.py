@@ -291,7 +291,9 @@ class SaveRequest:
     ``supersedes`` names the slot's latest version this save replaces for every reader
     (ADR-P09 D4, D11): the store commits a ``supersedes`` relation from the new version to
     it in the same transaction, and the invalidation view then counts the new version for
-    readers of every run, not only the saving run's line (ADR-P05 S1).
+    readers of every run, not only the saving run's line (ADR-P05 S1). ``answer`` names the
+    interrupt whose answer the runtime saved this from (a kind a declared choice saves);
+    no tool sets it.
     """
 
     kind: str
@@ -300,6 +302,7 @@ class SaveRequest:
     primary_inputs: tuple[InputRef, ...] = ()
     relations: tuple[RelationRequest, ...] = ()
     supersedes: str | None = None
+    answer: str | None = None
 
 
 @dataclass(frozen=True)
@@ -319,6 +322,8 @@ class ArtifactVersion:
     step: str | None
     event_seq: int
     primary_inputs: tuple[InputRef, ...] = ()
+    answer: str | None = None
+    """The answered choice the runtime saved this version from, if it did."""
 
     def __post_init__(self) -> None:
         """Deep-freeze ``content``."""

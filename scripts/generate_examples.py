@@ -388,8 +388,8 @@ def patent_summary(c: Mapping[str, Mapping[str, Any]]) -> str:
         "",
         "## Saved selection (`patent.selection`)",
         "",
-        f"Selected {', '.join(sel['selected'])}, chosen by {sel['chosen_by']}, from "
-        f"{sel['table']}.",
+        f"Selected {', '.join(sel['selected']) or 'none'}, chosen by the person (the runtime "
+        f"saved it from their answer), from {sel['based_on']}.",
         "",
     ]
     for cand in sel["selected"]:
@@ -618,8 +618,9 @@ def walkthrough(base: Path) -> str:
         "",
         f"C1 was the one candidate marked `{rec[0]['next_action']}`. With a closer reference "
         f"and an ownership question open, it is now `{rec[1]['next_action']}`. The saved "
-        f"selection is rebuilt from the new recommendations and still holds "
-        f"{', '.join(sel['selected'])}, as the person chose ({sel['chosen_by']}). Its packet "
+        f"selection is copied onto the new table and still holds "
+        f"{', '.join(sel['selected'])}, as the person chose; the copy goes back to the person "
+        "as a diff review of its own, which they confirm before the packet's review. Its packet "
         "goes to counsel with the contributor and ownership question marked for their "
         "confirmation, since inventorship and ownership are counsel's decision, not the "
         "agent's. The full report "

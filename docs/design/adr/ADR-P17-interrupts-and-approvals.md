@@ -96,6 +96,21 @@ Agent-side, no core change: The Research Agent's scope question is one `input` i
 3. C1c, the approval is bound to the version the proposer saw. Approving a correction whose target moved since the proposal is refused `target_moved`, by the same reasoning as S1: a person must not approve a change to something that is no longer what they were shown.
 
 
+### Amendment D2a: a choice whose options code builds, several picks, and the runtime's save (28 Nov 2026, Proposed)
+
+Found in a live patent run (gpt-6.2-sol, main `b2dacd9`): the `select` Task declared a `choice`, but a declared interrupt only offered `ask`, nothing made the model use it, and the model saved the selection itself. The run ended complete with no question asked.
+
+1. `DeclaredInterrupt` takes three trailing fields: `options` (a pure function of the Task's view returning `(code, label)` pairs), `multiple` (any subset of the options is an answer, none included) and `saves` (`AnswerSave(kind, field, build)`). Only a `choice` declares them, and one that saves declares its options.
+2. With declared options, `ask` raises the choice with them (`options`, `option_labels`, `multiple` on `interrupt.raised`); a model's own `options` argument is refused `schema`, and an ask with no options is refused `nothing_to_choose`. The model writes only the question, a summary.
+3. `answer` takes a `multiple` choice's codes as `choices` or as text (`"C1, C4"`, `"none"`); each must be an option (`not_an_option`); they are kept in option order. Every choice's `interrupt.resolved` records `chosen`. A choice's answer is minted as a statement span, as an input's is, so what is built from it has the answer in its lineage.
+4. The reject of a copied choice's review (ADR-P05 S4) raises the fresh choice with the writer's declared options, so `answer` can accept a reply (it carried none before, and every reply was refused `not_an_option`).
+
+5. A raised choice with declared options records `drawn_from`, the refs of the Task's declared reads its options were built from. An answer whose `drawn_from` is no longer current, or whose options differ from the options now, is stale: the runtime does not save it, the stop decision re-enters the instance once (`task.entered{cause: rebuild}`, so its earlier reads leave its lineage), and the check tells the model to ask again.
+6. `answer` refuses an empty or blank answer to a `multiple` choice (`answer_missing`); only the word `none`, or an explicit empty `choices` list, chooses none.
+7. A fresh choice raised by a reject (point 4) names the writer; once answered, the rejection no longer blocks the writer in the rebuild plan, and the writer, in whichever run enters it next, saves from that answer.
+
+The save from the answer and its completion check are ADR-P04's choice binding (amendment CB1). Recordings made before API 3.1 of the patent agent's `select` Task no longer replay: the model's selection save and its options argument are refused; record them again.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

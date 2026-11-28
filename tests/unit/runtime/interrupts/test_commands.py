@@ -86,6 +86,41 @@ def test_a_choice_takes_only_a_listed_option(bench: Bench) -> None:
     assert answer(bench.store, bench.owner, "I-0001", by="p", text="C2").accepted
 
 
+def _ask_several(b: Bench, ident: str) -> None:
+    pairs = (("C1", "prioritize"), ("C2", "collect"), ("C4", "collect"))
+    declared = DeclaredInterrupt("choice", "pick", options=lambda v: pairs, multiple=True)
+    request = ask_request(declared, {"question": "which?"}, run="R-0001", instance="select",
+                          options=pairs)  # fmt: skip
+    b.store.append(b.owner, "U2", (raised(request, ident),))
+
+
+def test_a_multiple_choice_takes_several_codes_in_option_order(bench: Bench) -> None:
+    """On main this was refused not_an_option: a choice took exactly one option."""
+    _ask_several(bench, "I-0001")
+    assert answer(bench.store, bench.owner, "I-0001", by="p", text="C4, C1").accepted
+    i = interrupts(bench.view())["I-0001"]
+    assert list(i.resolution["chosen"]) == ["C1", "C4"]  # type: ignore[index]
+    # The answer is minted as a statement, so what is built from it has it in its lineage.
+    assert bench.types()[-2:] == ["interrupt.resolved", "excerpts.minted"]
+
+
+def test_a_multiple_choice_takes_none_and_refuses_an_unknown_code(bench: Bench) -> None:
+    _ask_several(bench, "I-0001")
+    refused = answer(bench.store, bench.owner, "I-0001", by="p", text="C1 C9")
+    assert refused.refused == NOT_AN_OPTION
+    assert answer(bench.store, bench.owner, "I-0001", by="p", choices=[]).accepted
+    i = interrupts(bench.view())["I-0001"]
+    assert list(i.resolution["chosen"]) == []  # type: ignore[index]
+    assert dict(i.resolution["answers"]) == {"q1": "none"}  # type: ignore[index]
+
+
+def test_a_single_choice_records_what_it_chose(bench: Bench) -> None:
+    _ask(bench, "I-0001", {"question": "which?", "options": ["C1", "C2"]}, kind="choice")
+    assert answer(bench.store, bench.owner, "I-0001", by="p", text="C2").accepted
+    i = interrupts(bench.view())["I-0001"]
+    assert list(i.resolution["chosen"]) == ["C2"]  # type: ignore[index]
+
+
 def test_a_second_answer_is_already_decided(bench: Bench) -> None:
     _ask(bench, "I-0001", {"question": "which?"})
     assert answer(bench.store, bench.owner, "I-0001", by="a", text="x", command_id="c1").accepted

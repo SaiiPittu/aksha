@@ -386,8 +386,10 @@ class Session:
                                  command.card_hash, self.ids, tools=tools,
                                  command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.RejectReview):
+            agent = self._agent_of_interrupt(command.owner, command.review_id)
             return reject_review(self.store, command.owner, command.review_id,
                                  command.card_hash, self.ids,
+                                 tree=None if agent is None else agent.tree,
                                  command_id=command.command_id)  # fmt: skip
         if isinstance(command, n.ApplySourceChange):
             return apply_source_change(self.store, command.owner, self._versioned(),
@@ -596,6 +598,7 @@ class Session:
             answers=dict(command.answers) or None,
             tree=None if agent is None else agent.tree,
             command_id=command.command_id,
+            choices=command.choices,
         )
 
     def _missing_system(self, owner: str, approval_id: str) -> str | None:

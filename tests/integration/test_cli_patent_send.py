@@ -61,8 +61,10 @@ def at_approval(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, str, st
     assert gap is not None
     code, out = aksha(tmp, "answer", gap.group(1), GAP)
     assert code == wire.EXIT_WAITING_INPUT, out
-    assert "Which candidate should be prepared for counsel review?" in out, out
-    assert "options: C1, C2, C3, C4" in out, out
+    assert (
+        "Which candidates should be prepared for counsel review (from patent.table@v1)?" in out
+    ), out
+    assert all(f"option {c}: " in out for c in ("C1", "C2", "C3", "C4")), out
     choice = re.search(r"aksha answer (I-\d+)", out)
     assert choice is not None
     code, out = aksha(tmp, "answer", choice.group(1), "C1")

@@ -11,7 +11,7 @@ The graders read the worlds' answer keys; the agent's tools read only ``sources/
 2. Change and recovery (scenario 4): the variant's change set (the two edits and the new
    publication ``make demo`` applies to the base world) invalidates exactly C1's chain,
    revokes the approval on C1's packet, moves C1's recommendation as the key says, raises a
-   diff review for the packet, and sends nothing twice.
+   diff review for the copied selection and one for the packet, and sends nothing twice.
 """
 
 from __future__ import annotations
@@ -399,8 +399,15 @@ def test_the_change_set_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None
         # Family E ties family A at the top (both show four of the five elements, two of
         # them in full): the tie is reported, never broken by sort order.
         assert cmp_["closest_families"] == ["SYN-PRI-2021-0412", "SYN-PRI-2023-0215"]
-        # A human diff review appears for the reviewed packet; v1 stays current until accepted.
-        (review,) = r.reviews().values()
+        # Two human diff reviews: the person's selection, which the runtime copied onto the
+        # new table (only the person confirms a choice), and the rebuilt packet. Each old
+        # version stays current until accepted.
+        chosen, review = sorted(r.reviews().values(), key=lambda x: x.seq)
+        assert (str(chosen.old), str(chosen.revision)) == (
+            "patent.selection@v1",
+            "patent.selection@v2",
+        )
+        assert r.view().events and r.current("selection").ref.version == 1  # type: ignore[union-attr]
         assert (str(review.old), str(review.revision)) == (
             "patent.packet/C1@v1",
             "patent.packet/C1@v2",
@@ -409,7 +416,10 @@ def test_the_change_set_invalidates_exactly_the_c1_chain(tmp_path: Path) -> None
         refused = r.handoff(a.approval_id)
         assert not refused.accepted and r.ledger.rows == {}
 
-        # The person accepts the redline: a fresh approval request, never a grant.
+        # The person confirms the copied selection, then accepts the packet's redline: a
+        # fresh approval request, never a grant.
+        assert r.accept(chosen.interrupt, chosen.card_hash).accepted
+        assert r.current("selection").origin == "copy_choice"  # type: ignore[union-attr]
         assert r.accept(review.interrupt, review.card_hash).accepted
         fresh = r.pending_approval()
         assert fresh.body.target_refs() == ("patent.packet/C1@v2",)
@@ -438,7 +448,8 @@ def test_the_fresh_approval_for_the_new_packet_sends_it_once(tmp_path: Path) -> 
         assert r.approve(a.approval_id, a.signature).accepted
         r.change(tmp_path / "changed")
         r.drive()
-        (review,) = r.reviews().values()
+        chosen, review = sorted(r.reviews().values(), key=lambda x: x.seq)  # selection, packet
+        assert r.accept(chosen.interrupt, chosen.card_hash).accepted
         assert r.accept(review.interrupt, review.card_hash).accepted
         fresh = r.pending_approval()
         # The fresh request names the new version in its call and its facts, not only in

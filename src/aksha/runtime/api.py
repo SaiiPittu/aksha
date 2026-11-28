@@ -26,7 +26,9 @@ What an agent or extension declares, grouped by the primitive that owns it:
    ``HttpResponse`` and ``EgressRefused`` (``ToolContext.http``, P26).
 6. Stop policies (P16): ``StopPolicyOptIn``, ``Goal``, ``Plan``, ``ForcedTool``,
    ``TodoReminder``, ``Recite`` (and ``RECITATION``, the fence line above a recitation).
-   Interrupts (P17): ``DeclaredInterrupt``.
+   Interrupts (P17): ``DeclaredInterrupt``, and ``AnswerSave`` with its completion check
+   ``chosen_by_person``: a choice whose options code builds and whose answer the runtime
+   saves (the person chooses; the model never writes the choice).
 7. Models (P07): ``ModelAlias``, ``ModelClass``, ``ModelAdapterSpec``; what an alias
    declares: ``FieldSpec``, ``QuestionSpec``, ``ConfidenceThresholds``; what a rule-based
    fake adapter reads and returns: ``ModelCapabilities``, ``ExtractionRequest``,
@@ -126,7 +128,7 @@ from aksha.runtime.grounding.types import (
     maybe_unknown,
 )
 from aksha.runtime.inputs.tools import INPUT_TOOLS, InputReading, input_tools, read_view
-from aksha.runtime.interrupts.types import ApprovalRule, DeclaredInterrupt
+from aksha.runtime.interrupts.types import AnswerSave, ApprovalRule, DeclaredInterrupt
 from aksha.runtime.invalidation.keying import InvalidationKeys
 from aksha.runtime.invalidation.modes import InvalidationMode
 from aksha.runtime.invalidation.types import VersionedSourceSpec
@@ -195,6 +197,7 @@ from aksha.runtime.stop_policy.types import (
     StopPolicyOptIn,
     TodoReminder,
 )
+from aksha.runtime.tasks.choices import chosen_by_person
 from aksha.runtime.tasks.types import (
     Check,
     CheckResult,
@@ -246,6 +249,7 @@ __all__ = [
     "WEB_EGRESS",
     "WEB_SOURCE",
     "Agent",
+    "AnswerSave",
     "ApprovalRule",
     "ArtifactKind",
     "ArtifactReader",
@@ -355,6 +359,7 @@ __all__ = [
     "Usage",
     "VersionedSourceSpec",
     "artifact_keys",
+    "chosen_by_person",
     "decide_kind",
     "decimal_string",
     "distribution_ppm",

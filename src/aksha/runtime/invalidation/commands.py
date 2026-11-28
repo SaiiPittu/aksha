@@ -22,7 +22,8 @@ retry returns the first receipt.
 3. ``reject_review`` (U4) records ``review.rejected`` and ``interrupt.resolved``; the old
    version stays invalidated and nothing on it is sendable, and the plan skips the writer
    (``review_rejected``, S4). For a version a person chose, the same transaction raises a
-   fresh ``choice`` interrupt on the writer, so the person can choose again.
+   fresh ``choice`` interrupt on the writer, so the person can choose again; when the
+   writer's Task declares its options in code, the fresh choice lists them.
 
 :func:`check_sources` is recovery's source check (S2): the same one writer, cause
 ``recovery``, committed in U8 without a command receipt.
@@ -33,10 +34,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 
 from aksha.runtime.artifacts.versions import version
+from aksha.runtime.context.reads import declared_versions
 from aksha.runtime.events.envelope import NewEvent
 from aksha.runtime.execution.ports import IdSource
 from aksha.runtime.interrupts.approvals import ApprovalTool, request_events, retarget
 from aksha.runtime.interrupts.approvals import approvals as approval_views
+from aksha.runtime.interrupts.raising import SINGLE_QUESTION
 from aksha.runtime.invalidation.confirm import after, confirmations
 from aksha.runtime.invalidation.notices import notices_for
 from aksha.runtime.invalidation.ports import QueryRunner, VersionedSource
@@ -53,6 +56,9 @@ from aksha.runtime.session.types import (
     CommandSpec,
 )
 from aksha.runtime.storage.ports import EventStore
+from aksha.runtime.tasks.tree import CompiledTree
+from aksha.runtime.tasks.types import InstanceRef
+from aksha.runtime.tasks.view import TaskView
 
 DECISION_BOUNDARY = "U4"
 REVIEW_NOT_OPEN = "review_not_open"
@@ -194,8 +200,37 @@ def accept_spec(ids: IdSource, tools: Mapping[str, ApprovalTool] | None = None) 
     return CommandSpec("accept_review", DECISION_BOUNDARY, decide)
 
 
-def reject_spec(ids: IdSource) -> CommandSpec:
-    """The ``reject_review`` command; the fresh choice interrupt's ID comes from ``ids``."""
+def _fresh_choice(
+    view: LogView, tree: CompiledTree | None, run: str | None, instance: str | None
+) -> dict[str, object]:
+    """The options, question and label of the fresh choice, from the writer's declaration.
+
+    A choice the writer's Task declares with options in code (``DeclaredInterrupt.options``)
+    lists them again, read from the writer's view now, so ``answer`` can accept a reply;
+    with no tree, or no declared options, the payload names only the old version.
+    """
+    if tree is None or run is None or instance is None:
+        return {}
+    ref = InstanceRef.parse(run, instance)
+    declared = tree.node(ref.task_path).task.interrupt
+    if declared is None or declared.kind != "choice" or declared.options is None:
+        return {}
+    pairs = [(str(c), str(label)) for c, label in declared.options(TaskView(view, tree, ref))]
+    if not pairs:
+        return {}
+    question = "The rebuilt choice was rejected: choose again."
+    drawn = [str(v.ref) for v in declared_versions(view, tree, ref)]
+    return {"options": [c for c, _ in pairs], "option_labels": [label for _, label in pairs],
+            "multiple": declared.multiple, "label": declared.label, "drawn_from": drawn,
+            "questions": [{"id": SINGLE_QUESTION, "text": question}]}  # fmt: skip
+
+
+def reject_spec(ids: IdSource, tree: CompiledTree | None = None) -> CommandSpec:
+    """The ``reject_review`` command; the fresh choice interrupt's ID comes from ``ids``.
+
+    ``tree`` is the writer's agent's compiled tree: with it, the fresh choice lists the
+    options the writer's Task declares (:func:`_fresh_choice`).
+    """
 
     def decide(command: Command, view: LogView) -> CommandAccepted | CommandRefused:
         review = _open_review(view, str(command.args["interrupt"]),
@@ -207,7 +242,8 @@ def reject_spec(ids: IdSource) -> CommandSpec:
         if old is not None and old.origin in HUMAN_ORIGINS:
             payload = {"interrupt": ids.next(view.owner, "I"), "kind": "choice",
                        "reason": REVIEW_REJECTED, "old": str(review.old),
-                       "writer": old.writer.as_json()}  # fmt: skip
+                       "writer": old.writer.as_json(),
+                       **_fresh_choice(view, tree, review.run, review.instance)}  # fmt: skip
             events.append(
                 NewEvent("interrupt.raised", payload, run=review.run, instance=review.instance)
             )
@@ -242,8 +278,9 @@ def reject_review(
     *,
     command_id: str | None = None,
     session: str | None = None,
+    tree: CompiledTree | None = None,
 ) -> CommandReceipt:
-    """A person rejects a diff review (module doc, item 3)."""
+    """A person rejects a diff review (module doc, item 3); ``tree`` as in ``reject_spec``."""
     args: dict[str, object] = {"interrupt": interrupt_id, "card_hash": card_hash}
     command = _command("reject_review", owner, args, command_id, session, interrupt_id)
-    return dispatch(store, command, reject_spec(ids))
+    return dispatch(store, command, reject_spec(ids, tree))

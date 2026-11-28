@@ -37,7 +37,9 @@ class Waiting:
     """One open interrupt a person can answer: its ID, kind, label and what it asks.
 
     ``questions`` are the interrupt's ``(id, text)`` pairs and ``options`` a choice's
-    options, as raised; for an approval, ``tool`` is the tool it would run and ``facts``
+    options, as raised, with ``option_labels`` beside them when the Task's definition built
+    them, and ``multiple`` when any subset of them (none included) is an answer; for an
+    approval, ``tool`` is the tool it would run and ``facts``
     the facts its approval rule showed (the target and the recipient, for a send).
     """
 
@@ -50,6 +52,8 @@ class Waiting:
     options: tuple[str, ...] = ()
     tool: str | None = None
     facts: tuple[tuple[str, str], ...] = ()
+    option_labels: tuple[str, ...] = ()
+    multiple: bool = False
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,8 @@ def _waiting(view: LogView) -> dict[str | None, list[Waiting]]:
                 tool=None if approval is None else approval.body.tool,
                 facts=tuple(sorted((str(k), str(v)) for k, v in facts.items()))
                 if isinstance(facts, Mapping) else (),
+                option_labels=tuple(str(o) for o in i.payload.get("option_labels", ())),
+                multiple=i.payload.get("multiple") is True,
             )
         )  # fmt: skip
     return out

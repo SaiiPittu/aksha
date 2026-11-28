@@ -31,8 +31,12 @@ $ aksha answer I-0002 '0.5 m from the vent edge, so its air flow stays outside t
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent waiting
   waiting for choice (candidate selection) I-0003: aksha answer I-0003 TEXT
-    asks: Which candidate should be prepared for counsel review? C1: prioritize_counsel_review; C2: collect_more_evidence; C3: deprioritize_for_now; C4: collect_more_evidence
-    options: C1, C2, C3, C4
+    asks: Which candidates should be prepared for counsel review (from patent.table@v1)? C1: prioritize_counsel_review; C2: collect_more_evidence; C3: deprioritize_for_now; C4: collect_more_evidence
+    option C1: prioritize_counsel_review: business priority 1; implementation: built_and_tested; F3 not found in any family searched; family SYN-PRI-2021-0412 discloses F1, F5; family SYN-PRI-2022-0118 discloses F2
+    option C2: collect_more_evidence: business priority 4; implementation: idea_only; P3 not found in any family searched; family SYN-PRI-2019-0630 discloses P1; referenced document missing: placement-trial-02.csv
+    option C3: deprioritize_for_now: business priority 3; implementation: in_use_under_nda; family SYN-PRI-2022-0118 discloses Q1, Q3
+    option C4: collect_more_evidence: business priority 2; implementation: prototype; B4 not found in any family searched
+    choose any of them: aksha answer I-0003 "CODE, CODE" (or the word none)
 (exit code 3)
 ```
 
@@ -42,7 +46,7 @@ R-0002 patent waiting
 $ aksha answer I-0003 C1
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent waiting
-  waiting for approval A-0001: aksha approve A-0001 --signature v1:f0111802faab16c413fa60b1548bd82aac00f5e9886c26b92164eac434a9d937
+  waiting for approval A-0001: aksha approve A-0001 --signature v1:7d96ae2beaf74b47346eba327d8b3ec39ec2a3da382f47075a5bffaf73676cd3
     approves: send_packet
     packet: patent.packet/C1@v1
     recipient: counsel-primary
@@ -52,7 +56,7 @@ R-0002 patent waiting
 ## 4. Approve the exact send shown; the mock mailbox receives the packet once
 
 ```console
-$ aksha approve A-0001 --signature v1:f0111802faab
+$ aksha approve A-0001 --signature v1:7d96ae2beaf7
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
 R-0002 patent ended complete
 (exit code 0)
@@ -61,9 +65,9 @@ R-0002 patent ended complete
 ## 5. Approving again delivers nothing
 
 ```console
-$ aksha approve A-0001 --signature v1:f0111802faab
+$ aksha approve A-0001 --signature v1:7d96ae2beaf7
 mock: counsel_mail is a development mailbox at <work>/mock-counsel/mailbox.json (AKSHA_SYSTEMS); nothing it receives leaves this machine
-refused: already_decided (command c-bea7a0acfe631296141d6fc9, seq 1357)
+refused: already_decided (command c-7378b700752e9da22c0725ee, seq 1370)
 (exit code 7)
 ```
 
@@ -127,6 +131,6 @@ R-0002 patent ended complete
 
 ```console
 $ aksha verify
-chain ok: 1357 events, head sha256:0bef5d4e44feec45627537cf033dfa3bd30e85820c9249b9f2456f9b6fb94160
+chain ok: 1370 events, head sha256:25cdef89f9a5597f409240425802679e0302ee73a6563a4bd5c40587b2447a32
 (exit code 0)
 ```

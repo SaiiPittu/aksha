@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "3.0"
+API_VERSION = "3.1"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -100,6 +100,12 @@ result. 3.0 (28 Nov 2026, decision 42: long-running tasks) changed defaults, a m
 Task has no turn limit unless it declares one, and the run budget is the backstop.
 ``Agent.requires_api`` defaults to ``">=3.0,<4"``; an extension that reads no turn limit
 can accept both majors (``">=2.0,<4"``).
+3.1 (28 Nov 2026, the person chooses) added ``AnswerSave`` and the completion check
+``chosen_by_person``, the trailing fields ``DeclaredInterrupt.options``,
+``DeclaredInterrupt.multiple`` and ``DeclaredInterrupt.saves`` (a choice whose options code
+builds and whose answer the runtime saves), ``SaveRequest.answer`` and
+and ``ArtifactVersion.answer``. A kind a declared choice saves is the runtime's alone: a
+tool's save of it is refused ``answer_only``.
 """
 
 Version = tuple[int, int]

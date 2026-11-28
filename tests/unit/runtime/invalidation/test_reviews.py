@@ -223,3 +223,42 @@ def test_effects_refused_on_dirty_targets_and_the_outbox_authority(stale: Bench)
     assert check(entry, stale.view()) == TARGET_DIRTY
     rebuild_form(stale, ["a"])  # equal: the packet is current again by cutoff
     assert check(entry, stale.view()) is None
+
+
+def test_the_fresh_choice_after_a_reject_lists_the_declared_options(tmp_path: Path) -> None:
+    """On main the fresh choice listed no options, so ``answer`` refused every reply."""
+    from aksha.runtime.interrupts.commands import answer
+    from aksha.runtime.interrupts.types import AnswerSave, DeclaredInterrupt
+    from aksha.runtime.tasks.tree import compile_tree
+    from aksha.runtime.tasks.types import CheckResult, Task
+
+    def options(view: object) -> tuple[tuple[str, str], ...]:
+        table = view.latest("table")  # type: ignore[attr-defined]
+        return tuple((str(o), f"row {o}") for o in table.content["order"])
+
+    saves = AnswerSave("selection", "chosen", lambda v, c: {})
+    declared = DeclaredInterrupt("choice", "pick", options=options, multiple=True, saves=saves)
+    tree = compile_tree("p", (Task("select", writes=("selection",), interrupt=declared,
+                                   done=lambda v: CheckResult(True)),))  # fmt: skip
+    b = Bench(tmp_path)
+    try:
+        chooser = WriterId("p", "select", None)
+        b.start("R-0001")
+        b.save("R-0001", "p.table", {"order": ["C1"]}, reads=[record("K")])
+        b.save("R-0001", "p.selection", {"chosen": ["C1"]}, reads=[a("p.table@v1")],
+               writer=chooser, origin="choice")  # fmt: skip
+        b.end("R-0001")
+        move(b)
+        b.rebuild_run("R-0002", ["R-0001"])
+        b.save("R-0002", "p.table", {"order": ["C1", "C2"]}, reads=[record("K", "2")])
+        b.save("R-0002", "p.selection", {"chosen": ["C1"]}, reads=[a("p.table@v2")],
+               writer=chooser, origin="copy_choice", review="I-0001")  # fmt: skip
+        card = open_reviews(b.view())["p.selection@v1"].card_hash
+        assert reject_review(b.store, OWNER, "I-0001", card, b.ids, tree=tree).accepted
+        choice = [e for e in b.events() if e.type == "interrupt.raised"][-1]
+        assert list(choice.payload["options"]) == ["C1", "C2"]
+        assert choice.payload["multiple"] is True
+        fresh = str(choice.payload["interrupt"])
+        assert answer(b.store, OWNER, fresh, by="person", text="C2").accepted
+    finally:
+        b.close()

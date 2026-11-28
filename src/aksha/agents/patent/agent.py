@@ -24,8 +24,12 @@ or folder.
    and which are dropped with a reason; code caps the deep tier and its budget and gives
    deep work to an audit sample of the drops.
 3. ``table`` gathers every recommendation and, when the supervisor decided, the batched
-   review of its decisions, the drop list and the audit; ``select`` asks the person to
-   choose (a ``choice`` interrupt, the drop list beside the options) and saves it.
+   review of its decisions, the drop list and the audit; ``select`` always puts the choice
+   to the person (a ``choice`` interrupt whose options are the table's candidates with
+   their recommendations, built by code: each label is the candidate's code-checked
+   recommendation, not the table's text; any subset, none included) and the run waits.
+   The runtime, not the model, saves the selection from the answer: the codes the person
+   chose. With no candidate at all nothing is asked and an empty selection is recorded.
 4. Per selected candidate, keyed by code from the selection: ``prepare`` fills each blank
    form the plan names (every one found, when it names none) through the form tool,
    ``packet`` assembles the counsel-review packet and ``send`` sends it when the plan
@@ -43,6 +47,7 @@ from aksha.extensions.portfolio import commit_tool, supervisor_task
 from aksha.extensions.portfolio import kinds as portfolio_kinds
 from aksha.runtime.api import (
     Agent,
+    AnswerSave,
     ArtifactKind,
     Budget,
     CitePolicy,
@@ -55,6 +60,7 @@ from aksha.runtime.api import (
     ToolUse,
     VersionedSourceSpec,
     artifact_keys,
+    chosen_by_person,
     kind_question,
 )
 
@@ -152,6 +158,21 @@ PORTFOLIO = {
 prior art, which blank forms to fill (an empty list fills every one found), whether to
 send, and how many top business priorities count as top for the rule table."""
 
+SELECTION = {
+    "type": "object",
+    "required": ["selected", "based_on"],
+    "properties": {
+        "selected": {"type": "array", "items": {"type": "string", "minLength": 1},
+                     "uniqueItems": True},
+        "based_on": {"type": "string"},
+        "recommendations": {"type": "object"},
+    },
+}  # fmt: skip
+"""The person's selection: the candidate codes they chose (``prepare``, ``packet`` and
+``send`` fan out over them) and the table they chose from. Only the runtime saves it, from
+the person's answer to the select Task's choice (``AnswerSave``); a tool's save of it is
+refused."""
+
 KINDS = (
     ArtifactKind("portfolio", PORTFOLIO),
     ArtifactKind("extraction", EXTRACTION, keyed=True),
@@ -175,7 +196,7 @@ KINDS = (
         compute=rules.computed_recommendation,  # business_importance.note is the code's
     ),
     ArtifactKind("table", _schema("rows")),
-    ArtifactKind("selection", _schema("selected", "based_on"), reviewable=True),
+    ArtifactKind("selection", SELECTION, reviewable=True),
     ArtifactKind(
         "form",
         _schema("template", "candidate", "fields", "counts"),
@@ -282,11 +303,21 @@ def tasks() -> tuple[Task, ...]:
         Task(
             "select",
             needs=("table",),
-            reads=("table",),
-            tools=(SAVE,),
+            # The recommendations are read too: the options' labels are theirs, not the table's.
+            reads=("table", Read("patent.recommendation", keys="all")),
+            tools=(),
             writes=("selection",),
-            interrupt=DeclaredInterrupt("choice", "candidate selection"),
-            done=checks.selection_saved,
+            # The person chooses which candidates go to counsel: the options are the
+            # table's candidates, built by code; the runtime saves the selection from the
+            # answer, and the model only asks, with a summary for the question.
+            interrupt=DeclaredInterrupt(
+                "choice",
+                "candidate selection",
+                options=rules.selection_options,
+                multiple=True,
+                saves=AnswerSave("selection", "selected", rules.selection_from_answer),
+            ),
+            done=chosen_by_person,
         ),
         Task(
             "prepare",

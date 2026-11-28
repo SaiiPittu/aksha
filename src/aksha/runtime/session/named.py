@@ -52,6 +52,8 @@ class AnswerInterrupt(CommandBase):
 
     ``amend`` corrects an answer already given to an instance's ``input`` interrupt
     (ADR-P27 D5): the new statement supersedes the old one and reaches invalidation.
+    ``choices`` lists the codes chosen on a choice that takes several (``multiple``); an
+    empty tuple chooses none. ``text`` may carry them instead (``"C1, C4"``, ``"none"``).
     """
 
     interrupt_id: str
@@ -59,6 +61,7 @@ class AnswerInterrupt(CommandBase):
     answers: Mapping[str, str] = field(default_factory=dict)
     agent: str | None = None
     amend: bool = False
+    choices: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

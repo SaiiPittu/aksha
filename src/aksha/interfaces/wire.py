@@ -173,6 +173,7 @@ def waiting_from_json(data: Mapping[str, Any]) -> Waiting:
     for name in pairs:
         fields[name] = tuple((str(a), str(b)) for a, b in fields.get(name) or ())
     fields["options"] = tuple(str(o) for o in fields.get("options") or ())
+    fields["option_labels"] = tuple(str(o) for o in fields.get("option_labels") or ())
     return Waiting(**fields)
 
 

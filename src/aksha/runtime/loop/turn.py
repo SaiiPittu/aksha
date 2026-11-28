@@ -3,6 +3,10 @@
 A turn, in order, each part read from projections of the event store and every write
 made through the durable step executor:
 
+0. On a Task whose declared choice saves an artifact, the runtime's save from the
+   person's answer, when one is due (``loop/answers.py``), recorded as its own step. A
+   refused save ends the turn as a ``fault`` naming the refusal, so the instance ends
+   blocked with the code and message instead of retrying a save nothing can fix.
 1. The stop-policy stack's preparation for the instance (``prep_for``), read from the log
    as it stood before the turn's first step, so a resumed turn prepares the same request:
    brief lines for the context, and a tool narrowing the registry and the gate apply.
@@ -34,6 +38,7 @@ from aksha.runtime.context.types import ContextOverLimit
 from aksha.runtime.execution.errors import StepMismatch
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import StepId, StepPolicy
+from aksha.runtime.loop.answers import save_from_answer
 from aksha.runtime.loop.calls import run_calls
 from aksha.runtime.loop.classify import is_malformed, overflow_end, recorded_turn_end
 from aksha.runtime.loop.types import STEP_MISMATCH, LoopSetup, TurnEnd
@@ -42,6 +47,7 @@ from aksha.runtime.projections.view import LogView
 from aksha.runtime.stop_policy.evaluation import summary_refusal
 from aksha.runtime.stop_policy.stack import narrowing_of, prep_for
 from aksha.runtime.stop_policy.types import StopView
+from aksha.runtime.tasks.choices import answer_kinds
 from aksha.runtime.tasks.types import InstanceRef
 from aksha.runtime.tools.loader_added import offered_for_task
 
@@ -81,12 +87,19 @@ def run_turn(
     setup: LoopSetup, executor: DurableStepExecutor, ref: InstanceRef, turn: int
 ) -> TurnEnd:
     """Run (or resume) turn ``turn`` of ``ref`` and return its end (module doc)."""
+    refused = save_from_answer(setup, executor, ref, turn)  # a person's choice, saved by code
+    if refused is not None:  # nothing the model does fixes it: the instance ends, saying why
+        return TurnEnd(ref.run, ref.instance, turn, "fault", refused, setup.view().seq_read)
     step = StepId(ref.run, ref.instance, turn=turn)
     before = as_of(as_of(setup.view(), step), step.compaction())
     prep = prep_for(stop_view(setup, ref.run, before), ref)
     task = setup.task(ref)
     kinds = setup.artifacts.kinds if setup.artifacts is not None else setup.kinds
-    writable = {n: kinds[n] for n in (setup.tree.kind(w) for w in task.writes) if n in kinds}
+    writable = {
+        n: kinds[n]
+        for n in (setup.tree.kind(w) for w in task.writes)
+        if n in kinds and n not in answer_kinds(setup.tree)  # only the runtime saves these
+    }
     tools = offered_for_task(setup.registry.offered(task, prep.tools), writable)
     step_policy = model_policy(setup, before, ref.run)
     try:

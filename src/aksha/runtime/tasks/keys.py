@@ -14,9 +14,13 @@ Two origins:
 Keys come back sorted as strings, so two fake-model runs give the same order. A key the
 instance-ID grammar cannot carry (empty, or holding ``/``, ``[`` or ``]``) is refused when
 it is listed (``key_invalid``) and left out when an artifact lists it (``invalid_keys``
-names it, so the save that wrote it can be found). :func:`key_entry` gives the entry one
-key stands for, which a keyed instance's context shows (ADR-P08 D3), and
-:func:`key_entry_pointer` where it sits, which that instance records as its read.
+names it, so the save that wrote it can be found). A list item no key can be read from
+(an object with no ``key`` or ``id``, a boolean, a null) is named the same way, as
+``[item n]``, never dropped silently, and the agent loop refuses the save that lists one
+(:func:`listed_key_refusal`), so a malformed list cannot fan out to zero instances.
+:func:`key_entry` gives the entry one key stands for, which a keyed instance's context
+shows (ADR-P08 D3), and :func:`key_entry_pointer` where it sits, which that instance
+records as its read.
 ``keys_of`` does not apply a key source's ``unless`` filter: that needs a Task view, and
 ``status.instance_keys`` applies it.
 """
@@ -24,7 +28,7 @@ key stands for, which a keyed instance's context shows (ADR-P08 D3), and
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aksha.runtime.artifacts.versions import current
 from aksha.runtime.events.envelope import NewEvent
@@ -32,6 +36,12 @@ from aksha.runtime.projections.view import LogView
 from aksha.runtime.tasks.errors import KeyInvalid
 from aksha.runtime.tasks.ports import KeyLister
 from aksha.runtime.tasks.types import KeySource
+
+if TYPE_CHECKING:
+    from aksha.runtime.tasks.tree import CompiledTree
+
+KEY_INVALID = "key_invalid"
+"""The code of a save whose key-source list holds an item no instance key can be read from."""
 
 KEYS_LISTED = "keys.listed"
 SOURCE_CHANGED = "source.changed"
@@ -59,6 +69,16 @@ def _item_key(item: object) -> str | None:
     return str(item)
 
 
+def _unreadable(n: int) -> str:
+    """The stand-in for list item ``n`` that is no key: invalid, so it is named, not dropped."""
+    return f"[item {n}]"
+
+
+def _listed(listed: Sequence[object]) -> tuple[str, ...]:
+    return tuple(_unreadable(n) if (k := _item_key(i)) is None else k
+                 for n, i in enumerate(listed))  # fmt: skip
+
+
 def _artifact_items(view: LogView, kind: str, path: str) -> tuple[str, ...] | None:
     version = current(view, kind, None)
     if version is None:
@@ -66,7 +86,38 @@ def _artifact_items(view: LogView, kind: str, path: str) -> tuple[str, ...] | No
     listed = _field(version.content, path)
     if not isinstance(listed, Sequence) or isinstance(listed, str):
         return ()
-    return tuple(k for k in (_item_key(i) for i in listed) if k is not None)
+    return _listed(listed)
+
+
+def listed_key_refusal(
+    tree: CompiledTree, kind: str, content: Mapping[str, Any]
+) -> tuple[str, str] | None:
+    """``(pointer, message)`` when ``content`` of ``kind`` lists an item no key can be read from.
+
+    ``kind`` (a full name) is a key source when a Task of ``tree`` fans out with
+    ``artifact_keys`` over it. Every item at that path must be a key an instance ID can
+    carry (a string or number, or an object whose ``key`` or ``id`` is one): a save that
+    lists anything else is refused ``key_invalid``, so a malformed list stops the save
+    instead of fanning out to fewer instances than it lists. None when the save is fine.
+    """
+    for node in tree.walk():
+        source = node.task.per
+        if source is None or source.origin == "source" or tree.kind(source.name) != kind:
+            continue
+        listed = _field(content, source.path or "")
+        if listed is None:
+            continue
+        pointer = "/content/" + (source.path or "").replace(".", "/")
+        if not isinstance(listed, Sequence) or isinstance(listed, str):
+            return pointer, f"{source.path} lists the keys {node.path} works on: save a list"
+        bad = [n for n, k in enumerate(_listed(listed)) if not is_valid_key(k)]
+        if bad:
+            return f"{pointer}/{bad[0]}", (
+                f"{source.path} lists the keys {node.path} works on; items {bad} are not keys: "
+                "each item is a string (or an object whose key or id is one), not empty and "
+                "without '/', '[' or ']'"
+            )
+    return None
 
 
 def key_entry(

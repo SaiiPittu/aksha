@@ -68,6 +68,7 @@ Approval A-0001 named patent.packet/C1@v1 exactly, so it cannot cover the rebuil
    C1 outside contributor P-05: suggested F2, F3 on 2025-11-21, before their agreement took effect; flagged needs_counsel_confirmation for counsel
      question for counsel: An outside contributor suggested F2, F3 before the internal note and before their agreement's effective date. Who are the inventors, and who owns a suggestion made outside the agreement?
    A-0001 approved patent.packet/C1@v1 only, so it does not cover patent.packet/C1@v2; a fresh approval is requested
+   scripted: confirmed the copied selection, patent.selection@v1 -> patent.selection@v2
    scripted: accepted the packet's diff review, patent.packet/C1@v1 -> patent.packet/C1@v2
    scripted: approved the fresh request A-0002 for patent.packet/C1@v2
    rebuild runs: R-0003 research (5 model calls), R-0004 patent (21 model calls), R-0005 patent (3 model calls)
@@ -88,11 +89,11 @@ A child process sends the new packet and is killed with a real SIGKILL after the
 
 ```console
 5. Event store
-   hash chain verified: 1912 events, head sha256:0af763909b8949c2...
+   hash chain verified: 1935 events, head sha256:e24e9ec07f292e5c...
 
-Done in 22.13 s. Store, mailbox and sources: demo
+Done in 71.05 s. Store, mailbox and sources: demo
 ```
 
 ## What the new evidence did to the shortlist
 
-C1 was the one candidate marked `prioritize_counsel_review`. With a closer reference and an ownership question open, it is now `collect_more_evidence`. The saved selection is rebuilt from the new recommendations and still holds C1, as the person chose (person). Its packet goes to counsel with the contributor and ownership question marked for their confirmation, since inventorship and ownership are counsel's decision, not the agent's. The full report the demo wrote is in [outputs/demo-report.json](outputs/demo-report.json).
+C1 was the one candidate marked `prioritize_counsel_review`. With a closer reference and an ownership question open, it is now `collect_more_evidence`. The saved selection is copied onto the new table and still holds C1, as the person chose; the copy goes back to the person as a diff review of its own, which they confirm before the packet's review. Its packet goes to counsel with the contributor and ownership question marked for their confirmation, since inventorship and ownership are counsel's decision, not the agent's. The full report the demo wrote is in [outputs/demo-report.json](outputs/demo-report.json).
