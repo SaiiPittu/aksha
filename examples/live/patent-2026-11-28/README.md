@@ -13,7 +13,7 @@ The code was `main` at `0ba2f2f`, after the fixes in #114 to #122 ([06-evals-and
 | `events.jsonl` | all 1,472 events of the store in order, one per line: `owner`, `seq`, `type`, `instance`, `payload` |
 | `inspect/R-0001.txt`, `inspect/R-0002.txt`, `inspect/R-0003.txt` | `aksha inspect` of each run: every model and tool step with its event number, and every stop decision |
 | `outputs/*.json` | `aksha show` of each saved output, at its latest version |
-| `outputs/R-0001/*.json` | the `R-0001` versions of the seven outputs that `R-0002` later saved again, read from the store's `artifacts` table (`aksha show` prints only the latest version) |
+| `outputs/R-0001/*.json` | the `R-0001` versions of the seven outputs saved again later (six by `R-0002`, the selection by `R-0003`), read from the store's `artifacts` table (`aksha show` prints only the latest version) |
 | `trace/R-0001/*.otlp.jsonl`, `trace/R-0003/*.otlp.jsonl` | `aksha trace` of each run: the run as OpenTelemetry (OTLP JSON) spans |
 
 The folder is about 2 MB, most of it `events.jsonl`. The store's blob folder (84 KB) is not included: its 21 files are byte for byte the world's own files under `src/aksha/data/worlds/stillroom/sources/`.
@@ -60,18 +60,18 @@ The run asked nothing more and ended at event 1080, 4.1 minutes after the answer
 | `candidate[C2]/extract` | 4 | `list_inputs`, 4 `read_document`, 1 save, `finish` | `patent.extraction/C2@v1` (event 200) |
 | `candidate[C3]/extract` | 4 | `list_inputs`, 5 `read_document`, 1 save, `finish` | `patent.extraction/C3@v1` (event 265) |
 | `candidate[C4]/extract` | 4 | `list_inputs`, 4 `read_document`, 1 save, `finish` | `patent.extraction/C4@v1` (event 323) |
-| `candidate[C1]/deep/prior_art` | 6 | 6 `search_inputs`, 1 `web_search`, 5 `read_document`, 1 `fetch_url`, 1 save | `patent.prior_art/C1@v1` (event 413): 4 publications in 2 families |
-| `candidate[C1]/deep/compare` | 2 | 1 save | `patent.comparison/C1@v1` (event 439): 12 cells |
-| `candidate[C1]/deep/recommend` | 5 | 1 save refused (`span_not_seen`), 2 saves | version 1 (event 462) refused by its check, version 2 (event 477) `collect_more_evidence` |
-| `candidate[C2]/deep/prior_art` | 5 | 3 `search_inputs`, 1 `web_search`, 2 `read_document`, 1 save | `patent.prior_art/C2@v1` (event 531): 2 publications in 1 family |
-| `candidate[C2]/deep/compare` | 2 | 1 save | `patent.comparison/C2@v1` (event 565): 3 cells |
-| `candidate[C2]/deep/recommend` | 4 | 2 saves | version 1 (event 583) refused, version 2 (event 597) `collect_more_evidence` |
-| `candidate[C3]/deep/prior_art` | 6 | 4 `search_inputs`, 2 `web_search`, 4 `read_document`, 1 save refused (`cite_invalid`), 1 save | `patent.prior_art/C3@v1` (event 669): 4 publications in 2 families |
-| `candidate[C3]/deep/compare` | 2 | 1 save | `patent.comparison/C3@v1` (event 701): 10 cells |
-| `candidate[C3]/deep/recommend` | 4 | 2 saves | version 1 (event 719) refused, version 2 (event 734) `collect_more_evidence` |
-| `candidate[C4]/deep/prior_art` | 7 | 3 `search_inputs`, 2 `web_search`, 1 `read_document`, 2 saves refused (`quote_not_verbatim`, `quote_too_short`), 1 save | `patent.prior_art/C4@v1` (event 797): 1 publication in 1 family |
-| `candidate[C4]/deep/compare` | 2 | 1 save | `patent.comparison/C4@v1` (event 829): 4 cells |
-| `candidate[C4]/deep/recommend` | 4 | 2 saves | version 1 (event 847) refused, version 2 (event 863) `collect_more_evidence` |
+| `candidate[C1]/deep/prior_art` | 6 | 6 `search_inputs`, 1 `web_search`, 5 `read_document`, 1 `fetch_url`, 1 save, `finish` | `patent.prior_art/C1@v1` (event 413): 4 publications in 2 families |
+| `candidate[C1]/deep/compare` | 2 | 1 save, `finish` | `patent.comparison/C1@v1` (event 439): 12 cells |
+| `candidate[C1]/deep/recommend` | 5 | 1 save refused (`span_not_seen`), 2 saves, 2 `finish` | version 1 (event 462) refused by its check, version 2 (event 477) `collect_more_evidence` |
+| `candidate[C2]/deep/prior_art` | 5 | 3 `search_inputs`, 1 `web_search`, 2 `read_document`, 1 save, `finish` | `patent.prior_art/C2@v1` (event 531): 2 publications in 1 family |
+| `candidate[C2]/deep/compare` | 2 | 1 save, `finish` | `patent.comparison/C2@v1` (event 565): 3 cells |
+| `candidate[C2]/deep/recommend` | 4 | 2 saves, 2 `finish` | version 1 (event 583) refused, version 2 (event 597) `collect_more_evidence` |
+| `candidate[C3]/deep/prior_art` | 6 | 4 `search_inputs`, 2 `web_search`, 4 `read_document`, 1 save refused (`cite_invalid`), 1 save, `finish` | `patent.prior_art/C3@v1` (event 669): 4 publications in 2 families |
+| `candidate[C3]/deep/compare` | 2 | 1 save, `finish` | `patent.comparison/C3@v1` (event 701): 10 cells |
+| `candidate[C3]/deep/recommend` | 4 | 2 saves, 2 `finish` | version 1 (event 719) refused, version 2 (event 734) `collect_more_evidence` |
+| `candidate[C4]/deep/prior_art` | 7 | 3 `search_inputs`, 2 `web_search`, 1 `read_document`, 2 saves refused (`quote_not_verbatim`, `quote_too_short`), 1 save, `finish` | `patent.prior_art/C4@v1` (event 797): 1 publication in 1 family |
+| `candidate[C4]/deep/compare` | 2 | 1 save, `finish` | `patent.comparison/C4@v1` (event 829): 4 cells |
+| `candidate[C4]/deep/recommend` | 4 | 2 saves, 2 `finish` | version 1 (event 847) refused, version 2 (event 863) `collect_more_evidence` |
 | `table` | 2 | 1 save | `patent.table@v1` (event 892): one row per candidate, each citing its recommendation |
 | `select` | 2 | `ask` (`I-0001`), `finish` | `patent.selection@v1` (event 924), saved by the runtime from the answer |
 | `prepare[C1]` | 9 | `list_inputs`, 2 `read_form`, `search_inputs`, 2 `read_document`, 2 `fill_form` and 1 refused (`span_not_seen`), `finish` | the two forms (events 988 and 1023) |
