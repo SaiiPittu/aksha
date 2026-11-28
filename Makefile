@@ -25,9 +25,12 @@ venv-postgres: venv
 ## time was waiting for fsync. TEST_TMPDIR= (empty) uses the system temp folder instead.
 TEST_TMPDIR ?= $(if $(wildcard /dev/shm/.),/dev/shm,)
 PYTEST_PARALLEL ?= -n auto --dist loadgroup
+## SHARD=K/N runs only the K-th of N slices of the suite (CI runs four side by side; see
+## shard_key in tests/conftest.py). Unset, make test runs everything.
+SHARD ?=
 
 test:
-	TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest $(PYTEST_PARALLEL)
+	TMPDIR=$(TEST_TMPDIR) $(BIN)/pytest $(PYTEST_PARALLEL) $(if $(SHARD),--shard $(SHARD))
 
 ## The same suite in one process, in collection order: for debugging an order dependence.
 test-serial:

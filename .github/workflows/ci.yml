@@ -60,8 +60,13 @@ jobs:
 
   test-sqlite:
     # SQLite is the default backend. Without psycopg installed, the PostgreSQL tests skip and
-    # say why; the test-postgres job is the one that proves them.
-    name: Tests, SQLite (Python ${{ matrix.python }})
+    # say why; the test-postgres job is the one that proves them. The suite runs as four shards
+    # per Python version, side by side (make test SHARD=K/4, --shard in tests/conftest.py).
+    # A test's shard depends on that test alone: the slowest files are dealt out by a fixed
+    # list, every other test goes by a stable hash of its node ID (or of its xdist group, so
+    # a shared module- or class-scoped fixture is still set up once). No timing service, no
+    # new dependency. The test-shards job proves the shards add up to the whole suite.
+    name: Tests, SQLite (Python ${{ matrix.python }}, shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
     # make test runs on every core (pytest-xdist, -n auto) with its temporary files on the
     # runner's /dev/shm; one process took about 20 minutes per job before that.
@@ -70,6 +75,7 @@ jobs:
       fail-fast: false
       matrix:
         python: ["3.12", "3.13"]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -79,7 +85,42 @@ jobs:
         env:
           PY: ${{ matrix.python }}
         run: make venv PY="$PY"
-      - run: make test
+      - name: Tests (shard ${{ matrix.shard }} of 4)
+        env:
+          SHARD: ${{ matrix.shard }}/4
+        run: make test SHARD="$SHARD"
+
+  test-shards:
+    # The four shards together must be exactly the whole suite: collect the full suite and each
+    # shard, then fail if the shards' node IDs overlap or their union differs from the full set.
+    name: Test shards cover the suite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+      - run: make venv PY=3.12
+      - name: Collect the suite and each shard, then compare
+        run: |
+          set -euo pipefail
+          collect() { .venv/bin/pytest -p no:xdist -p no:cacheprovider --collect-only -q "$@" | grep '::' | sort; }
+          collect > full.txt
+          : > shards.txt
+          for k in 1 2 3 4; do
+            collect --shard "$k/4" > "shard-$k.txt"
+            echo "shard $k/4: $(wc -l < "shard-$k.txt") tests"
+            cat "shard-$k.txt" >> shards.txt
+          done
+          echo "full suite: $(wc -l < full.txt) tests"
+          sort shards.txt > union.txt
+          if [ -n "$(uniq -d union.txt)" ]; then
+            echo "::error::a test is in more than one shard"; uniq -d union.txt; exit 1
+          fi
+          if ! diff -u full.txt union.txt; then
+            echo "::error::the shards do not add up to the full suite"; exit 1
+          fi
 
   test-postgres:
     # AKSHA_REQUIRE_POSTGRES=1 turns every PostgreSQL skip into a failure, so the job cannot pass
@@ -145,7 +186,7 @@ jobs:
   ci-ok:
     name: CI passed
     if: always()
-    needs: [lint, typecheck, test-sqlite, test-postgres, package]
+    needs: [lint, typecheck, test-sqlite, test-shards, test-postgres, package]
     runs-on: ubuntu-24.04
     steps:
       - name: Every job succeeded
