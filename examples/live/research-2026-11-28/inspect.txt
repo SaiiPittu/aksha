@@ -1,0 +1,1246 @@
+{
+  "agent": "research",
+  "budget": {
+    "active_ms": 3600000,
+    "model_turns": 270,
+    "tool_calls": 420
+  },
+  "definition_hash": "sha256:5aeb1135ae0eceeac0d34ef1fe311803f712fdb1f9fb438905c3bee264d1bac5",
+  "ended": {
+    "outcome": "complete",
+    "reason": "completion_checks_passed"
+  },
+  "headless": false,
+  "outcome": "complete",
+  "run": "R-0001",
+  "run_mode": "live",
+  "session": "S-cb55654c6805",
+  "state": "ended",
+  "steps": [
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 10,
+      "step": "R-0001/scope/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 12,
+      "step": "R-0001/scope/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 18,
+      "step": "R-0001/scope/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 20,
+      "step": "R-0001/scope/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 25,
+      "step": "R-0001/scope/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "ask",
+      "outcome": "ok",
+      "seq": 27,
+      "step": "R-0001/scope/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 36,
+      "step": "R-0001/scope/t04"
+    },
+    {
+      "code": "form_not_allowed",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 39,
+      "step": "R-0001/scope/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 42,
+      "step": "R-0001/scope/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 44,
+      "step": "R-0001/scope/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 48,
+      "step": "R-0001/scope/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 50,
+      "step": "R-0001/scope/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 56,
+      "step": "R-0001/discover/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 59,
+      "step": "R-0001/discover/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 65,
+      "step": "R-0001/discover/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 67,
+      "step": "R-0001/discover/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 71,
+      "step": "R-0001/discover/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 73,
+      "step": "R-0001/discover/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 77,
+      "step": "R-0001/discover/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 79,
+      "step": "R-0001/discover/t04/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 83,
+      "step": "R-0001/discover/t04/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 87,
+      "step": "R-0001/discover/t04/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 91,
+      "step": "R-0001/discover/t04/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 95,
+      "step": "R-0001/discover/t04/c05"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 99,
+      "step": "R-0001/discover/t04/c06"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 102,
+      "step": "R-0001/discover/t04/c07"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 108,
+      "step": "R-0001/discover/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 110,
+      "step": "R-0001/discover/t05/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 114,
+      "step": "R-0001/discover/t05/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 117,
+      "step": "R-0001/discover/t05/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 121,
+      "step": "R-0001/discover/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 123,
+      "step": "R-0001/discover/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 135,
+      "step": "R-0001/discover/t07"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 141,
+      "step": "R-0001/evidence[corvane-group]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 145,
+      "step": "R-0001/evidence[corvane-group]/t01/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 151,
+      "step": "R-0001/evidence[corvane-group]/t01/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 156,
+      "step": "R-0001/evidence[corvane-group]/t02"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 158,
+      "step": "R-0001/evidence[corvane-group]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 161,
+      "step": "R-0001/evidence[corvane-group]/t03"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 163,
+      "step": "R-0001/evidence[corvane-group]/t03/c01"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 165,
+      "step": "R-0001/evidence[corvane-group]/t03/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 168,
+      "step": "R-0001/evidence[corvane-group]/t04"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 170,
+      "step": "R-0001/evidence[corvane-group]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 173,
+      "step": "R-0001/evidence[corvane-group]/t05"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 175,
+      "step": "R-0001/evidence[corvane-group]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 178,
+      "step": "R-0001/evidence[corvane-group]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 180,
+      "step": "R-0001/evidence[corvane-group]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 196,
+      "step": "R-0001/evidence[corvane-group]/t07"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 202,
+      "step": "R-0001/evidence[kelvra-systems]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 206,
+      "step": "R-0001/evidence[kelvra-systems]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 213,
+      "step": "R-0001/evidence[kelvra-systems]/t02"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 215,
+      "step": "R-0001/evidence[kelvra-systems]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 218,
+      "step": "R-0001/evidence[kelvra-systems]/t03"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 220,
+      "step": "R-0001/evidence[kelvra-systems]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 223,
+      "step": "R-0001/evidence[kelvra-systems]/t04"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 225,
+      "step": "R-0001/evidence[kelvra-systems]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 228,
+      "step": "R-0001/evidence[kelvra-systems]/t05"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 230,
+      "step": "R-0001/evidence[kelvra-systems]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 233,
+      "step": "R-0001/evidence[kelvra-systems]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 235,
+      "step": "R-0001/evidence[kelvra-systems]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 247,
+      "step": "R-0001/evidence[kelvra-systems]/t07"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 249,
+      "step": "R-0001/evidence[kelvra-systems]/t07/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 255,
+      "step": "R-0001/evidence[noctra]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 259,
+      "step": "R-0001/evidence[noctra]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 266,
+      "step": "R-0001/evidence[noctra]/t02"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 268,
+      "step": "R-0001/evidence[noctra]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 271,
+      "step": "R-0001/evidence[noctra]/t03"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 273,
+      "step": "R-0001/evidence[noctra]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 276,
+      "step": "R-0001/evidence[noctra]/t04"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 278,
+      "step": "R-0001/evidence[noctra]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 281,
+      "step": "R-0001/evidence[noctra]/t05"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 283,
+      "step": "R-0001/evidence[noctra]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 286,
+      "step": "R-0001/evidence[noctra]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 288,
+      "step": "R-0001/evidence[noctra]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 297,
+      "step": "R-0001/evidence[noctra]/t07"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 299,
+      "step": "R-0001/evidence[noctra]/t07/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 305,
+      "step": "R-0001/evidence[tallyway]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 309,
+      "step": "R-0001/evidence[tallyway]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 316,
+      "step": "R-0001/evidence[tallyway]/t02"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 318,
+      "step": "R-0001/evidence[tallyway]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 321,
+      "step": "R-0001/evidence[tallyway]/t03"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 323,
+      "step": "R-0001/evidence[tallyway]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 326,
+      "step": "R-0001/evidence[tallyway]/t04"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 328,
+      "step": "R-0001/evidence[tallyway]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 331,
+      "step": "R-0001/evidence[tallyway]/t05"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 333,
+      "step": "R-0001/evidence[tallyway]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 336,
+      "step": "R-0001/evidence[tallyway]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 338,
+      "step": "R-0001/evidence[tallyway]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 347,
+      "step": "R-0001/evidence[tallyway]/t07"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 349,
+      "step": "R-0001/evidence[tallyway]/t07/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 355,
+      "step": "R-0001/evidence[veyra-labs]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 359,
+      "step": "R-0001/evidence[veyra-labs]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 366,
+      "step": "R-0001/evidence[veyra-labs]/t02"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 368,
+      "step": "R-0001/evidence[veyra-labs]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 371,
+      "step": "R-0001/evidence[veyra-labs]/t03"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 373,
+      "step": "R-0001/evidence[veyra-labs]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 376,
+      "step": "R-0001/evidence[veyra-labs]/t04"
+    },
+    {
+      "code": "not_found",
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "error",
+      "seq": 378,
+      "step": "R-0001/evidence[veyra-labs]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 381,
+      "step": "R-0001/evidence[veyra-labs]/t05"
+    },
+    {
+      "code": "unknown_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 383,
+      "step": "R-0001/evidence[veyra-labs]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 386,
+      "step": "R-0001/evidence[veyra-labs]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 388,
+      "step": "R-0001/evidence[veyra-labs]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 400,
+      "step": "R-0001/evidence[veyra-labs]/t07"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 406,
+      "step": "R-0001/voice/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 409,
+      "step": "R-0001/voice/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 415,
+      "step": "R-0001/voice/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 417,
+      "step": "R-0001/voice/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 423,
+      "step": "R-0001/voice/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 425,
+      "step": "R-0001/voice/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 429,
+      "step": "R-0001/voice/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 431,
+      "step": "R-0001/voice/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 476,
+      "step": "R-0001/voice/t05"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 482,
+      "step": "R-0001/report/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 493,
+      "step": "R-0001/report/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 525,
+      "step": "R-0001/report/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 527,
+      "step": "R-0001/report/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 553,
+      "step": "R-0001/report/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 555,
+      "step": "R-0001/report/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 570,
+      "step": "R-0001/report/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 572,
+      "step": "R-0001/report/t04/c01"
+    }
+  ],
+  "stop_decisions": [
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 9,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 17,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 24,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 30,
+      "verdict": "hold"
+    },
+    {
+      "cause": "continuation",
+      "instance": null,
+      "seq": 31,
+      "verdict": "hold"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 35,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 41,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 47,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 55,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 64,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 70,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 76,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 107,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 120,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "discover",
+      "seq": 134,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 140,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 155,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 160,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 167,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 172,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 177,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[corvane-group]",
+      "seq": 195,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 201,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 212,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 217,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 222,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 227,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 232,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[kelvra-systems]",
+      "seq": 246,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 254,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 265,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 270,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 275,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 280,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 285,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[noctra]",
+      "seq": 296,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 304,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 315,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 320,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 325,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 330,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 335,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[tallyway]",
+      "seq": 346,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 354,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 365,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 370,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 375,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 380,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 385,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "evidence[veyra-labs]",
+      "seq": 399,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "voice",
+      "seq": 405,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "voice",
+      "seq": 414,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "voice",
+      "seq": 422,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "voice",
+      "seq": 428,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "voice",
+      "seq": 475,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "report",
+      "seq": 481,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "report",
+      "seq": 524,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "report",
+      "seq": 552,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "report",
+      "seq": 569,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": null,
+      "seq": 576,
+      "verdict": "stop"
+    }
+  ],
+  "waiting_on": []
+}

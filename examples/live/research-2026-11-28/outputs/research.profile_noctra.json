@@ -1,0 +1,111 @@
+{
+  "content": {
+    "cells": {
+      "battery_life": [
+        {
+          "cite": {
+            "quote": "5 year battery life claimed.",
+            "span": "EX-0190"
+          },
+          "date": "2026-07-08",
+          "label": "vendor_claim",
+          "page": "https://noctra.example/product",
+          "value": "5 year battery life"
+        }
+      ],
+      "counting_accuracy": [
+        {
+          "unknown": {
+            "question": "What is the headcount error against a manual count?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "installation_effort": [
+        {
+          "unknown": {
+            "question": "What mounting and setup effort is needed?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "price": [
+        {
+          "cite": {
+            "quote": "Contact sales for a quote.",
+            "span": "EX-0073"
+          },
+          "date": "2026-07-08",
+          "label": "fact",
+          "page": "https://noctra.example/product",
+          "value": "Contact sales for a quote."
+        }
+      ],
+      "privacy": [
+        {
+          "unknown": {
+            "question": "What are the privacy and data handling practices?",
+            "reason": "not_checked"
+          }
+        }
+      ]
+    },
+    "conflicts": [],
+    "flags": [
+      {
+        "text": {
+          "cite": {
+            "quote": "Estimates occupancy from motion and CO2 rise.",
+            "span": "EX-0188"
+          },
+          "date": "2026-07-08",
+          "label": "fact",
+          "page": "https://noctra.example/product",
+          "value": "Estimates occupancy from motion and CO2 rise."
+        }
+      },
+      {
+        "text": {
+          "cite": {
+            "quote": "CO2 accuracy +/- 50 ppm.",
+            "span": "EX-0191"
+          },
+          "date": "2026-07-08",
+          "label": "fact",
+          "page": "https://noctra.example/product",
+          "value": "CO2 accuracy +/- 50 ppm."
+        }
+      }
+    ],
+    "key": "noctra",
+    "name": "Noctra",
+    "pages": [
+      {
+        "date": "2026-07-08",
+        "url": "https://noctra.example/product"
+      }
+    ],
+    "price_notes": [
+      {
+        "cite": {
+          "quote": "Contact sales for a quote.",
+          "span": "EX-0073"
+        },
+        "date": "2026-07-08",
+        "label": "fact",
+        "page": "https://noctra.example/product",
+        "value": "Contact sales for a quote."
+      }
+    ],
+    "prices": [
+      {
+        "unknown": {
+          "question": "What amount and basis would sales quote?",
+          "reason": "not_checked"
+        }
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.profile/noctra@v1"
+}

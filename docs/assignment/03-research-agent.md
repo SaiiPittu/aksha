@@ -138,11 +138,17 @@ The cause is a harness bug, not the model. A per-key Task instance is never told
 2. A text-only reply counts as a request to finish. With `max_finish_vetoes=1` (the evidence Task's setting at the time of that run) the first refusal already reached the limit, so at event 138 the stop policy failed `evidence[corvane-group]` (`stop_veto_limit`) with no feedback turn.
 3. At event 177 the instance `evidence[kelvra-systems]` saved `research.profile/corvane-group@v1`, the wrong company's profile.
 
-The interactive patent run (c) of the same day hit the same bug ([04-patent-agent.md](04-patent-agent.md#a-real-model-interactive-on-the-assignments-own-prompt)). Both the per-key bug and the cost of ingestion are being fixed; neither fix is merged. All three runs side by side, with the bug's three failure modes, are on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model).
+The interactive patent run (c) of the same day hit the same bug ([04-patent-agent.md](04-patent-agent.md#a-real-model-interactive-on-the-assignments-own-prompt)). Both the per-key bug and the cost of ingestion are fixed and merged (#114, #115). All three runs side by side, with the bug's three failure modes, are on [06-evals-and-live-runs.md](06-evals-and-live-runs.md#live-runs-on-a-real-model).
 
 ### After the fixes
 
-To be added: runs (a) and (b) repeated on the fixed code, with their run IDs, outcomes and counts. The repeated runs are reported first under [After the fixes](06-evals-and-live-runs.md#after-the-fixes) on the live-runs page.
+Run (b) repeated on 28 Nov 2026 on `main` at `b2dacd9`, after the fixes #114 (keyed instances told their key), #115 (fast answers asked once per run), #116 (empty market and world framing) and #117 (a limit runs the check; no per-Task turn limits, decision 42). Same model, settings, prompt and upload as run (b).
+
+1. The agent asked `I-0001`: "What problem should the comparison focus on? The supplied reviews mention sensors in meeting rooms, but the request doesn't specify the use case." The answer named camera-free occupancy sensing for office meeting rooms, for facility managers of mid-size EU office buildings.
+2. It ended `complete` (`completion_checks_passed`) in about 8.5 minutes, with 57 model calls, 3 searches, 12 fetches and 147 citations bound. `aksha verify`: chain ok, 576 events.
+3. It saved 5 competitors, and all 5 match the answer key, including the acquisition: the Brightfield Analytics and Corvane pages merged by a `same_entity_as` relation (event 125). Each of the 5 `evidence` instances saved its profile under its own key. The needs count battery life in 7 of 40 unique reviews, the key's count, where run (b) saved every theme as 0 of 40.
+
+The run's events, inspector output, outputs and trace are in [examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md). The before and after table is under [After the fixes](06-evals-and-live-runs.md#after-the-fixes) on the live-runs page. The bundled recording of run (a) is stale until re-recorded.
 
 ## Sources
 
@@ -155,5 +161,6 @@ Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
 - Tests, all passing on 28 Nov 2026 with `pytest` on this branch: `tests/agents/research/test_episodes.py`, `tests/agents/research/test_runs.py`, `tests/agents/research/test_counts.py`, `tests/integration/test_grounding.py`, `tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task`, `tests/integration/test_record_replay.py::test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs`.
 - Runtime and agent boundary: [02-shared-runtime.md](02-shared-runtime.md), `tests/architecture/test_extension_boundary.py::test_third_agent_runtime_hash_unchanged`.
 - Offline runs: [examples/research-conversation.md](../../examples/research-conversation.md), [examples/outputs/research-summary.md](../../examples/outputs/research-summary.md); `aksha demo` with a private `AKSHA_HOME`, 28 Nov 2026, exit 0.
+- Final run after the fixes: exported to `examples/live/research-2026-11-28/` from the store `aksha-live/live-chat-research-final/aksha.sqlite`, read from a copy.
 - Live runs (read-only stores on the maintainer's machine; only run (a) is in the repository): run (a) `aksha-live/runs/live-sol-final/` (event 387, `run.ended`), shipped as `src/aksha/data/recordings/research-live-gpt/`; run (b) `aksha-live/live-chat-research/aksha.sqlite` (events 28, 33, 112, 134, 138, 177, 197, 323). Replay measured on 28 Nov 2026 with `aksha replay ... --out`, exit 0.
 - Fuller agent documentation: [docs/agents/research.md](../agents/research.md), [docs/agents/tools-and-schemas.md](../agents/tools-and-schemas.md).

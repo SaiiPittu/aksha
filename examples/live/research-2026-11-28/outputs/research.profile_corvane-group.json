@@ -1,0 +1,189 @@
+{
+  "content": {
+    "cells": {
+      "battery_life": [
+        {
+          "cite": {
+            "quote": "Battery life up to 3 years.",
+            "span": "EX-0176"
+          },
+          "date": "2026-09-15",
+          "label": "vendor_claim",
+          "page": "https://corvane.example/product",
+          "value": "up to 3 years"
+        },
+        {
+          "cite": {
+            "quote": "Battery life up to 3 years.",
+            "span": "EX-0151"
+          },
+          "date": "2026-04-02",
+          "label": "vendor_claim",
+          "page": "https://brightfield.example/product",
+          "value": "up to 3 years"
+        }
+      ],
+      "counting_accuracy": [
+        {
+          "unknown": {
+            "question": "How accurate is the sensor at counting occupants?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "installation_effort": [
+        {
+          "unknown": {
+            "question": "What steps, tools and time does installation require?",
+            "reason": "not_located"
+          }
+        }
+      ],
+      "price": [
+        {
+          "basis": "one-off, launch offer",
+          "cite": {
+            "quote": "USD 199 per unit</td><td>one-off, launch offer",
+            "span": "EX-0171"
+          },
+          "date": "2026-09-15",
+          "label": "fact",
+          "page": "https://corvane.example/product",
+          "value": "USD 199 per unit"
+        },
+        {
+          "basis": "one-off",
+          "cite": {
+            "quote": "USD 229 per unit</td><td>one-off",
+            "span": "EX-0177"
+          },
+          "date": "2026-04-02",
+          "label": "fact",
+          "page": "https://brightfield.example/product",
+          "value": "USD 229 per unit"
+        },
+        {
+          "basis": "billed annually",
+          "cite": {
+            "quote": "USD 7 per sensor per month</td><td>billed annually",
+            "span": "EX-0172"
+          },
+          "date": "2026-09-15",
+          "label": "fact",
+          "page": "https://corvane.example/product",
+          "value": "USD 7 per sensor per month"
+        },
+        {
+          "basis": "billed annually",
+          "cite": {
+            "quote": "USD 7 per sensor per month</td><td>billed annually",
+            "span": "EX-0178"
+          },
+          "date": "2026-04-02",
+          "label": "fact",
+          "page": "https://brightfield.example/product",
+          "value": "USD 7 per sensor per month"
+        }
+      ],
+      "privacy": [
+        {
+          "unknown": {
+            "question": "What data is collected, retained or shared?",
+            "reason": "not_located"
+          }
+        }
+      ]
+    },
+    "conflicts": [
+      {
+        "basis": "one-off per unit",
+        "kind": "contradicts",
+        "values": [
+          {
+            "basis": "one-off, launch offer",
+            "cite": {
+              "quote": "USD 199 per unit</td><td>one-off, launch offer",
+              "span": "EX-0171"
+            },
+            "date": "2026-09-15",
+            "label": "fact",
+            "page": "https://corvane.example/product",
+            "value": "USD 199 per unit"
+          },
+          {
+            "basis": "one-off",
+            "cite": {
+              "quote": "USD 229 per unit</td><td>one-off",
+              "span": "EX-0177"
+            },
+            "date": "2026-04-02",
+            "label": "fact",
+            "page": "https://brightfield.example/product",
+            "value": "USD 229 per unit"
+          }
+        ]
+      }
+    ],
+    "flags": [],
+    "key": "corvane-group",
+    "name": "Corvane Group",
+    "pages": [
+      {
+        "date": "2026-09-15",
+        "url": "https://corvane.example/product"
+      },
+      {
+        "date": "2026-04-02",
+        "url": "https://brightfield.example/product"
+      }
+    ],
+    "prices": [
+      {
+        "basis": "one-off, launch offer",
+        "cite": {
+          "quote": "USD 199 per unit</td><td>one-off, launch offer",
+          "span": "EX-0171"
+        },
+        "date": "2026-09-15",
+        "label": "fact",
+        "page": "https://corvane.example/product",
+        "value": "USD 199 per unit"
+      },
+      {
+        "basis": "one-off",
+        "cite": {
+          "quote": "USD 229 per unit</td><td>one-off",
+          "span": "EX-0177"
+        },
+        "date": "2026-04-02",
+        "label": "fact",
+        "page": "https://brightfield.example/product",
+        "value": "USD 229 per unit"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "USD 7 per sensor per month</td><td>billed annually",
+          "span": "EX-0172"
+        },
+        "date": "2026-09-15",
+        "label": "fact",
+        "page": "https://corvane.example/product",
+        "value": "USD 7 per sensor per month"
+      },
+      {
+        "basis": "billed annually",
+        "cite": {
+          "quote": "USD 7 per sensor per month</td><td>billed annually",
+          "span": "EX-0178"
+        },
+        "date": "2026-04-02",
+        "label": "fact",
+        "page": "https://brightfield.example/product",
+        "value": "USD 7 per sensor per month"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.profile/corvane-group@v1"
+}

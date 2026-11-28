@@ -1,0 +1,134 @@
+{
+  "content": {
+    "cells": {
+      "battery_life": [
+        {
+          "cite": {
+            "quote": "Mains powered (USB-C, 5 V).",
+            "span": "EX-0203"
+          },
+          "date": "2026-09-30",
+          "label": "fact",
+          "page": "https://veyra.example/product",
+          "value": "Mains powered (USB-C, 5 V)."
+        },
+        {
+          "unknown": {
+            "question": "Can battery operation and runtime be independently verified?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "counting_accuracy": [
+        {
+          "cite": {
+            "quote": "A 60 GHz mmWave radar that detects breathing-level micro-motion, so seated people stay counted.",
+            "span": "EX-0041"
+          },
+          "date": "2026-09-30",
+          "label": "vendor_claim",
+          "page": "https://veyra.example/product",
+          "value": "so seated people stay counted"
+        },
+        {
+          "unknown": {
+            "question": "What measured counting error would independent testing show?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "installation_effort": [
+        {
+          "cite": {
+            "quote": "Mains powered (USB-C, 5 V).",
+            "span": "EX-0203"
+          },
+          "date": "2026-09-30",
+          "label": "fact",
+          "page": "https://veyra.example/product",
+          "value": "Mains powered (USB-C, 5 V)."
+        },
+        {
+          "unknown": {
+            "question": "What mounting, calibration and labor would a pilot installation require?",
+            "reason": "not_checked"
+          }
+        }
+      ],
+      "price": [
+        {
+          "basis": "one-off",
+          "cite": {
+            "quote": "EUR 319 per unit</td><td>one-off",
+            "span": "EX-0201"
+          },
+          "date": "2026-09-30",
+          "label": "fact",
+          "page": "https://veyra.example/product",
+          "value": "EUR 319 per unit"
+        },
+        {
+          "basis": "billed monthly",
+          "cite": {
+            "quote": "EUR 9 per sensor per month</td><td>billed monthly",
+            "span": "EX-0202"
+          },
+          "date": "2026-09-30",
+          "label": "fact",
+          "page": "https://veyra.example/product",
+          "value": "EUR 9 per sensor per month"
+        }
+      ],
+      "privacy": [
+        {
+          "unknown": {
+            "question": "What data-handling practices apply?",
+            "reason": "not_checked"
+          }
+        }
+      ]
+    },
+    "conflicts": [],
+    "flags": [],
+    "key": "veyra-labs",
+    "name": "Veyra Labs",
+    "pages": [
+      {
+        "cite": {
+          "quote": "content=\"2026-09-30\"",
+          "span": "EX-0037"
+        },
+        "date": "2026-09-30",
+        "url": "https://veyra.example/product"
+      }
+    ],
+    "prices": [
+      {
+        "basis": "one-off",
+        "cite": {
+          "quote": "EUR 319 per unit</td><td>one-off",
+          "span": "EX-0201"
+        },
+        "date": "2026-09-30",
+        "item": "Veyra Halo sensor",
+        "label": "fact",
+        "page": "https://veyra.example/product",
+        "value": "EUR 319 per unit"
+      },
+      {
+        "basis": "billed monthly",
+        "cite": {
+          "quote": "EUR 9 per sensor per month</td><td>billed monthly",
+          "span": "EX-0202"
+        },
+        "date": "2026-09-30",
+        "item": "Presence API",
+        "label": "fact",
+        "page": "https://veyra.example/product",
+        "value": "EUR 9 per sensor per month"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.profile/veyra-labs@v1"
+}

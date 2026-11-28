@@ -1,0 +1,352 @@
+{
+  "content": {
+    "needs": [
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Works council asked us to prove it does not see through walls.",
+              "span": "EX-0105"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our works council wanted written proof that no image leaves the sensor.",
+              "span": "EX-0116"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Legal asked many questions about radar and privacy.",
+              "span": "EX-0123"
+            }
+          }
+        ],
+        "phrase": "3 of 40 reviews in this sample",
+        "theme": "privacy"
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0101"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Counts drift when two people pass the door together.",
+              "span": "EX-0107"
+            }
+          },
+          {
+            "cite": {
+              "quote": "CO2 lags by ten minutes, so the room shows empty after people walk in.",
+              "span": "EX-0110"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Display says empty while four of us sat still in a workshop.",
+              "span": "EX-0112"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0115"
+            }
+          },
+          {
+            "cite": {
+              "quote": "recalibration at night fails in our 24 hour office.",
+              "span": "EX-0117"
+            }
+          },
+          {
+            "cite": {
+              "quote": "weak for counting.",
+              "span": "EX-0120"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Hot afternoons show ghost occupants near the window.",
+              "span": "EX-0121"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Motion sensor misses people on calls who do not move.",
+              "span": "EX-0125"
+            }
+          },
+          {
+            "cite": {
+              "quote": "counts are rough.",
+              "span": "EX-0131"
+            }
+          }
+        ],
+        "phrase": "10 of 40 reviews in this sample",
+        "theme": "counting_accuracy"
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "every sensor needed a new PoE cable.",
+              "span": "EX-0100"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Our electrician took two days for one floor.",
+              "span": "EX-0102"
+            }
+          },
+          {
+            "cite": {
+              "quote": "every unit needs a power socket on the ceiling.",
+              "span": "EX-0104"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Setup app is clunky.",
+              "span": "EX-0113"
+            }
+          },
+          {
+            "cite": {
+              "quote": "the cabling cost more than the sensors.",
+              "span": "EX-0122"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Two units fell off the ceiling tile clips.",
+              "span": "EX-0126"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Install needed an electrician for sockets.",
+              "span": "EX-0128"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Sensor placement guide was unclear; two rooms needed remounting.",
+              "span": "EX-0135"
+            }
+          },
+          {
+            "cite": {
+              "quote": "app pairing took a while.",
+              "span": "EX-0136"
+            }
+          }
+        ],
+        "phrase": "9 of 40 reviews in this sample",
+        "theme": "installation_effort"
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Batteries died after about a year, not seven.",
+              "span": "EX-0106"
+            }
+          },
+          {
+            "cite": {
+              "quote": "We replace batteries every 14 months across 300 doors.",
+              "span": "EX-0108"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery warnings started after eight months on most units.",
+              "span": "EX-0114"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery swap schedule is a constant chore for facilities.",
+              "span": "EX-0119"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery life nowhere near the advertised figure in a busy office.",
+              "span": "EX-0124"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery dropped to 20% within the first year.",
+              "span": "EX-0130"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Battery lasted ten months, far from the claim.",
+              "span": "EX-0138"
+            }
+          }
+        ],
+        "phrase": "7 of 40 reviews in this sample",
+        "theme": "battery_life"
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "The lights went off while I was sitting alone reading for half an hour.",
+              "span": "EX-0101"
+            }
+          },
+          {
+            "cite": {
+              "quote": "CO2 lags by ten minutes, so the room shows empty after people walk in.",
+              "span": "EX-0110"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Display says empty while four of us sat still in a workshop.",
+              "span": "EX-0112"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Room shows empty while someone sits still at the desk.",
+              "span": "EX-0115"
+            }
+          }
+        ],
+        "phrase": "4 of 40 reviews in this sample",
+        "theme": "workflow"
+      },
+      {
+        "evidence": [
+          {
+            "cite": {
+              "quote": "Sales would not give a price until a call. Took three weeks.",
+              "span": "EX-0111"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Very accurate, pricey per month.",
+              "span": "EX-0118"
+            }
+          },
+          {
+            "cite": {
+              "quote": "the cabling cost more than the sensors.",
+              "span": "EX-0122"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Good, expensive for small rooms.",
+              "span": "EX-0137"
+            }
+          }
+        ],
+        "phrase": "4 of 40 reviews in this sample",
+        "theme": "cost"
+      }
+    ],
+    "sample": {
+      "duplicates": [
+        {
+          "duplicate_of": "R-009",
+          "evidence": [
+            {
+              "cite": {
+                "quote": "We replace batteries every 14 months across 300 doors.",
+                "span": "EX-0108"
+              }
+            },
+            {
+              "cite": {
+                "quote": "We replace batteries every 14 months across 300 doors.",
+                "span": "EX-0168"
+              }
+            }
+          ],
+          "review": "R-041"
+        },
+        {
+          "duplicate_of": "R-016",
+          "evidence": [
+            {
+              "cite": {
+                "quote": "Room shows empty while someone sits still at the desk.",
+                "span": "EX-0115"
+              }
+            },
+            {
+              "cite": {
+                "quote": "Room shows empty while someone sits still at the desk.",
+                "span": "EX-0169"
+              }
+            }
+          ],
+          "review": "R-042"
+        }
+      ],
+      "reviews": [
+        "R-001",
+        "R-002",
+        "R-003",
+        "R-004",
+        "R-005",
+        "R-006",
+        "R-007",
+        "R-008",
+        "R-009",
+        "R-010",
+        "R-011",
+        "R-012",
+        "R-013",
+        "R-014",
+        "R-015",
+        "R-016",
+        "R-017",
+        "R-018",
+        "R-019",
+        "R-020",
+        "R-021",
+        "R-022",
+        "R-023",
+        "R-024",
+        "R-025",
+        "R-026",
+        "R-027",
+        "R-028",
+        "R-029",
+        "R-030",
+        "R-031",
+        "R-032",
+        "R-033",
+        "R-034",
+        "R-035",
+        "R-036",
+        "R-037",
+        "R-038",
+        "R-039",
+        "R-040",
+        "R-041",
+        "R-042"
+      ],
+      "rows": 42,
+      "unique": 40
+    }
+  },
+  "freshness": "current",
+  "ref": "research.needs@v1"
+}

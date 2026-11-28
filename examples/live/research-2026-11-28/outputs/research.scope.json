@@ -1,0 +1,74 @@
+{
+  "content": {
+    "asked": [
+      "What problem should the comparison focus on? The supplied reviews mention sensors in meeting rooms, but the request doesn\u2019t specify the use case."
+    ],
+    "boundary": {
+      "in": "Per answer EX-0006, include camera-free occupancy sensing for office meeting rooms so booking and lighting reflect actual use; camera-based products and other spaces do not qualify.",
+      "out": []
+    },
+    "dimensions": [
+      {
+        "id": "privacy",
+        "name": "Privacy"
+      },
+      {
+        "id": "counting_accuracy",
+        "name": "Counting accuracy"
+      },
+      {
+        "id": "installation_effort",
+        "name": "Installation effort"
+      },
+      {
+        "id": "battery_life",
+        "name": "Battery life"
+      }
+    ],
+    "geography": {
+      "basis": "Answer EX-0006",
+      "value": "EU"
+    },
+    "plan": {
+      "kind": "comparison",
+      "outputs": [
+        "Compare sellers and products on stated price and the four dimensions named in answer EX-0006.",
+        "Summarize complaints in the supplied review sample, deduplicating cross-posts and reporting sample limits.",
+        "Prioritize next tests for real room use, booking and lighting, based on complaint patterns and evidence gaps."
+      ]
+    },
+    "question": "Who already offers camera-free occupancy sensing for office meeting rooms so booking and lighting reflect actual use, what do customers complain about, and what should we test next?",
+    "segment": {
+      "basis": "Answer EX-0006",
+      "value": "Facility managers of mid-size office buildings"
+    },
+    "themes": [
+      {
+        "id": "privacy",
+        "name": "Privacy concerns"
+      },
+      {
+        "id": "counting_accuracy",
+        "name": "Miscounts and missed occupancy"
+      },
+      {
+        "id": "installation_effort",
+        "name": "Installation and retrofit friction"
+      },
+      {
+        "id": "battery_life",
+        "name": "Battery life and replacement burden"
+      },
+      {
+        "id": "workflow",
+        "name": "Booking and lighting behavior when occupancy changes"
+      },
+      {
+        "id": "cost",
+        "name": "Price and ongoing cost complaints"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "research.scope@v1"
+}
