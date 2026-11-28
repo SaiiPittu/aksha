@@ -27,9 +27,13 @@ kind's extraction schema list the form's fields, the agent declares as data
 A form whose kind the fast classifier confidently decided is another, or whose extraction
 names no field, is refused, so a model cannot fill a form that is not among the inputs. The
 classifier is an optimisation, never a gatekeeper: when it abstains on a record (its kind is
-undecided), the record is recognised by its structure instead. The form kind's extraction
-runs over it as it would over a decided form, and the record is a blank form when that
-yields at least one form field. Such a form shows ``recognised_by: "structure"`` in the
+undecided), the record is recognised by its structure instead. The section decisions come
+first: they are the row ``list_inputs`` decides (the same requests, so memo hits in a run),
+and an undecided record with a section confidently decided as another declared kind (an
+engineering note whose Problem section is an invention disclosure, say) is refused
+``not_a_form``, in step with the ``list_inputs`` kind filter. Otherwise the form kind's
+extraction runs over it as it would over a decided form, and the record is a blank form when
+that yields at least one form field. Such a form shows ``recognised_by: "structure"`` in the
 ``read_form`` and ``fill_form`` results; an undecided record with no form field is refused
 ``not_a_form``.
 """
@@ -44,8 +48,8 @@ from typing import Any
 from aksha.runtime.artifacts.types import ArtifactKind, InputRef, SaveRequest
 from aksha.runtime.grounding.segment import Segment, sniff_format
 from aksha.runtime.grounding.types import ReturnedText, SpanDraft
-from aksha.runtime.inputs.tools import InputReading, resolve, segments_of
-from aksha.runtime.models.documents import accepted_ranges, decide_kind, document_preview
+from aksha.runtime.inputs.tools import InputReading, decide_row, resolve, segments_of
+from aksha.runtime.models.documents import OTHER_KIND, accepted_ranges
 from aksha.runtime.tools.types import Err, Ok, ToolContext, ToolDecl, ToolOutcome, ToolSpec
 
 READ_FORM = "read_form"
@@ -245,8 +249,9 @@ def read_blank_form(
     if reading.decide is None or kind is None or kind.extract is None or ctx.models is None:
         return Err("no_forms", "this agent declares no blank form kind to read", item=record)
     fmt = sniff_format(record, found.text)
-    state = document_preview(record, fmt, found.text, segments_of(found.text, fmt))
-    kind_name, settled, _ = decide_kind(ctx.models, reading.decide, reading.kinds, state)
+    # The row list_inputs decides (the same requests, so memo hits within a run).
+    row = decide_row(ctx, reading, found, fmt, segments_of(found.text, fmt))
+    kind_name, settled = row["kind"], row["decided"]
     refusal = Err(
         "not_a_form",
         f"{record} is read as {kind_name}, not a blank form: list_inputs with kinds "
@@ -256,7 +261,22 @@ def read_blank_form(
     )
     if settled and kind_name != spec.template_kind:
         return refusal  # the classifier confidently read another kind
-    by_structure = kind_name != spec.template_kind  # it abstained: the fields decide
+    by_structure = not settled  # it abstained: the sections, then the fields, decide
+    if by_structure:
+        others = sorted(
+            {
+                sec["kind"]
+                for sec in row.get("sections", ())
+                if sec["decided"] and sec["kind"] not in (spec.template_kind, OTHER_KIND)
+            }
+        )
+        if others:
+            return replace(
+                refusal,
+                message=f"{record}'s kind is undecided but its sections are read as {others}, "
+                f"so it is not a blank form: list_inputs with kinds [{spec.template_kind!r}] "
+                "lists the blank forms",
+            )
     segs, drafts = line_passages(found, fmt)
     judged = ctx.models.extract(kind.extract, found, drafts) if drafts else ()
     _, ranges, _ = accepted_ranges(judged, drafts)

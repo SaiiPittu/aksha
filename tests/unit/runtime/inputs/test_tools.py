@@ -68,7 +68,10 @@ class Kind(RuleClassificationModel):
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         q = request.questions[0]
         pick = "note" if "format: markdown" in request.state else "other"
-        if "undecided" in request.state:  # abstains: an even split, as a live classifier can
+        section = "#section-" in request.state.split("\n", 1)[0]
+        if "undecided" in request.state or (section and "maybe" in request.state):
+            # abstains (an even split, as a live classifier can): on a record whose ref says
+            # undecided, and on a section that says maybe
             even = {o: Decimal(1) / len(q.options) for o in q.options}
             return ClassificationResult(
                 answers=((q.name, ClassAnswer(pick, distribution_ppm(even))),)
@@ -182,6 +185,20 @@ def test_a_kind_filter_keeps_an_input_whose_kind_is_undecided(source: Source) ->
     assert "note" not in rows["input/note.md"]
     every = _call("list_inputs", source, {})
     assert isinstance(every, Ok) and all("note" not in r for r in every.data["inputs"])
+
+
+def test_a_kind_filter_hides_a_decided_record_with_an_abstaining_section(source: Source) -> None:
+    """Only the record's own abstention keeps it: live, a preamble section abstains on most
+    multi-section notes, and keeping those would defeat the filter."""
+    source.texts["input/mixed.md"] = "# Plan\n\nWe sell it.\n\n## Aside\n\nmaybe later.\n"
+    two = replace(READING, kinds=(*KINDS, DocumentKind("memo", "a memo")))
+    every = _call("list_inputs", source, {}, reading=two)
+    assert isinstance(every, Ok)
+    mixed = next(r for r in every.data["inputs"] if r["ref"] == "input/mixed.md")
+    assert (mixed["kind"], mixed["decided"]) == ("note", True)
+    assert [s["decided"] for s in mixed["sections"]] == [True, False]  # the Aside abstains
+    got = _call("list_inputs", source, {"kinds": ["memo"]}, reading=two)
+    assert isinstance(got, Ok) and got.data["inputs"] == []  # a decided note is no memo
 
 
 def test_a_listing_version_is_its_hit_set(source: Source) -> None:

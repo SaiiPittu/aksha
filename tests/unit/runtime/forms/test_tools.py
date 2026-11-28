@@ -65,12 +65,15 @@ class Source:
 
 class Kind(RuleClassificationModel):
     """``intake`` for a record with a heading, ``other`` for anything else; it abstains (an
-    even split) on a record whose ref says ``undecided``, as a live fast classifier does."""
+    even split) on a record whose ref says ``undecided``, as a live fast classifier does, but
+    reads a section headed ``Findings`` confidently as a ``visit_note``."""
 
     def classify(self, request: ClassificationRequest) -> ClassificationResult:
         q = request.questions[0]
         pick = "intake" if "headings:" in request.state else "other"
-        if "undecided" in request.state:
+        if "#section-" in request.state.split("\n", 1)[0] and "Findings" in request.state:
+            pick = "visit_note"  # a section of findings: confidently a visit note
+        elif "undecided" in request.state:
             even = {o: Decimal(1) / len(q.options) for o in q.options}
             return ClassificationResult(
                 answers=((q.name, ClassAnswer(pick, distribution_ppm(even))),)
@@ -108,7 +111,10 @@ class Boxes(RuleExtractionModel):
         return ExtractionResult(answers=tuple(answers))
 
 
-KINDS = (DocumentKind("intake", "a blank checklist to fill", "boxes"),)
+KINDS = (
+    DocumentKind("intake", "a blank checklist to fill", "boxes"),
+    DocumentKind("visit_note", "notes from a site visit"),
+)
 ALIASES = (
     ModelAlias("kind", "classification"),
     ModelAlias(
@@ -415,3 +421,33 @@ def test_a_record_confidently_read_as_another_kind_is_still_refused(source: Sour
     source.texts["input/undecided-notes.txt"] = NOTE  # undecided, and no form field in it
     out = _call("read_form", source, {"template": "input/undecided-notes.txt"}).result
     assert isinstance(out, Err) and out.code == "not_a_form" and "undecided" in out.message
+
+
+UNDECIDED_NOTE = (
+    "# Visit notes\n\n## Findings\n\nThe floor plan is out of date.\n\n"
+    "## Parameters\n\n- [ ] Site name (required)\n- [ ] Floor plan\n"
+)
+
+
+def test_an_undecided_record_with_a_section_of_another_kind_is_not_a_form(
+    source: Source,
+) -> None:
+    """Structure decides only after the section decisions: live, an engineering note whose
+    record kind was undecided held a parameter table that reads like form rows, while its
+    Problem and Mechanism sections were confidently invention disclosures. Its box lines
+    would make it a form; the confident section refuses it, and fill_form saves nothing."""
+    ref = "input/notes/undecided-visit.md"
+    source.texts[ref] = UNDECIDED_NOTE
+    read = _call("read_form", source, {"template": ref}).result
+    assert isinstance(read, Err) and read.code == "not_a_form"
+    assert "its sections are read as ['visit_note']" in read.message
+    filled = _call("fill_form", source, {"template": ref, "key": "S1", "fields": _fields()})
+    assert isinstance(filled.result, Err) and filled.result.code == "not_a_form"
+    assert not filled.saves
+    from aksha.runtime.inputs.tools import input_tools
+
+    listing = {t.spec.name: t for t in input_tools("checklist", READING)}["list_inputs"].body
+    assert listing is not None
+    listed = listing(_ctx(source), {"kinds": ["intake"]}).result
+    assert isinstance(listed, Ok)
+    assert ref not in {r["ref"] for r in listed.data["inputs"]}  # in step with the listing

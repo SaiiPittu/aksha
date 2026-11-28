@@ -11,10 +11,13 @@ document kinds (:class:`InputReading`, declared data):
     The inputs with their format, size (characters and lines), version, a table's columns
     and, when the agent
     declares a decide alias, their document kind (ADR-P07 G3) and the kinds of their
-    sections (G4). ``kinds`` keeps the inputs of those kinds and, because a fast
-    classifier is an optimisation and never a gatekeeper, also every input whose kind (or
-    a section's) the decision abstained on (``decided: false``), with a note that its kind
-    is undecided, so an agent can still read it by its ref. A recorded query (ADR-P05
+    sections (G4). ``kinds`` keeps the inputs of those kinds (the record's or a
+    section's) and, because a fast classifier is an optimisation and never a gatekeeper,
+    also every input whose record kind the decision abstained on (``decided: false``),
+    with a note that the record's kind is undecided, so an agent can still read it by its
+    ref. Such an input is not kept when the record's kind was decided, nor when one of its
+    sections was confidently decided as a declared kind outside ``kinds``: an abstaining
+    preamble never defeats the filter. A recorded query (ADR-P05
     D6): its version hashes what it listed, so an input added later re-executes it.
     ``as_of`` is the date the run counts to (a recorded time read, ADR-P25 B2), so a model
     counts days to a recorded date. Mints nothing.
@@ -330,7 +333,7 @@ def resolve(ctx: ToolContext, reading: InputReading, ref: str) -> str | Err:
 # --- list_inputs -----------------------------------------------------------------------
 
 
-def _decide(
+def decide_row(
     ctx: ToolContext, reading: InputReading, found: ReturnedText, fmt: str, segs: Sequence[Segment]
 ) -> dict[str, Any]:
     """The record's kind and, when it has several sections, each section's kind."""
@@ -352,15 +355,24 @@ def _decide(
 
 
 UNDECIDED_NOTE = (
-    "kind undecided: the fast classifier did not settle this input's kind, so it is listed "
+    "kind undecided: the fast classifier did not settle the record's kind, so it is listed "
     "for the kinds you asked for; read it to see whether it is one"
 )
 """The note on an input a kind-filtered listing keeps although its kind is undecided."""
 
 
-def _undecided(row: Mapping[str, Any]) -> bool:
-    """Whether the decision abstained on the record, or on one of its sections."""
-    return not row["decided"] or any(not s["decided"] for s in row.get("sections", ()))
+def _undecided(row: Mapping[str, Any], kinds: set[str]) -> bool:
+    """Whether a row outside ``kinds`` is kept as undecided.
+
+    Its record kind abstained, and no section was confidently decided as a declared kind
+    outside ``kinds``.
+    """
+    if row["decided"]:
+        return False  # a confident record kind is never undecided, whatever a section says
+    return not any(
+        s["decided"] and s["kind"] != OTHER_KIND and s["kind"] not in kinds
+        for s in row.get("sections", ())
+    )
 
 
 def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading) -> ToolOutcome:
@@ -392,10 +404,10 @@ def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading
             with suppress(ValueError):
                 row["columns"] = list(read_rows(found.text, fmt).columns)
         if reading.decide is not None:
-            row.update(_decide(ctx, reading, found, fmt, segments_of(found.text, fmt)))
+            row.update(decide_row(ctx, reading, found, fmt, segments_of(found.text, fmt)))
             held = {row["kind"], *(s["kind"] for s in row.get("sections", ()))}
             if kinds and not kinds & held:
-                if not _undecided(row):
+                if not _undecided(row, kinds):
                     continue
                 row["note"] = UNDECIDED_NOTE  # an abstention never hides an input
         rows.append(row)
@@ -793,7 +805,7 @@ def search_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReadi
             continue
         segs = segments_of(found.text, fmt)
         if kinds:  # the same decision list_inputs lists (one per input, memoised per run)
-            row = _decide(ctx, reading, found, fmt, segs)
+            row = decide_row(ctx, reading, found, fmt, segs)
             if not kinds & {row["kind"], *(s["kind"] for s in row.get("sections", ()))}:
                 continue
         searched += 1
