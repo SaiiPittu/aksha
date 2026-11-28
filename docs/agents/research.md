@@ -62,7 +62,7 @@ flowchart TD
     REPORT --> DONE{{"run completion<br/>outputs_exist"}}
 ```
 
-Notice that `evidence` fans out over `competitors.companies` and runs with `on_child_blocked="partial"`, so one blocked company leaves an explicit unknown instead of blocking the report. The only point where the run waits for a person is the `input` interrupt declared on `scope`; this agent has no external effect and so no approval point.
+Notice that `evidence` fans out over `competitors.companies` and runs with `on_child_blocked="partial"`, so one blocked company leaves an explicit unknown instead of blocking the report. Each `evidence` instance's context names the company key it is for and that company's entry in `competitors` (the runtime's key notice), and its prompt asks for the company whose key it is given. It keeps the default stop-veto limit of 3, so a refused finish ("save the profile of ...") comes back to the model twice before the instance is blocked. The only point where the run waits for a person is the `input` interrupt declared on `scope`; this agent has no external effect and so no approval point.
 
 Dependencies, as declared:
 

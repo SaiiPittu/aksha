@@ -156,13 +156,15 @@ def test_the_stack_is_derived_outer_to_inner_with_agent_policies_outside_the_tas
 
 
 def test_compose_prep_concatenates_briefs_outer_first_and_never_widens_tools() -> None:
-    tree = _fix(Plan("plan", plan_ok), ForcedTool("run_tests", always), brief="Fix it.")
+    tree = _fix(Plan("plan", plan_ok), ForcedTool("run_tests", always), brief="prompts/fix.md")
     log = _log()
     decide(log, tree, StopCandidate(RUN, "next"))
     view = view_of(log, tree)
     stack = derive_stack(view, StopCandidate(RUN, "tools", ref("fix")))
     prep = compose_prep(stack, view)
-    assert prep.brief[0] == "Fix it."
+    # The Task's brief is a prompt file's path: its text is the context's goal, not a brief.
+    assert "prompts/fix.md" not in prep.brief
+    assert "Write the plan first" in prep.brief[0]  # the plan policy is outer to the forced tool
     assert prep.tools == frozenset()  # plan keeps the save, the forced tool keeps run_tests
     assert prep.tool_choice is None  # a hint outside the kept tools is dropped
 

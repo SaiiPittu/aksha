@@ -207,9 +207,11 @@ class TaskPolicy:
         return task_ref(self.instance)
 
     def prepare(self, view: StopView) -> Prep:
-        """The Task's own brief, if it declares one."""
-        brief = view.tree.node(self.instance.task_path).task.brief
-        return Prep(brief=(brief,) if brief else ())
+        """Nothing: the Task's brief text reaches the context as its goal (``AssemblyInputs``).
+
+        ``Task.brief`` is the path of the prompt file, not its text, so it is never a brief.
+        """
+        return Prep()
 
     def judge(self, view: StopView, c: StopCandidate) -> Verdict:
         """Entry, turn ends and finish requests of this instance (module doc)."""
@@ -227,7 +229,7 @@ class TaskPolicy:
             writer = writer_of(view.tree, ref)
             facts = reentry(view.log, view.tree, ref.run, writer, choice=choice)
             if node.is_leaf:
-                return Verdict("continue", node.task.brief or "", facts=facts)
+                return Verdict("continue", facts=facts)
             return Verdict("pass", facts=facts)
         if status in SETTLED:
             return PASS
@@ -236,7 +238,7 @@ class TaskPolicy:
             if entry.done:
                 return Verdict("done", facts=entry.facts)
             if node.is_leaf:
-                return Verdict("continue", node.task.brief or "", facts=entry.facts)
+                return Verdict("continue", facts=entry.facts)
             return Verdict("pass", facts=entry.facts)  # its children are picked next
         if node.is_leaf:
             return self._leaf(view, c, state)

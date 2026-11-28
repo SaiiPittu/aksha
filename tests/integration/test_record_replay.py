@@ -16,6 +16,8 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import pytest
+
 from aksha import data
 from aksha.app import DEFAULT_AGENTS, DEFAULT_EXTENSIONS, RuntimeConfig, replay_run
 from aksha.interfaces import wire
@@ -92,6 +94,14 @@ def test_the_bundled_example_replays_to_its_recorded_outputs(tmp_path: Path) -> 
                        "an older version of a page on the same site"}  # fmt: skip
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "stale recording: since each keyed instance's context names its key and the "
+        "evidence Task gives a refused finish back to its model, the recorded GPT answers "
+        "no longer match the contexts this run sends; it needs re-recording on a live model"
+    ),
+)
 def test_the_bundled_live_model_run_replays_offline_to_its_recorded_outputs(
     tmp_path: Path,
 ) -> None:

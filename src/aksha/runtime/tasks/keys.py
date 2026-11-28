@@ -14,8 +14,10 @@ Two origins:
 Keys come back sorted as strings, so two fake-model runs give the same order. A key the
 instance-ID grammar cannot carry (empty, or holding ``/``, ``[`` or ``]``) is refused when
 it is listed (``key_invalid``) and left out when an artifact lists it (``invalid_keys``
-names it, so the save that wrote it can be found). ``keys_of`` does not apply a key
-source's ``unless`` filter: that needs a Task view, and ``status.instance_keys`` applies it.
+names it, so the save that wrote it can be found). :func:`key_entry` gives the entry one
+key stands for, which a keyed instance's context shows (ADR-P08 D3). ``keys_of`` does not
+apply a key source's ``unless`` filter: that needs a Task view, and
+``status.instance_keys`` applies it.
 """
 
 from __future__ import annotations
@@ -64,6 +66,27 @@ def _artifact_items(view: LogView, kind: str, path: str) -> tuple[str, ...] | No
     if not isinstance(listed, Sequence) or isinstance(listed, str):
         return ()
     return tuple(k for k in (_item_key(i) for i in listed) if k is not None)
+
+
+def key_entry(
+    view: LogView, source: KeySource, key: str, *, kind: str | None = None
+) -> object | None:
+    """What ``source`` lists for ``key``: its list item, or ``collection/key`` for a record.
+
+    For an artifact source it is the item at ``source.path`` of the current ``kind``
+    version whose key (a string item, or its ``key`` or ``id`` field) is ``key``; None when
+    no version or no item has it. For a source collection it is the record's ref. The
+    context of a keyed instance shows it, so the model knows which entry it works on.
+    """
+    if source.origin == "source":
+        return f"{source.name}/{key}"
+    version = current(view, kind or source.name, None)
+    if version is None:
+        return None
+    listed = _field(version.content, source.path or "")
+    if not isinstance(listed, Sequence) or isinstance(listed, str):
+        return None
+    return next((i for i in listed if _item_key(i) == key), None)
 
 
 def source_keys_listed(view: LogView, collection: str) -> tuple[str, ...] | None:

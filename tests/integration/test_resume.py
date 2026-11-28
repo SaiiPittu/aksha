@@ -344,7 +344,7 @@ def test_a_running_instance_gets_marks_and_a_notice_at_the_next_turn(make: Any) 
     first, second = r.requests_of("R-0001", "extract[C1]")[:2]
     assert not any("Change notice" in t for t in texts(first))
     said = texts(second)
-    assert "[superseded: record refs/K-C1 changed" in said[3]
+    assert "[superseded: record refs/K-C1 changed" in said[4]  # after the key notice
     assert said[-2].startswith("Change notice:")
     assert "record refs/K-C1@1 is now version 2" in said[-2]
     t02 = next(e.seq for e in r.events("step.started") if e.step == "R-0001/extract[C1]/t02")

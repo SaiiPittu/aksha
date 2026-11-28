@@ -297,7 +297,9 @@ def test_context_order_keeps_the_stable_prefix_first(log: Log) -> None:
     ]
     assert roles[4][1].startswith("Artifacts this Task read")
     assert roles[5] == ("user", "Fix bug 7.\n\nTask: Fix th")
-    assert [r for r, _ in roles[6:]] == ["assistant", "tool"]
+    assert roles[6] == ("user", "This Task instance works")  # the key notice: edit is keyed
+    assert "`parser`" in (a.request.messages[6].text or "")
+    assert [r for r, _ in roles[7:]] == ["assistant", "tool"]
     assert [t.name for t in a.request.tools] == ["run_tests"]
     assert a.request.tool_choice == "run_tests"
 
