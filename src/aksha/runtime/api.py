@@ -111,7 +111,14 @@ from aksha.runtime.egress.ports import HttpResponse
 from aksha.runtime.egress.types import EgressPolicy
 from aksha.runtime.events.catalogue import EventTypeSpec
 from aksha.runtime.events.envelope import Event, NewEvent
-from aksha.runtime.forms.tools import FORM_TOOLS, FormSpec, form_counts, form_kind, form_tools
+from aksha.runtime.forms.tools import (
+    FORM_TOOLS,
+    FormSpec,
+    form_counts,
+    form_kind,
+    form_name,
+    form_tools,
+)
 from aksha.runtime.grounding.parts import part_version, where_part
 from aksha.runtime.grounding.ports import RecordReader
 from aksha.runtime.grounding.segment import (
@@ -380,6 +387,7 @@ __all__ = [
     "find_dates",
     "form_counts",
     "form_kind",
+    "form_name",
     "form_tools",
     "from_field",
     "input_tools",

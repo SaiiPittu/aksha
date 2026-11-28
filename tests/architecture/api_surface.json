@@ -1,5 +1,5 @@
 {
-  "api_version": "3.2",
+  "api_version": "3.3",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=3.0,<4', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off', invalidation_keys: 'InvalidationKeys' = 'reads', reuse: \"Literal['on', 'off']\" = 'on') -> None",
     "AnswerSave": "class AnswerSave(kind: 'str', field: 'str', build: 'Callable[[Any, tuple[str, ...]], Mapping[str, Any]]') -> None",
@@ -135,6 +135,7 @@
     "find_dates": "def find_dates(text: 'str', order: 'str' = '') -> 'list[tuple[str, int, int]]'",
     "form_counts": "def form_counts(fields: 'Any', statuses: 'Sequence[str]') -> 'dict[str, int]'",
     "form_kind": "def form_kind(spec: 'FormSpec') -> 'ArtifactKind'",
+    "form_name": "def form_name(record: 'str') -> 'str'",
     "form_tools": "def form_tools(agent: 'str', reading: 'InputReading', spec: 'FormSpec') -> 'tuple[ToolDecl, ...]'",
     "from_field": "def from_field(kind: 'str', path: 'str') -> 'FromField'",
     "input_tools": "def input_tools(agent: 'str', reading: 'InputReading') -> 'tuple[ToolDecl, ...]'",
