@@ -1,0 +1,56 @@
+flowchart TB
+  subgraph IF["Interfaces"]
+    P19["P19 Session API"]
+    P23["P23 Request router"]
+  end
+  subgraph AG["Agents and extensions"]
+    P20["P20 Extension API and<br/>agent definition"]
+  end
+  subgraph CT["Control"]
+    P15["P15 Task model<br/>and scheduler"]
+    P16["P16 Stop policy"]
+    P17["P17 Interrupts<br/>and approvals"]
+    P18["P18 Cancellation"]
+    P24["P24 Partial results"]
+    P27["P27 Steering"]
+  end
+  subgraph TH["Thinking"]
+    P06["P06 Agent loop"]
+    P07["P07 Model routing<br/>by class"]
+    P08["P08 Context assembly"]
+    P09["P09 Memory"]
+  end
+  subgraph AS["Acting safely"]
+    P10["P10 Tool registry"]
+    P11["P11 Policy gate"]
+    P26["P26 Egress policy"]
+    P12["P12 Sandbox"]
+    P28["P28 Environment image"]
+    P13["P13 Grounding"]
+    P14["P14 Budgets and limits"]
+  end
+  subgraph DS["Durable state"]
+    P01["P01 Event store<br/>and projections"]
+    P02["P02 Durable execution"]
+    P03["P03 Outbox and<br/>idempotency keys"]
+    P04["P04 Artifact store<br/>and lineage"]
+    P05["P05 Invalidation"]
+    P25["P25 Durable timers"]
+    P29["P29 External record state"]
+    P30["P30 Erasure"]
+  end
+  subgraph PF["Proof"]
+    P21["P21 Tracing"]
+    P22["P22 Evals, fake and<br/>replay models"]
+  end
+  IF -->|"commands: new run, answers,<br/>approvals, stop, steer"| CT
+  AG -->|"declared Task tree, tools,<br/>permissions (load time)"| CT
+  AG -.->|"model aliases, context policy"| TH
+  AG -.->|"tool specs, egress policies"| AS
+  CT -->|"scheduler starts a turn"| TH
+  TH -->|"turn end goes to<br/>stop-policy evaluation"| CT
+  TH -->|"every tool call<br/>passes the gate"| AS
+  AS -->|"step results, artifact saves,<br/>outbox entries"| DS
+  CT -->|"stop decisions,<br/>interrupt facts"| DS
+  DS -->|"projections: status, holds,<br/>invalidation, budgets"| CT
+  DS -->|"traces and replay read<br/>the recorded store"| PF

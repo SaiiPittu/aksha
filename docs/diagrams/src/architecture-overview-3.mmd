@@ -1,0 +1,7 @@
+flowchart TB
+  IF["aksha.interfaces<br/>CLI, HTTP server"] --> APP
+  AG["Agents and extensions<br/>(import aksha.runtime.api only)"] --> API["aksha.runtime.api"]
+  API --> RT["aksha.runtime<br/>one package per primitive,<br/>ports.py holds its Protocols"]
+  APP["aksha.app<br/>composition root"] --> RT
+  APP --> AD["aksha.adapters<br/>storage, blobs, anchor, sources,<br/>clock, models, sandbox"]
+  AD -.->|"implements ports"| RT

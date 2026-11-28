@@ -19,6 +19,11 @@ Two example agents carry the design through every section. Both serve Stillroom,
 
 The runtime is a headless Python process: it has no user interface of its own, and every interface reaches it through one session API. People send it commands and watch an event stream. It calls models, a sandbox and outside systems, and it records every call before and after.
 
+<!-- diagram: docs/diagrams/design-02-architecture-1.png -->
+![1. Context: one headless process between people, models and outside systems](../diagrams/design-02-architecture-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   U["User<br/>(CLI or web app)"] -->|"commands, each with a command ID"| RT["Aksha runtime<br/>one headless Python process"]
@@ -32,6 +37,8 @@ flowchart LR
   RT <-->|"append and read"| DB[("Event store<br/>PostgreSQL or SQLite")]
 ```
 
+</details>
+
 Caption: every arrow into or out of the runtime is either a command that gets a receipt or a call that is recorded in the event store, so nothing the runtime does is invisible to replay.
 
 The model providers include two families. Generation models (System 2, the slow class) write prose and plans. Extraction and classification models (System 1, the fast class) pull typed fields out of text and sort inputs into labels, and they are routed like any other model (decision 15). Offline, every model class has a fake and a replay model read from a recorded store (ADR-P22, Proposed).
@@ -39,6 +46,11 @@ The model providers include two families. Generation models (System 2, the slow 
 ## 2. HLD: seven layers, with every primitive placed
 
 The runtime splits into seven layers. Each layer answers one question, and each of the 30 primitives belongs to exactly one layer.
+
+<!-- diagram: docs/diagrams/design-02-architecture-2.png -->
+![2. HLD: seven layers, with every primitive placed](../diagrams/design-02-architecture-2.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart TB
@@ -99,6 +111,8 @@ flowchart TB
   DS -->|"traces and replay read<br/>the recorded store"| PF
 ```
 
+</details>
+
 Caption: every layer writes facts down into durable state and reads projections back up, so durable state is the only layer every other layer depends on.
 
 | Layer | Question it answers | Primitives |
@@ -126,6 +140,11 @@ The design choice that sets this split apart is that tier 3 is stateless on purp
 | 1, state | The event store (append-only, hash-chained, ADR-P01), the blob store (content-addressed by SHA-256, decision 25) and the transactional outbox (ADR-P03) | Trusted storage that computes nothing about agents; tamper-evident through the hash chain | It is tier 1 | No |
 | 2, runtime | The session API, the agent loop, Tasks and the scheduler, stop policies, the policy gate, the durable step executor, context assembly, invalidation, model adapters, outbox receivers and the egress-checked HTTP client; the loaded agent definitions; every provider and receiver credential; caches of projections | Trusted code that treats model output and tool results as untrusted data | Yes, only through the single writer | Yes, through model adapters, receivers and the egress-checked HTTP client |
 | 3, execution | Sandbox workers, and one materialised workspace per box for the box's lifetime | The worker is trusted to enforce limits; the box is assumed hostile | No | No; the network is off in every shipped backend (ADR-P12 decision 4) |
+
+<!-- diagram: docs/diagrams/design-02-architecture-3.png -->
+![3. Three tiers: state, runtime and execution](../diagrams/design-02-architecture-3.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -171,6 +190,8 @@ flowchart LR
   RCV --> EXT
 ```
 
+</details>
+
 Caption: every arrow into tier 1 starts in tier 2, every arrow into tier 3 starts at the step executor, and tier 3 has no arrow out except its result.
 
 ### 3.1 One exec call across the tiers
@@ -182,6 +203,11 @@ The contrast coding agent's `run_tests` step shows where each tier's job begins 
 3. The executor sends tier 3 the argv, the tree manifest, the effective sandbox policy and the limits through the `Sandbox` port.
 4. Tier 3 materialises `/work` from that tree version, runs the test suite in a box with no network, collects the declared report file, and returns it with the exit code and any denials.
 5. Tier 2 validates the report against its artifact schema, stores the blob, and commits `step.completed` and the new artifact version, with its lineage, in one transaction.
+
+<!-- diagram: docs/diagrams/design-02-architecture-4.png -->
+![3.1 One exec call across the tiers](../diagrams/design-02-architecture-4.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -200,6 +226,8 @@ sequenceDiagram
   X->>S: blob put, step.completed and artifact saved in one transaction
   X-->>L: result as data for the next turn
 ```
+
+</details>
 
 Caption: the box never sees the store and the store never sees the box; the step executor is the only party that talks to both.
 
@@ -229,6 +257,11 @@ The same three tiers run in two shapes. Only the adapters behind the ports chang
 
 On a laptop, everything is one process and a local sandbox. `aksha run` with no server starts the runtime in-process for one command, and `aksha serve` runs the same runtime as a backend (section 6).
 
+<!-- diagram: docs/diagrams/design-02-architecture-5.png -->
+![3.3 Deployment shapes](../diagrams/design-02-architecture-5.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart TB
   subgraph HOST["One machine"]
@@ -246,6 +279,8 @@ flowchart TB
   RT -->|"Sandbox port"| SB
 ```
 
+</details>
+
 Caption: on a laptop the tiers are module boundaries plus a process boundary to the box, not separate machines; the rules hold because the ports and the tests are the same.
 
 | Part | Laptop | Software factory |
@@ -256,6 +291,11 @@ Caption: on a laptop the tiers are module boundaries plus a process boundary to 
 | Sandbox | bubblewrap or Docker; `refuse` when neither exists, never an unconfined fallback (ADR-P12) | A remote pool of microVM boxes behind the same `Sandbox` port (ADR-P12 T4) |
 | Workspace to the box | Tier 2 materialises `/work` from local blobs | Streamed by tier 2 with a cache on the worker host keyed by blob hash (Proposed) |
 | Telemetry | Live OpenTelemetry from the process | From every runtime replica and every worker host; boxes emit nothing, because their network is off |
+
+<!-- diagram: docs/diagrams/design-02-architecture-6.png -->
+![3.3 Deployment shapes](../diagrams/design-02-architecture-6.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart TB
@@ -292,6 +332,8 @@ flowchart TB
   W1 -.-> OT
 ```
 
+</details>
+
 Caption: tier 2 scales out, tier 1 stays one authority, and tier 3 becomes a pool of microVMs reached through the same port.
 
 The factory raises three questions the laptop does not. Each answer below is Proposed unless it names a decision.
@@ -315,6 +357,11 @@ The foundation is the six pieces every other primitive stands on: the ports and 
 ### 4.1 Ports and adapters keep the runtime free of every backend
 
 The runtime is the domain in the middle. It states what it needs from the outside world as `typing.Protocol` classes, called ports, and concrete backends, called adapters, implement them from outside (ports and adapters, also called hexagonal architecture). A composition root, `src/aksha/app.py`, is the only module that knows which adapter fills which port (decision 18, recorded in [codebase-structure.md](../architecture/codebase-structure.md)).
+
+<!-- diagram: docs/diagrams/design-02-architecture-7.png -->
+![4.1 Ports and adapters keep the runtime free of every backend](../diagrams/design-02-architecture-7.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 classDiagram
@@ -352,6 +399,8 @@ classDiagram
   Clock <|.. FakeClock
 ```
 
+</details>
+
 Caption: the ports that have adapters as of 26 Nov 2026; every later port (a model adapter, a sandbox backend, an HTTP client for egress, a system of record for the outbox) follows the same pattern.
 
 The method lists above are simplified; the ports' exact signatures are in the code. Each port has one contract test suite, and every adapter of that port must pass it unchanged. If an adapter cannot pass, the port or the suite is wrong, and that is a design change to raise rather than a test to skip.
@@ -368,13 +417,20 @@ The event store (ADR-P01, Proposed) is an append-only table of facts that happen
 
 The store is hash-chained (decision 20, built now rather than later). Each event carries `prev_hash`, the hash of the event before it, and `hash`, a SHA-256 over the canonical JSON of its own record. The first event's `prev_hash` is a genesis hash derived from a random store ID, so two stores never share a chain. An anchor copies the latest `(seq, hash)` to a sink outside the store that the store's writer cannot rewrite.
 
+<!-- diagram: docs/diagrams/design-02-architecture-8.png -->
+![4.2 The event store is append-only and hash-chained](../diagrams/design-02-architecture-8.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
-flowchart LR
+flowchart TB
   G["genesis<br/>hash of store_id"] --> E1["seq 1<br/>prev_hash = genesis<br/>hash = H1"]
   E1 --> E2["seq 2<br/>prev_hash = H1<br/>hash = H2"]
   E2 --> E3["seq 3<br/>prev_hash = H2<br/>hash = H3"]
   E3 -. "copied every N events" .-> A["anchor sink<br/>(seq 3, H3)<br/>outside the store"]
 ```
+
+</details>
 
 Caption: editing seq 2 changes H2, so seq 3's `prev_hash` no longer matches; deleting seq 3 leaves a valid shorter chain that only the anchor reveals.
 
@@ -390,14 +446,21 @@ This is the rule the whole design rests on: store facts, derive interpretations.
 
 An agent is a Python module that holds one `Agent` value (decision 2, Accepted; ADR-P20, Proposed with three parts Accepted). Its structure is declared data that the runtime can inspect: its purpose text, the artifacts it writes, the relations between them, its Task tree, its tools, its stop-policy opt-ins, its model aliases, its budget and limits, its context policy and the extensions it uses by name. Its behaviour, such as completion checks, is plain pure Python functions the declarations name.
 
+<!-- diagram: docs/diagrams/design-02-architecture-9.png -->
+![4.4 An agent definition is a Python module with declared data](../diagrams/design-02-architecture-9.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
-flowchart LR
+flowchart TB
   MOD["agents/patent/<br/>agent.py, checks.py, prompts/"] --> LD["Agent loader"]
   LD -->|"scan imports: only aksha.runtime.api<br/>and named extensions"| V["Definition validation<br/>(fixed order of refusals)"]
   V -->|"refusal: module, Task, field, code"| ERR["LoadError"]
   V -->|"valid"| H["Agent definition version hash<br/>over module, prompts, policies"]
   H --> RS["run.started records the hash"]
 ```
+
+</details>
 
 Caption: the loader refuses a bad agent before any run starts, and the version hash on `run.started` lets recovery detect a run whose agent changed underneath it.
 
@@ -432,6 +495,11 @@ The gate never appends. Its caller records the answer: an `Allow` becomes the to
 
 A command starts a run. The receipt returns at the first commit, and the client follows the work through the event stream.
 
+<!-- diagram: docs/diagrams/design-02-architecture-10.png -->
+![5.1 Start and a tool call through the gate](../diagrams/design-02-architecture-10.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 sequenceDiagram
   participant C as CLI or web app
@@ -458,6 +526,8 @@ sequenceDiagram
   E-->>C: stream events after the client's cursor
 ```
 
+</details>
+
 Caption: tool bodies return values and never touch the store, so only the single writer appends, and a late result from an abandoned attempt is discarded rather than saved.
 
 Three rules shape this sequence. The scheduler alone starts work; a stop policy never spawns it (decision 8). The agent loop runs one turn of one Task instance and keeps nothing between turns (ADR-P06). Every turn end is a stop candidate that stop-policy evaluation decides, recording one `stop.decided` event (ADR-P16, Accepted in part; the event name itself is Proposed).
@@ -465,6 +535,11 @@ Three rules shape this sequence. The scheduler alone starts work; a stop policy 
 ### 5.2 Interrupt and suspension
 
 An interrupt and a suspension mean different things (decision 14). An interrupt is the run asking for outside input and stopping itself. A suspension is the run durably parked with no process attached, for any reason: an interrupt, a budget limit, a scheduled wake or an outside event.
+
+<!-- diagram: docs/diagrams/design-02-architecture-11.png -->
+![5.2 Interrupt and suspension](../diagrams/design-02-architecture-11.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -484,6 +559,8 @@ sequenceDiagram
   O->>E: outbox completed
 ```
 
+</details>
+
 Caption: an approval authorises one exact action by signature, and the runtime re-checks that signature from current facts before the outbox sends anything.
 
 In the patent-disclosure agent's flow, a person approves sending packet version 3 to recipient `counsel-1`. If the recipient record changes before the send, the recomputed signature differs, the send is refused `signature_mismatch`, and a fresh approval is needed (ADR-P17, Proposed). Only a person resolves an interrupt; the runtime may only void one. A held run gets no automatic start of any kind, because one hold predicate reads the same projection that stop-policy evaluation reads (the hold invariant, decision 13).
@@ -491,6 +568,11 @@ In the patent-disclosure agent's flow, a person approves sending packet version 
 ### 5.3 Crash and resume
 
 Recovery on startup runs in a fixed order (ADR-P02, Accepted by decision 27). Every step reads the event store; none trusts memory from the dead process. A person's stop is checked before anything else about a run (decision 33): a stopped run stays stopped, and whether its agent definition has since changed no longer matters.
+
+<!-- diagram: docs/diagrams/design-02-architecture-12.png -->
+![5.3 Crash and resume](../diagrams/design-02-architecture-12.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart TD
@@ -511,6 +593,8 @@ flowchart TD
   RB --> DONE["recovery.completed"]
 ```
 
+</details>
+
 Caption: recovery never starts a turn for a suspended or stopped run, so restarting while an approval is open writes nothing and the person sees the same request with the same signature.
 
 Resume works because step IDs are deterministic (run, Task instance, turn, call), every module reads time from an injected clock, and each tool declares its step semantics: at-least-once for reads and model steps, reconcile for tools with a system of record, at-most-once for the rest. A restart that reaches a recorded step returns the recorded result instead of running it again. A run that crash-loops stops `failed, restart_limit` after three resume records with no progress in between, a count that is itself a projection.
@@ -518,6 +602,11 @@ Resume works because step IDs are deterministic (run, Task instance, turn, call)
 ### 5.4 Invalidation after a change
 
 Invalidation (ADR-P05, Accepted in part) reopens exactly the work whose lineage reaches a changed input. Lineage is the set of recorded reads on every artifact version, which the artifact store keeps automatically (ADR-P04, Accepted in part).
+
+<!-- diagram: docs/diagrams/design-02-architecture-13.png -->
+![5.4 Invalidation after a change](../diagrams/design-02-architecture-13.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -539,6 +628,8 @@ sequenceDiagram
   S->>E: review.accepted, then a fresh approval request
 ```
 
+</details>
+
 Caption: machines regenerate machine-only work silently, while a human-reviewed artifact gets a diff review, and only the person's acceptance makes the revision current (decision 5).
 
 A worked example: a new prior-art reference arrives for one patent family. The comparison that read that family is invalidated, so the packet that read the comparison is too, and the approval to send that packet is revoked in the same transaction. A second comparison that read other families stays current. If the regenerated comparison comes out equal to the old one, early cutoff stops the invalidation there, and nothing downstream is rebuilt.
@@ -546,6 +637,11 @@ A worked example: a new prior-art reference arrives for one patent family. The c
 ## 6. Server and embedded modes share one runtime
 
 The runtime runs in two modes (decision 22, Accepted). In server mode, `aksha serve` is the backend: it owns the session API and the single-writer lock, and the CLI and the web app are both clients. In embedded mode, when no server is running, `aksha run` starts the runtime in-process for that one command and exits when it finishes.
+
+<!-- diagram: docs/diagrams/design-02-architecture-14.png -->
+![6. Server and embedded modes share one runtime](../diagrams/design-02-architecture-14.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -561,6 +657,8 @@ flowchart LR
     W2 --> DB2[("Event store")]
   end
 ```
+
+</details>
 
 Caption: both modes run the same runtime behind the same session API, so the only difference is which process holds the single-writer lock.
 
@@ -584,6 +682,11 @@ What is not yet written down is listed in section 11.
 
 Telemetry splits into two planes (decision 21, Accepted; the instruments, names and packaging in ADR-P21 are Proposed).
 
+<!-- diagram: docs/diagrams/design-02-architecture-15.png -->
+![8. Two telemetry planes, one backend](../diagrams/design-02-architecture-15.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   subgraph P1["Plane 1: the agent-run trace"]
@@ -599,6 +702,8 @@ flowchart LR
   BT -->|"OTLP, after each segment"| B["One OTLP backend"]
   P2 -->|"OTLP, live"| B
 ```
+
+</details>
 
 Caption: the two planes meet only at trace and span IDs; the event store holds one correlation reference per command, never spans, metrics or logs.
 

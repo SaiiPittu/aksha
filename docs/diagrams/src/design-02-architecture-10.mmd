@@ -1,0 +1,23 @@
+sequenceDiagram
+  participant C as CLI or web app
+  participant S as Session API
+  participant W as Single writer
+  participant L as Agent loop
+  participant G as Policy gate
+  participant T as Tool body
+  participant E as Event store
+  C->>S: dispatch(NewRun, command_id)
+  S->>W: queue the command
+  W->>E: run.started (definition hash)
+  W-->>C: receipt at first commit
+  W->>L: scheduler starts a turn for one Task instance
+  L->>E: model step recorded (step.started, step.completed)
+  L->>G: check(tool call)
+  G-->>L: Allow, route
+  L->>E: step.started (kind tool, args hash)
+  L->>T: run the body under timeout and retry
+  T-->>L: a value: result, save request or interrupt request
+  L->>E: step.completed and artifact.saved in one boundary
+  L->>W: turn end
+  W->>E: stop.decided (one per stop candidate)
+  E-->>C: stream events after the client's cursor

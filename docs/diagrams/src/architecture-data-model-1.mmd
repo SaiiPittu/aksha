@@ -1,0 +1,61 @@
+---
+title: The events table is the record, and every other row points back into it
+---
+erDiagram
+  STORE_META ||--|| EVENTS : "genesis_hash starts the chain"
+  META ||--|| EVENTS : "schema_version of every row"
+  BOOTS ||--o{ EVENTS : "boot that wrote the row"
+  EVENTS ||--o| ARTIFACTS : "artifact.saved at event_seq"
+  EVENTS }o--o{ BLOBS : "payload stubs by hash"
+  ARTIFACTS }o--o{ BLOBS : "content stubs by hash"
+  EVENTS ||--o{ ANCHORS : "head hash copied out"
+  STORE_META {
+    text store_id
+    text created_at
+    int chain_version
+    text genesis_hash
+  }
+  META {
+    int schema_version
+  }
+  BOOTS {
+    int boot PK
+    int pid
+    text at
+  }
+  EVENTS {
+    int seq PK
+    text owner
+    text type
+    json payload
+    text run
+    text instance
+    text step
+    text session
+    text uniq
+    text at
+    int boot FK
+    int schema_version
+    text prev_hash UK
+    text hash UK
+  }
+  ARTIFACTS {
+    text owner PK
+    text ref PK
+    text kind
+    text key
+    int version
+    json content
+    text content_hash
+    text canonical_hash
+    int event_seq FK
+  }
+  BLOBS {
+    text sha256 PK
+    bytes content
+  }
+  ANCHORS {
+    text store_id
+    int seq
+    text hash
+  }

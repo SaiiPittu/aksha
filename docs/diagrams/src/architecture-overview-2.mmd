@@ -1,0 +1,10 @@
+flowchart LR
+  CMD["Command or<br/>tool step"] --> W["Single writer:<br/>append in one transaction"]
+  W --> ES[("Event store<br/>append-only, hash-chained")]
+  ES --> R1["Task status"]
+  ES --> R2["Open interrupts<br/>and approvals"]
+  ES --> R3["Budgets"]
+  ES --> R4["Invalidation view"]
+  ES --> R5["Model context<br/>(a rendering)"]
+  ES --> R6["Trace<br/>(a projection)"]
+  R1 & R2 & R3 & R4 & R5 --> NEXT["Next decision"]

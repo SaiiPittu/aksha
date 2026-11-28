@@ -1,0 +1,13 @@
+---
+title: An agent folder is scanned, validated and hashed before any event is written
+---
+flowchart TB
+    PATH[["AKSHA_AGENTS folder"]] --> SCAN["scan_sources<br/>only aksha.runtime.api"]
+    SCAN --> IMPORT["import AGENT"]
+    IMPORT --> EXT["load the extensions it names"]
+    EXT --> VALIDATE["validate_agent<br/>Task tree, kinds, prompts"]
+    VALIDATE --> REG["ToolRegistry.build<br/>adds finish, ask, save_artifact"]
+    REG --> REFUSE{"any refusal?"}
+    REFUSE -- yes --> ERR(["LoadError, nothing starts"])
+    REFUSE -- no --> HASH["definition_hash"]
+    HASH --> RUN(["run.started records the hash"])

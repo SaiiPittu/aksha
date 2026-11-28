@@ -1,0 +1,23 @@
+---
+title: The loop decides nothing about stopping; stop policy and the gate do
+---
+flowchart TB
+  SES["Session API<br/>session/service.py"]
+  RT["Request router<br/>router/router.py"]
+  DRV["drive<br/>loop/drive.py"]
+  SP["Stop policy<br/>evaluate_stop"]
+  SCH["Scheduler<br/>tasks/scheduler.py"]
+  TURN["run_turn<br/>loop/turn.py"]
+  CTX["Context assembly<br/>prepare_context"]
+  GATE["Policy gate<br/>policy/gate.py check"]
+  EX["StepExecutor<br/>execution/executor.py"]
+  OB["Outbox worker<br/>outbox/worker.py"]
+  INV["Invalidation view<br/>invalidation/view.py"]
+  ES[("Event store")]
+  SES --> RT --> DRV
+  DRV --> SP --> SCH
+  DRV --> TURN --> CTX
+  TURN --> GATE --> EX
+  EX --> OB
+  EX --> ES
+  ES --> INV --> SP

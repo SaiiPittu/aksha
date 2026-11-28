@@ -1,0 +1,24 @@
+flowchart LR
+  subgraph T2["Tier 2: runtime (trusted, holds credentials)"]
+    API["Session API"]
+    LOOP["Agent loop and<br/>context assembly"]
+    GATE["Policy gate"]
+    EXEC["Durable step executor"]
+    MOD["Model adapters<br/>System 1 and System 2"]
+  end
+  subgraph T1["Tier 1: state (no logic)"]
+    ES[("Event store,<br/>hash-chained")]
+    OB[("Outbox")]
+    BS[("Blob store")]
+  end
+  subgraph T3["Tier 3: execution (holds nothing)"]
+    BOX["Sandbox box:<br/>network off"]
+  end
+  API --> LOOP
+  LOOP --> MOD
+  LOOP --> GATE
+  GATE --> EXEC
+  EXEC -->|"single writer"| ES
+  EXEC --> OB
+  EXEC --> BS
+  EXEC -->|"request, result"| BOX

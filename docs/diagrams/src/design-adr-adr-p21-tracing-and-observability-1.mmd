@@ -1,0 +1,16 @@
+flowchart LR
+  subgraph P2["Plane 2: live instrumentation (adapters and interfaces)"]
+    HTTP["session API / HTTP server spans"]
+    DB["database and queue spans"]
+    W["worker lifecycle spans"]
+    M["metrics"]
+    L["structured logs"]
+  end
+  subgraph P1["Plane 1: projection (otel extension)"]
+    ES[("event store")] --> BT["build_trace()"]
+  end
+  HTTP -- "command.accepted carries request_trace" --> ES
+  HTTP -. "span link to derived run span" .-> BT
+  BT -. "span link requested_by" .-> HTTP
+  P2 -- "OTLP, live (BatchSpanProcessor)" --> B["one OTLP backend"]
+  BT -- "OTLP, after each segment" --> B

@@ -1,0 +1,22 @@
+---
+title: Every outside system is behind an adapter with an offline stand-in
+---
+flowchart LR
+  P(["Person"])
+  CLI["aksha CLI<br/>interfaces/cli"]
+  HTTP["aksha serve<br/>interfaces/http"]
+  AK["Aksha runtime<br/>two agents loaded as plugins"]
+  ST[("Event store<br/>SQLite or PostgreSQL")]
+  MOD["Model provider<br/>fake, replay or LiteLLM"]
+  SRCH["Web search<br/>world proxy or Brave"]
+  WEB["Web pages<br/>egress-checked fetch"]
+  SYS["Mock systems of record<br/>mailbox, folder"]
+  BOX["Sandbox<br/>bubblewrap or E2B"]
+  P --> CLI --> AK
+  P --> HTTP --> AK
+  AK --> ST
+  AK --> MOD
+  AK --> SRCH
+  AK --> WEB
+  AK -->|"outbox only"| SYS
+  AK --> BOX

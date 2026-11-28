@@ -6,6 +6,11 @@ Aksha draws one line. On one side is everything the model reads: uploaded docume
 
 ## Diagram: text can only propose a call; code decides, and only a person's signed command approves
 
+<!-- diagram: docs/diagrams/architecture-trust-boundary-1.png -->
+![Text can only propose a call; code decides, and only a person's signed command approves](../diagrams/architecture-trust-boundary-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 ---
 title: Text can only propose a call; code decides, and only a person's signed command approves
@@ -33,6 +38,8 @@ flowchart LR
   GATE -->|"route approval"| AUTH --> SYS
 ```
 
+</details>
+
 Caption: the only arrow from the data side into the control side ends at the gate, which judges a proposed call against the agent's declared tools and rules and never against anything the model read. Notice that `approval.granted` has a single source, a person's `approve` command, so an instruction inside a page that says "approval granted" is only text in the context.
 
 ## What is data, and how the model is told
@@ -59,7 +66,7 @@ The rule in the prompt is a courtesy to the model, not the defence. The defence 
 - A page that tells an obedient model to send to an outside address and write a git hook changes nothing: the effects and calls equal the clean run, and the refusals are `not_in_task` or `recipient_not_listed` and `argument_rule` (`test_injection_world_equals_clean_world` in [`tests/integration/test_policy_gate.py`](../../tests/integration/test_policy_gate.py)).
 - A fetched text containing "approval granted" and a signature writes no approval fact and no outbox entry (`test_injection_cannot_create_approval` in [`tests/integration/test_interrupts.py`](../../tests/integration/test_interrupts.py)).
 - Free text cannot approve; approve needs the shown signature; reject changes nothing; an edit needs a fresh approval ([`tests/unit/runtime/interrupts/test_commands.py`](../../tests/unit/runtime/interrupts/test_commands.py)).
-- The research eval suite carries a planted injection case, `s8a-injection-research` ([`src/aksha/data/suites/research/s8a-injection-research.toml`](../../src/aksha/data/suites/research/s8a-injection-research.toml)), graded on the trap, one row per key and no unbound send.
+- The research eval set carries a planted injection eval case, `s8a-injection-research` ([`src/aksha/data/suites/research/s8a-injection-research.toml`](../../src/aksha/data/suites/research/s8a-injection-research.toml)), graded on the trap, one row per key and no unbound send.
 - Hostile files become gaps, not crashes ([`tests/unit/extensions/ingest/test_hostile_inputs.py`](../../tests/unit/extensions/ingest/test_hostile_inputs.py)).
 
 ## One mode moves the line

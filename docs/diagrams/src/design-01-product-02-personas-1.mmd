@@ -1,0 +1,15 @@
+flowchart TB
+  subgraph Harness["Judge the harness"]
+    AD["Agent developer"]
+    OP["Operator"]
+  end
+  RV["Reviewer of agent output<br/>(a role)"]
+  subgraph Example["Judge the example agents' work"]
+    FO["Venture founder"]
+    EI["Engineer-inventor"]
+    CO["Patent counsel (external)"]
+  end
+  FO -->|"fills the role"| RV
+  CO -->|"fills the role for packets"| RV
+  EI -->|"answers through"| FO
+  OP -.->|"may also fill the role"| RV

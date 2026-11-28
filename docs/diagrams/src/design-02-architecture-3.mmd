@@ -1,0 +1,41 @@
+flowchart LR
+  subgraph CL["Clients"]
+    CLI["CLI"]
+    WEB["Web app"]
+  end
+  subgraph T2["Tier 2: runtime (trusted, holds credentials)"]
+    SAPI["Session API"]
+    TASK["Tasks and scheduler"]
+    STOP["Stop policies and hold predicate"]
+    LOOP["Agent loop and context assembly"]
+    GATE["Policy gate and egress rules"]
+    EXEC["Durable step executor"]
+    MOD["Model adapters (provider keys)"]
+    RCV["Outbox drainer and receivers"]
+  end
+  subgraph T1["Tier 1: state (trusted, no logic)"]
+    ES[("Event store, hash-chained")]
+    OB[("Outbox rows")]
+    BS[("Blob store, sha256")]
+  end
+  subgraph T3["Tier 3: execution (untrusted, holds nothing)"]
+    SW["Sandbox worker: limits, kill"]
+    BOX["Box: /work from a tree version,<br/>network off, cleared environment"]
+  end
+  EXT["Outside systems:<br/>model providers, web, systems of record"]
+  CLI --> SAPI
+  WEB --> SAPI
+  SAPI --> TASK
+  TASK --> STOP
+  STOP --> LOOP
+  LOOP --> GATE
+  GATE --> EXEC
+  EXEC -->|"single writer"| ES
+  EXEC --> OB
+  EXEC --> BS
+  EXEC -->|"Sandbox port: request, result"| SW
+  SW --> BOX
+  LOOP --> MOD
+  MOD --> EXT
+  RCV --> OB
+  RCV --> EXT

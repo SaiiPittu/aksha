@@ -6,6 +6,11 @@ Aksha is one runtime that hosts pluggable agents. Today it loads two, a research
 
 ## Diagram: every outside system is behind an adapter with an offline stand-in
 
+<!-- diagram: docs/diagrams/architecture-0-context-1.png -->
+![Every outside system is behind an adapter with an offline stand-in](../diagrams/architecture-0-context-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 ---
 title: Every outside system is behind an adapter with an offline stand-in
@@ -31,6 +36,8 @@ flowchart LR
   AK --> BOX
 ```
 
+</details>
+
 Caption: every arrow out of Aksha crosses a port that has an offline adapter, which is why `AKSHA_MODE=fake` runs end to end with no network. Notice that the mock systems are reached only through the outbox, so a send is always a recorded, keyed effect and never a direct call.
 
 ## The outside parties
@@ -45,7 +52,7 @@ Caption: every arrow out of Aksha crosses a port that has an offline adapter, wh
 | Sandbox | Where exec tools and document parsers run | `refuse` (no exec) | bubblewrap on Linux, E2B (`AKSHA_SANDBOX`) | [`adapters/sandbox/`](../../src/aksha/adapters/sandbox/) |
 | Event store | The record of everything that happened | SQLite, one file (default) | PostgreSQL (`AKSHA_STORE=postgres`, `AKSHA_POSTGRES_DSN`) | [`adapters/storage/`](../../src/aksha/adapters/storage/) |
 
-A web app with accounts and an `aksha chat` terminal interface are in review (pull request #101) and are not described here until they merge.
+A web app with accounts (`aksha serve --web web/dist`) and an `aksha chat` terminal interface are built ([#101](https://github.com/SaiiPittu/aksha/pull/101)); both are clients of the same HTTP session API, and accounts live in the HTTP layer only.
 
 ## Where to go deeper
 

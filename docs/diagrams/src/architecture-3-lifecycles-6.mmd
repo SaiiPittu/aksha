@@ -1,0 +1,15 @@
+---
+title: A document the parser cannot read is a recorded gap, never an empty text
+---
+stateDiagram-v2
+  [*] --> received: upload
+  received --> refused: over a byte cap, document.refused
+  received --> stored: original bytes to the blob store
+  stored --> typed: sniff the bytes, not the name
+  typed --> parse_fast: converter for the detected type
+  parse_fast --> converted: document.stored with representation
+  parse_fast --> gap: document.gap, unsupported or unreadable
+  typed --> gap: type not allowed, document.gap refused
+  converted --> [*]
+  gap --> [*]
+  refused --> [*]

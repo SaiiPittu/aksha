@@ -56,6 +56,11 @@ Seven decisions. D1, D2 and D4 are the maintainer's (P-2, items 3 and 10). D3, D
 
 One evaluation, as a diagram:
 
+<!-- diagram: docs/diagrams/design-adr-adr-p16-stop-policy-and-evaluation-1.png -->
+![ADR-P16: Decision](../../diagrams/design-adr-adr-p16-stop-policy-and-evaluation-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
   Y["Stop candidate:<br/>kind, instance, after_turn, seq"] --> M["1. Read the budget accounting"]
@@ -75,6 +80,8 @@ flowchart TD
   J -->|"HOLD or STOP"| K
   K --> A["7. Act: next turn, suspend, pick the next instance, or end"]
 ```
+
+</details>
 
 Caption: box 3 is the hold predicate placed before any policy can propose work, so human state wins by position, not by each policy remembering to check it; every branch that ends a turn, an instance or a run passes through box 6.
 

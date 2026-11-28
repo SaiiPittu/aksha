@@ -51,6 +51,11 @@ Proposed (not in the log):
 11. D11, diff reviews in dependency order. When a reviewed version reads or takes its keys from another reviewed version, the downstream review opens only after the upstream one is accepted; receiver effects never run in silent regeneration while a reviewed upstream review is open.
 12. D12, every change is explained. Each invalidated version carries its direct causes and one shortest lineage chain (`via`) back to the source change. After a change the interfaces show five lists: what was invalidated, what was rebuilt, what stayed current by cutoff, what waits on a person, and what is blocked.
 
+<!-- diagram: docs/diagrams/design-adr-adr-p05-invalidation-1.png -->
+![ADR-P05: Decision](../../diagrams/design-adr-adr-p05-invalidation-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart TD
   SC["source.changed for one owner"] --> QE["Re-execute this owner's recorded queries:<br/>query.reexecuted, same or changed"]
@@ -66,6 +71,8 @@ flowchart TD
   HR -->|"no"| PLAN
   HR -->|"yes"| DR["approval.revoked if it carried one;<br/>pending revision; diff review interrupt"]
 ```
+
+</details>
 
 Caption: The only stored facts are the source change, the query re-executions, the saves and the revocations; every set on this diagram is a projection over them, recomputed after each commit.
 

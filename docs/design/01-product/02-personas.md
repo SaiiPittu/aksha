@@ -15,6 +15,11 @@ Aksha has two kinds of user, and they judge different things. The agent develope
 | Engineer-inventor | Example-agent user | Have their invention recorded from their own dated notes | Their notes are read, not rewritten, and an unanswered question stays a question | Through the founder | P04, P13 |
 | Patent counsel | Example-agent user, external | Read a packet that is complete, missing or flagged, never guessed | Every field cites its source, and a new version shows only what changed | Receives the packet | P04, P05, P03 |
 
+<!-- diagram: docs/diagrams/design-01-product-02-personas-1.png -->
+![The frame: six personas](../../diagrams/design-01-product-02-personas-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart TB
   subgraph Harness["Judge the harness"]
@@ -32,6 +37,8 @@ flowchart TB
   EI -->|"answers through"| FO
   OP -.->|"may also fill the role"| RV
 ```
+
+</details>
 
 Caption: the reviewer of agent output is a role the runtime serves for every agent; the founder and counsel fill it for the example agents, and the engineer-inventor reaches the system only through the founder.
 

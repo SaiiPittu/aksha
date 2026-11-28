@@ -44,6 +44,11 @@ My lean:
 10. Memory is off unless an agent declares a `MemorySpec`. An agent without one hashes the same with the extension installed.
 11. The runtime core gains two small things, about 35 lines in all (estimate): an optional `supersedes` field on a tool's save request, committed as a typed relation in the save transaction, and a `RunView.ended_runs` projection.
 
+<!-- diagram: docs/diagrams/design-adr-adr-p09-memory-1.png -->
+![ADR-P09: Decision](../../diagrams/design-adr-adr-p09-memory-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -65,6 +70,8 @@ sequenceDiagram
   A->>V: lineage closure from geography@v1
   V-->>P: run 2's scope and its dependents are invalidated
 ```
+
+</details>
 
 Caption: memory enters a run only through a cited artifact, so a changed preference reopens exactly the outputs that used it, with no memory-specific invalidation code.
 

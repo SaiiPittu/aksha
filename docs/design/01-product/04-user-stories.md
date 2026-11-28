@@ -382,7 +382,7 @@ Scenarios: 3, 4.
 
 ## Where these stories stop
 
-1. Every criterion is designed. The built primitives (P01, P10, P11, P20) carry parts of DEV-01, DEV-02, OPS-07 and FND-06, and those parts have tests on a branch in review; no story is met end to end.
+1. Every criterion was designed before the build, and this page has not been re-checked against it. As of 27 Nov 2026, 29 of the 30 primitives are built and both example agents run end to end in fake model mode; [docs/requirements.md](../../requirements.md) maps what is built to its tests.
 2. Stories that depend on Later primitives (DEV-08, OPS-01, OPS-02, OPS-05) are in the design so the runtime is shaped for them, not because the first milestone delivers them.
 3. The founder is assumed to be the authorised client who may approve. No wider role model is designed.
 

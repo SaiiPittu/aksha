@@ -57,8 +57,13 @@ The contrast coding agent is the stress test for the boundary. It needs a sandbo
 
 Worked example, the contrast coding agent with no core edit. Its folder declares `push_branch` (external, receiver `git_remote`, recovery `reconcile` by comparing the remote ref with the intended commit), `shell` (exec, network off), artifact kinds `patch` and `test_report`, a typed relation `tested_at` from a test report to the commit it ran on, and a Task tree `plan → edit → test → push`. The `test` Task's completion check is `lambda view: (r := view.latest("coding.test_report")).failed == 0 and view.freshness(r) == "current"` (S5): a pure function over artifacts, because the exec tool already ran the suite and saved the report. It imports the `bwrap` sandbox extension by name. Every piece is a contribution to an interface the core already has, so `test_third_agent_runtime_hash_unchanged` passes with this agent in place of the conformance agent.
 
+<!-- diagram: docs/diagrams/design-adr-adr-p20-extension-api-and-agent-definition-1.png -->
+![ADR-P20: Decision](../../diagrams/design-adr-adr-p20-extension-api-and-agent-definition-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
-flowchart LR
+flowchart TB
   subgraph L3["Agent definitions (agents/name/)"]
     A1["Agent value: purpose, Task tree,<br/>tools, kinds, relations, opt-ins"]
     A2["Pure checks, rules, reducers,<br/>tool bodies, fakes, prompts"]
@@ -79,6 +84,8 @@ flowchart LR
   L2 -->|"contributes data through"| API
   API --> LD --> IF
 ```
+
+</details>
 
 Caption: every arrow points inward; the runtime core imports nothing from the two outer layers, and contributions reach the core only through interfaces it already has.
 
@@ -111,7 +118,7 @@ Caption: every arrow points inward; the runtime core imports nothing from the tw
 
 1. `Agent.invalidation` is a trailing field (extension API 2.10), one of `off`, `edit_guard`, `notify` or `rebuild` (`InvalidationMode`), with `off` the default when nothing is declared. What each mode does is ADR-P05 amendment M1. The loader refuses any other value with `invalidation_unknown` (field `invalidation`) and hashes the resolved mode into the definition hash beside the context policy (D7), because the default lives in the runtime and no file of the agent shows it. `run_started_fields` records the mode on every `run.started` a definition opens.
 2. `ToolSpec.edits` is a trailing field (`EditSpec(source, record, collection=None, overwrite=False)`): the record a `store` or `exec` tool edits or overwrites, named by a JSON pointer to a required string argument, optionally a path inside a collection. The loader refuses it on any other effect class (`edits_not_allowed`) and a pointer that is not a required top-level string argument, or an empty source (`edits_invalid`). It enters the tool registry's canonical hash only when declared, so the hash of a tool that edits nothing is unchanged.
-3. The research and patent agents declare `invalidation="rebuild"`; `make demo` and every eval suite run as before.
+3. The research and patent agents declare `invalidation="rebuild"`; `make demo` and every eval set run as before.
 4. `RecordReader` gains `serves(source) -> bool` (extension API 2.10), so the edit-time check can tell a source it cannot read from a record that does not exist yet. Agents and extensions call the reader and do not implement it; the readers the composition root wires (folder sources, the inputs workspace, the eval episode reader) implement it. The loader refuses two differently named versioned sources, across an agent and its extensions and across loaded agents, that declare the same collection (`collection_served_twice`, field `sources`), because a recorded read names a record by its ID alone.
 
 ### Amendment from the design review: imports from outside the folder (27 Nov 2026, Proposed)

@@ -12,6 +12,11 @@ The system is split by what each part may hold, so a compromise of one part cost
 | 2, runtime | The session API, the agent loop, Tasks and the scheduler, stop policies, the policy gate, the durable step executor, context assembly, model adapters, and every credential | Yes, through one writer |
 | 3, execution | Sandbox workers and one throwaway workspace per call; no credentials, no state | No |
 
+<!-- diagram: docs/diagrams/architecture-overview-1.png -->
+![Architecture overview: Three tiers](../diagrams/architecture-overview-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   subgraph T2["Tier 2: runtime (trusted, holds credentials)"]
@@ -39,11 +44,18 @@ flowchart LR
   EXEC -->|"request, result"| BOX
 ```
 
+</details>
+
 Caption: every arrow into tier 1 starts in tier 2, and tier 3 returns only its result. Tier 3 is the sandbox: as of 27 Nov 2026 a bubblewrap backend on Linux and an optional E2B backend, with a process-group kill unit (P12).
 
 ## The event store is the source of truth
 
 Nothing in Aksha is stored as mutable state. A Task's status, the open approvals, the budget spent, which outputs are out of date, and the model's own context window are all projections: views computed from the event store by pure functions (reducers). A restart rebuilds them from the record, so a crash cannot leave them inconsistent and a budget cannot reset.
+
+<!-- diagram: docs/diagrams/architecture-overview-2.png -->
+![The event store is the source of truth](../diagrams/architecture-overview-2.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -58,11 +70,18 @@ flowchart LR
   R1 & R2 & R3 & R4 & R5 --> NEXT["Next decision"]
 ```
 
+</details>
+
 Caption: facts go in through one writer; every view, the trace included, is rebuilt from the facts.
 
 ## Ports and adapters
 
 The domain is `src/aksha/runtime/`, one package per primitive. Every dependency on the outside world is a `typing.Protocol` in that package's `ports.py`, and backends are adapters in `src/aksha/adapters/`. `src/aksha/app.py` is the composition root, the one place that picks adapters. The runtime never imports an adapter, agents and extensions import only `aksha.runtime.api` (an agent also the extensions it names), and `tests/architecture/` enforces both rules.
+
+<!-- diagram: docs/diagrams/architecture-overview-3.png -->
+![Ports and adapters](../diagrams/architecture-overview-3.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
 
 ```mermaid
 flowchart TB
@@ -73,6 +92,8 @@ flowchart TB
   APP --> AD["aksha.adapters<br/>storage, blobs, anchor, sources,<br/>clock, models, sandbox"]
   AD -.->|"implements ports"| RT
 ```
+
+</details>
 
 Caption: arrows are imports. Adapters depend on the runtime's ports; the runtime depends on nothing outside itself.
 
@@ -123,6 +144,11 @@ The catalogue, with dependencies and the build order, is [docs/design/03-primiti
 
 An agent with many items (the patent agent with twenty invention candidates) does not run deep work on every one. A supervisor Task sits over per-item worker Tasks and reads a work board, a capped summary of where each item stands, through the recitation policy (`Recite`), rendered from the event store on every turn; it never sees the workers' artifacts. Every item gets a cheap triage tier. The supervisor's one write, `commit_round`, admits items to the deep tier, and code checks every bound before the round commits: the tier's item cap, its share of the run's model turns, and how many items one round may newly admit. Code, not the supervisor, then gives deep work to a seeded sample of the dropped items; an audited item the deep tier would have kept counts as a miss, and while a miss stays dropped the goal fails with "re-open drops". The goal itself is a pure function over the board.
 
+<!-- diagram: docs/diagrams/architecture-overview-4.png -->
+![The super agent: a supervisor over a work board](../diagrams/architecture-overview-4.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart TB
   SUP["Supervisor Task<br/>reads the board, commits rounds"] -->|"directive per item"| DEEP
@@ -132,7 +158,9 @@ flowchart TB
   TRI --> DEEP
 ```
 
-Caption: the supervisor steers by directives that only filter which items the deep tier takes, so re-deciding an item re-runs nothing that already ran. The kit is `extensions/portfolio/`; the decision is ADR-P15 S5 (Proposed), and the `portfolio` eval suite runs it on the 20-candidate `coldwick` world.
+</details>
+
+Caption: the supervisor steers by directives that only filter which items the deep tier takes, so re-deciding an item re-runs nothing that already ran. The kit is `extensions/portfolio/`; the decision is ADR-P15 S5 (Proposed), and the `portfolio` eval set runs it on the 20-candidate `coldwick` world.
 
 ## Why a hash-chained event store
 

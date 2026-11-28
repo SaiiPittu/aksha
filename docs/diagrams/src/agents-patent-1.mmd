@@ -1,0 +1,14 @@
+---
+title: Selection and sending are two separate human gates, and nothing is sent without the second
+---
+flowchart TD
+    SCOPE["scope<br/>done: portfolio_saved"] --> EXTRACT["extract per candidate<br/>done: extraction_saved"]
+    EXTRACT -.->|"ask: input interrupt, missing detail"| GAP[/person fills a gap/]
+    EXTRACT --> SUP["candidate supervisor<br/>commit_round above 8 candidates"]
+    SUP --> DEEP["deep per admitted candidate<br/>prior_art, compare, recommend"]
+    DEEP --> TABLE["table<br/>done: table_saved"]
+    TABLE --> SELECT[/"select: choice interrupt<br/>GATE 1, the person picks candidates"/]
+    SELECT --> PREPARE["prepare per selected<br/>fill_form, done: forms_filled"]
+    PREPARE --> PACKET["packet per selected<br/>done: packet_saved"]
+    PACKET --> APPROVE[/"send_packet approval<br/>GATE 2, exact packet and recipient"/]
+    APPROVE --> SEND["send per selected<br/>outbox, done: handoff_recorded"]

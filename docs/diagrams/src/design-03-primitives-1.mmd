@@ -1,0 +1,27 @@
+flowchart LR
+  P01["P01 Event store"] --> P20["P20 Extension API"]
+  P01 --> P02["P02 Durable execution"]
+  P20 --> P10["P10 Tool registry"]
+  P01 --> P04["P04 Artifact store"]
+  P10 --> P11["P11 Policy gate"]
+  P02 --> P14["P14 Budgets and limits"]
+  P14 --> P11
+  P04 --> P13["P13 Grounding"]
+  P10 --> P13
+  P01 --> P07["P07 Model interface<br/>(fake)"]
+  P07 --> P06["P06 Agent loop"]
+  P11 --> P06
+  P06 --> P08["P08 Context and compaction"]
+  P06 --> P15["P15 Tasks and scheduler"]
+  P04 --> P17["P17 Interrupts<br/>and approvals"]
+  P15 --> P16["P16 Stop policy<br/>and hold predicate"]
+  P17 --> P16
+  P16 --> P24["P24 Partial results"]
+  P13 --> P24
+  P17 --> P19["P19 Session API, CLI"]
+  P19 --> P23["P23 Request router"]
+  P02 --> P03["P03 Outbox"]
+  P04 --> P05["P05 Invalidation"]
+  P05 --> P27["P27 amend lane"]
+  P19 --> P27
+  P07 --> P22["P22 Fakes and replay"]

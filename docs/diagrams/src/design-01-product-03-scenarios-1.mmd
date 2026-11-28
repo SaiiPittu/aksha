@@ -1,0 +1,11 @@
+flowchart LR
+  S1["1 Research<br/>happy path"] --> S11["11 Blocked source,<br/>partial"]
+  S1 --> S12["12 Injected<br/>instructions"]
+  S2["2 Patent packet<br/>with approval"] --> S3["3 Restart mid-approval<br/>and mid-send"]
+  S2 --> S4["4 Changed input,<br/>invalidation, diff"]
+  S2 --> S7["7 System 1 abstains,<br/>System 2 decides"]
+  S2 --> S9["9 User stop<br/>holds"]
+  S4 --> S6["6 Portfolio under<br/>a supervisor Task"]
+  S8["8 Third agent,<br/>no runtime change"]
+  S5["5 Headless job<br/>in a sandbox"]
+  S10["10 Trace to<br/>OTLP"]

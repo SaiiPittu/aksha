@@ -1,0 +1,32 @@
+flowchart TB
+  subgraph C["Clients and triggers"]
+    API["CLI, web app, event-triggered starts"]
+  end
+  subgraph T2F["Tier 2: several runtime processes"]
+    R1["aksha serve, replica 1"]
+    R2["aksha serve, replica 2"]
+    TW["Or: Temporal workers, a run as a workflow,<br/>steps as activities"]
+  end
+  subgraph T1F["Tier 1"]
+    PG[("PostgreSQL: events and outbox,<br/>advisory-lock writer")]
+    S3[("S3-compatible blob store,<br/>write-once anchor")]
+  end
+  subgraph T3F["Tier 3: remote sandbox pool"]
+    W1["Sandbox worker host"]
+    V1["microVM box"]
+    V2["microVM box"]
+  end
+  OT["OpenTelemetry collector (operational plane)"]
+  API --> R1
+  API --> R2
+  R1 --> PG
+  R2 --> PG
+  TW --> PG
+  R1 --> S3
+  R2 --> S3
+  R1 -->|"Sandbox port over the network"| W1
+  R2 -->|"Sandbox port over the network"| W1
+  W1 --> V1
+  W1 --> V2
+  R1 -.-> OT
+  W1 -.-> OT

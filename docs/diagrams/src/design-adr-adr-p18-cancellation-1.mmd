@@ -1,0 +1,15 @@
+sequenceDiagram
+  participant P as Person (web UI)
+  participant S as Session API
+  participant E as Event store
+  participant R as Recovery on startup
+  participant V as Stop-policy evaluation
+  P->>S: stop(owner, R-0002, command_id=cli-7f3a)
+  S->>E: append run.stop_requested (seq 203)
+  S-->>P: acknowledged: committed, not done
+  Note over E: process killed
+  R->>E: open runs with a stop request newer than their last decision
+  R->>V: resume candidate for R-0002
+  V->>V: hold_reason(run) = stop_requested, Run policy STOP stopped
+  V->>E: one transaction: interrupt.voided P-0009, run.ended stopped, stop.decided w062
+  E-->>P: event stream: run.ended stopped

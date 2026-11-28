@@ -50,6 +50,11 @@ Seven decisions. D1 to D3 and D5 are the maintainer's (items 2, 4, 7, 8, 10). D4
 
 The tree's lifecycle for one instance, every arrow a fact already in the event store:
 
+<!-- diagram: docs/diagrams/design-adr-adr-p15-task-model-and-scheduler-1.png -->
+![ADR-P15: Decision](../../diagrams/design-adr-adr-p15-task-model-and-scheduler-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 stateDiagram-v2
   [*] --> new: its key appears in the key source
@@ -63,6 +68,8 @@ stateDiagram-v2
   new --> withdrawn: its key leaves the source
   suspended --> withdrawn: its key leaves the source
 ```
+
+</details>
 
 Caption: no arrow is a write of a status; each is an event another primitive already records, so the reducer that computes status cannot disagree with the event store after a crash.
 
@@ -92,7 +99,7 @@ D7's supervisor rule was built on 26 Nov 2026 over un-keyed children only. This 
 7. S5.7, the goal is a condition over the board. The supervisor's completion check is a pure function over the board: every item has a triage result (`worker`), then a decision (`supervisor`), no decision rests on a moved basis (`supervisor`), and no audit miss stays dropped (`supervisor`). Each failing branch aggregates its keys into one message with a count and the first five keys. D7's rule then decides between a turn and a hold from the tags alone.
 8. S5.8, the patent agent. Its candidates run under a supervisor Task named `candidate`: `extract` for every candidate (triage) and `deep` (`prior_art`, `compare`, `recommend`) for the admitted ones and the audit sample. At eight candidates or fewer every candidate gets deep work and the supervisor takes no turn, so the base worlds run as before; `extract`'s instance IDs are unchanged. `table` carries the batched review (decisions, the drop list with reasons, the audit), checked in code against the kit's own review, and `select` shows it beside the choice.
 
-Measured on the synthetic 20-candidate world `coldwick` with the offline fake model (27 Nov 2026, eval suite `portfolio`): 138 model turns and 744 tool calls to the selection and packet, of which 2 turns were the supervisor's, 60 triage and 60 deep over 10 of 20 candidates; deep work for every candidate would be about 196, so the tiers saved about 29%. The supervisor's requests showed no artifact and held at most 15,989 characters. The planted wrong drop was in the audit sample, found worth the deep work (miss rate 1 of 3) and re-opened. These are plumbing numbers from a rule-based model; a live model's are unmeasured.
+Measured on the synthetic 20-candidate world `coldwick` with the offline fake model (27 Nov 2026, eval set `portfolio`): 138 model turns and 744 tool calls to the selection and packet, of which 2 turns were the supervisor's, 60 triage and 60 deep over 10 of 20 candidates; deep work for every candidate would be about 196, so the tiers saved about 29%. The supervisor's requests showed no artifact and held at most 15,989 characters. The planted wrong drop was in the audit sample, found worth the deep work (miss rate 1 of 3) and re-opened. These are plumbing numbers from a rule-based model; a live model's are unmeasured.
 
 ### Amendment from the build: a failed instance is not re-entered in the same evaluation (27 Nov 2026, S6, Proposed)
 

@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant F as Founder
+  participant R as Runtime
+  participant V as Invalidation view
+  participant S as Scheduler
+  F->>R: apply change set, restart
+  R->>V: re-execute recorded queries
+  V-->>R: C1 comparison and extraction invalidated, 5 more downstream
+  R->>R: refuse handoff for packet C1 v1
+  R->>S: rebuild machine-only C1 work in order
+  S-->>R: disclosure and worksheet v2 differ
+  R->>R: revoke approval on packet C1 v1
+  R-->>F: diff review: selection v2
+  F->>R: accept
+  S-->>R: pending packet C1 v2
+  R-->>F: diff review: packet v2 with redline
+  F->>R: accept, then approve the new signature

@@ -1,0 +1,13 @@
+---
+title: Every research output waits on a completion check, and only scope can stop for a person
+---
+flowchart TD
+    REQ([request]) --> SCOPE["scope<br/>done: scope_done"]
+    SCOPE -.->|"ask: input interrupt, question"| PERSON[/person answers/]
+    PERSON -.-> SCOPE
+    SCOPE --> DISC["discover<br/>done: discover_done"]
+    SCOPE --> VOICE["voice<br/>done: needs_done"]
+    DISC --> EVID["evidence, one per company<br/>done: profile_done"]
+    EVID --> REPORT["report, finalizer<br/>done: report_done"]
+    VOICE --> REPORT
+    REPORT --> DONE{{"run completion<br/>outputs_exist"}}

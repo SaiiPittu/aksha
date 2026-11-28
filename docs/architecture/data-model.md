@@ -6,6 +6,11 @@ Aksha stores very little, and all of it is append-only. There are five tables, a
 
 ## Diagram: the events table is the record, and every other row points back into it
 
+<!-- diagram: docs/diagrams/architecture-data-model-1.png -->
+![The events table is the record, and every other row points back into it](../diagrams/architecture-data-model-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 ---
 title: The events table is the record, and every other row points back into it
@@ -69,6 +74,8 @@ erDiagram
     text hash
   }
 ```
+
+</details>
 
 Caption: an artifact row cannot exist without the `artifact.saved` event at its `event_seq`, and a blob is reachable only by the hash a row names. Notice that `owner` is on every event and every artifact row, which is the key every read filters on and the basis of user isolation.
 

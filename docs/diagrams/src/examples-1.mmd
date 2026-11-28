@@ -1,0 +1,16 @@
+---
+title: The new evidence reopens C1's chain and every recommendation, and leaves C2's extraction and the company profiles alone
+---
+flowchart TB
+  profile["research.profile/c01-kelvra-systems<br/>kept"]
+  needs["research.needs<br/>rebuilt"]
+  ext2["patent.extraction/C2<br/>kept"]
+  ext["patent.extraction/C1<br/>rebuilt"]
+  prior["patent.prior_art/C1<br/>rebuilt"]
+  comp["patent.comparison/C1<br/>rebuilt"]
+  rec["patent.recommendation/C1<br/>rebuilt"]
+  sel["patent.selection<br/>rebuilt"]
+  pkt["patent.packet/C1<br/>rebuilt"]
+  appr["approval.requested<br/>A-0002 for v2"]
+  ext --> prior --> comp --> rec --> sel --> pkt --> appr
+  ext2 --> sel

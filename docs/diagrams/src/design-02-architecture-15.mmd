@@ -1,0 +1,13 @@
+flowchart LR
+  subgraph P1["Plane 1: the agent-run trace"]
+    ES[("Event store")] --> BT["build_trace()<br/>pure function"]
+  end
+  subgraph P2["Plane 2: operational telemetry"]
+    HTTP["Session API and HTTP spans"]
+    DBS["Database and queue spans"]
+    WK["Worker health"]
+    MET["Metrics and logs"]
+  end
+  HTTP -->|"command carries the request's trace ID"| ES
+  BT -->|"OTLP, after each segment"| B["One OTLP backend"]
+  P2 -->|"OTLP, live"| B

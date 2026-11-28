@@ -1,0 +1,20 @@
+flowchart TB
+  subgraph L3["Agent definitions (agents/name/)"]
+    A1["Agent value: purpose, Task tree,<br/>tools, kinds, relations, opt-ins"]
+    A2["Pure checks, rules, reducers,<br/>tool bodies, fakes, prompts"]
+  end
+  subgraph L2["Extensions (aksha/extensions/name/)"]
+    E1["memory"]
+    E2["supervisor (work board)"]
+    E3["sandbox backends: bwrap, docker"]
+    E4["otel exporter"]
+  end
+  subgraph L1["Runtime core (aksha/runtime/)"]
+    API["api.py: The extension API, API_VERSION"]
+    LD["Agent loader: refusals,<br/>namespaces, version hash"]
+    IF["Interfaces the contributions plug into:<br/>tool registry, artifact store, sandbox,<br/>model, versioned sources, projections"]
+  end
+  A1 -->|"declares"| API
+  A1 -->|"imports by name"| L2
+  L2 -->|"contributes data through"| API
+  API --> LD --> IF

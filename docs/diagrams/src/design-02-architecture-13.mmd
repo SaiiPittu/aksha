@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant P as Person
+  participant S as Session API
+  participant E as Event store
+  participant V as Invalidation view
+  participant A as Patent-disclosure agent
+  P->>S: apply_source_change(owner, change set)
+  S->>E: source.changed
+  E->>V: reducer recomputes states in save order
+  V-->>S: invalidated: comparison C2, packet v3
+  S->>E: approval.revoked (packet v3 target confirmed out of date)
+  S->>A: rebuild run for the affected work
+  A->>E: machine-only comparison regenerated silently
+  A->>E: pending revision packet v4 beside v3
+  E-->>P: diff review with changed inputs and a redline
+  P->>S: accept review
+  S->>E: review.accepted, then a fresh approval request

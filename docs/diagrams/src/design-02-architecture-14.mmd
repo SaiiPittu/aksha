@@ -1,0 +1,12 @@
+flowchart LR
+  subgraph SERVER["Server mode: aksha serve"]
+    H["HTTP handlers"] -->|"command"| Q["Command queue"] --> W1["Single writer"]
+    W1 -->|"append"| DB1[("Event store")]
+    H -->|"read-only, events after cursor"| DB1
+  end
+  CLI1["aksha CLI"] --> H
+  WEB["Web app"] --> H
+  subgraph EMB["Embedded mode: aksha run, no server"]
+    CLI2["aksha run"] -->|"takes the lock, calls in process"| W2["Single writer"]
+    W2 --> DB2[("Event store")]
+  end

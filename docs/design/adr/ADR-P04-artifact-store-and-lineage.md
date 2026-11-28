@@ -50,6 +50,11 @@ Proposed (not in the log):
 11. D11, reads of another agent's artifacts are pinned. A Patent Task's read of `research.findings@v3` stays `@v3`; a newer Research version from an ordinary request does not invalidate it, only invalidation of the pinned version itself does (v2 AE-9).
 12. D12, names. `EdgeKind` becomes `RelationKind`, `edge.saved` becomes `relation.saved`, "domain edge" becomes typed relation, and "recorded reads" becomes lineage in prose; the field stays `reads` in code.
 
+<!-- diagram: docs/diagrams/design-adr-adr-p04-artifact-store-and-lineage-1.png -->
+![ADR-P04: Decision](../../diagrams/design-adr-adr-p04-artifact-store-and-lineage-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   REC["source record<br/>publications/SYN-PUB-0011@v1"] -->|"derived_from"| EX["patent.extraction/C1@v2"]
@@ -60,6 +65,8 @@ flowchart LR
   SNAP["coding.snapshot/repo@v7"] -->|"derived_from"| TR["coding.test_report@v4"]
   PATCH["coding.patch/P2@v1"] -->|"derived_from"| SNAP
 ```
+
+</details>
 
 Caption: plain `derived_from` arrows are lineage the runtime recorded; the labelled arrow is a typed relation the agent declared, carrying its own citation; the bottom row is the contrast coding agent's chain in the same shapes.
 

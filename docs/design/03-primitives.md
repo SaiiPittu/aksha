@@ -95,6 +95,11 @@ Takeaway: 24 of the 30 primitives are built or stubbed in the first milestone, a
 
 Each primitive is built after everything it needs. The diagram shows the first-milestone primitives only.
 
+<!-- diagram: docs/diagrams/design-03-primitives-1.png -->
+![Harness primitives: Build order](../diagrams/design-03-primitives-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
   P01["P01 Event store"] --> P20["P20 Extension API"]
@@ -124,6 +129,8 @@ flowchart LR
   P19 --> P27
   P07 --> P22["P22 Fakes and replay"]
 ```
+
+</details>
 
 Caption: every arrow points from a primitive to one that needs it. P20 comes second because every later declaration lands in its `Agent` value.
 

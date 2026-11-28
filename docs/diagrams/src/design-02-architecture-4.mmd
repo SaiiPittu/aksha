@@ -1,0 +1,15 @@
+sequenceDiagram
+  autonumber
+  participant L as Tier 2, loop and gate
+  participant X as Tier 2, step executor
+  participant S as Tier 1, event and blob stores
+  participant W as Tier 3, sandbox worker
+  participant B as Tier 3, box
+  L->>X: run_tests allowed, argument hash, tree version
+  X->>S: step.started (single writer)
+  X->>W: exec request: argv, manifest, policy digest, limits
+  W->>B: materialise /work, start, enforce limits
+  B-->>W: exit status, report file
+  W-->>X: collected outputs, denials, exit status
+  X->>S: blob put, step.completed and artifact saved in one transaction
+  X-->>L: result as data for the next turn

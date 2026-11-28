@@ -1,0 +1,14 @@
+flowchart TB
+  subgraph HOST["One machine"]
+    subgraph P["One process: aksha run or aksha serve"]
+      RT["Tier 2: session API, loop, Tasks, stop policies,<br/>gate, own durable executor"]
+      ESA["EventStore adapter: SQLite, one writer under an OS lock"]
+      BSA["BlobStore adapter: filesystem"]
+    end
+    DB[("Tier 1: one SQLite file")]
+    FS[("Tier 1: blobs folder")]
+    SB["Tier 3: local backend, bubblewrap or Docker,<br/>or refuse"]
+  end
+  RT --> ESA --> DB
+  RT --> BSA --> FS
+  RT -->|"Sandbox port"| SB

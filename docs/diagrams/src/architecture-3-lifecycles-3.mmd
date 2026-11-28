@@ -1,0 +1,20 @@
+---
+title: An approval is used only by the outbox entry it names, and an edit is a new approval
+---
+stateDiagram-v2
+  state Interrupt {
+    state "voided" as voided_i
+    [*] --> open: interrupt.raised
+    open --> resolved: interrupt.resolved
+    open --> voided_i: interrupt.voided
+  }
+  state Approval {
+    [*] --> requested: approval.requested
+    requested --> granted: approval.granted
+    requested --> rejected: approval.rejected
+    requested --> voided: approval.voided
+    granted --> voided: approval.voided
+    requested --> revoked: approval.revoked
+    granted --> revoked: approval.revoked
+    granted --> used: outbox.enqueued
+  }

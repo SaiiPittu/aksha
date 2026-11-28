@@ -6,6 +6,11 @@ Aksha is split into three tiers by what each may hold. The state tier holds the 
 
 ## Diagram: only the runtime tier writes the record, and the execution tier returns only results
 
+<!-- diagram: docs/diagrams/architecture-1-tiers-1.png -->
+![Only the runtime tier writes the record, and the execution tier returns only results](../diagrams/architecture-1-tiers-1.png)
+
+<details><summary>Diagram source (Mermaid)</summary>
+
 ```mermaid
 ---
 title: Only the runtime tier writes the record, and the execution tier returns only results
@@ -33,6 +38,8 @@ flowchart LR
   EXEC -->|"request, result"| BOX
   SES -->|"bytes, representation"| PARSE
 ```
+
+</details>
 
 Caption: every arrow into the state tier starts at the step executor or the session's one writer, and nothing in the execution tier has an arrow back into state. Notice that the policy gate sits before the executor, so no tool call reaches the record or the sandbox without being checked.
 

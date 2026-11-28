@@ -1,0 +1,11 @@
+stateDiagram-v2
+  [*] --> new: its key appears in the key source
+  new --> running: task.entered (scheduler, inside a stop decision)
+  running --> suspended: interrupt.raised for this instance
+  suspended --> running: interrupt.resolved
+  running --> done: stop decision pops it DONE
+  running --> blocked: stop decision pops it FAIL (stop-veto limit, check_raised)
+  blocked --> running: completion_check.reset after a person's answer, or a rebuild run re-enters it by writer key
+  done --> running: an artifact it wrote is invalidated and a run re-enters it by writer key
+  new --> withdrawn: its key leaves the source
+  suspended --> withdrawn: its key leaves the source

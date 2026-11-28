@@ -1,6 +1,6 @@
 # Quick start: the demo and the command line, step by step
 
-*As of 27 Nov 2026. The shortest path is in the [README](../README.md): `aksha demo`, then `aksha example` and three commands. This page is the long walk-through from a clone, every command with the output it printed. Nothing here calls a model over the network: every model is a rule-based fake or a replay.*
+*As of 27 Nov 2026. The shortest path is in the [README](../README.md): `aksha demo`, then `aksha example` and three commands. This page is the long walk-through from a clone, every command with the output it printed. Apart from the section on running the agents live, nothing here calls a model over the network: every model is a rule-based fake or a replay.*
 
 ## From a clone
 
