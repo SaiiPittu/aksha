@@ -27,6 +27,11 @@ approved by a process that had the system) cannot move, and only that run waits:
 skips it and :meth:`Session.unavailable` says why, so the owner's other runs and commands
 go on. Nothing about the skip is stored; the next process with the system drives it.
 
+A run whose model step is suspended (``StepSuspended``: the provider account has no credits
+left) is skipped the same way, with the provider's short reason: the step's attempt is
+recorded and the run stays open at that step, so ``aksha resume`` after a top-up asks the
+model again from there. A server process keeps skipping the run until it restarts.
+
 Timers (ADR-P25): every :meth:`Session.step` and :meth:`Session.resume` first ticks the
 owner (``timers.firing.tick``): it records the date when a run open across midnight or a
 read of an earlier date makes it matter, then fires the owner's due timers, before any
@@ -68,7 +73,7 @@ from aksha.runtime.corrections.types import (
 from aksha.runtime.definitions.types import Agent
 from aksha.runtime.definitions.versions import API_VERSION
 from aksha.runtime.events.envelope import NewEvent
-from aksha.runtime.execution.errors import EffectNeedsOutbox
+from aksha.runtime.execution.errors import EffectNeedsOutbox, StepSuspended
 from aksha.runtime.execution.executor import StepExecutor
 from aksha.runtime.execution.ids import LogIdSource, highest
 from aksha.runtime.execution.ports import Clock, DurableStepExecutor, IdSource
@@ -734,6 +739,9 @@ class Session:
             except EffectNeedsOutbox as e:
                 self._unavailable[owner][run] = f"{e.code}: {e.message}"
                 continue
+            except StepSuspended as e:
+                self._unavailable[owner][run] = e.message or e.code
+                continue
             if state == "ended":
                 self._answers.forget(owner, run)
             if state == "running":
@@ -790,6 +798,8 @@ class Session:
                     self._answers.forget(owner, run.run)
             except EffectNeedsOutbox as e:
                 self._unavailable.setdefault(owner, {})[run.run] = f"{e.code}: {e.message}"
+            except StepSuspended as e:
+                self._unavailable.setdefault(owner, {})[run.run] = e.message or e.code
 
         self.tick(owner)
         blocked = self._blocked(owner)
@@ -817,7 +827,7 @@ class Session:
                                 reader=self._reader(owner), answers=self._answers)  # fmt: skip
             try:
                 driven = drive_rebuilds(setup, self._executor(owner), self.ids)
-            except EffectNeedsOutbox as e:
+            except (EffectNeedsOutbox, StepSuspended) as e:
                 why = f"{e.code}: {e.message}"
                 self._unavailable.setdefault(owner, {})[f"rebuilds of {name}"] = why
                 continue
@@ -828,7 +838,7 @@ class Session:
         return tuple(out)
 
     def unavailable(self, owner: str) -> Mapping[str, str]:
-        """``owner``'s runs this process skipped, each with why (an effect with no system)."""
+        """``owner``'s runs this process skipped, each with why (no system, a suspended step)."""
         return MappingProxyType(dict(self._unavailable.get(owner, {})))
 
     def status(self, owner: str, session: str) -> SessionStatus:

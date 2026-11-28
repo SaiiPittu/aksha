@@ -3,7 +3,9 @@
 A raising body becomes ``tool_exception``, except an egress refusal the body let through,
 which becomes ``egress_refused`` naming the host and the reason (ADR-P26 D4); a body
 that returns anything but a ``ToolOutcome`` becomes ``class_violation``; neither escapes
-as an exception, so the model reads the error in its next turn. ``tool_exception`` is
+as an exception, so the model reads the error in its next turn. A fast-model call's
+``TransientStepError`` (retried by the step's policy) and ``StepSuspended`` (a provider
+account with no credits left: the step stays open) are raised to the step. ``tool_exception`` is
 not in any default ``retry_on``, because a bug repeats. The durable step executor
 (ADR-P02) records the outcome; this function only calls.
 """
@@ -15,7 +17,7 @@ from typing import Any
 
 from aksha.runtime.canonical import freeze
 from aksha.runtime.egress.errors import EGRESS_REFUSED, EgressRefused
-from aksha.runtime.execution.errors import TransientStepError
+from aksha.runtime.execution.errors import StepSuspended, TransientStepError
 from aksha.runtime.tools.types import Err, Ok, ToolContext, ToolDecl, ToolOutcome
 
 
@@ -26,7 +28,7 @@ def call_body(decl: ToolDecl, ctx: ToolContext, args: Mapping[str, Any]) -> Tool
         return ToolOutcome(Err("class_violation", f"tool {name!r} has no body to call"))
     try:
         outcome: object = decl.body(ctx, freeze(args))  # agent code is not type-checked
-    except TransientStepError:  # a fast-model call worth retrying: the step's policy decides
+    except (TransientStepError, StepSuspended):  # a fast-model call the step decides about
         raise
     except EgressRefused as refused:  # the destination, not the body, was refused
         message = f"tool {name!r}: egress refused for {refused.host!r}: {refused.reason}"

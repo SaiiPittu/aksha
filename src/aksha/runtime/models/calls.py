@@ -29,7 +29,10 @@ The tool step is the durable unit: a completed step returns its recorded result 
 running the body, so a resume never asks again, and a fake-mode run writes the same bytes.
 A body that dies mid-call is ``at_least_once`` and asks again on its next attempt. A
 transient model error is raised as ``TransientStepError("transient")``, which the tool's
-retry policy retries; a permanent one moves to the next candidate. An alias whose
+retry policy retries; a permanent one moves to the next candidate. A provider account
+with no credits left suspends the tool step (``StepSuspended``) instead of trying the next
+candidate, which the same account usually bills, so ``aksha resume`` asks again after a
+top-up. An alias whose
 cascade is used up follows its ``on_exhausted``: ``unknown`` (the default) leaves the
 abstention for the body to report as unknown, ``fail`` raises ``ModelCallFailed``.
 
@@ -67,7 +70,7 @@ from typing import Any
 from aksha.runtime.artifacts.types import InputRef
 from aksha.runtime.canonical import sha256_hex
 from aksha.runtime.errors import AkshaError
-from aksha.runtime.execution.errors import TransientStepError
+from aksha.runtime.execution.errors import StepSuspended, TransientStepError
 from aksha.runtime.execution.types import Deadline
 from aksha.runtime.grounding.types import CitationSpan, ReturnedText, SpanDraft
 from aksha.runtime.models.codec import (
@@ -76,7 +79,12 @@ from aksha.runtime.models.codec import (
     judgement_json,
 )
 from aksha.runtime.models.definitions import alias_definition, code_record, definition_record
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.routing import AliasTable, adapter_name, cascade_for
 from aksha.runtime.models.thresholds import threshold_classification, threshold_extraction
 from aksha.runtime.models.types import (
@@ -376,6 +384,8 @@ class ToolModelCalls:
                 data, found = ask(candidate, pending)
             except TransientModelError as e:
                 raise TransientStepError("transient", e.message, detail=e.detail) from e
+            except ModelQuotaExhausted as e:  # the next candidate is billed by the same account
+                raise StepSuspended(e.code, e.message, detail=e.detail) from e
             except (PermanentModelError, ContextOverflow) as e:
                 steps.append({**entry, "error": e.code})
                 continue

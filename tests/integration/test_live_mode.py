@@ -124,6 +124,51 @@ def test_the_research_agent_runs_live_over_http_with_every_fast_alias_on_the_wir
     assert code == wire.EXIT_OK and '"resolved": 4' in shown, shown
 
 
+def _events(tmp: Path) -> list[tuple[str, str | None, dict[str, object]]]:
+    from aksha.adapters.clock.fake import FakeClock
+    from aksha.adapters.storage.sqlite import open_store
+    from aksha.runtime.canonical import thaw
+    from tests.support.events import START
+
+    store = open_store(tmp / "var" / "aksha.sqlite", FakeClock(START), writer=False)
+    try:
+        return [(e.type, e.step, thaw(e.payload)) for e in store.read("o1")]
+    finally:
+        store.close()
+
+
+def test_no_credits_pauses_the_run_at_its_step_and_resume_continues_it(
+    tmp_path: Path, stub: StubServer
+) -> None:
+    broke = _live(stub, AKSHA_ALIAS_GENERATE="tests.support.live_stub:NoCreditsGeneration",
+                  AKSHA_LIVE_TEST_NO_CREDITS="on")  # fmt: skip
+    code, out = aksha(tmp_path, broke, "run", PROMPT, "--agent", "research",
+                      "--input", str(CINDRAL))  # fmt: skip
+    reason = "model provider: no credits remaining (openai); add credits and run aksha resume"
+    assert f"R-0001 cannot move in this process: {reason}" in out, out
+    assert "ended" not in out, out
+    failed = [(s, p) for t, s, p in _events(tmp_path) if t == "step.failed"]
+    # Asked once, not retried: one attempt, recorded with what the provider said.
+    ((step, first),) = failed
+    assert (first["code"], first["attempt"]) == ("model_quota_exhausted", 1)
+    assert first["error"]["provider"] == "openai" and first["error"]["status"] == 429  # type: ignore[index]
+    assert not any(t == "run.ended" for t, _, _ in _events(tmp_path))
+    # Still no credits: each resume asks once more and says the same, and resuming more
+    # often than the restart limit (3) before the top-up does not end the run.
+    for _ in range(4):
+        code, out = aksha(tmp_path, broke, "resume")
+        assert reason in out and "ended" not in out, out
+    # Credits added: resume continues from the same step and the run completes.
+    added = _live(stub, AKSHA_ALIAS_GENERATE="tests.support.live_stub:NoCreditsGeneration")
+    code, out = aksha(tmp_path, added, "resume", "R-0001")
+    assert code == wire.EXIT_OK and "R-0001 research ended complete" in out, out
+    events = _events(tmp_path)
+    attempts = [p["attempt"] for t, s, p in events if t == "step.failed" and s == step]
+    assert attempts == [1, 2, 3, 4, 5]
+    (done,) = [p for t, s, p in events if t == "step.completed" and s == step]
+    assert done["outcome"] == "ok" and done["attempts"] == 6
+
+
 def test_a_remote_server_without_a_key_is_refused_before_any_call(
     tmp_path: Path, stub: StubServer
 ) -> None:

@@ -19,7 +19,11 @@ writes the same bytes:
    500 ms by default; the agent loop passes ``Limits.max_retries`` and ``Limits.backoff``,
    which live mode raises, ADR-P14 B2), waiting at least the provider's ``Retry-After``;
    then the step ends ``model_transient`` and the call is ``model_unavailable``. A permanent
-   error ends the step with its own code; in a cascade the next candidate is tried. What
+   error ends the step with its own code; in a cascade the next candidate is tried. A
+   provider account with no credits left (``ModelQuotaExhausted``) is never retried and
+   never ends the step: the attempt is recorded and the step is suspended
+   (``StepSuspended``), so the run stays open at this step and ``aksha resume`` asks again
+   once the account is topped up. What
    the provider said (an adapter's ``detail``: error type, status, short message) is
    recorded on each ``step.failed{error}`` and on an error ``step.completed{error}``.
 
@@ -34,7 +38,7 @@ from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from aksha.runtime.events.envelope import NewEvent
-from aksha.runtime.execution.errors import TransientStepError
+from aksha.runtime.execution.errors import StepSuspended, TransientStepError
 from aksha.runtime.execution.ports import DurableStepExecutor
 from aksha.runtime.execution.types import Deadline, StepId, StepOutput, StepPolicy, StepResult
 from aksha.runtime.models.codec import (
@@ -47,7 +51,12 @@ from aksha.runtime.models.codec import (
     judgement,
     judgement_json,
 )
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.ports import ClassificationModel, ExtractionModel
 from aksha.runtime.models.routing import AliasTable, Candidate, adapter_name, cascade_for
 from aksha.runtime.models.thresholds import threshold_classification, threshold_extraction
@@ -81,6 +90,8 @@ def _call(work: Callable[[], StepOutput]) -> StepOutput:
         raise TransientStepError(
             MODEL_TRANSIENT, e.message, detail=e.detail, retry_after_ms=e.retry_after_ms
         ) from e
+    except ModelQuotaExhausted as e:
+        raise StepSuspended(e.code, e.message, detail=e.detail) from e
     except (ContextOverflow, PermanentModelError) as e:
         return StepOutput(outcome="error", code=e.code, error=e.detail)
 

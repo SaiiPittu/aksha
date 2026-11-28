@@ -44,7 +44,9 @@ from aksha.runtime.models.codec import (
     generation_result_json,
 )
 from aksha.runtime.models.errors import (
+    MODEL_QUOTA_EXHAUSTED,
     ContextOverflow,
+    ModelQuotaExhausted,
     PermanentModelError,
     TransientModelError,
 )
@@ -95,6 +97,8 @@ def _raise(err: Mapping[str, Any]) -> None:
                                   retry_after_ms=int(after) if after else None)  # fmt: skip
     if kind == "overflow":
         raise ContextOverflow(code or None, message, detail=detail)
+    if code == MODEL_QUOTA_EXHAUSTED:
+        raise ModelQuotaExhausted(code, message, detail=detail)
     raise PermanentModelError(code or None, message, detail=detail)
 
 

@@ -29,9 +29,15 @@ from aksha.adapters.models.litellm import (
 )
 from aksha.app import LIVE_BACKOFF, LIVE_JITTER, LIVE_RETRIES
 from aksha.runtime.errors import AkshaError
+from aksha.runtime.execution.errors import StepSuspended
 from aksha.runtime.execution.types import StepId
 from aksha.runtime.grounding.types import CitationSpan
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.routing import bind_aliases
 from aksha.runtime.models.steps import MODEL_STEP_POLICY, generation_step
 from aksha.runtime.models.types import (
@@ -541,3 +547,101 @@ assert "litellm" not in sys.modules, "LiteLLM was imported"
         [sys.executable, "-c", script], capture_output=True, text=True, check=False
     )
     assert done.returncode == 0, done.stderr
+
+
+# --- no credits left: never retried, the step waits for a resume -------------------------
+
+NO_CREDITS = (
+    "You have no credits remaining. Add credits to continue using the API at "
+    "https://platform.openai.com/settings/organization/billing/."
+)
+
+
+class QuotaBody(stub_errors.StubError):
+    """An OpenAI-library 429 that kept the provider's ``code`` and ``body``."""
+
+    status_code = 429
+
+    def __init__(self, message: str, code: str) -> None:
+        super().__init__(message, llm_provider="openai")
+        self.code = code
+        self.body = {"error": {"message": message, "code": code, "type": code}}
+
+
+@pytest.mark.parametrize("raised", [
+    stub_errors.RateLimitError(f"litellm.RateLimitError: OpenAIException - {NO_CREDITS}",
+                               llm_provider="openai"),
+    QuotaBody("Request refused.", "insufficient_quota"),
+    stub_errors.RateLimitError("You exceeded your current quota, please check your plan and "
+                               "billing details.", llm_provider="openai"),
+    stub_errors.BadRequestError("Your credit balance is too low to access the Anthropic API.",
+                                llm_provider="anthropic"),
+])  # fmt: skip
+def test_no_credits_left_is_quota_exhausted_with_a_short_reason(
+    lib: StubLiteLLM, raised: Exception
+) -> None:
+    lib.answers.append(raised)
+    with pytest.raises(ModelQuotaExhausted) as e:
+        LiteLLMGenerationModel("generate", ENV, lib).generate(REQUEST)
+    provider = getattr(raised, "llm_provider", "")
+    assert e.value.code == "model_quota_exhausted"
+    assert e.value.message == (
+        f"model provider: no credits remaining ({provider}); add credits and run aksha resume"
+    )
+    assert e.value.detail is not None and e.value.detail["type"] == type(raised).__name__
+
+
+@pytest.mark.parametrize("raised", [
+    stub_errors.RateLimitError("Rate limit reached for requests per min", llm_provider="openai"),
+    stub_errors.RateLimitError(GEMINI_RETRY_INFO),
+    # Gemini's per-minute limit uses OpenAI's quota words; from Gemini it is a rate limit.
+    stub_errors.RateLimitError("You exceeded your current quota, please check your plan and "
+                               "billing details. retryDelay 30s"),
+])  # fmt: skip
+def test_an_ordinary_rate_limit_stays_transient(lib: StubLiteLLM, raised: Exception) -> None:
+    lib.answers.append(raised)
+    with pytest.raises(TransientModelError):
+        LiteLLMGenerationModel("generate", ENV, lib).generate(REQUEST)
+
+
+def test_no_credits_is_not_retried_and_the_step_continues_after_a_resume(
+    tmp_path: Path, lib: StubLiteLLM
+) -> None:
+    lib.answers += [stub_errors.RateLimitError(NO_CREDITS, llm_provider="openai"),
+                    message("never asked")]  # fmt: skip
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    with pytest.raises(StepSuspended) as e:
+        generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert e.value.message.startswith("model provider: no credits remaining (openai)")
+    assert len(lib.calls) == 1 and h.clock.now() == START  # no retry, no backoff
+    (failed,) = [p for t, s, p in h.log() if t == "step.failed"]
+    assert (failed["code"], failed["retried"], failed["backoff_ms"]) == (
+        "model_quota_exhausted", True, 0)  # fmt: skip
+    assert failed["error"]["status"] == 429 and failed["error"]["provider"] == "openai"
+    assert [t for t, s, p in h.log() if t == "step.completed"] == []  # the step stays open
+    # After a top-up the step is reached again (a resume, a new process): attempt 2 runs
+    # at once, with nothing charged for the wait and no interrupted attempt recorded.
+    lib.answers[:] = [message("ok")]
+    h.clock.advance(3 * 3600)
+    out = generation_step(h.restart(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is not None and out.result.text == "ok" and len(lib.calls) == 2
+    assert [p["code"] for t, s, p in h.log() if t == "step.failed"] == ["model_quota_exhausted"]
+    (done,) = [p for t, s, p in h.log() if t == "step.completed"]
+    assert done["outcome"] == "ok" and done["attempts"] == 2
+    h.close()
+
+
+def test_an_ordinary_429_is_still_retried_after_its_retry_after(
+    tmp_path: Path, lib: StubLiteLLM
+) -> None:
+    lib.answers += [stub_errors.RateLimitError("Rate limit reached for requests",
+                                               llm_provider="openai",
+                                               headers={"Retry-After": "12"}),
+                    message("ok")]  # fmt: skip
+    h = ModelHarness(tmp_path / "a.sqlite")
+    table = bind_aliases((), "live", {"generate": LiteLLMGenerationModel("generate", ENV, lib)})
+    out = generation_step(h.executor(), STEP, table, REQUEST, policy=LIVE_POLICY)
+    assert out.result is not None and out.result.text == "ok" and len(lib.calls) == 2
+    assert _waits(h) == [(True, 12_000)]
+    h.close()

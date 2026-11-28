@@ -106,12 +106,18 @@ def vetoes_since_entry(view: LogView, run: str, instance: str) -> int:
 
 
 def resumes_since_progress(view: LogView, run: str) -> int:
-    """Resume records of ``run`` since its last completed tool step or saved artifact."""
+    """Resume records of ``run`` since its last completed tool step or saved artifact.
+
+    A suspended attempt (``step.failed`` with a code of ``execution.errors.SUSPEND_CODES``,
+    such as a provider account with no credits left) starts the count again too: the
+    process did not crash, the provider answered, so resuming before a top-up never uses up
+    the restart limit.
+    """
     count = 0
     for e in view.events:
         if e.run != run:
             continue
-        if records.is_progress(e):
+        if records.is_progress(e) or records.is_suspension(e):
             count = 0
         elif records.is_resume_record(e):
             count += 1

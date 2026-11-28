@@ -60,6 +60,13 @@ ID, so a restarted process returns recorded results instead of running steps aga
     finished through its entry: claimed entries are asked by key first, and nothing calls
     the system outside the outbox. A step whose key is already enqueued (a rebuild run's
     equal request) reaches the first entry and its receipt.
+11. A suspended attempt (``StepSuspended``: a provider account with no credits left) of an
+    ``at_least_once`` step with no unit records ``step.failed{code, retried: true,
+    backoff_ms: 0}`` with what the provider said, and the error is raised again with no
+    ``step.completed``: the step stays open, so the run is neither ended nor retried here.
+    When the step is reached again (``aksha resume``), the next attempt runs at once and
+    nothing is charged for the time between, since no attempt was in flight. Any other
+    step records a suspension as an error, as for every failure not in ``retry_on``.
 
 An exception that is not an ``Exception`` (a ``KeyboardInterrupt``, a process exit, a
 test's simulated crash) is re-raised with nothing recorded, as a real crash would leave it.
@@ -84,7 +91,13 @@ from aksha.runtime.cancellation.requests import STOP_VIEW_TYPES, stop_before_ste
 from aksha.runtime.cancellation.types import RUN_STOPPED, KillOutcome, KillPolicy
 from aksha.runtime.events.envelope import Event, NewEvent
 from aksha.runtime.execution import facts
-from aksha.runtime.execution.errors import EffectNeedsOutbox, StepMismatch, TransientStepError
+from aksha.runtime.execution.errors import (
+    SUSPEND_CODES,
+    EffectNeedsOutbox,
+    StepMismatch,
+    StepSuspended,
+    TransientStepError,
+)
 from aksha.runtime.execution.ports import Clock
 from aksha.runtime.execution.types import (
     OUTCOME_UNKNOWN,
@@ -391,6 +404,8 @@ class StepExecutor:
             if e.step == sid
         ]
         last = max(failures, key=lambda e: int(e.payload["attempt"]), default=None)
+        if last is not None and last.payload.get("code") in SUSPEND_CODES:
+            return attempt, None  # suspended (module doc, item 11): no attempt was in flight
         if last is not None and last.payload.get("retried") is not True:
             n = int(last.payload["attempt"])
             event = facts.step_completed(step_id, kind, name, "error", attempts=n,
@@ -493,10 +508,15 @@ class StepExecutor:
         while True:
             if once:
                 self._append(facts.DISPATCH, facts.step_dispatched(step_id, attempt))
-            code, output, spent, kill, transient = self._attempt(
+            code, output, spent, kill, raised = self._attempt(
                 step_id, attempt, work, policy.timeout_ms, unit
             )
-            detail = transient.detail if transient is not None else None
+            detail = raised.detail if raised is not None else None
+            if isinstance(raised, StepSuspended) and not once and unit is None:
+                failed = facts.step_failed(step_id, attempt, code, retried=True, backoff_ms=0,
+                                           duration_ms=spent, error=detail)  # fmt: skip
+                self._append(facts.ATTEMPT_FAILED, failed)
+                raise raised  # the step stays open (module doc, item 11)
             waited += spent
             self.drain_late()
             if kill is not None and code == RUN_STOPPED:
@@ -535,7 +555,7 @@ class StepExecutor:
                 return self._recorded(step_id, stored, replayed=False)
             retryable = not once and unit is None and code in policy.retry_on
             retried = retryable and attempt <= policy.max_retries
-            asked = transient.retry_after_ms if transient is not None else None
+            asked = raised.retry_after_ms if isinstance(raised, TransientStepError) else None
             backoff = policy.delay_ms(attempt, asked) if retried else 0
             cap = policy.wait_cap_ms
             if retried and cap is not None and waited + backoff >= cap:
@@ -574,15 +594,17 @@ class StepExecutor:
         work: Callable[[Deadline], StepOutput],
         timeout_ms: int,
         unit: KillableUnit | None = None,
-    ) -> tuple[str, StepOutput | None, int, KillOutcome | None, TransientStepError | None]:
+    ) -> tuple[
+        str, StepOutput | None, int, KillOutcome | None, TransientStepError | StepSuspended | None
+    ]:
         """Run one attempt on a worker thread and say how it ended.
 
         The answer is ``(code, None, ms, None, raised)``, ``("", out, ms, None, None)``,
         ``(run_stopped, None, ms, kill, None)`` when a stop ended its unit, or
         ``(timeout, None, ms, kill, None)`` when its deadline did. ``ms`` is the attempt's
         active time on the injected clock; a timeout is its deadline. ``raised`` is the
-        :class:`TransientStepError` the work raised: what the failure was
-        (``step.failed{error}``) and how long it asked to wait.
+        :class:`TransientStepError` or :class:`StepSuspended` the work raised: what the
+        failure was (``step.failed{error}``) and how long it asked to wait.
         """
         box = _Attempt(step_id, number, threading.Lock())
         began = self._clock.now()
@@ -624,7 +646,7 @@ class StepExecutor:
         if box.error is not None:
             if not isinstance(box.error, Exception):
                 raise box.error  # a crash: nothing recorded, as if the process died here
-            if isinstance(box.error, TransientStepError):
+            if isinstance(box.error, TransientStepError | StepSuspended):
                 return box.error.code, None, spent, None, box.error
             return STEP_EXCEPTION, None, spent, None, None
         if not isinstance(box.output, StepOutput):
