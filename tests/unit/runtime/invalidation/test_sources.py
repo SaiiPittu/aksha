@@ -72,3 +72,16 @@ def test_a_never_recorded_source_is_recorded_when_a_query_now_answers_differentl
     assert (rerun.payload["previous"], rerun.payload["hash"], rerun.payload["changed"]) == (
         "h1", "h2", True,
     )  # fmt: skip
+
+
+def test_a_query_this_process_cannot_run_again_is_not_reexecuted(bench: Bench) -> None:
+    """A web search has no web to run on here: None, so its last hash stands and moves nothing."""
+    source = FakeSource()
+    source.versions[OWNER] = 1
+    unrunnable = FakeQueries({(OWNER, "Q-1"): None})
+    assert record_source_changes(bench.view(), [source], cause="command",
+                                 run_query=unrunnable) == ()  # fmt: skip
+    source.change(OWNER, {"refs/K-1": None})
+    (changed,) = record_source_changes(bench.view(), [source], cause="command",
+                                       run_query=unrunnable)  # fmt: skip
+    assert changed.type == "source.changed"  # the record moved; the query was not re-run

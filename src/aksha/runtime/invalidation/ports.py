@@ -76,8 +76,13 @@ class QueryRunner(Protocol):
     so the same hits in a new order hash the same.
     """
 
-    def __call__(self, owner: str, query: str, /) -> str:
-        """The result-set hash of ``query`` for ``owner`` now."""
+    def __call__(self, owner: str, query: str, /) -> str | None:
+        """The result-set hash of ``query`` for ``owner`` now.
+
+        None when this process cannot run the query again at all (a web search, with no web
+        to search): the query is not re-executed, and its last recorded hash stands. What
+        rests on it then reopens only when something it scoped or cited moves.
+        """
         ...
 
 

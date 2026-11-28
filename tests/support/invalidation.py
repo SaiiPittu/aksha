@@ -110,10 +110,10 @@ class FakeSource:
 class FakeQueries:
     """Result-set hashes per owner and query; unknown queries hash as ``h1``."""
 
-    hashes: dict[tuple[str, str], str] = field(default_factory=dict)
+    hashes: dict[tuple[str, str], str | None] = field(default_factory=dict)
     calls: list[tuple[str, str]] = field(default_factory=list)
 
-    def __call__(self, owner: str, q: str, /) -> str:
+    def __call__(self, owner: str, q: str, /) -> str | None:
         self.calls.append((owner, q))
         return self.hashes.get((owner, q), "h1")
 

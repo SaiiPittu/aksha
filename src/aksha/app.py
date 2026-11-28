@@ -60,7 +60,13 @@ from aksha.adapters.recording.sink import JsonlSink, Sink, read_stream
 from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.sandbox import e2b
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
-from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
+from aksha.adapters.search.world import (
+    WorldWeb,
+    environment_note,
+    load_pages,
+    world_hints,
+    world_inputs_environment,
+)
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
@@ -463,6 +469,9 @@ class RuntimeConfig:
     """``AKSHA_SEARCH``: which web the web tools reach (the table above); None for none."""
     web_world: str | None = None
     """``AKSHA_WEB_WORLD``: the world ``AKSHA_SEARCH=world`` serves."""
+    inputs_environment: str | None = None
+    """The note on the supplied records the input tools return; None takes the served world's
+    (its manifest's ``environment``), so only a replay sets it, to the recorded note."""
     search_env: Mapping[str, str] = field(default_factory=dict, repr=False)
     """``AKSHA_BRAVE_*``: the live search provider's settings, the key among them. Never
     recorded."""
@@ -1263,7 +1272,8 @@ class ToolQueryRunner:
     tool body again with the same arguments over the owner's current inputs, and answers
     the version it returns now. A query no loaded tool can answer, or whose tool now
     fails, answers the empty hash, which differs from any recorded one: the work built on it
-    reopens rather than staying current on an answer nobody can check.
+    reopens rather than staying current on an answer nobody can check. A web search is not
+    re-run at all (no web here): it answers None, and its last hash stands.
     """
 
     def __init__(
@@ -1282,8 +1292,12 @@ class ToolQueryRunner:
         self.reader = reader
         self.tables = dict(tables or {})
 
-    def __call__(self, owner: str, query: str) -> str:
-        """The result-set hash of ``query`` for ``owner`` now."""
+    def __call__(self, owner: str, query: str) -> str | None:
+        """The result-set hash of ``query`` for ``owner`` now; None for a web query.
+
+        A tool under an egress policy (``web_search``) needs a network this re-execution
+        never has, so its query is not re-run: None leaves its last hash standing.
+        """
         from aksha.runtime.tools.types import Ok, ToolContext
 
         head, _, raw = query.partition("?")
@@ -1292,6 +1306,8 @@ class ToolQueryRunner:
         if definition is None or tool not in definition.registry.names():
             return ""
         decl = definition.registry.get(tool)
+        if getattr(decl.spec, "egress", None) is not None:
+            return None
         if decl.body is None:
             return ""
         args = json.loads(raw) if raw else {}
@@ -1432,7 +1448,21 @@ def execution_tier(config: RuntimeConfig, loaded: Sequence[LoadedDefinition]) ->
         sink = JsonlSink(config.record)
         search = None if search is None else RecordingSearch(search, sink)
         web = None if web is None else RecordingFetch(web, sink)
-    return replace(base, egress=egress, environments=environments, search=search, web=web)
+    return replace(base, egress=egress, environments=environments, search=search, web=web,
+                   inputs_environment=inputs_note(config))  # fmt: skip
+
+
+def inputs_note(config: RuntimeConfig) -> str:
+    """The note on the supplied records the input tools return (``ToolContext.environment``).
+
+    With ``AKSHA_SEARCH=world``, the served world's own note (its manifest's
+    ``environment``): in that mode the inputs are taken to be that world's records. A
+    replay sets the note it recorded. Any other process states none.
+    """
+    if config.inputs_environment is not None:
+        return config.inputs_environment
+    world = web_world(config)
+    return "" if world is None else world_inputs_environment(world)
 
 
 def web_world(config: RuntimeConfig) -> Path | None:
@@ -1844,10 +1874,11 @@ class _RuntimeAdapter:
         store = sqlite.open_store(folder / "aksha.sqlite", clock, writer=True,
                                   catalogue=self.catalogue)  # fmt: skip
         sources = (source,) if source.collections else ()
-        tier = ExecutionTier()
+        note = str(getattr(reader, "environment", ""))
+        tier = ExecutionTier(inputs_environment=note)
         if web is not None:
             proxy = episode_web(web)
-            tier = ExecutionTier(search=proxy, web=proxy)
+            tier = ExecutionTier(search=proxy, web=proxy, inputs_environment=note)
             bound = with_world_hints(bound, web.hints.get(bound.agent.name, {}))
         return Session(store, clock, (bound,), blobs=FilesystemBlobStore(folder / "blobs"),
                        systems=cast(Mapping[str, SystemOfRecord], systems),
@@ -1856,7 +1887,8 @@ class _RuntimeAdapter:
 
 def episode_web(web: EpisodeWeb) -> WorldWeb:
     """The world's search proxy over an episode's web: fetches and searches recorded."""
-    return WorldWeb(load_pages(web.declared), web.read, index=web.index, on_search=web.searched)
+    return WorldWeb(load_pages(web.declared), web.read, index=web.index, on_search=web.searched,
+                    environment=environment_note(web.declared))  # fmt: skip
 
 
 def eval_agents() -> AgentRegistry:
@@ -2118,6 +2150,9 @@ def record_run(
         "outcome": ended.outcome,
         "waiting": list(ended.waiting),
     }
+    note = inputs_note(config)
+    if note:
+        manifest["inputs_environment"] = note  # what the input tools said of the records
     if factors:
         manifest["turn_factors"] = factors  # a replay runs under the same limits
     manifest["limits"] = limits  # and the same timeouts, retries and active-time cap
@@ -2168,8 +2203,8 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
     limits = {str(k): dict(v) for k, v in (manifest.get("limits") or {}).items()}
     cfg = replace(config, storage=_local_store(out / "store"), mode="replay", record=None,
                   search=f"replay:{folder}", network="off", server_url=None,
-                  live_env={}, search_env={}, turn_factors=factors,
-                  run_limits=limits)  # fmt: skip
+                  live_env={}, search_env={}, turn_factors=factors, run_limits=limits,
+                  inputs_environment=str(manifest.get("inputs_environment", "")))  # fmt: skip
     loaded = load_definitions(cfg)
     adapters = {d.agent.name: recorded_adapters(d.model_aliases.values(), recorded)
                 for d in loaded}  # fmt: skip

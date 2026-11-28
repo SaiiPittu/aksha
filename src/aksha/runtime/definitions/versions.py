@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.19"
+API_VERSION = "2.20"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -93,6 +93,9 @@ model step's.
 fields a save computes from the content, written over the model's (counts a check asserts).
 2.19 (28 Nov 2026, ADR-P04 K1e) added the trailing field ``ArtifactKind.compute_reads``: the
 kinds whose current content a ``compute`` is given too (a need's theme matched to the scope).
+2.20 (28 Nov 2026) added the trailing field ``ToolContext.environment``: the environment's own
+note on the supplied records (a fixture world's), which the input tools return with every
+result.
 """
 
 Version = tuple[int, int]

@@ -44,6 +44,10 @@ document kinds (:class:`InputReading`, declared data):
 
 :func:`read_view` is the view ``read_document`` returns, over any returned text, so the
 generic ``fetch_url`` (``web/tools.py``) shows a fetched page exactly as an input.
+
+When the environment states a note on the supplied records (``ToolContext.environment``, a
+fixture world's word on how to read them), each of the three returns it as
+``environment``. The note is the environment's, never an agent's prompt.
 """
 
 from __future__ import annotations
@@ -396,6 +400,8 @@ def list_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading
     run_date = ctx.run_date
     if run_date is not None:
         data["as_of"] = run_date
+    if ctx.environment:
+        data["environment"] = ctx.environment
     return ToolOutcome(Ok(data, reads=(read,)))
 
 
@@ -703,7 +709,8 @@ def read_input(ctx: ToolContext, args: Mapping[str, Any], reading: InputReading)
     found = ctx.reader.read(reading.source, ref) if ctx.reader is not None else None
     if found is None:
         return ToolOutcome(Err("fetch_failed", f"{ref} could not be read", item=ref))
-    return read_view(ctx, found, args, reading)
+    extra = {"environment": ctx.environment} if ctx.environment else None
+    return read_view(ctx, found, args, reading, extra)
 
 
 # --- search_inputs ---------------------------------------------------------------------
@@ -801,6 +808,8 @@ def search_inputs(ctx: ToolContext, args: Mapping[str, Any], reading: InputReadi
         data["truncated"] = (
             f"showing {limit} of {len(ranked)} hits; narrow the query or raise limit"
         )
+    if ctx.environment:
+        data["environment"] = ctx.environment
     return ToolOutcome(Ok(data, reads=(read,)))
 
 

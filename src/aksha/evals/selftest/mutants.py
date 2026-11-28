@@ -16,8 +16,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from aksha.evals.bundle import EpisodeRecord
+from aksha.evals.errors import KeyRefMissing
 from aksha.evals.key import AnswerKey
-from aksha.evals.world import WEB_FILE
+from aksha.evals.world import WEB_FILE, declared_labels
 from aksha.runtime.web.types import web_record_id
 
 Events = list[dict[str, Any]]
@@ -198,6 +199,61 @@ def _edit_outputs(
         return rec.edited(events=edit)
 
     return plant
+
+
+def market_emptied(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """Every competitor left out: the run reports an empty market where the key has one."""
+
+    def edit(events: Events) -> Events:
+        return [
+            e
+            for e in events
+            if not (e["type"] == "episode.output_saved" and e["payload"]["kind"] == "competitor")
+        ]
+
+    return rec.edited(events=edit)
+
+
+def excluded_on_label(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """Each competitor turned into a ``not_a_seller`` exclusion citing its page's synthetic label.
+
+    The live failure this guards: a run that left every seller out because each page says
+    it is invented for testing, worded as a reason the instructions allow. A world that
+    declares no label, or whose pages hold none, has nothing to plant it in.
+    """
+    labels = declared_labels(rec.sources.parent.parent)
+    try:
+        keyed = dict(key.resolve("competitors")) if labels else {}
+    except KeyRefMissing:  # a world with no market (a patent world): nothing to plant
+        keyed = {}
+    pages = {kid: list(e.get("pages", ())) for kid, e in keyed.items()}
+
+    def cite(kid: str) -> dict[str, Any] | None:
+        for page in pages.get(kid, ()):
+            base = rec.sources.parent if str(page).startswith("web/") else rec.sources
+            path = base / str(page)
+            text = path.read_text(encoding="utf-8") if path.is_file() else ""
+            for label in labels:
+                at = text.find(label)
+                if at >= 0:
+                    return {"file": str(page), "exact": label, "start": at,
+                            "end": at + len(label)}  # fmt: skip
+        return None
+
+    def edit(events: Events) -> Events:
+        for e in events:
+            p = e["payload"]
+            if e["type"] != "episode.output_saved" or p["kind"] != "competitor":
+                continue
+            c = cite(str(p["key"]))
+            if c is None:
+                continue
+            p.update(kind="excluded", ref=f"excluded/{p['key']}", citations=[c],
+                     content={"record": c["file"], "reason": "not_a_seller",
+                              "quote": c["exact"]})  # fmt: skip
+        return events
+
+    return rec.edited(events=edit)
 
 
 def competitor_split(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
@@ -525,6 +581,12 @@ MUTANTS: Mapping[str, Mutant] = {
             ("research.competitor_count", "research.duplicates_are_edges", "trap.T-DUP"),
             competitor_split,
         ),
+        Mutant(
+            "market-emptied",
+            ("research.market_found", "research.competitor_count"),
+            market_emptied,
+        ),
+        Mutant("excluded-on-label", ("research.exclusion_not_on_label",), excluded_on_label),
         Mutant("conflict-dropped", ("research.conflicts_are_edges",), conflict_dropped),
         Mutant(
             "review-dup-counted",

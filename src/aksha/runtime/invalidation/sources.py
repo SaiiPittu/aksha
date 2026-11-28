@@ -148,8 +148,9 @@ def record_source_changes(
     hashes: dict[str, str] | None = None
     if unseen and not moved_sources:
         assert run_query is not None
-        hashes = {q: run_query(owner, q) for q in _queries(view, facts)}
-        if any(hashes[q] != prev for q, prev in _queries(view, facts).items()):
+        known = _queries(view, facts)
+        hashes = {q: h for q in known if (h := run_query(owner, q)) is not None}
+        if any(hashes.get(q, prev) != prev for q, prev in known.items()):
             moved_sources.update(unseen)
     elif unseen:
         moved_sources.update(unseen)
@@ -193,7 +194,9 @@ def _changed(
     events = [NewEvent("source.changed", payload)]
     if run_query is not None:
         for query, previous in sorted(_queries(view, facts).items()):
-            new = hashes[query] if hashes is not None else run_query(owner, query)
+            new = hashes.get(query) if hashes is not None else run_query(owner, query)
+            if new is None:  # this process cannot run it again: its last hash stands
+                continue
             events.append(
                 NewEvent(
                     "query.reexecuted",

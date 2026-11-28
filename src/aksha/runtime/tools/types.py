@@ -143,6 +143,10 @@ class ToolContext:
     ``web`` searches and fetches the web through the process's web ports (ADR-P26 A3): a
     fetched page is kept as a text the attempt's reader returned, so its passages may be
     drafted as spans; a search hit never is. None when the process has no web port.
+    ``environment`` is the environment's own note on the supplied records, when the process
+    states one (``ExecutionTier.inputs_environment``, a fixture world's word on how to read
+    its records); the input tools return it with every result. It comes from the
+    environment, never from an agent's prompt.
     """
 
     owner: str
@@ -159,6 +163,7 @@ class ToolContext:
     artifacts: ArtifactReader | None = None
     models: ToolModels | None = None
     web: AttemptWeb | None = None
+    environment: str = ""
 
     def __getattribute__(self, name: str) -> Any:
         """Every read of ``run_date`` is recorded in ``time_reads`` (class doc)."""

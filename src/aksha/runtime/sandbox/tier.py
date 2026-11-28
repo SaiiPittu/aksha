@@ -50,6 +50,9 @@ class ExecutionTier:
     """The web search port ``ToolContext.web`` searches through; None refuses ``web_off``."""
     web: WebFetch | None = None
     """The web fetch port ``ToolContext.web`` fetches through; None refuses ``web_off``."""
+    inputs_environment: str = ""
+    """The environment's own note on the supplied records (a fixture world's ``environment``),
+    handed to every tool as ``ToolContext.environment``; empty adds nothing."""
 
     @property
     def gate_availability(self) -> Availability | None:

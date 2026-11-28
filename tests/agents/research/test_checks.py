@@ -276,3 +276,151 @@ def test_each_failing_check_states_what_it_found_what_it_expected_and_the_change
         ("scope", None): _scope("EU"),
     }
     assert "add rows for ['b'], remove rows for ['c']" in checks.report_done(_View(report)).message
+
+
+@dataclass
+class _Read:
+    """A ``read.recorded`` fact, as the log holds one."""
+
+    payload: Mapping[str, Any]
+    type: str = "read.recorded"
+
+
+def _fetched(*records: str) -> list[Any]:
+    return [_Read({"input": {"kind": "record", "id": r, "version": "sha256:1"}}) for r in records]
+
+
+ABSENCE = {"absence": {"statement": "no page read sells the product",
+                       "scope": {"records": ["record:web/a.example/p@sha256:1"]}}}  # fmt: skip
+CITE = {"span": "EX-1", "quote": "a copy of the original page"}
+
+
+def _empty(**extra: Any) -> dict[str, Any]:
+    return {"companies": [], "resolved": 0, "pages_found": 0, **extra}
+
+
+def test_an_empty_comparison_without_a_scoped_absence_claim_fails_and_says_what_to_do() -> None:
+    """The live run that left every seller out on a page's synthetic label passed this check."""
+    excluded = [{"record": "web/a.example/p", "reason": "the page says it is synthetic",
+                 "quote": "Invented for testing"}]  # fmt: skip
+    view = _View({("scope", None): _scope("EU"),
+                  ("competitors", None): _empty(excluded_fixtures=excluded)})  # fmt: skip
+    view.log.events.extend(_fetched("web/a.example/p"))
+    result = checks.discover_done(view)
+    assert not result.ok
+    assert "list each company whose own page sells" in result.message
+    assert '{"absence": {"statement"' in result.message and "excluded" in result.message
+
+
+def _minted(**spans: str) -> _Event:
+    """An ``excerpts.minted`` fact minting each span ID for its record."""
+    rows = [{"span_id": s, "record_id": r} for s, r in spans.items()]
+    return _Event("excerpts.minted", {"tool": "fetch_url", "spans": rows, "shown": []})
+
+
+def _cite(span: str, quote: str) -> dict[str, str]:
+    return {"span": span, "quote": quote}
+
+
+def test_an_empty_comparison_passes_as_a_scoped_absence_with_every_fetched_page_excluded() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("web/a.example/p", "web/b.example/q"))
+    view.log.events.append(_minted(**{"EX-1": "web/a.example/p", "EX-2": "web/b.example/q"}))
+    one = [{"record": "web/a.example/p", "reason": "copy", "cite": CITE}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=one)
+    left = checks.discover_done(view)
+    assert not left.ok and "web/b.example/q" in left.message  # a fetched page unaccounted for
+    advert = {"record": "record:web/b.example/q@sha256:1", "reason": "advert",
+              "cite": _cite("EX-2", "Deals of the day on every brand")}  # fmt: skip
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=[*one, advert])
+    assert checks.discover_done(view).ok
+
+
+LABEL = "Invented for testing; not a real company or offer."
+
+
+def test_the_live_runs_retry_on_the_synthetic_label_fails() -> None:
+    """The live run's own cite, reworded as an allowed reason, still leaves out every page.
+
+    Four seller pages, each excluded as ``not_a_seller`` on the same label line: the reason
+    is allowed and each cite is that page's own span, but one quote leaving out four pages
+    is a label every page carries, not a reason about one.
+    """
+    pages = [f"web/{n}.example/product" for n in ("kelvra", "tallyway", "noctra", "brightfield")]
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched(*pages))
+    view.log.events.append(_minted(**{f"EX-{i}": p for i, p in enumerate(pages, start=1)}))
+    retry = [{"record": p, "reason": "not_a_seller", "cite": _cite(f"EX-{i}", LABEL)}
+             for i, p in enumerate(pages, start=1)]  # fmt: skip
+    scoped = {"records": [f"record:{p}@sha256:1" for p in pages]}
+    absence = {"absence": {"statement": "no page fetched sells an occupancy sensor",
+                           "scope": scoped}}  # fmt: skip
+    view.slots[("competitors", None)] = _empty(absence=absence, excluded=retry)
+    result = checks.discover_done(view)
+    assert not result.ok and "the same words" in result.message
+    assert all(p in result.message for p in pages)
+
+
+def test_an_exclusion_cites_the_record_it_leaves_out() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("web/a.example/p"))
+    view.log.events.append(_minted(**{"EX-1": "web/a.example/p", "EX-9": "input/notes.md"}))
+    elsewhere = [{"record": "web/a.example/p", "reason": "advert",
+                  "cite": _cite("EX-9", "a note about adverts")}]  # fmt: skip
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=elsewhere)
+    result = checks.discover_done(view)
+    assert not result.ok and "not spans of those records" in result.message
+    unminted = [{"record": "web/a.example/p", "reason": "advert", "cite": _cite("EX-7", "x")}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=unminted)
+    assert not checks.discover_done(view).ok
+
+
+def test_an_empty_market_in_the_scope_may_leave_out_a_seller_outside_it() -> None:
+    """A page that sells the product only outside the scope's geography is out_of_scope."""
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("web/us.example/p"))
+    view.log.events.append(_minted(**{"EX-1": "web/us.example/p"}))
+    us = [{"record": "web/us.example/p", "reason": "out_of_scope",
+           "cite": _cite("EX-1", "Shipping to the United States only")}]  # fmt: skip
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=us)
+    assert checks.discover_done(view).ok
+
+
+def test_an_empty_comparison_accounts_for_every_input_read_too() -> None:
+    """An input read in discover is a record to account for, as a fetched page is."""
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("definitions/research/doc_kind", "input/reviews.json",
+                                    "input/sites/a.html"))  # fmt: skip
+    view.log.events.append(_minted(**{"EX-1": "input/reviews.json"}))
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=[])
+    result = checks.discover_done(view)
+    assert not result.ok and "input/sites/a.html" in result.message
+    assert "definitions/" not in result.message  # the runtime's own read is not judged
+
+
+def test_an_empty_web_market_scopes_its_absence_on_every_web_search() -> None:
+    query = 'research.web_search?{"query":"occupancy sensor"}'
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.append(_Event("read.recorded", {"input": {"kind": "query", "id": query,
+                                                              "version": "q-1"}}))  # fmt: skip
+    on_records = {"absence": {"statement": "none sells it", "scope": {"records": ["record:x@1"]}}}
+    view.slots[("competitors", None)] = _empty(absence=on_records, excluded=[])
+    result = checks.discover_done(view)
+    assert not result.ok and query in result.message
+    for scoped in (f"query:{query}@q-1", [f"query:{query}@q-1"], [query]):
+        claim = {"absence": {"statement": "none sells it", "scope": {"query": scoped}}}
+        view.slots[("competitors", None)] = _empty(absence=claim, excluded=[])
+        assert checks.discover_done(view).ok, scoped
+
+
+def test_a_synthesis_lists_no_companies_and_needs_no_absence_claim() -> None:
+    scope = _scope("", plan={"kind": "synthesis"}, segment={})
+    assert checks.discover_done(_View({("scope", None): scope, ("competitors", None): _empty()})).ok
+
+
+def test_an_absence_claim_needs_its_statement_and_scope() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    for bad in ({"absence": {"statement": "none"}}, {"absence": {"scope": {"query": "q"}}},
+                {"statement": "none", "scope": {"query": "q"}}):  # fmt: skip
+        view.slots[("competitors", None)] = _empty(absence=bad)
+        assert not checks.discover_done(view).ok, bad

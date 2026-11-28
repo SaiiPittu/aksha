@@ -1,7 +1,9 @@
 """The generic web tools every agent may list: ``web_search`` and the parts of ``fetch_url``.
 
 ``web_search(query, limit)`` returns ranked results (title, url, snippet, date) and mints
-nothing: a snippet is a pointer, never evidence. :func:`web_search_tool` builds it for
+nothing: a snippet is a pointer, never evidence. It is a recorded query (ADR-P05 D6), as an
+input search is: its read names the call and hashes the URLs it returned
+(:func:`search_read`), and the result names it as ``recorded``. :func:`web_search_tool` builds it for
 an agent. ``fetch_url(url, offset?, limit?, cells?, extract?)`` fetches the page and
 shows it as the shared ``read_document`` shows an input (``inputs/tools.read_view``):
 numbered lines and citable units; :func:`fetch_url_tool` builds it, with the agent's
@@ -18,7 +20,9 @@ and its passages are minted as spans of the source ``web`` (ADR-P13 D1).
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import hashlib
+import json
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from aksha.runtime.artifacts.types import InputRef
@@ -56,8 +60,22 @@ FETCH_SCHEMA: Mapping[str, Any] = {
 }
 
 
+def search_read(agent: str, args: Mapping[str, Any], urls: Sequence[str]) -> InputRef:
+    """The recorded query of a ``web_search``: its ID the call, its version the URLs' hash.
+
+    The same form an input search records (``<agent>.web_search?<canonical JSON
+    arguments>``, version ``q-`` and 16 hex digits of the sorted hit set's SHA-256), so a
+    scoped absence claim may rest on it and name every search it rests on. Invalidation
+    does not run a web search again (it re-runs a query with no web), so a claim scoped on
+    one reopens when a page it scoped or cited changes, not when a new page appears.
+    """
+    qid = f"{agent}.web_search?" + json.dumps(dict(args), sort_keys=True, separators=(",", ":"))
+    hashed = hashlib.sha256("\n".join(sorted(set(urls))).encode("utf-8")).hexdigest()
+    return InputRef("query", qid, "q-" + hashed[:16])
+
+
 def web_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
-    """Ranked results for ``query``; nothing in them is citable."""
+    """Ranked results for ``query``; nothing in them is citable. A recorded query."""
     if ctx.web is None:
         return ToolOutcome(Err(WEB_OFF, "no web search is configured"))
     query = " ".join(str(args["query"]).split())
@@ -65,9 +83,13 @@ def web_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         found = ctx.web.search(query, limit=int(args.get("limit", 10)))
     except WebError as e:
         return ToolOutcome(Err(e.code, e.message))
+    read = search_read(ctx.agent, args, [h.url for h in found.hits])
     data = {"query": query, "provider": found.provider,
-            "results": [h.as_json() for h in found.hits], "note": SNIPPET_NOTE}  # fmt: skip
-    return ToolOutcome(Ok(data))
+            "results": [h.as_json() for h in found.hits], "note": SNIPPET_NOTE,
+            "recorded": f"query:{read.id}@{read.version}"}  # fmt: skip
+    if found.environment:
+        data["environment"] = found.environment
+    return ToolOutcome(Ok(data, reads=(read,)))
 
 
 def web_search_tool(agent: str) -> ToolDecl:
@@ -80,6 +102,7 @@ def web_search_tool(agent: str) -> ToolDecl:
         "relevant pages with noise: copies, outdated versions, adverts and pages that only "
         "share a word. A snippet is never evidence: fetch_url the results you need.",
         SEARCH_SCHEMA,
+        recorded_query=True,
         egress=WEB_EGRESS,
         retry=_RETRY,
     )
@@ -133,6 +156,8 @@ def fetch_url(
         return ToolOutcome(fetched)
     extra = {"url": fetched.page.url, "final_url": fetched.page.final_url,
              "content_type": fetched.page.content_type}  # fmt: skip
+    if fetched.page.environment:
+        extra["environment"] = fetched.page.environment
     return read_view(ctx, fetched.text, args, reading or InputReading("web", "web"), extra)
 
 

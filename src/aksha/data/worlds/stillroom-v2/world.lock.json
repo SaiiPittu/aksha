@@ -1,7 +1,7 @@
 {
   "files": {
     "key.json": "sha256:c992e21e890904a1ca04ddd89c7abc87bfe9762536ff6d40009fe301b46c6fa5",
-    "manifest.json": "sha256:c6f2dfbc226212011091474cf6ce61ee34a8aae2c2207f80903b7064a5b90760",
+    "manifest.json": "sha256:0a12e2f30815c767f0ab3943c8ce8d7c961db0f5cf747c46ad9cc40087d0f6a4",
     "sources/contributors/records.csv": "sha256:d720f4cd057738bf92b6d626eb4d0a470cd41d8c53ff63b957cd33f4f59d913b",
     "sources/disclosures/2026-03-10-trade-show-demo.md": "sha256:a6079a067dd65111e71d923ae344234d8f318e4599560ea1a836b73a4ef49741",
     "sources/disclosures/consultant-email.eml.txt": "sha256:3b086d62faa75233633feb11d6898ba00012194d2f4007e42eea594a545b8d08",
@@ -26,7 +26,7 @@
     "sources/templates/filing-information-worksheet.md": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2",
     "sources/templates/invention-disclosure-form.md": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451",
     "spec.yaml": "sha256:50c41f5ef3cdaefaef094742453a714e9e54681242fe17afe42cd56054267c3a",
-    "web.json": "sha256:2db0c6f2744708e838358c69a3c3653dfebad3abb531503112c40107317330de",
+    "web.json": "sha256:b79ac5d452aa4e99c5d138c4ac7c4c6ff8bd5eef8da4e8c20fcdcc580db4cce0",
     "web/airwise.example/product": "sha256:55ee1261794cb006da936e84c0786930f73c7c34f65ed650565a4e35b9851604",
     "web/buildingwords.example/glossary/occupancy-sensor": "sha256:0ac3938f12498fdcc8bc408c33ab4e73596ef1b573f45fae1cd7736451aa61e0",
     "web/gatecount.example/product": "sha256:e94b839e9d42e89b137b1450675f0156db1d2dae53eda553dcdcad014d66b6a5",

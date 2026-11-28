@@ -76,27 +76,41 @@ class SearchHit:
 
 @dataclass(frozen=True)
 class SearchResults:
-    """What one search answered: the query, the provider that answered and its hits."""
+    """What one search answered: the query, the provider that answered and its hits.
+
+    ``environment`` is what the web itself says about where the agent is searching, when it
+    says anything (a synthetic web built for an exercise says so, and that it stands for the
+    market there). A public provider says nothing; the field is then empty and left out.
+    """
 
     query: str
     provider: str
     hits: tuple[SearchHit, ...]
+    environment: str = ""
 
     def as_json(self) -> dict[str, Any]:
         """The results as a recording writes them."""
-        return {"query": self.query, "provider": self.provider,
-                "hits": [h.as_json() for h in self.hits]}  # fmt: skip
+        out: dict[str, Any] = {"query": self.query, "provider": self.provider,
+                               "hits": [h.as_json() for h in self.hits]}  # fmt: skip
+        if self.environment:
+            out["environment"] = self.environment
+        return out
 
     @classmethod
     def from_json(cls, data: Any) -> SearchResults:
         """The results :meth:`as_json` wrote."""
         return cls(str(data["query"]), str(data.get("provider", "")),
-                   tuple(SearchHit.from_json(h) for h in data.get("hits", ())))  # fmt: skip
+                   tuple(SearchHit.from_json(h) for h in data.get("hits", ())),
+                   str(data.get("environment") or ""))  # fmt: skip
 
 
 @dataclass(frozen=True)
 class FetchedPage:
-    """One fetched page: the URL asked for, the URL that answered, status, type, text."""
+    """One fetched page: the URL asked for, the URL that answered, status, type, text.
+
+    ``environment`` is the web's own note on where the page lives, as on
+    :class:`SearchResults`; empty for a public page.
+    """
 
     url: str
     final_url: str
@@ -104,19 +118,24 @@ class FetchedPage:
     content_type: str
     text: str
     truncated: bool = False
+    environment: str = ""
 
     def as_json(self) -> dict[str, Any]:
         """The page as a recording writes it."""
-        return {"url": self.url, "final_url": self.final_url, "status": self.status,
-                "content_type": self.content_type, "text": self.text,
-                "truncated": self.truncated}  # fmt: skip
+        out: dict[str, Any] = {"url": self.url, "final_url": self.final_url,
+                               "status": self.status, "content_type": self.content_type,
+                               "text": self.text, "truncated": self.truncated}  # fmt: skip
+        if self.environment:
+            out["environment"] = self.environment
+        return out
 
     @classmethod
     def from_json(cls, data: Any) -> FetchedPage:
         """The page :meth:`as_json` wrote."""
         return cls(str(data["url"]), str(data.get("final_url") or data["url"]),
                    int(data.get("status", 200)), str(data.get("content_type", "")),
-                   str(data["text"]), bool(data.get("truncated", False)))  # fmt: skip
+                   str(data["text"]), bool(data.get("truncated", False)),
+                   str(data.get("environment") or ""))  # fmt: skip
 
 
 def url_problem(url: str) -> str | None:

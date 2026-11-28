@@ -31,9 +31,39 @@ from aksha.runtime.web.types import web_record_id
 
 LOCK_FILE = "world.lock.json"
 WEB_FILE = "web.json"
-OUT_OF_REACH = ("key.json", "spec.yaml", "manifest.json", LOCK_FILE, WEB_FILE)
+MANIFEST_FILE = "manifest.json"
+OUT_OF_REACH = ("key.json", "spec.yaml", MANIFEST_FILE, LOCK_FILE, WEB_FILE)
 """Files beside ``sources/`` that no tool path may resolve to. ``web.json`` names which of
 the world's web pages are noise, so no tool reaches it either."""
+
+
+def declared_labels(root: Path) -> tuple[str, ...]:
+    """The ``label`` lists of the ``web.json`` and ``manifest.json`` at ``root``, in order.
+
+    A world declares the synthetic labels its pages and records carry, so a grader can tell
+    a page left out on its label from one left out on what it shows. No tool returns them.
+    """
+    out: list[str] = []
+    for name in (WEB_FILE, MANIFEST_FILE):
+        path = root / name
+        if not path.is_file():
+            continue
+        found = json.loads(path.read_text(encoding="utf-8")).get("label", ())
+        for label in [found] if isinstance(found, str) else found:
+            text = " ".join(str(label).split())
+            if text and text not in out:
+                out.append(text)
+    return tuple(out)
+
+
+def on_label(quote: str, labels: tuple[str, ...]) -> str | None:
+    """The label ``quote`` overlaps (holds it, or is a run of at least 12 of its characters)."""
+    q = " ".join(quote.split()).casefold()
+    for label in labels:
+        lab = label.casefold()
+        if lab in q or (len(q) >= 12 and q in lab):
+            return label
+    return None
 
 
 @dataclass(frozen=True)
@@ -87,6 +117,10 @@ class World:
                         p.get("copy_of"))
             for p in raw.get("pages", ())
         )  # fmt: skip
+
+    def labels(self) -> tuple[str, ...]:
+        """The synthetic labels the world's pages and records carry (``label`` in its files)."""
+        return declared_labels(self.root)
 
     @property
     def key_path(self) -> Path:

@@ -171,3 +171,17 @@ def test_a_requery_whose_model_call_fails_answers_the_empty_hash() -> None:
     loaded = SimpleNamespace(agent=SimpleNamespace(name="a"), registry=registry)
     runner = ToolQueryRunner([loaded], lambda owner: None)  # type: ignore[list-item]
     assert runner("o", "a.list_inputs?{}") == ""
+
+
+def test_a_web_search_is_never_run_again_so_its_last_hash_stands() -> None:
+    """A re-execution has no web: a web query answers None, not a hash that would reopen."""
+    from types import SimpleNamespace
+
+    from aksha.app import ToolQueryRunner
+    from aksha.runtime.api import web_search_tool
+
+    decl = web_search_tool("a")
+    registry = SimpleNamespace(names=lambda: ("web_search",), get=lambda name: decl)
+    loaded = SimpleNamespace(agent=SimpleNamespace(name="a"), registry=registry)
+    runner = ToolQueryRunner([loaded], lambda owner: None)  # type: ignore[list-item]
+    assert runner("o", 'a.web_search?{"query":"probe"}') is None

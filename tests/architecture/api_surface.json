@@ -1,5 +1,5 @@
 {
-  "api_version": "2.19",
+  "api_version": "2.20",
   "surface": {
     "Agent": "class Agent(name: 'str', purpose: 'str', instructions: 'str', reads: 'tuple[str, ...]', artifacts: 'tuple[ArtifactKind, ...]', relations: 'tuple[RelationKind, ...]' = (), tasks: 'tuple[Task, ...]' = (), tools: 'tuple[ToolUse | ToolDecl, ...]' = (), stop_policies: 'tuple[StopPolicyOptIn, ...]' = (), completion: 'tuple[Check, ...]' = (), model_aliases: 'tuple[ModelAlias, ...]' = (), budget: 'Budget | None' = None, limits: 'Limits | None' = None, context_policy: 'ContextPolicy | None' = None, sources: 'tuple[VersionedSourceSpec, ...]' = (), fakes: 'str' = 'fakes', phrases: 'str | None' = 'phrases.json', extensions: 'tuple[str, ...]' = (), requires_api: 'str' = '>=2.0,<3', concurrency: 'int' = 1, invalidation: 'InvalidationMode' = 'off', invalidation_keys: 'InvalidationKeys' = 'reads', reuse: \"Literal['on', 'off']\" = 'on') -> None",
     "ApprovalRule": "class ApprovalRule(facts: 'ApprovalFacts', targets: 'Callable[[Mapping[str, object]], tuple[str, ...]] | None' = None, expires_after_s: 'int | None' = None) -> None",
@@ -105,7 +105,7 @@
     "TodoReminder": "def TodoReminder(every: 'int') -> 'StopPolicyOptIn'",
     "ToolBody": "ToolBody = collections.abc.Callable[[aksha.runtime.tools.types.ToolContext, collections.abc.Mapping[str, typing.Any]], aksha.runtime.tools.types.ToolOutcome]",
     "ToolCall": "class ToolCall(call_id: 'str', name: 'str', arguments: 'Mapping[str, Any]' = <factory>) -> None",
-    "ToolContext": "class ToolContext(owner: 'str', agent: 'str', task_path: 'str', key: 'str | None', step_id: 'str', attempt: 'int', reader: 'RecordReader | None' = None, run_date: 'str | None' = None, http: 'HttpClient' = <factory>, exec: 'ExecAPI | None' = None, time_reads: 'TimeReads | None' = None, artifacts: 'ArtifactReader | None' = None, models: 'ToolModels | None' = None, web: 'AttemptWeb | None' = None) -> None",
+    "ToolContext": "class ToolContext(owner: 'str', agent: 'str', task_path: 'str', key: 'str | None', step_id: 'str', attempt: 'int', reader: 'RecordReader | None' = None, run_date: 'str | None' = None, http: 'HttpClient' = <factory>, exec: 'ExecAPI | None' = None, time_reads: 'TimeReads | None' = None, artifacts: 'ArtifactReader | None' = None, models: 'ToolModels | None' = None, web: 'AttemptWeb | None' = None, environment: 'str' = '') -> None",
     "ToolDecl": "class ToolDecl(spec: 'ToolSpec', body: 'ToolBody | None') -> None",
     "ToolModels": "class ToolModels: classify(self, alias: 'str', state: 'str', questions: 'Sequence[QuestionSpec] | None' = None, state_inputs: 'Sequence[str]' = ()) -> 'Sequence[Judgement]'; extract(self, alias: 'str', text: 'ReturnedText', passages: 'Sequence[SpanDraft]', fields: 'Sequence[FieldSpec] | None' = None) -> 'Sequence[Judgement]'",
     "ToolOutcome": "class ToolOutcome(result: 'Ok | Err', saves: 'tuple[SaveRequest, ...]' = ()) -> None",

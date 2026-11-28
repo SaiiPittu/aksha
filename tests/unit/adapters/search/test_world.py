@@ -8,7 +8,12 @@ from pathlib import Path
 import pytest
 
 from aksha import data
-from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
+from aksha.adapters.search.world import (
+    WorldWeb,
+    load_pages,
+    world_hints,
+    world_inputs_environment,
+)
 from aksha.runtime.egress.client import RefusingHttpClient
 from aksha.runtime.web.types import WebError, web_record_id
 
@@ -132,3 +137,63 @@ def test_a_search_is_told_to_an_observer_and_reads_through_the_index(tmp_path: P
     assert seen == [("probe", ["https://a.example/p"])] and fetched == []
     web.fetch("https://a.example/p", RefusingHttpClient())
     assert fetched == ["web/a.example/p"]
+
+
+def test_every_world_web_frames_its_synthetic_pages_as_the_exercise_s_market() -> None:
+    """The pages keep their synthetic label; the web itself says what that label means here.
+
+    A run that read only the label left every seller out and reported an empty market, so
+    the note travels with every result and every fetched page, from the world, never from
+    an agent's prompt.
+    """
+    for world in WORLDS:
+        web = WorldWeb.of_world(data.worlds() / world)
+        note = web.environment
+        assert "synthetic market" in note and "are the market" in note, world
+        assert "not as a reason to leave the page out" in note, world
+        assert "—" not in note
+        url = web.pages[0].url
+        found = web.search(url.split("/")[2].split(".")[0], limit=5)
+        assert found.hits, world
+        assert found.environment == note and found.as_json()["environment"] == note, world
+        page = web.fetch(url, RefusingHttpClient())
+        assert page.environment == note, world
+        assert "synthetic" in page.text.lower()  # the page's own label is kept
+
+
+def test_a_web_with_no_environment_note_adds_nothing_to_its_results() -> None:
+    web = WorldWeb(_web().pages, _web()._read)
+    found = web.search("occupancy sensor", limit=3)
+    assert found.environment == "" and "environment" not in found.as_json()
+    assert "environment" not in web.fetch("https://kelvra.example/product",
+                                          RefusingHttpClient()).as_json()  # fmt: skip
+
+
+RESEARCH_WORLDS = (*WORLDS, "kelasora", "vantlow", "rimefold")
+"""Every world whose records a research comparison reads, with a web or inputs only."""
+
+
+def test_every_research_world_frames_its_supplied_records_and_declares_its_labels() -> None:
+    """The records keep their label; the world's manifest says what it means in the exercise.
+
+    The scope and voice tasks read only inputs, so the web's note never reaches them: the
+    world's own note on its records does, through the input tools. The labels it declares
+    are what the graders read (``research.exclusion_not_on_label``).
+    """
+    for world in RESEARCH_WORLDS:
+        root = data.worlds() / world
+        note = world_inputs_environment(root)
+        assert "synthetic sample" in note and "safety label" in note, world
+        assert "not evidence that a record sells nothing" in note, world
+        assert "\u2014" not in note
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["label"], world
+        texts = [f.read_text(encoding="utf-8", errors="ignore")
+                 for f in (root / "sources").rglob("*") if f.is_file()]  # fmt: skip
+        for label in manifest["label"]:
+            assert any(label in t for t in texts), (world, label)
+    for world in WORLDS:
+        web = json.loads((data.worlds() / world / "web.json").read_text(encoding="utf-8"))
+        assert "not evidence that a page sells nothing" in web["environment"], world
+        assert web["label"], world
+    assert world_inputs_environment(data.worlds() / "brackwen") == ""

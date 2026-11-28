@@ -3,7 +3,15 @@
   "synthetic": true,
   "frozen_today": "2026-11-27",
   "tool_root": "sources/",
-  "note": "What a server would know: paths and publish dates. No answers (no duplicate links, no units, no traps). The agents read sources/ as uploaded inputs; folder names mean nothing to them.",
+  "note": "What a server would know: paths and publish dates. No answers (no duplicate links, no units, no traps). The agents read sources/ as uploaded inputs; folder names mean nothing to them. 'environment' is the note the input tools return with every result on these records; 'label' lists the synthetic labels the records carry, for the graders.",
+  "environment": "The records supplied for this exercise are a synthetic sample built for it. No company, person, review, page or price in them is real, and each record carries a label that says so. Within this exercise these records are the case's own records: read each as what it presents itself to be (a customer's review, a seller's page, a price list, a report), and treat the synthetic label on it as a safety label, not as a reason to set the record aside. The label is not evidence that a record sells nothing, is an advert, or is a copy; judge each record by what it says.",
+  "label": [
+    "Invented for testing the agents; not a real company, person, product or document.",
+    "Invented for testing the agents; not real people, messages or offers.",
+    "Invented for testing; not a real newsletter, company or person.",
+    "Invented for testing; not a real survey.",
+    "Invented for testing; not a real company or offer."
+  ],
   "records": [
     {
       "path": "brief/kelasora-brief.md",

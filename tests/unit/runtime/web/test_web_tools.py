@@ -81,7 +81,10 @@ def test_a_record_id_is_the_page_s_host_and_path() -> None:
 def test_a_search_returns_hits_and_mints_nothing() -> None:
     reader = AttemptReader(None)
     out = web_search(_ctx(_handle(reader), reader), {"query": "soil  probe"})
-    assert isinstance(out.result, Ok) and out.result.spans == () and out.result.reads == ()
+    assert isinstance(out.result, Ok) and out.result.spans == ()
+    (read,) = out.result.reads  # a recorded query: the call, versioned by the URLs it found
+    assert read.kind == "query" and read.id == 'a.web_search?{"query":"soil  probe"}'
+    assert out.result.data["recorded"] == f"query:{read.id}@{read.version}"
     assert out.result.data["query"] == "soil probe"
     assert out.result.data["results"][0]["url"] == "https://a.example/probe"
     assert "not evidence" in out.result.data["note"]
@@ -173,3 +176,28 @@ def test_only_a_tool_under_the_web_policy_is_handed_the_web() -> None:
         assert web_for(setup, spec, reader, http) is None  # type: ignore[arg-type]
     bare = SimpleNamespace(tier=ExecutionTier())
     assert web_for(bare, fetch_url_spec("a"), reader, http) is None  # type: ignore[arg-type]
+
+
+def test_a_web_s_environment_note_reaches_the_model_with_each_result_and_page() -> None:
+    """A web that says where it is (a synthetic market for an exercise) says it in the tool
+    result; a web that says nothing adds no field."""
+    note = "This web is a synthetic market built for this exercise."
+
+    class Framed(Search, Fetch):
+        def search(self, query: str, *, limit: int) -> SearchResults:
+            return replace(Search.search(self, query, limit=limit), environment=note)
+
+        def fetch(self, url: str, http: HttpClient) -> FetchedPage:
+            return replace(Fetch.fetch(self, url, http), environment=note)
+
+    reader = AttemptReader(None)
+    framed = AttemptWeb(Framed(), Framed(), reader, RefusingHttpClient())
+    found = web_search(_ctx(framed, reader), {"query": "probe"})
+    assert isinstance(found.result, Ok) and found.result.data["environment"] == note
+    page = fetch_url(_ctx(framed, reader), {"url": "https://a.example/probe"})
+    assert isinstance(page.result, Ok) and page.result.data["environment"] == note
+    plain = AttemptReader(None)
+    out = web_search(_ctx(_handle(plain), plain), {"query": "probe"})
+    assert isinstance(out.result, Ok) and "environment" not in out.result.data
+    got = fetch_url(_ctx(_handle(plain), plain), {"url": "https://a.example/probe"})
+    assert isinstance(got.result, Ok) and "environment" not in got.result.data

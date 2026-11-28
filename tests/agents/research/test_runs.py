@@ -183,3 +183,40 @@ def test_a_replay_of_the_recorded_model_steps_gives_the_same_research(tmp_path: 
     assert sorted(model.calls) == sorted(recorded)
     assert _outputs(again) == expected
     again.close()
+
+
+class NoSellerWeb(WorldWeb):
+    """The world's web with every seller's page gone: only adverts, reports and glossaries."""
+
+    def __init__(self) -> None:
+        inner = WorldWeb.of_world(WORLDS / "stillroom")
+        pages = [p for p in inner.pages if p.noise in ("spam", "irrelevant", "keyword_only")]
+        super().__init__(pages, inner._read, environment=inner.environment)
+
+
+def test_an_empty_web_market_saves_a_scoped_absence_that_its_check_accepts(
+    tmp_path: Path,
+) -> None:
+    """No page sells the product: the offline model saves no company, an absence scoped on
+    every search it ran, and each page it read excluded on its own words, and discover's
+    check passes on that, so the run ends rather than repeating the save."""
+    b = ResearchBench(tmp_path, ResearchModel(), web=NoSellerWeb())
+    b.start()
+    assert b.run_to_end(**ANSWER).state == "ended"
+    found = thaw(b.content("competitors"))
+    assert found["companies"] == []
+    scope = found["absence"]["absence"]["scope"]
+    searched = [e.payload["input"]["id"] for e in b.events("read.recorded")
+                if e.instance == "discover" and e.payload["input"]["kind"] == "query"
+                and ".web_search?" in e.payload["input"]["id"]]  # fmt: skip
+    assert searched and set(searched) <= set(scope["query"])
+    excluded = {e["record"] for e in found["excluded"]}
+    read = {e.payload["input"]["id"] for e in b.events("read.recorded")
+            if e.instance == "discover" and e.payload["input"]["kind"] == "record"
+            and not e.payload["input"]["id"].startswith("definitions/")}  # fmt: skip
+    assert read and read <= excluded
+    quotes = [" ".join(e["cite"]["quote"].split()) for e in found["excluded"]]
+    assert len(quotes) == len(set(quotes))  # no one line leaves out two pages
+    evaluated = [e.payload for e in b.events("completion_check.evaluated")
+                 if e.instance == "discover" and e.payload["check"] == "discover_done"]  # fmt: skip
+    assert evaluated and evaluated[-1]["ok"], evaluated[-1:]

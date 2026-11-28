@@ -328,3 +328,87 @@ def test_known_fake_leaks_still_exist() -> None:
         for _w, _k, value in leaks(p.read_text(encoding="utf-8"), p)
     }
     assert sorted(set(FAKE_KNOWN_LEAKS) - present) == []
+
+
+# --- a world's framing of its own synthetic label --------------------------------------
+
+RUN_WORDS = 6
+"""How many words in a row of a world's note count as the note copied into code."""
+PROMPT_PHRASES = ("synthetic market", "invented for testing", "safety label", "synthetic sample")
+"""What a prompt would say if it told the agent how to read one world's synthetic label."""
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+(?:'[a-z0-9]+)*", text.lower())
+
+
+def _runs(words: list[str]) -> set[tuple[str, ...]]:
+    return {tuple(words[i : i + RUN_WORDS]) for i in range(len(words) - RUN_WORDS + 1)}
+
+
+@cache
+def world_framing() -> dict[str, list[str]]:
+    """Every world's framing text, by world: its ``environment`` notes and its ``label``s.
+
+    The notes say how to read a page's or a record's synthetic label within the exercise.
+    They belong to the world (its ``web.json`` and ``manifest.json``) and reach the agent
+    through the tools' results, so the agents stay general: no sentence of them, and no
+    run of six of their words, may sit in an agent's prompt or logic, the runtime or the app.
+    """
+    out: dict[str, list[str]] = {}
+    for world in sorted(p for p in WORLDS_DIR.iterdir() if p.is_dir()):
+        texts: list[str] = []
+        for name in ("web.json", "manifest.json"):
+            path = world / name
+            if not path.is_file():
+                continue
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(raw.get("environment"), str):
+                texts.append(raw["environment"])
+            label = raw.get("label", ())
+            texts.extend([label] if isinstance(label, str) else [str(x) for x in label])
+        if texts:
+            out[world.name] = texts
+    return out
+
+
+def framing_leaks(text: str) -> list[tuple[str, str]]:
+    """Every (world, words) of a world's framing that ``text`` repeats: a sentence or a run."""
+    have = _runs(_words(text))
+    flat = " ".join(_words(text))
+    hits: list[tuple[str, str]] = []
+    for world, texts in world_framing().items():
+        for note in texts:
+            for sentence in re.split(r"(?<=[.;:])\s+", note):
+                words = _words(sentence)
+                if len(words) >= 3 and " ".join(words) in flat:
+                    hits.append((world, sentence))
+            hits.extend((world, " ".join(run)) for run in sorted(_runs(_words(note)) & have))
+    return hits
+
+
+def test_every_research_world_states_its_framing() -> None:
+    framed = world_framing()
+    assert {"stillroom", "stillroom-v2", "cindral", "tilldew"} <= set(framed)
+    assert {"kelasora", "vantlow", "rimefold"} <= set(framed)
+
+
+@pytest.mark.parametrize("path", scanned_files(), ids=_rel)
+def test_no_world_framing_reaches_an_agent_prompt(path: Path) -> None:
+    """A world's note on its synthetic label stays in the world (module doc of the notes)."""
+    text = path.read_text(encoding="utf-8")
+    assert framing_leaks(text) == []
+    if path.suffix == ".md" and "prompts" in path.parts:
+        lowered = " ".join(text.lower().split())
+        assert [p for p in PROMPT_PHRASES if p in lowered] == []
+
+
+def test_the_framing_guard_catches_a_planted_note() -> None:
+    """The probe a review ran: the web's note appended to a prompt is caught."""
+    world, texts = sorted(world_framing().items())[0]
+    planted = "## Searching\n\nRead every page you fetch. " + texts[0] + "\n"
+    assert any(w == world for w, _ in framing_leaks(planted))
+    sentence = re.split(r"(?<=[.;:])\s+", texts[0])[1]
+    six = " ".join(sentence.split()[:RUN_WORDS])
+    assert framing_leaks(f"x = '{six}'\n")
+    assert framing_leaks("Read each page and judge what it sells.\n") == []

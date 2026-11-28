@@ -53,7 +53,7 @@ from typing import Any
 
 from aksha.evals.episode import Episode, guard_path
 from aksha.evals.errors import EvalError, PathRefused
-from aksha.evals.world import WEB_FILE
+from aksha.evals.world import MANIFEST_FILE, WEB_FILE
 from aksha.runtime.artifacts.ports import BlobStore
 from aksha.runtime.grounding.parts import part_version
 from aksha.runtime.grounding.types import ReturnedText
@@ -83,6 +83,14 @@ def world_file(record: str) -> str:
     return record.removeprefix(INPUTS + "/")
 
 
+def manifest_environment(path: Path) -> str:
+    """The ``environment`` note of the world manifest at ``path``; empty when it has none."""
+    if not path.is_file():
+        return ""
+    note = json.loads(path.read_text(encoding="utf-8")).get("environment")
+    return " ".join(note.split()) if isinstance(note, str) else ""
+
+
 class EpisodeReader:
     """The runtime's record reader over one episode, for the source names it serves.
 
@@ -97,6 +105,9 @@ class EpisodeReader:
         self.sources = sources
         self.texts: dict[str, str] = {}
         """Every record's text as last returned, by world file (for citation offsets)."""
+        self.environment = manifest_environment(episode.root.parent / MANIFEST_FILE)
+        """The world's own note on its supplied records (its manifest's ``environment``),
+        which the composition root hands the input tools; empty when it states none."""
 
     def read(self, source: str, record_id: str) -> ReturnedText | None:
         """The record's text through ``read_source``; None for a refusal or a fault."""
