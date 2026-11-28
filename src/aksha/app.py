@@ -2062,6 +2062,12 @@ def _local_store(folder: Path) -> StorageConfig:
     return StorageConfig(sqlite_path=folder / "aksha.sqlite", blob_path=folder / "blobs")
 
 
+ASKS_ONCE_PER_RUN = "once_per_run"
+"""The manifest's ``asks``: a recording made since ADR-P07 G8, when a run began asking
+each fast request once. A recording without it asked otherwise, so it no longer replays
+and needs recording again."""
+
+
 def record_run(
     config: RuntimeConfig,
     folder: Path,
@@ -2115,6 +2121,7 @@ def record_run(
     if factors:
         manifest["turn_factors"] = factors  # a replay runs under the same limits
     manifest["limits"] = limits  # and the same timeouts, retries and active-time cap
+    manifest["asks"] = ASKS_ONCE_PER_RUN  # what the run asks the model (Replayed.older_asks)
     (folder / RECORDING_FILE).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
                                          encoding="utf-8")  # fmt: skip
     (folder / OUTPUTS_FILE).write_text(json.dumps(ended.outputs, indent=2, sort_keys=True)
@@ -2132,6 +2139,9 @@ class Replayed:
     out: Path
     older: bool = False
     """The recording predates ``limits`` and recorded failed model calls (section doc)."""
+    older_asks: bool = False
+    """The recording predates asking each fast request once per run (ADR-P07 G8), so the
+    replay asks what it never recorded."""
 
 
 def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
@@ -2182,4 +2192,5 @@ def replay_run(config: RuntimeConfig, folder: Path, out: Path) -> Replayed:
     if not differing and (out / OUTPUTS_FILE).read_bytes() != (folder / OUTPUTS_FILE).read_bytes():
         differing = (OUTPUTS_FILE,)
     return Replayed(replace(ended, trace=trace), not differing, differing, out,
-                    older="limits" not in manifest)  # fmt: skip
+                    older="limits" not in manifest,
+                    older_asks=manifest.get("asks") != ASKS_ONCE_PER_RUN)  # fmt: skip

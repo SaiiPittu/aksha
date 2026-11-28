@@ -1,4 +1,5 @@
 {
+  "asks": "once_per_run",
   "format": "aksha-recording/1",
   "inputs": [
     "priorities/business-priorities.md"
@@ -40,7 +41,7 @@
     "text": "Who sells camera-free occupancy sensing for offices in the EU, and at what price? Compare power (PoE, battery powered, mains) and privacy (privacy, camera, image)."
   },
   "search": "world",
-  "started_at": "2026-11-28T03:13:02.555888+00:00",
+  "started_at": "2026-11-28T04:49:19.829122+00:00",
   "synthetic_notice": "A recording of one run: what the person gave, every model answer, every search and fetch. Replay it with aksha replay.",
   "waiting": []
 }

@@ -3,9 +3,10 @@
 The research agent runs ``AKSHA_MODE=live`` with every fast-class alias bound to the
 LiteLLM adapters over a stubbed LiteLLM module (no network), under live settings that
 are none of the defaults, and one classification call inside a tool body times out after
-the calls before it were answered, so the tool step is retried and asks those requests a
-second time. The replay runs with no ``AKSHA_LIVE_*`` at all: it must take every setting
-that shapes the run from the recording, fail the recorded call the way it failed, and
+the calls before it were answered, so the tool step is retried; the retry asks only the
+request that failed, the run's earlier answers being remembered (``FastAnswers``). The
+replay runs with no ``AKSHA_LIVE_*`` at all: it must take every setting that shapes the
+run from the recording, fail the recorded call the way it failed, and
 end with the same outputs, the same limits on ``run.started`` and the same retry.
 """
 
@@ -91,6 +92,9 @@ def test_a_live_recording_replays_with_a_clean_environment_to_the_same_outputs(
     # The twentieth call timed out inside a tool body; its step failed once and ran again.
     failed = _events(rec / "store", "step.failed")
     assert [p["code"] for _, _, p in failed] == ["transient"], failed
+    # The retry asked the failed request again and nothing the failed attempt was answered.
+    asked = [json.dumps(c["messages"], sort_keys=True) for c in lib.calls]
+    assert asked.count(asked[19]) == 2 and len(set(asked)) == len(asked) - 1
     lines = [json.loads(x) for x in (rec / "models.jsonl").read_text().splitlines()]
     assert [x["error"]["kind"] for x in lines if "error" in x] == ["transient"]
     manifest = json.loads((rec / "recording.json").read_text())

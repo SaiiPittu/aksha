@@ -165,10 +165,10 @@ class FakesLiteLLM:
     ``sys.modules`` by the test): the fake is chosen by the call's ``model``
     (``stub:<alias>``). ``fail`` holds the numbers of the calls (from 1) that time out
     instead, as LiteLLM's ``Timeout``, so a test can make one call of a tool body fail
-    after the calls before it were answered. A real model need not answer one request the
-    same way twice: a classification request asked before the first failing call is
-    answered with each question's first option, certain, the first time; later askings
-    get the fake's answer.
+    after the calls before it were answered. (It once answered a classification asked
+    before the first failure with its first option the first time, as a real model need not
+    answer one request the same way twice; a run now asks each request once,
+    ``models.calls.FastAnswers``, so only the failed request is asked again.)
     Every call's keyword arguments are kept.
     """
 
@@ -193,12 +193,9 @@ class FakesLiteLLM:
         content = _extract(fake, ask) if system == EXTRACT_SYSTEM else _classify(fake, ask)
         again = json.dumps(kwargs["messages"], sort_keys=True)
         if system != EXTRACT_SYSTEM:
-            first = len(self.calls) < min(self.fail, default=0) and again not in self.asked
             for q in ask["questions"]:
                 options = list(q.get("options") or [])
                 odds = content["answers"].get(q["name"], {}).get("probabilities", {})
-                if first and options:
-                    odds = {options[0]: 1.0}
                 full = {o: float(odds.get(o, 0.0)) for o in options}
                 choice = max(options, key=lambda o: full[o]) if options else None
                 content["answers"][q["name"]] = {"choice": choice, "probabilities": full}
