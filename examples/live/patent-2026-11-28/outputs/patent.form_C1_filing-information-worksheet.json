@@ -1,0 +1,136 @@
+{
+  "content": {
+    "candidate": "C1",
+    "counts": {
+      "complete": 2,
+      "missing": 3,
+      "needs_counsel_confirmation": 6
+    },
+    "fields": [
+      {
+        "field": "working_title",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "cite": {
+            "quote": "Engineering note: self-calibrating thermal baseline",
+            "span": "EX-0073"
+          }
+        }
+      },
+      {
+        "counsel_question": "Who should be named as applicant?",
+        "field": "applicant",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": null
+      },
+      {
+        "counsel_question": "Who contributed to conception of each element, including the gate?",
+        "field": "proposed_inventors",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "records": "patent.extraction/C1@v1"
+        }
+      },
+      {
+        "counsel_question": "What do the executed employee and founder assignments, signed consultancy agreement and applicable university IP terms establish?",
+        "field": "ownership_and_assignments",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "records": "patent.extraction/C1@v1"
+        }
+      },
+      {
+        "counsel_question": "Can you confirm Lin's contribution and review the signed agreement, invoice INV-0037, university IP terms and confidentiality terms for the email and preceding call?",
+        "field": "outside_party_agreements",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "cite": {
+            "quote": "consulting agreement CA-2025-11, effective 2025-12-01",
+            "span": "EX-0103"
+          }
+        }
+      },
+      {
+        "counsel_question": "What was observable in the live demo, and how should counsel assess the disclosure after reviewing the original slide, script and any recordings or photographs?",
+        "field": "earlier_public_disclosures",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "elapsed_days": 263,
+          "event": {
+            "cite": {
+              "quote": "DISC-01,2026-03-10,C1,trade-show demo,Live demo plus one slide describing the PIR-quiet and door-closed baseline gate,\"Smart Workplace Expo 2026, Rotterdam, open floor, about 200 visitors\",yes",
+              "span": "EX-0020"
+            }
+          },
+          "not_on_slide": {
+            "cite": {
+              "quote": "The update weight, the per-pixel freeze and the threshold multiplier were not on the slide.",
+              "span": "EX-0130"
+            }
+          },
+          "shown": {
+            "cite": {
+              "quote": "no motion for 20 minutes and the door closed.",
+              "span": "EX-0127"
+            }
+          }
+        }
+      },
+      {
+        "field": "related_applications",
+        "question": "Are there any related applications? If so, what are their identifiers and dates?",
+        "required": false,
+        "status": "missing",
+        "value": null
+      },
+      {
+        "field": "priority_claims",
+        "question": "Are there earlier filings for counsel to review for any priority claim?",
+        "required": false,
+        "status": "missing",
+        "value": null
+      },
+      {
+        "counsel_question": "Which jurisdictions should be considered?",
+        "field": "jurisdictions_of_interest",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": null
+      },
+      {
+        "field": "representative",
+        "question": "Who is the designated representative?",
+        "required": false,
+        "status": "missing",
+        "value": null
+      },
+      {
+        "field": "attachments",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "comparison_matrix": "patent.comparison/C1@v1",
+          "disclosure_form": "form/C1~invention-disclosure-form@v1",
+          "prior_art": "patent.prior_art/C1@v1",
+          "proposed_figures": [
+            "Sensor and door-contact block diagram",
+            "Baseline update and freeze flowchart",
+            "Per-pixel threshold diagram"
+          ]
+        }
+      }
+    ],
+    "file": "input/templates/filing-information-worksheet.md",
+    "form": "Filing-information worksheet (blank, mock)",
+    "template": "filing-information-worksheet",
+    "template_version": "sha256:fff7f066b2beb8b77032cad5dbe51cbe54a9b44b982fe79af6380610adb8f9f2"
+  },
+  "freshness": "current",
+  "ref": "patent.form/C1~filing-information-worksheet@v1"
+}

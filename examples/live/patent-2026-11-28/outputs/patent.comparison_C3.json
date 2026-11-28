@@ -1,0 +1,65 @@
+{
+  "content": {
+    "absence": {
+      "scope": {
+        "query": "(overlap | overlapping) AND (occupancy | people counting | people), prior_art_publication"
+      },
+      "statement": "Specific implementation details not found in reviewed uploaded publications"
+    },
+    "candidate": "C3",
+    "cells": [
+      {
+        "element": "On-device processing and count-only transmission",
+        "family": "SYN-PRI-2020-0907",
+        "state": "not_found"
+      },
+      {
+        "element": "Per-device pixel-coordinate overlap marking at installation",
+        "family": "SYN-PRI-2020-0907",
+        "state": "not_found"
+      },
+      {
+        "element": "Total and overlap counts every 30 seconds",
+        "family": "SYN-PRI-2020-0907",
+        "state": "not_found"
+      },
+      {
+        "element": "Room count subtracting the minimum of two overlap counts",
+        "family": "SYN-PRI-2020-0907",
+        "state": "not_found"
+      },
+      {
+        "element": "Floor roll-up with single-regular-occupant grouping and minimum three rooms",
+        "family": "SYN-PRI-2020-0907",
+        "state": "not_found"
+      },
+      {
+        "element": "On-device processing and count-only transmission",
+        "family": "SYN-PRI-2022-0118",
+        "state": "disclosed"
+      },
+      {
+        "element": "Per-device pixel-coordinate overlap marking at installation",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      },
+      {
+        "element": "Total and overlap counts every 30 seconds",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      },
+      {
+        "element": "Room count subtracting the minimum of two overlap counts",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      },
+      {
+        "element": "Floor roll-up with single-regular-occupant grouping and minimum three rooms",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.comparison/C3@v1"
+}

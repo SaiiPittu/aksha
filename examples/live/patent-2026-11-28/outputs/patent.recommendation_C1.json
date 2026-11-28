@@ -1,0 +1,42 @@
+{
+  "content": {
+    "business_importance": {
+      "cite": {
+        "quote": "1. **Accuracy with still occupants.** Facilities buyers reject sensors that report a room empty while someone is in it. Losing a pilot over \"the lights went off while I was sitting\" is our most common failure story. Relates to C1.",
+        "span": "EX-0011"
+      },
+      "from_research": "unknown",
+      "note": "Research outputs support business importance only; they are not evidence of technical novelty or prior art.",
+      "summary": "1. **Accuracy with still occupants.** Facilities buyers reject sensors that report a room empty while someone is in it. Losing a pilot over \"the lights went off while I was sitting\" is our most common failure story. Relates to C1."
+    },
+    "candidate": "C1",
+    "next_action": "collect_more_evidence",
+    "why": {
+      "implementation": {
+        "cite": {
+          "quote": "Bench log reference BL-2026-011.",
+          "span": "EX-0099"
+        },
+        "question": "Can you provide the bench log?"
+      },
+      "inventorship": {
+        "question": "Who contributed to conception?",
+        "status": "needs_counsel_confirmation"
+      },
+      "outside_contributions": {
+        "question": "How should counsel treat Dr. Wei Lin's suggestion and any university rights?",
+        "status": "needs_counsel_confirmation"
+      },
+      "ownership": {
+        "question": "What do the executed agreements assign?",
+        "status": "needs_counsel_confirmation"
+      },
+      "prior_art": {
+        "question": "Which publications should be searched for C1?",
+        "status": "not_checked"
+      }
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.recommendation/C1@v4"
+}

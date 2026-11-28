@@ -1,0 +1,29 @@
+{
+  "content": {
+    "candidate": "C4",
+    "cells": [
+      {
+        "element": "Keep the thermopile and the radio off by default; the PIR stays on.",
+        "family": "SYN-PRI-2021-1103",
+        "state": "partial"
+      },
+      {
+        "element": "When the PIR fires, power the thermopile and sample once per second for a 60 second window.",
+        "family": "SYN-PRI-2021-1103",
+        "state": "partial"
+      },
+      {
+        "element": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings.",
+        "family": "SYN-PRI-2021-1103",
+        "state": "not_found"
+      },
+      {
+        "element": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit.",
+        "family": "SYN-PRI-2021-1103",
+        "state": "not_found"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.comparison/C4@v1"
+}

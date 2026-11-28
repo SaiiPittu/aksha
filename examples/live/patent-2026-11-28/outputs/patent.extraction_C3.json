@@ -1,0 +1,154 @@
+{
+  "content": {
+    "business_priority": {
+      "cite": {
+        "quote": "3. **Privacy story for EU works councils.** No image may leave the device. Works councils in Germany and the Netherlands ask for this in writing. Relates to C3.",
+        "span": "EX-0015"
+      },
+      "rank": 3
+    },
+    "candidate": {
+      "cite": {
+        "quote": "Candidate: C3, privacy-preserving coordination",
+        "span": "EX-0177"
+      },
+      "id": "C3",
+      "title": "privacy-preserving coordination"
+    },
+    "contributors": [
+      {
+        "agreement_ref": "employment, standard IP assignment",
+        "cite": {
+          "quote": "CR-06,P-04,Tomas Ibarra,Stillroom,data engineer,C3,Designed the count-only overlap aggregator,2026-02-20,\"employment, standard IP assignment\",NOTE-C3,true",
+          "span": "EX-0198"
+        },
+        "contribution": "Designed the count-only overlap aggregator",
+        "date": "2026-02-20",
+        "employer": "Stillroom",
+        "name": "Tomas Ibarra",
+        "person_id": "P-04",
+        "role": "data engineer"
+      }
+    ],
+    "disclosures": [
+      {
+        "as_of": "2026-11-28",
+        "audience": "one customer facilities team",
+        "cite": {
+          "quote": "DISC-02,2026-04-15,C3,customer pilot,Count-only aggregator running in one customer office,one customer facilities team,\"no, under NDA-2026-03\",P-04,NOTE-C3,true",
+          "span": "EX-0021"
+        },
+        "date": "2026-04-15",
+        "describes_fully": false,
+        "elapsed_days": 227,
+        "event_type": "customer pilot",
+        "public": "no, under NDA-2026-03",
+        "question": "Which mechanism details were actually shared or visible to the facilities team?",
+        "what_was_shown": "Count-only aggregator running in one customer office"
+      }
+    ],
+    "implementation": {
+      "cite": {
+        "quote": "Aggregator running in the pilot at a customer office since 15 Apr 2026, under NDA.",
+        "span": "EX-0056"
+      },
+      "status": "in_use_under_nda"
+    },
+    "inventorship": {
+      "question": "Who contributed to the conception of each mechanism step?",
+      "status": "needs_counsel_confirmation"
+    },
+    "mechanism": {
+      "alternatives": [
+        {
+          "cite": {
+            "quote": "Server-side fusion of both heat frames. Rejected: raw frames leave the device.",
+            "span": "EX-0050"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Assigning each overlap pixel to one unit only. Rejected: a person standing on the boundary flickers between units.",
+            "span": "EX-0052"
+          }
+        }
+      ],
+      "parameters": [
+        {
+          "cite": {
+            "quote": "| Report interval | 30 | seconds | |",
+            "span": "EX-0196"
+          }
+        },
+        {
+          "cite": {
+            "quote": "| Minimum group size for roll-up | 3 | rooms | |",
+            "span": "EX-0197"
+          }
+        }
+      ],
+      "problem": {
+        "cite": {
+          "quote": "A person in the overlap is seen by both, and adding the counts double-counts.",
+          "span": "EX-0180"
+        }
+      },
+      "steps": [
+        {
+          "cite": {
+            "quote": "Each unit processes frames on the device and outputs counts only; no frame ever leaves the unit.",
+            "span": "EX-0183"
+          }
+        },
+        {
+          "cite": {
+            "quote": "At install time, the overlap zone is marked in each unit's own pixel coordinates.",
+            "span": "EX-0185"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Each unit reports two integers every 30 seconds: total people seen, and people seen inside the overlap zone.",
+            "span": "EX-0187"
+          }
+        },
+        {
+          "cite": {
+            "quote": "The room aggregator computes room count = A + B - min(overlap_A, overlap_B).",
+            "span": "EX-0189"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Above room level, counts roll up to floors, and any room with a single regular occupant is grouped with its neighbours so no one person is singled out.",
+            "span": "EX-0191"
+          }
+        }
+      ]
+    },
+    "missing_documents": [
+      {
+        "question": "Can you provide executed NDA-2026-03 and the materials shown in the pilot?",
+        "value": null
+      },
+      {
+        "question": "Can you provide the executed IP assignment and any agreements with outside contributors?",
+        "value": null
+      },
+      {
+        "question": "Can you provide a system diagram and pilot test results?",
+        "value": null
+      }
+    ],
+    "outside_contributions": {
+      "question": "Did any customer or other outside party contribute to C3?",
+      "status": "needs_counsel_confirmation"
+    },
+    "ownership": {
+      "question": "Is there an executed assignment covering C3?",
+      "status": "needs_counsel_confirmation"
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.extraction/C3@v1"
+}

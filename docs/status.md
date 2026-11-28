@@ -58,7 +58,7 @@ On the held-out worlds the research agent passes 25 of 26 eval cases and the pat
 | Live models from any provider through LiteLLM | Built; smoke-tested on one Gemini model, and one whole Research task has run on GPT-6.2 Sol (partial, recorded in `src/aksha/data/recordings/research-live-gpt/`); native file input is in the code but off |
 | A clean failure for a Task that fails while awaiting rebuild ([#95](https://github.com/SaiiPittu/aksha/issues/95)) | Built (decision Proposed); a later decision can still re-enter it while other work runs |
 | Erasure in the append-only store (P30) | Open: options listed, none chosen |
-| A whole Patent Agent task on a real model, the evals in live mode, and the live fresh-against-resumed rebuild comparison | Not run; one whole Research task has run on GPT-6.2 Sol and ended partial ([live mode](live-mode.md)) |
+| The evals in live mode, a live send of a counsel packet, and the live fresh-against-resumed rebuild comparison | Not run. Status on 28 Nov 2026: one whole Research task and one whole Patent task have ended complete on GPT-6.2 Sol, the Patent one without a send, as its request asked ([live runs](assignment/06-evals-and-live-runs.md#after-the-fixes)) |
 | A container backend, a real system of record behind the outbox, OTLP/HTTP export | Not built |
 | Unattended operation: stronger isolation, a halt-everything stop, per-agent identity, an untrusted-origin mark, an approval inbox, event-triggered runs (X-1 to X-7) | Designed, not built; see [future directions](design/05-future-directions.md) |
 

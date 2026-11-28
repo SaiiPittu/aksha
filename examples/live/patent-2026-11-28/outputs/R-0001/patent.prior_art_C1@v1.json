@@ -1,0 +1,272 @@
+{
+  "ref": "patent.prior_art/C1@v1",
+  "saved_at_event": 413,
+  "content": {
+    "candidate": "C1",
+    "comparison": [
+      {
+        "cite": {
+          "quote": "During periods of low activity, the background frame is updated as a running average of recent frames. A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+          "span": "EX-0251"
+        },
+        "feature": "adaptive thermal background and pixel-specific noise threshold",
+        "status": "found"
+      },
+      {
+        "cite": {
+          "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period.",
+          "span": "EX-0299"
+        },
+        "feature": "motion-free holding period before background update",
+        "status": "found"
+      },
+      {
+        "absence": {
+          "scope": {
+            "query": "Uploaded thermal-array/background/motion and threshold searches, priority follow-ups SYN-PRI-2021-0412 and SYN-PRI-2022-0118, and web search site:patents.google.com patent thermopile occupancy background baseline calibration PIR door closed thermal array adaptive"
+          },
+          "statement": "Exact C1 gate and implementation details not found in the retained references"
+        },
+        "feature": "20-minute PIR quiet plus closed door; per-pixel window mean and standard deviation; minute-by-minute 0.99/0.01 update; ten-minute per-pixel freeze; baseline plus four standard deviations",
+        "status": "not_found"
+      }
+    ],
+    "excluded": [
+      {
+        "cite": {
+          "quote": "\"publication_number\": \"SYN-PUB-0001\"",
+          "span": "EX-0355"
+        },
+        "reason": "Web mirror of uploaded SYN-PUB-0001"
+      },
+      {
+        "cite": {
+          "quote": "A PIR detector wakes a high-power sensing element for a fixed window.",
+          "span": "EX-0350"
+        },
+        "reason": "PIR-triggered power management rather than baseline learning"
+      }
+    ],
+    "families": [
+      {
+        "members": [
+          "SYN-PUB-0001",
+          "SYN-PUB-0002"
+        ],
+        "priority_number": "SYN-PRI-2021-0412"
+      },
+      {
+        "members": [
+          "SYN-PUB-0005",
+          "SYN-PUB-0006"
+        ],
+        "priority_number": "SYN-PRI-2022-0118"
+      }
+    ],
+    "publications": [
+      {
+        "cite": {
+          "quote": "\"number\": \"SYN-PRI-2021-0412\"",
+          "span": "EX-0229"
+        },
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a threshold derived from a noise estimate of that pixel.",
+              "span": "EX-0248"
+            }
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein low activity is determined from the variance of recent frames.",
+              "span": "EX-0249"
+            }
+          }
+        ],
+        "filing_date": "2022-04-11",
+        "kind_code": "A1",
+        "number": "SYN-PUB-0001",
+        "priority_date": "2021-04-12",
+        "priority_number": "SYN-PRI-2021-0412",
+        "publication_date": "2022-10-13",
+        "status_observations": [
+          {
+            "as_of": "2026-10-01",
+            "cite": {
+              "quote": "\"wording\": \"Published application\"",
+              "span": "EX-0229"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Published application"
+          }
+        ]
+      },
+      {
+        "cite": {
+          "quote": "\"number\": \"SYN-PRI-2021-0412\"",
+          "span": "EX-0253"
+        },
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of detecting occupancy, comprising: storing a background frame from a thermal array; updating the background frame during periods of low activity; and marking a pixel occupied when its reading exceeds the background frame by a fixed temperature offset.",
+              "span": "EX-0274"
+            }
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein the fixed temperature offset is 0.5 degrees Celsius.",
+              "span": "EX-0275"
+            }
+          }
+        ],
+        "description": {
+          "cite": {
+            "quote": "A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+            "span": "EX-0277"
+          }
+        },
+        "filing_date": "2022-04-11",
+        "grant_date": "2024-03-05",
+        "kind_code": "B2",
+        "number": "SYN-PUB-0002",
+        "priority_date": "2021-04-12",
+        "priority_number": "SYN-PRI-2021-0412",
+        "publication_date": "2022-10-13",
+        "status_observations": [
+          {
+            "as_of": "2026-10-01",
+            "cite": {
+              "quote": "\"wording\": \"Granted - in force\"",
+              "span": "EX-0253"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Granted - in force"
+          }
+        ]
+      },
+      {
+        "cite": {
+          "quote": "\"number\": \"SYN-PRI-2022-0118\"",
+          "span": "EX-0279"
+        },
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+              "span": "EX-0298"
+            }
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period.",
+              "span": "EX-0299"
+            }
+          }
+        ],
+        "filing_date": "2023-01-17",
+        "kind_code": "A1",
+        "number": "SYN-PUB-0005",
+        "priority_date": "2022-01-18",
+        "priority_number": "SYN-PRI-2022-0118",
+        "publication_date": "2023-07-20",
+        "status_observations": [
+          {
+            "as_of": "2025-02-11",
+            "cite": {
+              "quote": "\"wording\": \"Application closed - patent granted\"",
+              "span": "EX-0279"
+            },
+            "source": "SYN-Office-2 register",
+            "wording": "Application closed - patent granted"
+          }
+        ]
+      },
+      {
+        "cite": {
+          "quote": "SYN-PRI-2022-0118, 2022-01-18",
+          "span": "EX-0329"
+        },
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with\nan overlap region, comprising: at each sensor, counting persons locally and counting persons\nwithin the overlap region; transmitting only the counts; and computing a room count as the sum\nof the counts minus the overlap count, wherein the sensors transmit no image data.",
+              "span": "EX-0317"
+            }
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein room counts are aggregated to floor level.",
+              "span": "EX-0319"
+            }
+          }
+        ],
+        "description": {
+          "cite": {
+            "quote": "Each sensor updates its background only while\nno motion has been detected for a holding period.",
+            "span": "EX-0314"
+          }
+        },
+        "filing_date": "2023-01-17",
+        "grant_date": "2025-02-11",
+        "kind_code": "B1",
+        "number": "SYN-PUB-0006",
+        "priority_date": "2022-01-18",
+        "priority_number": "SYN-PRI-2022-0118",
+        "publication_date": null,
+        "question": "What publication date does the register show for this member?",
+        "status_observations": [
+          {
+            "cite": {
+              "quote": "Granted",
+              "span": "EX-0330"
+            },
+            "source": "Publication front page",
+            "wording": "Granted"
+          },
+          {
+            "cite": {
+              "quote": "Legal status (register extract, 2026-08-03): Lapsed - renewal fee not paid (2025-11-30).",
+              "span": "EX-0321"
+            },
+            "source": "register extract, 2026-08-03",
+            "wording": "Lapsed - renewal fee not paid (2025-11-30)."
+          }
+        ]
+      }
+    ],
+    "query": {
+      "priority": [
+        "SYN-PRI-2021-0412",
+        "SYN-PRI-2022-0118",
+        "SYN-PRI-2021-1103"
+      ],
+      "uploaded_groups": [
+        [
+          "thermal array",
+          "thermal",
+          "thermopile",
+          "sensor",
+          "PIR"
+        ],
+        [
+          "baseline",
+          "calibration",
+          "background",
+          "occupancy",
+          "empty"
+        ],
+        [
+          "gate",
+          "quiet",
+          "closed",
+          "motion",
+          "freeze",
+          "threshold",
+          "standard deviation"
+        ]
+      ],
+      "web": "site:patents.google.com patent thermopile occupancy background baseline calibration PIR door closed thermal array adaptive"
+    }
+  }
+}

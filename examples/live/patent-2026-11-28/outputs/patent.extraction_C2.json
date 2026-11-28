@@ -1,0 +1,160 @@
+{
+  "content": {
+    "business_priority": {
+      "cite": {
+        "quote": "4. **Installer time.** Fewer site revisits after a bad mount. Useful, but not a reason a buyer chooses us. Relates to C2.",
+        "span": "EX-0017"
+      },
+      "rank": 4
+    },
+    "candidate": {
+      "cite": {
+        "quote": "Candidate: C2, sensor placement",
+        "span": "EX-0143"
+      },
+      "value": "C2"
+    },
+    "contributors": [
+      {
+        "cite": {
+          "quote": "CR-04,P-03,Lena Fischer,Stillroom,hardware engineer,C2,Sketched the placement planner and the walk test,2026-02-03,\"employment, standard IP assignment\",NOTE-C2,true",
+          "span": "EX-0162"
+        },
+        "name": "Lena Fischer",
+        "question": "Who should counsel identify as inventors, and what does the signed employment assignment establish about ownership?",
+        "status": "needs_counsel_confirmation"
+      },
+      {
+        "cite": {
+          "quote": "CR-05,P-06,Mira Okafor,Okafor Prototyping (contractor),contract technician,C2,Built the mounting jig from the hardware engineer's drawings,2026-02-10,contractor statement of work SOW-14,invoice INV-0042,true",
+          "span": "EX-0163"
+        },
+        "name": "Mira Okafor",
+        "question": "Did the outside contractor contribute design concepts beyond building the jig, and what rights does signed SOW-14 assign?",
+        "status": "needs_counsel_confirmation"
+      }
+    ],
+    "disclosure_history": {
+      "absence": {
+        "scope": {
+          "query": "read_document(input/disclosures/history.csv, where candidate=C2)"
+        },
+        "statement": "No C2 rows matched in the disclosure history CSV."
+      },
+      "question": "Was C2 ever shared outside the team? If so, when, with whom, under what terms, and what was shown?"
+    },
+    "disclosures": [],
+    "implementation": {
+      "cite": {
+        "quote": "Mechanism (whiteboard sketch, not yet built)",
+        "span": "EX-0147"
+      },
+      "evidence": {
+        "cite": {
+          "quote": "Whiteboard photo taken 3 Feb 2026. The walk-test results are in placement-trial-02.csv (attached separately).",
+          "span": "EX-0047"
+        }
+      },
+      "question": "What did the walk test evaluate, and was the planner ever implemented?",
+      "status": "idea_only"
+    },
+    "mechanism": {
+      "alternatives": [
+        {
+          "cite": {
+            "quote": "One unit per room at the centre of the ceiling. Rejected for rooms over about 10 square metres: the ends of the table fall outside the footprint.",
+            "span": "EX-0043"
+          }
+        }
+      ],
+      "parameters": [
+        {
+          "cite": {
+            "quote": "| Field of view | 90 | degrees | thermopile lens |",
+            "span": "EX-0160"
+          }
+        },
+        {
+          "cite": {
+            "quote": "| Seated head height | 1.2 | m | |",
+            "span": "EX-0161"
+          }
+        },
+        {
+          "cite": {
+            "quote": "| Minimum distance from a vent | not decided | m | |",
+            "span": "EX-0040"
+          },
+          "question": "What minimum distance from a vent was adopted, if any?",
+          "value": null
+        }
+      ],
+      "problem": {
+        "cite": {
+          "quote": "Installers mount units where the ceiling tile is convenient. Mounted near the door, a unit counts the corridor; under a vent, it sees air flow as people.",
+          "span": "EX-0146"
+        }
+      },
+      "steps": [
+        {
+          "cite": {
+            "quote": "Take the floor plan with ceiling height, doors, windows, vents and seats.",
+            "span": "EX-0149"
+          }
+        },
+        {
+          "cite": {
+            "quote": "For each candidate mount point, compute the sensor footprint at seated head height, 1.2 m above the floor, from the 90 degree field of view.",
+            "span": "EX-0151"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Score each layout on seat coverage, overlap between units, and exposure to heat sources and doorways.",
+            "span": "EX-0153"
+          }
+        },
+        {
+          "cite": {
+            "quote": "After install, walk one person to marked spots and check each unit sees them where the plan predicts.",
+            "span": "EX-0155"
+          }
+        }
+      ],
+      "title": {
+        "cite": {
+          "quote": "Engineering note: placement planner for ceiling units",
+          "span": "EX-0141"
+        }
+      }
+    },
+    "missing_documents": [
+      {
+        "cite": {
+          "quote": "Whiteboard photo taken 3 Feb 2026. The walk-test results are in placement-trial-02.csv (attached separately).",
+          "span": "EX-0047"
+        },
+        "question": "Can you supply the walk-test results and the whiteboard photo?",
+        "value": "placement-trial-02.csv"
+      },
+      {
+        "cite": {
+          "quote": "contractor statement of work SOW-14,invoice INV-0042",
+          "span": "EX-0163"
+        },
+        "question": "Can you supply the signed SOW and invoice?",
+        "value": "SOW-14; INV-0042"
+      },
+      {
+        "cite": {
+          "quote": "employment, standard IP assignment",
+          "span": "EX-0162"
+        },
+        "question": "Can you supply the signed employment IP assignment?",
+        "value": null
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.extraction/C2@v1"
+}

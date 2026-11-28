@@ -273,9 +273,9 @@ Every patent run had the same prompt as run (c), the same 21 input files and the
 | (e) | `4ec7523`, the code merged as #117 | 12.5 min | `complete`, but hollow | The model saved its own selection without asking, and nothing was prepared. | #120 |
 | (f) | `4ab5b15`, the first commit of #120 | 15.1 min | `blocked` on `prepare[C1]` | A classifier that abstained hid the blank disclosure form; every option label was `:`. | #121, and #120's review for the labels |
 | (g) | `29be30b`, the code merged as #121 | 14.3 min | `blocked` on `prepare[C1]` | Both forms were filled, but the plan named forms by file and the check compared by name. | #122 |
-| final | `main` with #114 to #122 | Final run: to be added | Final run: to be added | | |
+| final | `main` at `0ba2f2f`, #114 to #122 | 16.9 min | `complete` (`completion_checks_passed`) | None: the person chose C1, both forms were filled, and the packet was saved and held unsent, as the request asked. | |
 
-Times run from `run.started` to `run.ended` and include the wait for the person's answer in runs (f) and (g), 30 and 16 seconds.
+Times run from `run.started` to `run.ended` and include the wait for the person's answer in runs (f), (g) and the final run, 30, 16 and 23 seconds.
 
 Run (d), 28 Nov 2026, 11:22 to 11:37 IST (India Standard Time), store `live-chat-patent-after1`:
 
@@ -307,14 +307,31 @@ Run (g), 28 Nov 2026, 17:34 to 17:48 IST, store `live-chat-patent-after4-formnam
 4. Root cause: the portfolio's plan named the forms by file (`patent.portfolio@v1`, event 55), while filled forms are keyed by name (`C1~invention-disclosure-form`), so the check never found them.
 5. Fixed in #122: the check compares forms by name.
 
-> Final run: to be added. The outcome of the final patent run on `main` with #114 to #122: its run ID, duration, the selection, the packet versions saved, and the approval and send.
+The final run, 28 Nov 2026, 18:16 to 18:33 IST, store `live-chat-patent-final`, session `S-30c81cb04260`, with the settings of run (c) and the mock counsel mailbox bound (`AKSHA_SYSTEMS=counsel_mail=mailbox:...`):
+
+1. What it did: all four candidates got an extraction, a prior-art search, a comparison and a recommendation. Every first recommendation put free text in `next_action` and was refused (events 472, 592, 729 and 858); every accepted version says `collect_more_evidence`.
+2. The question: `I-0001` (event 914), 12.4 minutes in, "Which candidates should go to counsel? All four need more evidence: ...", one option per candidate, each labelled `collect_more_evidence`. The answer was C1 (event 919), and the runtime saved `patent.selection@v1` from it (event 924, origin `choice`).
+3. The forms: `patent.form/C1~invention-disclosure-form@v1` (event 988) has 14 fields, 10 complete and 4 `needs_counsel_confirmation`. `patent.form/C1~filing-information-worksheet@v1` (event 1023) has 11, 2 complete, 6 `needs_counsel_confirmation` and 3 missing.
+4. The packet and hand-off: `patent.packet/C1@v1` (event 1050) opens with "Needs counsel confirmation". The plan had `send: false`, because the request asked to prepare. So `send[C1]` saved `patent.handoff/C1@v1` (event 1072) with status `not_sent` and the question "Who should receive patent.packet/C1@v1, and do you approve sending this exact version to that recipient?" No approval was asked; the mock mailbox stayed empty.
+5. How it ended: `complete` at event 1080, 4.1 minutes after the answer, with 89 model calls and 186 citations bound. `aksha verify` on a copy of the store printed `chain ok` (1,472 events, including the two runs below).
+
+The exported events, inspector output, saved outputs and traces are in [examples/live/patent-2026-11-28/](../../examples/live/patent-2026-11-28/README.md), with the commands to repeat it. The live send is not tried; the approve-and-send step is shown offline by `aksha demo`: an approval bound to the exact packet version, and one delivery after the sending process is killed mid-send.
+
+#### What a follow-up showed
+
+Two follow-ups came after the final run, both "Please send the C1 counsel-review packet to our primary patent counsel (counsel-primary) for review."
+
+1. `R-0002` (event 1083) went by mistake to a new session, `S-c61c5cddee89`. It re-planned with `patent.portfolio@v2` (event 1096): C1 only, `forms: []`, `prior_art: false`, `send: true`, and saved C1's extraction, prior art, comparison, recommendation and table again. It was stopped with `aksha stop` (event 1366) while its selection question `I-0002` waited, and ended `stopped` (event 1368).
+2. `R-0003` (event 1371) went to the right session, `S-30c81cb04260`. It ran the declared recipe again from `scope`, reusing `R-0002`'s versions up to the table (events 1375 to 1396), asked the selection again as `I-0003` (event 1414), and entered `prepare[C1]` while that question waited. The check `forms_filled` did not count `R-0001`'s two forms, which this run had not reused. The model read both blank forms but filled neither, and said three times that the sending tool was unavailable here. The check refused all three finishes and the instance failed (event 1459). The answer C1 came after that (event 1461), and the run ended `blocked: prepare[C1]` (event 1471).
+
+The finding: a follow-up in a finished conversation restarts the agent's declared recipe instead of continuing the conversation. The person asked for one step, the send of a packet that already existed, and got a re-plan, the same question again and a failed preparation. Cross-run reuse is keyed by the agent's writer, not by session, so the stray run's plan also reached the right session ([limitations, item 21](../limitations.md)). The next step is a single-session design in which a follow-up continues its conversation ([limitations, what comes next](../limitations.md#what-comes-next)); status on 28 Nov 2026: planned, not built.
 
 ## Top limitations
 
 The full list is on the [limitations page](../limitations.md). The ones that bear on this page:
 
 1. The evals run in fake model mode only; no eval set has run live (item 12).
-2. Live-model evidence is thin: one research run, after the fixes, ended complete with 5 of 5 competitors, and the earlier research runs ended partial. Of five patent runs, one ended complete without asking the person and four ended blocked; none has yet saved a packet live. Item 11 describes only run (a), the one that is recorded.
+2. Live-model evidence is thin: one research run and one patent run, after the fixes, ended complete on the assignment's example prompts, and the earlier runs ended partial or blocked. The patent run saved a packet but did not send it, as its request asked; a live send has not been tried, and a follow-up asking for the send ended blocked. Item 11 describes only run (a), the one that is recorded.
 3. Three of the six held-out worlds are no longer strictly held out, and the offline patent comparison counts words, so most remaining patent failures are matrix cells (item 19).
 4. A world's offline web ranks pages by shared words; live web search has been tested only against a stub (item 17).
 5. A replay answers only what was recorded, so a change to an agent's prompt or tools makes its recordings stale (item 18).
@@ -333,4 +350,5 @@ Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
 - Test count: `.venv/bin/python -m pytest --collect-only -q` after `make venv` printed `3742 tests collected`, 28 Nov 2026.
 - Final research run after the fixes: the maintainer's live store `aksha-live/live-chat-research-final/aksha.sqlite`, read from a copy with `aksha verify` (576 events, chain ok), `aksha inspect R-0001`, `aksha show` and `aksha trace R-0001 --out <folder>`, exported to `examples/live/research-2026-11-28/`; compared with `src/aksha/data/worlds/stillroom/key.json`.
 - Patent runs after the fixes, (d) to (g): the maintainer's live stores `live-chat-patent-after1`, `live-chat-patent-after2-selfselected`, `live-chat-patent-after3-template` and `live-chat-patent-after4-formnames` under `aksha-live/`, read from copies with Python's `sqlite3` (1,026, 922, 868 and 989 events). Code versions from each `run.started` event's `runtime_commit`; times from its `run.started` and `run.ended` events; tool timings from `step.completed` events; turn limits from `src/aksha/agents/patent/portfolio.py` before #117 (`SAVE_TURNS = 2`). Run (c)'s store is `aksha-live/live-chat-patent-before`.
+- Final patent run and the follow-ups: the maintainer's live store `aksha-live/live-chat-patent-final/aksha.sqlite`, read from a copy with `aksha verify` (1,472 events, chain ok), `aksha status`, `aksha inspect` of `R-0001`, `R-0002` and `R-0003`, `aksha show`, `aksha trace R-0001` and `aksha trace R-0003`, and Python's `sqlite3` for event times and earlier versions; exported to `examples/live/patent-2026-11-28/`. Check behaviour from `src/aksha/agents/patent/checks.py` (`forms_filled`) and `src/aksha/runtime/tasks/view.py` (`hidden`).
 - Earlier live fixes: [live-mode page](../live-mode.md), and commit `5b11d46` for the schema fix.

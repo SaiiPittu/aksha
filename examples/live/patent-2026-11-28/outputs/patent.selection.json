@@ -1,0 +1,13 @@
+{
+  "content": {
+    "based_on": "patent.table@v2",
+    "recommendations": {
+      "C1": "collect_more_evidence"
+    },
+    "selected": [
+      "C1"
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.selection@v2"
+}

@@ -1,0 +1,36 @@
+{
+  "content": {
+    "rows": [
+      {
+        "candidate": "C1",
+        "extraction": "patent.extraction/C1@v2",
+        "next_action": "collect_more_evidence",
+        "question": "Can you provide the bench log?",
+        "recommendation": "patent.recommendation/C1@v4"
+      },
+      {
+        "candidate": "C2",
+        "extraction": "patent.extraction/C2@v1",
+        "next_action": "collect_more_evidence",
+        "question": "What did the walk test evaluate, and was the planner implemented?",
+        "recommendation": "patent.recommendation/C2@v2"
+      },
+      {
+        "candidate": "C3",
+        "extraction": "patent.extraction/C3@v1",
+        "next_action": "collect_more_evidence",
+        "question": "Which mechanism details were actually shared or visible to the facilities team?",
+        "recommendation": "patent.recommendation/C3@v2"
+      },
+      {
+        "candidate": "C4",
+        "extraction": "patent.extraction/C4@v1",
+        "next_action": "collect_more_evidence",
+        "question": "Can you provide measured power profiles and battery-life validation?",
+        "recommendation": "patent.recommendation/C4@v2"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.table@v2"
+}

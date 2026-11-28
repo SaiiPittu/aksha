@@ -1,0 +1,104 @@
+{
+  "content": {
+    "candidate": "C1",
+    "scope_note": "Selected candidate only. Prepared for counsel review, not sent. No legal conclusions.",
+    "sections": [
+      {
+        "inventorship": {
+          "question": "Who contributed to conception of each element, including the gate?",
+          "status": "needs_counsel_confirmation"
+        },
+        "outside_contributions": {
+          "cite": {
+            "quote": "Why not use the door contact as a room-sealed signal, and only relearn the\nbaseline when the room is sealed and the PIR has been quiet for a while?",
+            "span": "EX-0112"
+          },
+          "question": "What did Lin contribute and what confidentiality terms applied to the email and preceding call?",
+          "status": "needs_counsel_confirmation"
+        },
+        "ownership": {
+          "question": "What do the executed employee and founder assignments, signed consultancy agreement and university IP terms establish?",
+          "status": "needs_counsel_confirmation"
+        },
+        "questions": [
+          "What could visitors observe in the live demo beyond the slide? Can the team supply the original slide, script and any recordings or photographs?",
+          "Can the team supply BL-2026-011, the underlying test results, signed CA-2025-11, invoice INV-0037 and executed assignments?",
+          "Why was the 20-minute window chosen?"
+        ],
+        "title": "Needs counsel confirmation"
+      },
+      {
+        "business_importance": {
+          "from_research": "unknown",
+          "research": [],
+          "summary": {
+            "cite": {
+              "quote": "Accuracy with still occupants",
+              "span": "EX-0010"
+            }
+          }
+        },
+        "implementation": {
+          "cite": {
+            "quote": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.",
+            "span": "EX-0035"
+          }
+        },
+        "next_action": "collect_more_evidence",
+        "recommendation": "patent.recommendation/C1@v2",
+        "title": "Business reason and evidence to collect"
+      },
+      {
+        "expo": {
+          "cite": {
+            "quote": "DISC-01,2026-03-10,C1,trade-show demo,Live demo plus one slide describing the PIR-quiet and door-closed baseline gate,\"Smart Workplace Expo 2026, Rotterdam, open floor, about 200 visitors\",yes",
+            "span": "EX-0020"
+          },
+          "date": "2026-03-10",
+          "elapsed_days": 263,
+          "not_on_slide": {
+            "quote": "The update weight, the per-pixel freeze and the threshold multiplier were not on the slide.",
+            "span": "EX-0130"
+          },
+          "shown": {
+            "quote": "no motion for 20 minutes and the door closed.",
+            "span": "EX-0127"
+          }
+        },
+        "outside_email": {
+          "cite": {
+            "quote": "DISC-05,2026-01-05,C1,outside email,Dr. Lin suggested using the door contact as a room-sealed signal for calibration,private email to Asha Rao,no,P-05",
+            "span": "EX-0024"
+          },
+          "date": "2026-01-05",
+          "elapsed_days": 327
+        },
+        "record": "patent.extraction/C1@v1",
+        "title": "Disclosure record"
+      },
+      {
+        "absence": {
+          "scope": {
+            "query": "Uploaded thermal-array/background/motion and threshold searches, priority follow-ups SYN-PRI-2021-0412 and SYN-PRI-2022-0118, and web search site:patents.google.com patent thermopile occupancy background baseline calibration PIR door closed thermal array adaptive"
+          },
+          "statement": "Exact C1 gate and implementation details not found in the retained references"
+        },
+        "matrix": "patent.comparison/C1@v1",
+        "prior_art": "patent.prior_art/C1@v1",
+        "title": "Prior-art comparison"
+      },
+      {
+        "filing_worksheet": "patent.form/C1~filing-information-worksheet@v1",
+        "invention_disclosure": "patent.form/C1~invention-disclosure-form@v1",
+        "proposed_figures": [
+          "Sensor and door-contact block diagram",
+          "Baseline update and freeze flowchart",
+          "Per-pixel threshold diagram"
+        ],
+        "title": "Disclosure documents"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.packet/C1@v1"
+}
