@@ -13,7 +13,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 
 from aksha.extensions.portfolio import review, supervised
-from aksha.runtime.api import CheckResult
+from aksha.runtime.api import CheckResult, form_name
 
 from . import rules
 from .portfolio import SPEC
@@ -225,7 +225,8 @@ def _forms(view: Any) -> dict[str, Any]:
 def forms_filled(view: Any) -> CheckResult:
     """Every form the plan names is filled for this candidate (at least one form)."""
     filled = _forms(view)
-    want = [str(t) for t in plan_of(view).get("forms", ())]
+    # a plan may name a form by its file (input/templates/x.md) or by its name (x)
+    want = list(dict.fromkeys(form_name(str(t)) for t in plan_of(view).get("forms", ())))
     missing = [t for t in want if t not in filled]
     if missing:
         return CheckResult(False, f"fill the forms {missing}", keys=tuple(missing))

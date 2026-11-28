@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "3.2"
+API_VERSION = "3.3"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -111,6 +111,9 @@ tool's save of it is refused ``answer_only``.
 a fill), ``FORM_TOOLS``, ``form_kind`` (the filled form's kind, counts computed) and
 ``form_counts``, and the trailing field
 ``InputReading.search_kinds`` (``search_inputs`` over some document kinds; off by default).
+3.3 (28 Nov 2026) added ``form_name``: the name a form is saved under
+(``<key>~<form name>``), so an agent can match a plan that names a form by its file to
+the filled form.
 """
 
 Version = tuple[int, int]

@@ -711,3 +711,29 @@ def test_an_option_label_is_the_next_action_when_the_why_is_structured() -> None
     )
     saved = rules.selection_from_answer(View(), ("C1",))
     assert saved["recommendations"] == {"C1": "collect_more_evidence"}
+
+
+def test_forms_named_by_file_in_the_plan_match_the_filled_forms() -> None:
+    """A plan may name its forms by file (as a live model did); the filled forms are by name."""
+    from types import SimpleNamespace
+
+    from aksha.agents.patent import checks
+
+    plan = {
+        "forms": ["input/templates/invention-disclosure-form.md", "filing-information-worksheet"]
+    }
+    filled = {"C1~invention-disclosure-form": object(), "C1~filing-information-worksheet": object()}
+
+    class FormsView:
+        key = "C1"
+
+        def latest(self, kind: str) -> Any:
+            return SimpleNamespace(content={"plan": plan}) if kind == "portfolio" else None
+
+        def all_latest(self, kind: str) -> dict[str, Any]:
+            return filled if kind == "form" else {}
+
+    assert checks.forms_filled(FormsView()).ok
+    filled.pop("C1~invention-disclosure-form")
+    result = checks.forms_filled(FormsView())
+    assert not result.ok and "invention-disclosure-form" in result.message

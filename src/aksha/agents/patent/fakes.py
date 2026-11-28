@@ -33,6 +33,7 @@ from aksha.runtime.api import (
     RuleGenerationModel,
     ToolCall,
     find_dates,
+    form_name,
 )
 
 from . import fakes_stillroom, fakes_views, portfolio, rules
@@ -783,7 +784,7 @@ class PatentFake(RuleGenerationModel):
             ask = [_call("read_people", 1, person_ids=ids)] if ids else []
             return _reply(*ask, *_form_reads(ctx, blank))
         people = {p["person_id"]: p for _, d in ctx.ok("read_people") for p in d["people"]}
-        wanted = [str(t) for t in plan.get("forms", ())]
+        wanted = [form_name(str(t)) for t in plan.get("forms", ())]
         templates = {d["template"]: d for d in sorted(forms.values(), key=lambda d: d["template"])}
         names = [t for t in templates if not wanted or t in wanted]
         cmp_, rec, art = ctx.read("comparison"), ctx.read("recommendation"), ctx.read("prior_art")
