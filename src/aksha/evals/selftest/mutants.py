@@ -200,6 +200,19 @@ def _edit_outputs(
     return plant
 
 
+def market_emptied(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
+    """Every competitor left out: the run reports an empty market where the key has one."""
+
+    def edit(events: Events) -> Events:
+        return [
+            e
+            for e in events
+            if not (e["type"] == "episode.output_saved" and e["payload"]["kind"] == "competitor")
+        ]
+
+    return rec.edited(events=edit)
+
+
 def competitor_split(rec: EpisodeRecord, key: AnswerKey) -> EpisodeRecord:
     """The merged competitor saved again as a second company, with its merge edge dropped."""
     kid = next(
@@ -524,6 +537,11 @@ MUTANTS: Mapping[str, Mutant] = {
             "competitor-split",
             ("research.competitor_count", "research.duplicates_are_edges", "trap.T-DUP"),
             competitor_split,
+        ),
+        Mutant(
+            "market-emptied",
+            ("research.market_found", "research.competitor_count"),
+            market_emptied,
         ),
         Mutant("conflict-dropped", ("research.conflicts_are_edges",), conflict_dropped),
         Mutant(

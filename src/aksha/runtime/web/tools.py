@@ -67,6 +67,8 @@ def web_search(ctx: ToolContext, args: Mapping[str, Any]) -> ToolOutcome:
         return ToolOutcome(Err(e.code, e.message))
     data = {"query": query, "provider": found.provider,
             "results": [h.as_json() for h in found.hits], "note": SNIPPET_NOTE}  # fmt: skip
+    if found.environment:
+        data["environment"] = found.environment
     return ToolOutcome(Ok(data))
 
 
@@ -133,6 +135,8 @@ def fetch_url(
         return ToolOutcome(fetched)
     extra = {"url": fetched.page.url, "final_url": fetched.page.final_url,
              "content_type": fetched.page.content_type}  # fmt: skip
+    if fetched.page.environment:
+        extra["environment"] = fetched.page.environment
     return read_view(ctx, fetched.text, args, reading or InputReading("web", "web"), extra)
 
 

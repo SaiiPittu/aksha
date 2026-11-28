@@ -60,7 +60,7 @@ from aksha.adapters.recording.sink import JsonlSink, Sink, read_stream
 from aksha.adapters.recording.web import RecordingFetch, RecordingSearch, ReplayWeb
 from aksha.adapters.sandbox import e2b
 from aksha.adapters.sandbox.bwrap import BwrapSandbox
-from aksha.adapters.search.world import WorldWeb, load_pages, world_hints
+from aksha.adapters.search.world import WorldWeb, environment_note, load_pages, world_hints
 from aksha.adapters.sources.folder import FolderSource, FolderSources
 from aksha.adapters.sources.workspace import InputWorkspace
 from aksha.adapters.storage import sqlite
@@ -1856,7 +1856,8 @@ class _RuntimeAdapter:
 
 def episode_web(web: EpisodeWeb) -> WorldWeb:
     """The world's search proxy over an episode's web: fetches and searches recorded."""
-    return WorldWeb(load_pages(web.declared), web.read, index=web.index, on_search=web.searched)
+    return WorldWeb(load_pages(web.declared), web.read, index=web.index, on_search=web.searched,
+                    environment=environment_note(web.declared))  # fmt: skip
 
 
 def eval_agents() -> AgentRegistry:

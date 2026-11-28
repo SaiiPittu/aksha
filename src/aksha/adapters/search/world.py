@@ -26,6 +26,13 @@ one for a word in its body, ties kept in the world's declared order, relevant
 pages and noise mixed as a search engine would mix them. The body is what a page shows
 (an HTML page without its head and scripts, a JSON record's string values); the snippet is
 the body around the first query word. It is both ports: :meth:`search` and :meth:`fetch`.
+
+``environment``, when the world states it, is the web's own word to whoever searches it:
+the agent-facing note that this web is a synthetic market built for an exercise, so every
+search result and fetched page carries it (``SearchResults.environment``,
+``FetchedPage.environment``). Each page keeps its own synthetic label; the note says what
+that label means here, so the pages are read as the market they stand for. It is separate
+from ``notice``, the author-side description no tool returns.
 """
 
 from __future__ import annotations
@@ -162,6 +169,20 @@ def world_pages(root: Path) -> tuple[WebPage, ...]:
     return load_pages(json.loads(path.read_text(encoding="utf-8")))
 
 
+def environment_note(raw: Mapping[str, Any]) -> str:
+    """The agent-facing ``environment`` note of a parsed ``web.json``; empty when it has none."""
+    note = raw.get("environment")
+    return " ".join(note.split()) if isinstance(note, str) else ""
+
+
+def world_environment(root: Path) -> str:
+    """The ``environment`` note of the world at ``root``; empty when it declares no web."""
+    path = root / WEB_FILE
+    if not path.is_file():
+        return ""
+    return environment_note(json.loads(path.read_text(encoding="utf-8")))
+
+
 def world_hints(root: Path) -> Mapping[str, Mapping[str, Any]]:
     """What each agent's offline model is told about the world at ``root``, by agent name.
 
@@ -194,9 +215,11 @@ class WorldWeb:
         *,
         index: Callable[[str], str | None] | None = None,
         on_search: Callable[[str, list[str]], None] | None = None,
+        environment: str = "",
     ) -> None:
-        """Serve ``pages``, reading each page's file through ``read``."""
+        """Serve ``pages``, reading each page's file through ``read``, with ``environment``."""
         self.pages = tuple(pages)
+        self.environment = environment
         self._read = read
         self._index = index or read
         self._on_search = on_search
@@ -215,7 +238,7 @@ class WorldWeb:
                 return None
             return path.read_text(encoding="utf-8")
 
-        return cls(world_pages(root), read)
+        return cls(world_pages(root), read, environment=world_environment(root))
 
     def page(self, url: str) -> WebPage | None:
         """The declared page at ``url``, if any."""
@@ -254,7 +277,7 @@ class WorldWeb:
         )
         if self._on_search is not None:
             self._on_search(query, [h.url for h in hits])
-        return SearchResults(query, self.name, hits)
+        return SearchResults(query, self.name, hits, self.environment)
 
     def fetch(self, url: str, http: HttpClient) -> FetchedPage:
         """The page at ``url`` from the world's file; 404 for a URL the world does not hold."""
@@ -264,7 +287,8 @@ class WorldWeb:
         if page is None or raw is None:
             raise WebError(NOT_ON_THE_WEB, f"{url} is not on this web")
         kind = CONTENT_TYPES.get(sniff_format(page.file, raw), "text/plain; charset=utf-8")
-        return FetchedPage(url, normal_url(page.url), 200, kind, raw)
+        return FetchedPage(url, normal_url(page.url), 200, kind, raw,
+                           environment=self.environment)  # fmt: skip
 
 
 def _has(found: set[str], word: str) -> bool:

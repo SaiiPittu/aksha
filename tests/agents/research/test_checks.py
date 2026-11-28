@@ -276,3 +276,75 @@ def test_each_failing_check_states_what_it_found_what_it_expected_and_the_change
         ("scope", None): _scope("EU"),
     }
     assert "add rows for ['b'], remove rows for ['c']" in checks.report_done(_View(report)).message
+
+
+@dataclass
+class _Read:
+    """A ``read.recorded`` fact, as the log holds one."""
+
+    payload: Mapping[str, Any]
+    type: str = "read.recorded"
+
+
+def _fetched(*records: str) -> list[Any]:
+    return [_Read({"input": {"kind": "record", "id": r, "version": "sha256:1"}}) for r in records]
+
+
+ABSENCE = {"absence": {"statement": "no page read sells the product",
+                       "scope": {"records": ["record:web/a.example/p@sha256:1"]}}}  # fmt: skip
+CITE = {"span": "EX-1", "quote": "a copy of the original page"}
+
+
+def _empty(**extra: Any) -> dict[str, Any]:
+    return {"companies": [], "resolved": 0, "pages_found": 0, **extra}
+
+
+def test_an_empty_comparison_without_a_scoped_absence_claim_fails_and_says_what_to_do() -> None:
+    """The live run that left every seller out on a page's synthetic label passed this check."""
+    excluded = [{"record": "web/a.example/p", "reason": "the page says it is synthetic",
+                 "quote": "Invented for testing"}]  # fmt: skip
+    view = _View({("scope", None): _scope("EU"),
+                  ("competitors", None): _empty(excluded_fixtures=excluded)})  # fmt: skip
+    view.log.events.extend(_fetched("web/a.example/p"))
+    result = checks.discover_done(view)
+    assert not result.ok
+    assert "list each company whose own page sells" in result.message
+    assert '{"absence": {"statement"' in result.message and "excluded" in result.message
+
+
+def test_an_empty_comparison_passes_as_a_scoped_absence_with_every_fetched_page_excluded() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("web/a.example/p", "web/b.example/q"))
+    one = [{"record": "web/a.example/p", "reason": "copy", "cite": CITE}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=one)
+    left = checks.discover_done(view)
+    assert not left.ok and "web/b.example/q" in left.message  # a fetched page unaccounted for
+    both = [*one, {"record": "record:web/b.example/q@sha256:1", "reason": "advert", "cite": CITE}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=both)
+    assert checks.discover_done(view).ok
+
+
+def test_an_exclusion_stands_only_on_a_reason_the_instructions_allow() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    view.log.events.extend(_fetched("web/a.example/p"))
+    synthetic = [{"record": "web/a.example/p", "reason": "synthetic", "cite": CITE}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=synthetic)
+    result = checks.discover_done(view)
+    assert not result.ok and "web/a.example/p" in result.message
+    assert all(r in result.message for r in checks.EXCLUSION_REASONS)
+    uncited = [{"record": "web/a.example/p", "reason": "not_a_seller"}]
+    view.slots[("competitors", None)] = _empty(absence=ABSENCE, excluded=uncited)
+    assert not checks.discover_done(view).ok
+
+
+def test_a_synthesis_lists_no_companies_and_needs_no_absence_claim() -> None:
+    scope = _scope("", plan={"kind": "synthesis"}, segment={})
+    assert checks.discover_done(_View({("scope", None): scope, ("competitors", None): _empty()})).ok
+
+
+def test_an_absence_claim_needs_its_statement_and_scope() -> None:
+    view = _View({("scope", None): _scope("EU")})
+    for bad in ({"absence": {"statement": "none"}}, {"absence": {"scope": {"query": "q"}}},
+                {"statement": "none", "scope": {"query": "q"}}):  # fmt: skip
+        view.slots[("competitors", None)] = _empty(absence=bad)
+        assert not checks.discover_done(view).ok, bad

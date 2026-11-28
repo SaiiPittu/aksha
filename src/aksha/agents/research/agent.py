@@ -122,11 +122,31 @@ COMPETITORS = ArtifactKind(
         dimensions=LIST,
         resolved={"type": "integer", "description": "computed at save: the companies listed"},
         pages_found={"type": "integer", "description": "computed at save: the pages listed"},
+        absence={
+            "type": "object",
+            "description": "only when a comparison lists no company: the scoped claim that "
+            'none was found, {"absence": {"statement", "scope"}}',
+        },
+        excluded={
+            "type": "array",
+            "items": _obj(
+                "record",
+                "reason",
+                "cite",
+                record={"type": "string"},
+                url={"type": "string"},
+                reason={"enum": list(checks.EXCLUSION_REASONS)},
+                cite=OBJECT,
+            ),
+            "description": "fetched pages left out, each with the reason and the cite that "
+            "shows it",
+        },
     ),
     cites=(
         CitePolicy("/companies/*/canonical", forms=SPAN, value_in_quote=True),
         CitePolicy("/companies/*/aliases/*", forms=SPAN, value_in_quote=True),
         CitePolicy("/companies/*/merge_evidence/*", forms=SPAN),
+        CitePolicy("/excluded/*", forms=SPAN),
         CitePolicy("/manual_alternatives", may_be_unknown=True),
     ),
     compute=computed.competitors,

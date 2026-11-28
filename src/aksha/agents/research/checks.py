@@ -165,11 +165,119 @@ def _unkeyed(companies: list[Mapping[str, Any]]) -> CheckResult | None:
     )  # fmt: skip
 
 
+EXCLUSION_REASONS = ("copy", "older_version", "advert", "other_subject", "not_a_seller")
+"""Why a fetched page may be left out of the competitors: the instructions' rule on search
+results, and only that. A copy of a page on another site, an older version of a page, an
+advert or deal site, a page that only shares a word, or a page that sells nothing."""
+
+WEB_RECORD = "web/"
+"""The prefix of a fetched page's record ID (``web/<host><path>``)."""
+
+
+def _absence(found: Mapping[str, Any]) -> bool:
+    """Whether ``found`` holds a scoped absence claim at ``absence``.
+
+    Its scope is verified at save by the runtime, which refuses a scope never read here.
+    """
+    node = found.get("absence")
+    if not isinstance(node, Mapping) or set(node) != {"absence"}:
+        return False
+    inner = node["absence"]
+    return (
+        isinstance(inner, Mapping)
+        and isinstance(inner.get("statement"), str)
+        and bool(inner["statement"].strip())
+        and isinstance(inner.get("scope"), Mapping)
+        and bool(inner["scope"])
+    )
+
+
+def fetched_pages(view: Any) -> list[str]:
+    """The web page records this instance read, in the order it read them.
+
+    Only the reads since the instance's last rebuild count, as for lineage: a page read for
+    an earlier version of the work is not one this version has to account for.
+    """
+    ref = getattr(view, "instance", None)
+    run, instance = getattr(ref, "run", None), getattr(ref, "instance", None)
+    mine = [
+        e
+        for e in view.log.events
+        if getattr(e, "run", run) == run and getattr(e, "instance", instance) == instance
+    ]
+    since = max(
+        (i for i, e in enumerate(mine)
+         if e.type == "task.entered" and e.payload.get("cause") == "rebuild"),
+        default=-1,
+    )  # fmt: skip
+    out: dict[str, None] = {}
+    for e in mine[since + 1 :]:
+        read = e.payload.get("input") if e.type == "read.recorded" else None
+        if isinstance(read, Mapping) and read.get("kind") == "record":
+            rid = str(read.get("id", ""))
+            if rid.startswith(WEB_RECORD):
+                out.setdefault(rid, None)
+    return list(out)
+
+
+def _excluded_record(entry: Mapping[str, Any]) -> str:
+    """The record an exclusion names (``record:`` read text or a bare ID), as a bare ID."""
+    rec = str(entry.get("record") or "")
+    rec = rec[len("record:") :] if rec.startswith("record:") else rec
+    return rec.rpartition("@")[0] if "@" in rec else rec
+
+
+def _empty_comparison(view: Any, found: Mapping[str, Any]) -> CheckResult | None:
+    """A failure for a comparison that lists no company without accounting for it, or None.
+
+    An empty list is a claim that nobody sells what the request is about. It stands only as a
+    scoped absence claim, and only when every page fetched is left out for a reason the
+    instructions allow, each cited.
+    """
+    shape = (
+        '{"absence": {"statement": "<what was not found>", "scope": {"records": '
+        '["record:<id>@<version>", ...]}}} (or {"query": <the query a list_inputs or '
+        "search_inputs result recorded>})"
+    )
+    if not _absence(found):
+        return CheckResult(
+            False, "the competitors list no company, but the scope plans a comparison: list "
+            "each company whose own page sells what the request is about, from the pages and "
+            "inputs you read. Only if none does, save absence as a scoped claim, " + shape
+            + ", and list every page you fetched under excluded",
+        )  # fmt: skip
+    entries = _objects(found.get("excluded"))
+    bad = [
+        _excluded_record(e) or str(i)
+        for i, e in enumerate(entries)
+        if e.get("reason") not in EXCLUSION_REASONS or not isinstance(e.get("cite"), Mapping)
+    ]
+    if bad:
+        return CheckResult(
+            False, f"excluded pages {bad} give no allowed reason or no cite: a page is left "
+            f"out only as one of {list(EXCLUSION_REASONS)} (a copy on another site, an older "
+            "version, an advert or deal site, a page about something else, a page that sells "
+            "nothing), with the cite that shows it. A page that sells what the request is "
+            "about is a competitor: list its company",
+        )  # fmt: skip
+    accounted = {_excluded_record(e) for e in entries}
+    unaccounted = [r for r in fetched_pages(view) if r not in accounted]
+    if unaccounted:
+        return CheckResult(
+            False, f"the competitors list no company, but the pages {unaccounted} were fetched "
+            "and are neither a company's page nor excluded: list each page's company, or "
+            f"exclude it with its record, a reason from {list(EXCLUSION_REASONS)} and a cite",
+        )  # fmt: skip
+    return None
+
+
 def discover_done(view: Any) -> CheckResult:
     """Each page belongs to one company; a merged company's pages are joined by ``same_entity_as``.
 
     The relations must join exactly that company's pages: a relation between other pages,
-    or one fewer than the merge needs, leaves the check failing.
+    or one fewer than the merge needs, leaves the check failing. A comparison that lists no
+    company passes only as a scoped absence claim with every fetched page excluded for an
+    allowed reason (:func:`_empty_comparison`); a synthesis lists none and needs neither.
     """
     found = _content(view, "competitors")
     if found is None:
@@ -178,6 +286,10 @@ def discover_done(view: Any) -> CheckResult:
     unkeyed = _unkeyed(companies)
     if unkeyed is not None:
         return unkeyed
+    if not companies and plan_kind(_content(view, "scope") or found) == "comparison":
+        empty = _empty_comparison(view, found)
+        if empty is not None:
+            return empty
     norecord = [_key(c) for c in companies if any(not p.get("record") for p in _pages(c))]
     if norecord:
         return CheckResult(

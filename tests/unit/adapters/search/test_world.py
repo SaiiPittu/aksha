@@ -132,3 +132,33 @@ def test_a_search_is_told_to_an_observer_and_reads_through_the_index(tmp_path: P
     assert seen == [("probe", ["https://a.example/p"])] and fetched == []
     web.fetch("https://a.example/p", RefusingHttpClient())
     assert fetched == ["web/a.example/p"]
+
+
+def test_every_world_web_frames_its_synthetic_pages_as_the_exercise_s_market() -> None:
+    """The pages keep their synthetic label; the web itself says what that label means here.
+
+    A run that read only the label left every seller out and reported an empty market, so
+    the note travels with every result and every fetched page, from the world, never from
+    an agent's prompt.
+    """
+    for world in WORLDS:
+        web = WorldWeb.of_world(data.worlds() / world)
+        note = web.environment
+        assert "synthetic market" in note and "are the market" in note, world
+        assert "not as a reason to leave the page out" in note, world
+        assert "—" not in note
+        url = web.pages[0].url
+        found = web.search(url.split("/")[2].split(".")[0], limit=5)
+        assert found.hits, world
+        assert found.environment == note and found.as_json()["environment"] == note, world
+        page = web.fetch(url, RefusingHttpClient())
+        assert page.environment == note, world
+        assert "synthetic" in page.text.lower()  # the page's own label is kept
+
+
+def test_a_web_with_no_environment_note_adds_nothing_to_its_results() -> None:
+    web = WorldWeb(_web().pages, _web()._read)
+    found = web.search("occupancy sensor", limit=3)
+    assert found.environment == "" and "environment" not in found.as_json()
+    assert "environment" not in web.fetch("https://kelvra.example/product",
+                                          RefusingHttpClient()).as_json()  # fmt: skip

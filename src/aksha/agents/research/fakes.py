@@ -1006,6 +1006,16 @@ def _discover(seen: Seen) -> GenerationResult:
             "not_checked",
         ),
     }
+    listing = (listed[0].data or {}).get("query")
+    if not rows and listing:
+        # No seller found: the empty list is an absence over what was listed and searched.
+        content["absence"] = {
+            "absence": {
+                "statement": "no input listed, and no page fetched, sells what the request "
+                "is about",
+                "scope": {"query": _query_id(str(listing))},
+            }
+        }
     return _calls(
         seen,
         [

@@ -17,7 +17,7 @@
     "sources/rnd/td3-electrode-self-cleaning.md": "sha256:ff19ecbed378150f872f2d6ae5d428efd4ee20676ad9b428e9247fbd97dc29d6",
     "sources/vendors/khetimeter.md": "sha256:d517a8d2ebf3615be5f3ffa23295a837f016baa4d0d2cbc29690891d96100aba",
     "spec.yaml": "sha256:5e91a8ea9b079cec862bd997b765b7e005825ece58d76c2d9283909eba46b87b",
-    "web.json": "sha256:f7626a0f189ca7990d76706fd3436bcdd231e4b97589d8732e4c507e65718bc5",
+    "web.json": "sha256:48a5145c8ecc3c2df8758067905ac1e617ca0ca58a38187d08d70dc23bd55311",
     "web/agri-listings.example/aquasense-s2": "sha256:2f6efa64d218810e33ec48b4ba1e2d16f61c43f11cce2514b83b8b4e89cd4b5a",
     "web/aquasense.example/s2": "sha256:2f6efa64d218810e33ec48b4ba1e2d16f61c43f11cce2514b83b8b4e89cd4b5a",
     "web/dripwise.example/root-2025": "sha256:f5f2fa0b2eae2a46e6c467ce4263e069657ad33c44b63693e4a24b1d5294985b",

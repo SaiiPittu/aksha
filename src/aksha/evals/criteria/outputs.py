@@ -61,6 +61,20 @@ def competitor_count(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> C
     return passed(f"{want} competitors")
 
 
+def market_found(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
+    """A market the key resolves is never reported empty: at least one competitor saved.
+
+    ``research.competitor_count`` fails any count but the key's; this one names the failure
+    that empties the whole comparison (no seller kept, so no evidence, matrix or test rests
+    on one), which a run can reach by leaving every page it found out.
+    """
+    want = int(ctx.key.resolve("counts.competitors_resolved"))
+    got = ctx.state.of_kind("competitor")
+    if want > 0 and not got:
+        return failed(f"no competitor saved, but the key resolves {want}: the market is not empty")
+    return passed(f"{len(got)} competitors saved, key resolves {want}")
+
+
 def duplicates_are_edges(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> Check:
     """Each keyed competitor with several pages is one output joined by a cited edge."""
     competitors = dict(ctx.key.resolve("competitors"))
@@ -431,6 +445,12 @@ def abstention_count(rec: EpisodeRecord, ctx: GradeContext, case: EvalCase) -> C
 
 CRITERIA = (
     Criterion("research.competitor_count", "state", competitor_count),
+    Criterion(
+        "research.market_found",
+        "state",
+        market_found,
+        description="a market the key resolves is never reported empty",
+    ),
     Criterion("research.duplicates_are_edges", "state", duplicates_are_edges),
     Criterion("research.prices", "state", prices),
     Criterion("research.conflicts_are_edges", "state", conflicts_are_edges),

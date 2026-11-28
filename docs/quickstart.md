@@ -41,6 +41,8 @@ aksha show                   # every latest output: research.matrix@v1, ...; sta
 aksha show research.needs    # one output's content as JSON, every value cited
 ```
 
+Every page of a world's web says it is synthetic, and so do most of its supplied records. That label stays: nothing in a world is a real company or person. So the model does not read the label as a reason to drop every seller, `AKSHA_SEARCH=world:<name>` returns the world's own `environment` note (from its `web.json`) with every search result and fetched page. The note says this web is a synthetic market built for the exercise and that, within the exercise, it is the market. The note comes from the world, not from an agent's prompt, and a public search (`brave`) adds no such note. A research comparison that still lists no company fails its discover check unless it saves a scoped absence claim and excludes every page it fetched for one of the reasons its instructions allow (a copy, an older version, an advert, a page about something else, a page that sells nothing), each with a cite.
+
 Uploaded files become versioned records of your inputs (`var/inputs/<user>/`). Upload the folder again after changing a file, and only the work built on that file reopens:
 
 ```sh
