@@ -158,6 +158,35 @@ class OfflineGeneration:
         return self._policy.generate(request)
 
 
+class NoCreditsGeneration(OfflineGeneration):
+    """:class:`OfflineGeneration` behind an OpenAI account with no credits left, while
+    ``AKSHA_LIVE_TEST_NO_CREDITS=on``: each call raises what the LiteLLM adapter makes of
+    OpenAI's 429 ``insufficient_quota`` (:func:`aksha.adapters.models.litellm.failure` over
+    the stubbed LiteLLM error). With the setting off (credits added), the policy answers.
+    """
+
+    def __init__(self, alias: str, env: Mapping[str, str]) -> None:
+        """Bound like any live adapter; reads ``AKSHA_LIVE_TEST_NO_CREDITS``."""
+        super().__init__(alias, env)
+        self._no_credits = env.get("AKSHA_LIVE_TEST_NO_CREDITS") == "on"
+
+    def generate(self, request: GenerationRequest) -> GenerationResult:
+        """The provider's refusal while there are no credits, else the policy's next calls."""
+        if self._no_credits:
+            from aksha.adapters.models.litellm import failure
+            from tests.support.litellm_stub import RateLimitError
+
+            raise failure(RateLimitError(NO_CREDITS, llm_provider="openai"))
+        return super().generate(request)
+
+
+NO_CREDITS = (
+    "You have no credits remaining. Add credits to continue using the API at "
+    "https://platform.openai.com/settings/organization/billing/."
+)
+"""OpenAI's answer to a call from an account whose prepaid credits are used up."""
+
+
 class FakesLiteLLM:
     """The LiteLLM module answering every fast-class call from an agent's offline fakes.
 

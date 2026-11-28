@@ -7,7 +7,9 @@ arguments, another kind or another name, so the run is not the run that was reco
 step, or an effectful step or a recovery with outbox entries to finish has no outbox worker;
 an effect runs only through the outbox (ADR-P03 D1). ``NotRecoveryWriter`` (``not_writer``):
 recovery was given a reader. ``TransientStepError``: what a step's work raises for a
-retryable failure.
+retryable failure. ``StepSuspended``: what a step's work raises when only a person acting
+outside the run can let it finish (a provider account with no credits left); the step
+stays open and the run waits for ``aksha resume``.
 """
 
 from __future__ import annotations
@@ -64,3 +66,33 @@ class TransientStepError(AkshaError):
         super().__init__(code, message)
         self.detail = dict(detail) if detail else None
         self.retry_after_ms = retry_after_ms if retry_after_ms and retry_after_ms > 0 else None
+
+
+SUSPEND_CODES: frozenset[str] = frozenset({"model_quota_exhausted"})
+"""The codes a step may be suspended with: each names a failure a person fixes outside the
+run (a provider account with no credits left), after which ``aksha resume`` asks again."""
+
+
+class StepSuspended(AkshaError):
+    """Raised by a step's work when the step cannot finish until a person acts outside the run.
+
+    The executor records the attempt as ``step.failed{code, retried: true}`` with ``detail``
+    and raises this again without a ``step.completed``, so the run stays open at this step:
+    driving skips it and says ``message``, and a later process (``aksha resume``) runs the
+    step's next attempt. ``code`` is one of :data:`SUSPEND_CODES`.
+    """
+
+    default_code = "model_quota_exhausted"
+
+    def __init__(
+        self,
+        code: str | None = None,
+        message: str = "",
+        *,
+        detail: Mapping[str, str | int] | None = None,
+    ) -> None:
+        """As :class:`AkshaError`, plus the failure's ``detail``; ``code`` is a suspend code."""
+        super().__init__(code, message)
+        if self.code not in SUSPEND_CODES:
+            raise ValueError(f"{self.code!r} is not a code a step is suspended with")
+        self.detail = dict(detail) if detail else None

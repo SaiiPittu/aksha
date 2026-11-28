@@ -20,7 +20,12 @@ import pytest
 from aksha.adapters.models.live import LiveGenerationModel, from_wire, to_wire
 from aksha.runtime.errors import AkshaError
 from aksha.runtime.execution.types import StepId
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.routing import bind_aliases, live_adapters
 from aksha.runtime.models.rules import RuleClassificationModel, RuleGenerationModel
 from aksha.runtime.models.steps import generation_step, run_cascade
@@ -137,6 +142,33 @@ def test_statuses_map_to_the_model_errors(
     with pytest.raises(error) as e:
         model.generate(REQUEST)
     assert e.value.code == code and KEY not in str(e.value)
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [
+        (429, {"error": {"message": "No credits.", "code": "insufficient_quota"}}),
+        (429, {"error": {"message": "Over quota", "type": "insufficient_quota"}}),
+        (402, {"error": {"message": "You have no credits remaining. Add credits."}}),
+        (400, b"Your credit balance is too low to access the API."),
+    ],
+)  # fmt: skip
+def test_no_credits_left_is_quota_exhausted_not_a_rate_limit(status: int, body: Any) -> None:
+    model = LiveGenerationModel("generate", ENV, transport=Server((status, body)))
+    with pytest.raises(ModelQuotaExhausted) as e:
+        model.generate(REQUEST)
+    assert e.value.code == "model_quota_exhausted" and KEY not in str(e.value)
+    assert (
+        e.value.message == "model provider: no credits remaining; add credits and run aksha resume"
+    )
+    assert e.value.detail is not None and e.value.detail["status"] == status
+
+
+def test_an_ordinary_429_body_stays_transient() -> None:
+    body = {"error": {"message": "Rate limit reached for requests", "code": "rate_limit_exceeded"}}
+    model = LiveGenerationModel("generate", ENV, transport=Server((429, body)))
+    with pytest.raises(TransientModelError):
+        model.generate(REQUEST)
 
 
 def test_missing_configuration_is_refused_before_any_call() -> None:

@@ -36,6 +36,7 @@ Every function is pure: it reads one event and returns what it counts for.
 from __future__ import annotations
 
 from aksha.runtime.events.envelope import Event
+from aksha.runtime.execution.errors import SUSPEND_CODES
 
 RUN_STARTED = "run.started"
 STOP_DECIDED = "stop.decided"
@@ -102,6 +103,11 @@ def is_progress(e: Event) -> bool:
         return True
     p = e.payload
     return e.type == "step.completed" and p.get("kind") == "tool" and p.get("outcome") == "ok"
+
+
+def is_suspension(e: Event) -> bool:
+    """A suspended attempt: the step waits for a person outside the run, not for a crash."""
+    return e.type == "step.failed" and e.payload.get("code") in SUSPEND_CODES
 
 
 def is_automatic_start(e: Event) -> bool:

@@ -57,7 +57,14 @@ the measurements count real numbers.
 Errors. LiteLLM's own retries are off (``num_retries=0``): every retry is the model step's,
 so each attempt is a ``step.failed`` with what the provider said (``detail``: LiteLLM's
 error class, the HTTP status, the provider and a short message with anything key-shaped
-removed). A rate limit (429), a 5xx, a timeout and a lost connection are
+removed). An account with no credits or quota left is ``ModelQuotaExhausted``, whatever
+its class and status (OpenAI answers it as a 429 ``RateLimitError``): read from the
+error's ``code`` or ``type`` where LiteLLM keeps the provider's (``insufficient_quota``),
+else from a narrow message match (:func:`aksha.adapters.models.live.quota_exhausted`). It
+is never retried, and its message is the short reason the CLI prints (``model provider: no
+credits remaining (openai); add credits and run aksha resume``); the model step pauses the
+run at that step, so ``aksha resume`` after a top-up asks again from there. Any other rate
+limit (429), a 5xx, a timeout and a lost connection are
 ``TransientModelError``; a context-window refusal is ``ContextOverflow``; 401 and 403 are
 ``live_unauthorised``; a content-policy block is ``live_blocked``; any other refusal is
 ``live_refused``; LiteLLM not installed is ``live_config_missing``. A transient error
@@ -97,10 +104,17 @@ from aksha.adapters.models.live import (
     field_answers,
     from_wire,
     json_fraction,
+    quota_exhausted,
+    quota_message,
     stated_probabilities,
     to_wire,
 )
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.routing import live_model_name
 from aksha.runtime.models.types import (
     FALSE,
@@ -452,6 +466,22 @@ def retry_after_ms(error: BaseException, now: datetime | None = None) -> int | N
     return None
 
 
+def _quota(error: BaseException, provider: str) -> bool:
+    """Whether ``error`` says the account has no credits or quota left (module doc, errors).
+
+    LiteLLM's exceptions subclass the OpenAI library's, which keep the provider's ``code``,
+    ``type`` and ``body`` when the response carried them; the message is read as well.
+    """
+    body = getattr(error, "body", None)
+    inner = body.get("error", body) if isinstance(body, Mapping) else None
+    codes: list[object] = [getattr(error, "code", None), getattr(error, "type", None)]
+    texts = [str(getattr(error, "message", "") or ""), str(error)]
+    if isinstance(inner, Mapping):
+        codes += [inner.get("code"), inner.get("type")]
+        texts.append(str(inner.get("message", "")))
+    return quota_exhausted(texts, codes, provider)
+
+
 def failure(error: BaseException, environ: Mapping[str, str] | None = None) -> Exception:
     """The Aksha model error for a LiteLLM exception (module doc, errors), with its detail."""
     kind = type(error).__name__
@@ -467,6 +497,9 @@ def failure(error: BaseException, environ: Mapping[str, str] | None = None) -> E
     said = f"{kind}{f' {status}' if status else ''}: {text}".rstrip(": ")
     if kind == "ContextWindowExceededError":
         return ContextOverflow(message=said, detail=detail)
+    named = provider if isinstance(provider, str) else ""
+    if _quota(error, named):
+        return ModelQuotaExhausted(message=quota_message(named), detail=detail)
     if kind in _UNAUTHORISED_TYPES or status in (401, 403):
         return PermanentModelError(LIVE_UNAUTHORISED, said, detail=detail)
     if kind in _TRANSIENT_TYPES or status in (408, 429) or (status or 0) >= 500:

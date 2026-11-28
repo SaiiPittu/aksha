@@ -14,10 +14,14 @@ Configuration is read from the environment in ``__init__`` and held on the insta
 never written to an event, an error message or a ``repr``; ``run.started`` records only
 the adapter's class.
 
-Errors: HTTP 429 and 5xx, and a connection failure or timeout, are
-``TransientModelError`` (retried by the model step); a 400 that names the context length
-is ``ContextOverflow``; 401 and 403 are ``live_unauthorised``; any other refusal is
-``live_refused``; missing configuration is ``live_config_missing``.
+Errors: an answer saying the account has no credits or quota left (an OpenAI-style error
+code such as ``insufficient_quota``, else a narrow message match, :func:`quota_exhausted`)
+is ``ModelQuotaExhausted``, whatever its status, and is never retried; the model step
+pauses the run there, so ``aksha resume`` continues it after a top-up. Any other HTTP 429
+or 5xx, and a connection failure or timeout, are ``TransientModelError`` (retried by the
+model step); a 400 that names the context length is ``ContextOverflow``; 401 and 403 are
+``live_unauthorised``; any other refusal is ``live_refused``; missing configuration is
+``live_config_missing``.
 
 At this edge every JSON number with a fraction in a tool call's arguments becomes a
 decimal string (``0.5`` is ``"0.5"``), because the event store refuses floats (D4); an
@@ -34,7 +38,12 @@ from collections.abc import Callable, Mapping, Sequence
 from decimal import Decimal
 from typing import Any, ClassVar, Literal
 
-from aksha.runtime.models.errors import ContextOverflow, PermanentModelError, TransientModelError
+from aksha.runtime.models.errors import (
+    ContextOverflow,
+    ModelQuotaExhausted,
+    PermanentModelError,
+    TransientModelError,
+)
 from aksha.runtime.models.fixed import decimal_string, distribution_ppm
 from aksha.runtime.models.routing import live_model_name as model_for
 from aksha.runtime.models.types import (
@@ -90,6 +99,58 @@ def urllib_post(
         return int(e.code), e.read()
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         raise TransientModelError(message=f"no answer from the server ({type(e).__name__})") from e
+
+
+QUOTA_CODES = frozenset({"insufficient_quota", "billing_hard_limit_reached", "billing_not_active"})
+"""Provider error codes (OpenAI's, and servers that copy its shape) for an account with no
+credits or quota left: a top-up fixes it, a retry does not."""
+
+_QUOTA_PHRASES = (
+    "no credits remaining",  # OpenAI, prepaid credits used up
+    "credit balance is too low",  # Anthropic
+    "insufficient_quota",
+    "billing_hard_limit_reached",
+    "billing_not_active",
+)
+"""Message text that says the same when no code is exposed. Narrow on purpose: Gemini's
+per-minute limit says "exceeded your current quota" too, and that one passes, so it stays a
+rate limit."""
+
+_OPENAI_QUOTA = "exceeded your current quota, please check your plan and billing details"
+"""OpenAI's ``insufficient_quota`` message, read as quota only from OpenAI itself."""
+
+
+def quota_exhausted(texts: Sequence[str], codes: Sequence[object], provider: str = "") -> bool:
+    """Whether a provider's refusal says the account has no credits or quota left.
+
+    ``codes`` are the error's ``code`` and ``type`` values where the provider library
+    exposes them; ``texts`` are its message and body. A code in :data:`QUOTA_CODES` is
+    enough; else one of a few exact phrases, read case aside.
+    """
+    if any(isinstance(c, str) and c.lower() in QUOTA_CODES for c in codes):
+        return True
+    said = " ".join(t for t in texts if isinstance(t, str)).lower()
+    if any(p in said for p in _QUOTA_PHRASES):
+        return True
+    return provider == "openai" and _OPENAI_QUOTA in said
+
+
+def quota_message(provider: str = "") -> str:
+    """The short reason a person reads for an account with no credits left."""
+    where = f" ({provider})" if provider else ""
+    return f"model provider: no credits remaining{where}; add credits and run aksha resume"
+
+
+def _error_body(raw: bytes) -> tuple[list[str], list[object]]:
+    """The message and the ``code`` and ``type`` of a chat-completions error body, if any."""
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return [raw.decode("utf-8", "replace")[:2000]], []
+    error = data.get("error") if isinstance(data, Mapping) else None
+    if not isinstance(error, Mapping):
+        return [], []
+    return [str(error.get("message", ""))], [error.get("code"), error.get("type")]
 
 
 def _message(m: Message) -> dict[str, Any]:
@@ -215,6 +276,11 @@ class LiveGenerationModel:
         said = f"the server answered {status}"
         detail = {"type": "http_status", "status": status, "provider": "chat-completions",
                   "message": said}  # fmt: skip
+        if status >= 400:
+            texts, codes = _error_body(raw)
+            if quota_exhausted(texts, codes):
+                detail["message"] = f"{said}: no credits or quota left"
+                raise ModelQuotaExhausted(message=quota_message(), detail=detail)
         if status == 429 or status >= 500:
             raise TransientModelError(message=said, detail=detail)
         if status in (401, 403):

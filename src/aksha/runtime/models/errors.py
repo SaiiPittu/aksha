@@ -3,7 +3,10 @@
 What an adapter raises: ``TransientModelError`` (``model_transient``, retried by the model
 step with backoff on the injected clock, then ``model_unavailable``), ``PermanentModelError``
 (``model_permanent``, or a more specific code such as ``script_exhausted``,
-``replay_missing`` or ``replay_mismatch``) and ``ContextOverflow`` (``context_overflow``).
+``replay_missing`` or ``replay_mismatch``), ``ModelQuotaExhausted``
+(``model_quota_exhausted``: the provider account has no credits or quota left; the model
+step pauses the run instead of ending it, so ``aksha resume`` continues it once the account
+is topped up) and ``ContextOverflow`` (``context_overflow``).
 What the binder raises: ``BindRefused`` (``bind_refused``), listing every
 :class:`BindRefusal` at once. What building a request raises: ``OptionsUnavailable``
 (``options_unavailable``). No message ever carries a key or a configuration value. A live
@@ -83,6 +86,20 @@ class PermanentModelError(_ModelError):
     """A failure no retry fixes: a refused request, a missing replay, a used-up script."""
 
     default_code = "model_permanent"
+
+
+MODEL_QUOTA_EXHAUSTED = "model_quota_exhausted"
+
+
+class ModelQuotaExhausted(PermanentModelError):
+    """The provider account has no credits or quota left: no retry fixes it, a top-up does.
+
+    No retry is made. The model step records the attempt and pauses the run at that step
+    (``execution.errors.StepSuspended``), so ``aksha resume`` after the top-up asks again
+    from the same step. ``message`` is the short reason a person reads.
+    """
+
+    default_code = MODEL_QUOTA_EXHAUSTED
 
 
 class ContextOverflow(_ModelError):
