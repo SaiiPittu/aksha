@@ -30,15 +30,26 @@ def test_attempt_number_is_one_more_than_the_recorded_attempts() -> None:
     assert attempt_number(log.view(), "R-0001/a/t01/c02") == 3
 
 
-def test_turn_limit_fail_at_11() -> None:
+def test_a_declared_turn_limit_fails_at_11() -> None:
     log = Log()
     log.started()
+    limits = Limits(turn_limit=10)
     for turn in range(1, 11):
-        assert limit_reached(log.view(), RUN, "a", Limits()) == ()
+        assert limit_reached(log.view(), RUN, "a", limits) == ()
         log.decided("continue", turn=turn)
     assert turns_used(log.view(), RUN, "a") == 10
-    assert limit_reached(log.view(), RUN, "a", Limits()) == (LimitHit("turn_limit", 10, 10, "a"),)
-    assert limit_reached(log.view(), RUN, "b", Limits()) == ()
+    assert limit_reached(log.view(), RUN, "a", limits) == (LimitHit("turn_limit", 10, 10, "a"),)
+    assert limit_reached(log.view(), RUN, "b", limits) == ()
+
+
+def test_no_turn_limit_is_declared_by_default() -> None:
+    """Decision 42: an instance has no turn limit unless one is declared."""
+    log = Log()
+    log.started()
+    for turn in range(1, 201):
+        log.decided("continue", turn=turn)
+    assert turns_used(log.view(), RUN, "a") == 200
+    assert limit_reached(log.view(), RUN, "a", Limits()) == ()
 
 
 def test_the_third_refusal_is_blocked() -> None:

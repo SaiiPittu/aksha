@@ -66,13 +66,13 @@ Notice that `evidence` fans out over `competitors.companies` and runs with `on_c
 
 Dependencies, as declared:
 
-| Task | Runs per | Needs | Reads | Writes | Completion check | Turn limit |
-|---|---|---|---|---|---|---|
-| `scope` | once | none | the inputs | `scope` | `scope_done` | 6 |
-| `discover` | once | `scope` | `scope` | `competitors` | `discover_done` | 6 |
-| `evidence` | each key in `competitors.companies` | `discover` | `competitors` | `profile` | `profile_done` | 4 |
-| `voice` | once | `scope` | `scope` | `needs` | `needs_done` | 5 |
-| `report` | once, finalizer | `evidence`, `voice` | `scope`, `competitors`, every `research.profile`, `needs` | `matrix`, `findings`, `tests` | `report_done` | 4 |
+| Task | Runs per | Needs | Reads | Writes | Completion check |
+|---|---|---|---|---|---|
+| `scope` | once | none | the inputs | `scope` | `scope_done` |
+| `discover` | once | `scope` | `scope` | `competitors` | `discover_done` |
+| `evidence` | each key in `competitors.companies` | `discover` | `competitors` | `profile` | `profile_done` |
+| `voice` | once | `scope` | `scope` | `needs` | `needs_done` |
+| `report` | once, finalizer | `evidence`, `voice` | `scope`, `competitors`, every `research.profile`, `needs` | `matrix`, `findings`, `tests` | `report_done` |
 
 The run is complete when `outputs_exist` passes: `matrix`, `needs`, `findings` and `tests` exist at current versions, or the first three for a `synthesis`.
 
@@ -150,7 +150,7 @@ Tests: [`tests/integration/test_citation_keying.py`](../../tests/integration/tes
 | Limit | Value |
 |---|---|
 | Run budget | 90 model turns, 140 tool calls, 600,000 ms active time |
-| Agent-wide turn limit | 6 per Task instance, alongside each Task's own limit above; both are multiplied by the run's recorded turn factor |
+| Task turn limit | none declared, per Task or agent-wide (decision 42, ADR-P15 S8): an instance runs until its check passes on a finish, its stop-veto limit (3 refused finishes) blocks it, a person stops it, or the run budget holds the run. A live run's turn factor scales only the run budget's turns and tool calls |
 | Tool result cap and read cap | 24,000 characters each |
 | Context limit | 200,000 characters, with a high water mark of 150,000 and a low water mark of 120,000 |
 | Read retry | 600,000 ms timeout, one retry (`READING.retry`) |

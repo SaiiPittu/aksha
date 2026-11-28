@@ -314,14 +314,19 @@ class TaskPolicy:
         return PASS
 
     def limit(self, view: StopView, c: StopCandidate, proposed: Verdict) -> Verdict | None:
-        """The turn limit (times the run's recorded turn factor), then the stop-veto limit."""
+        """The turn limit (times the run's recorded turn factor), then the stop-veto limit.
+
+        A Task declares no turn limit by default (decision 42): its instances then run until
+        their check passes, the stop-veto limit, a person or the run budget ends them.
+        """
         if proposed.resumes_turn:
             return None
         ref = self.instance
         task = view.tree.node(ref.task_path).task
         turns = turns_since_entry(view.log, ref.run, ref.instance)
-        allowed = task.turn_limit * turn_factor(view.log, ref.run)
-        if turns >= allowed:
+        declared = task.turn_limit
+        allowed = None if declared is None else declared * turn_factor(view.log, ref.run)
+        if allowed is not None and turns >= allowed:
             reason = f"turn limit {allowed} reached"
             counts = (("turns", turns), ("allowed", allowed))
             return self._at_limit(view, c, proposed, reason, "turn_limit", counts)

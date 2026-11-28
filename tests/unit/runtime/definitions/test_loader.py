@@ -63,7 +63,7 @@ def test_unknown_extension_is_refused(plugins: Plugins) -> None:
         ("raise RuntimeError('boom')\n", "extension_import_failed"),
         (
             "from aksha.runtime.api import Extension\n"
-            "EXTENSION = Extension(name='other', version='1', requires_api='>=2.0,<3')\n",
+            "EXTENSION = Extension(name='other', version='1', requires_api='>=3.0,<4')\n",
             "extension_name_mismatch",
         ),
         (
@@ -84,7 +84,7 @@ def test_requires_api_mismatch_refused(plugins: Plugins) -> None:
     plugins.edit(
         "agents/toy/agent.py",
         'extensions=("echo",),',
-        'extensions=("echo",),\n    requires_api=">=3",',
+        'extensions=("echo",),\n    requires_api=">=4",',
     )
     with pytest.raises(LoadError) as err:
         load_agents([plugins.toy], [plugins.extensions])

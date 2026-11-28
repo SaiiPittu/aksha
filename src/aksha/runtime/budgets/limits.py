@@ -144,10 +144,11 @@ def limit_reached(
     """
     hits: list[LimitHit] = []
     if instance is not None:
-        turns = turns_since_entry(view, run, instance)
-        allowed = limits.turn_limit * turn_factor(view, run)
-        if turns >= allowed:
-            hits.append(LimitHit("turn_limit", turns, allowed, instance))
+        if limits.turn_limit is not None:  # none by default (decision 42)
+            turns = turns_since_entry(view, run, instance)
+            allowed = limits.turn_limit * turn_factor(view, run)
+            if turns >= allowed:
+                hits.append(LimitHit("turn_limit", turns, allowed, instance))
         vetoes = vetoes_since_entry(view, run, instance) + 1  # the refusal being judged
         if vetoes >= limits.stop_veto_limit:
             hits.append(LimitHit("stop_veto_limit", vetoes, limits.stop_veto_limit, instance))

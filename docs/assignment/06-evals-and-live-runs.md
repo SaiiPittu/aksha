@@ -147,7 +147,7 @@ export AKSHA_SEARCH=world:stillroom             # the world's offline web, with 
 aksha example stillroom stillroom-inputs        # copy the world's 22 input files
 ```
 
-Every other setting was its default: six retries per model step with backoff, a one-hour active-time budget, and turn limits multiplied by 3 for a live run (`AKSHA_LIVE_TURN_FACTOR`). The recording of run (a) stores these limits in its `recording.json`. The full list of settings is on the [live-mode page](../live-mode.md).
+Every other setting was its default: six retries per model step with backoff, a one-hour active-time budget, and turn limits multiplied by 3 for a live run (`AKSHA_LIVE_TURN_FACTOR`). Since decision 42 (28 Nov 2026, after these runs) the agents declare no per-Task turn limit, so the factor now scales only the run budget's turns and tool calls. The recording of run (a) stores these limits in its `recording.json`. The full list of settings is on the [live-mode page](../live-mode.md).
 
 ### Run (a): one-shot research, recorded and replayable
 

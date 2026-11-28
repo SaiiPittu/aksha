@@ -103,7 +103,7 @@ Each field maps to one requirement for an agent definition:
 | `artifacts`, `relations` | The kinds it saves, each with a JSON Schema, and the relation kinds between them. |
 | `tasks` | The Task tree: fan-out (`per`), dependencies (`needs`), reads, writes, completion checks (`done`) and interrupts. |
 | `completion` | The run-level checks. |
-| `budget`, `limits`, `context_policy` | The run's turn and call budget, the per-instance turn limit, and the context caps. |
+| `budget`, `limits`, `context_policy` | The run's turn and call budget (the backstop on a long run), the limits and the context caps. A Task has no turn limit unless it declares `turn_limit=` (decision 42, ADR-P15 S8). The toy's agent-wide `Limits(turn_limit=5)` ends no instance by itself ([limitations](../limitations.md) item 24); give the Task its own `turn_limit=` to cap it. |
 
 The completion checks are pure functions over the Task view, in [`tests/fixtures/agents/toy/checks.py`](../../tests/fixtures/agents/toy/checks.py):
 

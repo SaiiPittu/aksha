@@ -49,7 +49,6 @@ from aksha.runtime.api import (
     ContextPolicy,
     DeclaredInterrupt,
     FieldSpec,
-    Limits,
     ModelAlias,
     Read,
     Task,
@@ -222,7 +221,6 @@ DEEP = Task(
             ),
             writes=("prior_art",),
             done=checks.prior_art_saved,
-            turn_limit=portfolio.PRIOR_ART_TURNS,
         ),
         Task(
             "compare",
@@ -231,7 +229,6 @@ DEEP = Task(
             tools=(SAVE,),
             writes=("comparison",),
             done=checks.comparison_saved,
-            turn_limit=portfolio.SAVE_TURNS,
         ),
         Task(
             "recommend",
@@ -247,7 +244,6 @@ DEEP = Task(
             tools=(SAVE,),
             writes=("recommendation",),
             done=checks.recommendation_follows_rules,
-            turn_limit=portfolio.SAVE_TURNS,
         ),
     ),
 )
@@ -468,10 +464,10 @@ def build_agent(world: SourceWorld) -> Agent:
         # world: 138 turns and about 740 calls to the packet, most of the calls the shared
         # input tools' listing and reads in triage). Running the deep tier for all twenty
         # would need about 196 turns; the supervisor's deep budget (portfolio.DEEP_BUDGET)
-        # keeps it inside this.
+        # keeps it inside this. No Task declares a turn limit (decision 42): long live work
+        # runs to its check, and this budget is the runaway backstop (live mode triples it).
         budget=Budget(model_turns=160, tool_calls=900),
         model_aliases=MODEL_ALIASES,
-        limits=Limits(turn_limit=8),
         context_policy=ContextPolicy(
             result_cap_chars=60_000,
             read_cap_chars=60_000,

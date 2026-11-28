@@ -48,7 +48,7 @@ The contrast coding agent is where a reset counter does damage: it runs long, cr
 
    | Limit | Default | Counted from | When it bites |
    |---|---|---|---|
-   | Turn limit per Task instance | 10 | Authorised turns of that instance since it was last entered (a rebuild re-entry starts the count again, like the stop-veto limit) | The Task ends: done when its completion check passes on what is saved (ADR-P16 S5), otherwise it fails with "turn limit reached" |
+   | Turn limit per Task instance | none (decision 42; it was 10). An agent may declare one per Task | Authorised turns of that instance since it was last entered (a rebuild re-entry starts the count again, like the stop-veto limit) | The Task ends: done when its completion check passes on what is saved (ADR-P16 S5), otherwise it fails with "turn limit reached" |
    | Stop-veto limit per instance entry | 3 | Completion-check refusals since the instance was entered, the one being judged included (so the first two refusals are given back to the model and the third fails) | The Task is blocked, with the failing checks listed |
    | Restart limit (S2: ADR-P02 D8's rule) | 3 | Resume records since the run's last progress (a completed tool step or a saved artifact) | The run ends `failed, restart_limit` through a stop decision, never by boot directly |
    | Automatic-start limit (new, designed) | 3 in 5 minutes per run | Resume records, rebuild-run starts and continuation records, with their recorded timestamps (v2 dropped `run.resumed`, LC-3, so the resume record is the fact) | Further automatic starts are refused and the run is held for a person |
@@ -82,6 +82,7 @@ The agents' Task turn limits and run budgets were sized against the offline fake
 1. L1a, `AKSHA_LIVE_TURN_FACTOR` (a whole number from 1, default 3; anything else is refused `live_config_missing` before any call). In live mode the run budget's `model_turns` and `tool_calls` are multiplied by it at bind (`app.scaled_limits`), and `run.started` records the factor as `turn_factor` beside the scaled `budget`. The stop policy multiplies every Task's `turn_limit` (and `limit_reached` the agent-wide one) by the factor its run's `run.started` records (`budgets.limits.turn_factor`), so the limit is read from the log: a resumed run keeps the factor it started under, and the definition, its hash and the compiled tree are unchanged. The veto, restart and retry limits and the time caps are not scaled.
 2. L1b, fake mode, so every offline eval and test, records no factor and runs under the declared limits exactly as before. A recording's manifest keeps each agent's factor (`turn_factors`) and a replay binds the agent under it, so a replay of a live recording runs under the limits the recording ran under. It also keeps each agent's active-time cap, model step timeout, retries and backoff (`limits`, `app.run_limits`), and a replay binds the agent under those with no jitter, never under the replaying machine's live settings.
 3. Not done: a portfolio tier's declared effort (the deep budget the supervisor commits against) is not scaled, so in a live run the agent's budget, not the tier's effort, is the bound on deep work.
+4. L1c (28 Nov 2026, decision 42). Since Tasks declare no turn limit by default (ADR-P15 S8), the factor scales only the limits that exist: the run budget's `model_turns` and `tool_calls`, and the turn limit of a Task (or agent) that declares one. The research and patent agents declare none, so for them it scales the run budget only. Their budgets stay the runaway backstop and were not raised: live research gets 270 model turns and 420 tool calls, live patent 480 and 2,700, each with at least an hour of active time.
 
 ## Alternatives considered
 
@@ -117,7 +118,7 @@ class Budget:                                        # the agent's, a Task's, or
 
 @dataclass(frozen=True)
 class Limits:
-    turn_limit: int = 10                             # per Task instance
+    turn_limit: int | None = None                    # per Task instance; none by default (decision 42)
     stop_veto_limit: int = 3                         # per instance entry
     restart_limit: int = 3                           # per run
     auto_starts: tuple[int, int] = (3, 300_000)      # count, window in ms (designed)

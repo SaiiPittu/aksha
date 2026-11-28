@@ -34,7 +34,7 @@ def test_from_field_builds_a_key_binding() -> None:
 
 def test_task_defaults_follow_the_adr() -> None:
     t = Task("leaf", done=_ok)
-    assert (t.turn_limit, t.max_finish_vetoes, t.on_child_blocked) == (10, 3, "block")
+    assert (t.turn_limit, t.max_finish_vetoes, t.on_child_blocked) == (None, 3, "block")
     assert t.model_aliases == () and t.stop_policies == () and t.interrupt is None
     with pytest.raises(FrozenInstanceError):
         t.id = "other"  # type: ignore[misc]

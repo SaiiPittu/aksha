@@ -1,4 +1,4 @@
-"""The extension API version, and ``requires_api`` specifiers such as ``">=2.0,<3"`` (D2).
+"""The extension API version, and ``requires_api`` specifiers such as ``">=3.0,<4"`` (D2).
 
 ``API_VERSION`` is ``major.minor``: adding a public name bumps the minor version; removing
 or changing one bumps the major. :mod:`aksha.runtime.api` re-exports it.
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 
-API_VERSION = "2.20"
+API_VERSION = "3.0"
 """The version of :mod:`aksha.runtime.api`; the snapshot test pins its names to it.
 
 1.0 is the first frozen snapshot (ADR-P20 S1). 1.1 added ``Extension.event_types`` and
@@ -95,7 +95,11 @@ fields a save computes from the content, written over the model's (counts a chec
 kinds whose current content a ``compute`` is given too (a need's theme matched to the scope).
 2.20 (28 Nov 2026) added the trailing field ``ToolContext.environment``: the environment's own
 note on the supplied records (a fixture world's), which the input tools return with every
-result.
+result. 3.0 (28 Nov 2026, decision 42: long-running tasks) changed defaults, a major change:
+``Task.turn_limit`` and ``Limits.turn_limit`` are ``int | None`` and None by default, so a
+Task has no turn limit unless it declares one, and the run budget is the backstop.
+``Agent.requires_api`` defaults to ``">=3.0,<4"``; an extension that reads no turn limit
+can accept both majors (``">=2.0,<4"``).
 """
 
 Version = tuple[int, int]

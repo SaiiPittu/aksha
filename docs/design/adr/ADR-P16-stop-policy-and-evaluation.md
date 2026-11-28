@@ -104,6 +104,10 @@ A live patent run on a general model ended `blocked` with correct work saved. `r
 2. S5.2, where it does not apply. A finish or an entry candidate keeps the FAIL: the judge has just evaluated the check there and it failed, and a second evaluation would only repeat the fact. A follow-up or steer still pending for the instance keeps the FAIL, since it would veto a finish (ADR-P27 D4); the limit reads the pending input itself, as the finish does. Parents and supervisors take no turns of their own and already evaluate their checks on every candidate. The stop-veto limit bites only on a finish whose check just failed. The budget limit is a HOLD that keeps the work, not a FAIL, and is unchanged.
 3. S5.3, the catch. A log recorded before this rule may hold a `stop.decided` that failed an instance at its turn limit with passing work saved; driving that log again decides DONE there, so such a recording is stale. The bundled recordings hold no turn-limit decision. A check that passes on a partial save now ends the instance where it used to fail it: the check, not the turn count, says what done means, as it already does on a finish.
 
+### Amendment: no per-Task turn limit by default (28 Nov 2026, decision 42, S6)
+
+ADR-P15 S8 makes a Task's turn limit None unless the agent declares one (decision 42: long-running tasks, as coding agent harnesses run them). The Task policy's `limit` skips the turn limit for such a Task and goes straight to the stop-veto limit; `limit_reached` skips the agent-wide one the same way. Nothing else in D3 changes: the budget is still applied first and is now the only automatic bound on a Task that keeps taking turns, the stop-veto limit (`max_finish_vetoes`, 3 refused finishes) still bites on a finish whose check failed, and S5 (a limit ends a leaf as a finish would) applies whenever a Task does declare a limit. A `stop.decided` names `limit: turn_limit` only for a declared limit.
+
 ## Alternatives considered
 
 | Option | For | Against | Verdict |

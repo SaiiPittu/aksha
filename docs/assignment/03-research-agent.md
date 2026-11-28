@@ -38,7 +38,6 @@ Task(
     brief="prompts/evidence.md",
     on_child_blocked="partial",
     max_finish_vetoes=1,
-    turn_limit=4,
 ),
 ```
 
@@ -96,7 +95,7 @@ One example from the offline run in [examples/outputs/research-summary.md](../..
 |---|---|---|
 | Tools per Task, in code | `report` can only save; `scope` cannot search the web. The policy gate refuses any unlisted call. | `tests/integration/test_policy_gate.py::test_every_tool_every_agent_every_task` |
 | Page text is data | A page addressed to AI readers asks to skip approval and send a packet; it is flagged as a finding and changes nothing. | `tests/agents/research/test_runs.py::test_a_model_that_obeys_page_text_is_refused_and_nothing_changes`, eval case `s8a-injection-research` |
-| Budgets and turn limits | 90 model turns, 140 tool calls, 600,000 ms active time per run; 4 to 6 turns per Task instance. | `budget=` and `turn_limit=` in `agent.py` |
+| Budgets, no turn limits | 90 model turns, 140 tool calls, 600,000 ms active time per run, multiplied by 3 for turns and calls in a live run. No Task declares a turn limit (decision 42): long work runs until its check passes, its finish vetoes run out, a person stops it, or the run budget holds the run. | `budget=` in `agent.py`; `tests/integration/test_no_turn_limit.py` |
 | Bounded finish vetoes | A Task that tries to finish while its check fails is refused and told why; by default the third refusal fails the instance. `evidence` sets `max_finish_vetoes=1`, so its first refused finish already fails that instance, with no turn to act on the reason. | `limit` in `src/aksha/runtime/stop_policy/core.py`; `tests/agents/research/test_counts.py::test_a_missing_theme_is_named_in_one_veto_and_the_next_turn_passes` (default limit) |
 | Partial results | A company whose page fails to fetch ends as a row of `unverified` cells; the other four rows are kept and the run ends `partial`. | `tests/agents/research/test_runs.py::test_a_blocked_source_ends_the_run_partial_with_the_gap_named` |
 | Crash and restart | A crash mid-evidence resumes without repeating a recorded step; a restart while a question waits asks it once. | `tests/agents/research/test_runs.py::test_a_crash_mid_evidence_resumes_and_repeats_no_recorded_step`, `tests/agents/research/test_runs.py::test_a_restart_while_waiting_on_the_founder_asks_once` |

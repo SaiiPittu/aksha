@@ -9,7 +9,7 @@ Counted from the code on this branch on 28 Nov 2026:
 | | |
 |---|---|
 | Primitives | 29 of the 30 in the [catalogue](design/03-primitives.md) have code and tests; erasure (P30) is open: its options are listed and none is chosen |
-| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 2.20 |
+| Agents | 2 (research, patent), each a data definition loaded and hashed by one loader; extension API 3.0 (decision 42: no per-Task turn limit by default) |
 | Tools per agent | The harness declares the shared tools every agent lists: `list_inputs`, `read_document` and `search_inputs` over the uploads, `web_search`, `fetch_url` and `todo`. The research agent lists only those six; the patent agent adds six domain tools (publication search and fetch, two template readers, `fill_form`, `send_packet`) |
 | Super agent | A supervisor Task over per-item worker Tasks, reading a capped work board: two tiers (triage for every item, deep work for the ones it admits), admission bounded in code, an audited sample of the drops with a reported miss rate. The patent agent runs under it above eight candidates (decision Proposed) |
 | Model providers | Rule-based fakes offline (the default); live, any provider LiteLLM reaches, or any chat-completions server through a standard-library adapter |

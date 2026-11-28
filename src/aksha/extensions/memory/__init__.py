@@ -39,7 +39,7 @@ from .types import (
     Veracity,
 )
 
-EXTENSION = Extension(name="memory", version="0.1.0", requires_api=">=2.8,<3", artifacts=KINDS)
+EXTENSION = Extension(name="memory", version="0.1.0", requires_api=">=2.8,<4", artifacts=KINDS)
 
 __all__ = [
     "EXTENSION",

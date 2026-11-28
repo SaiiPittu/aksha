@@ -39,8 +39,10 @@ MAX_COLUMNS = 12
 class Tier:
     """The deep tier: its worker Task and the bounds code enforces on admission.
 
-    ``effort`` is the most model turns one admitted item may cost at this tier (the sum of
-    its Tasks' turn limits, declared by the agent); ``cap`` is the most items admitted.
+    ``effort`` is the model turns admission counts for one item at this tier: the most it
+    may cost when its Tasks declare turn limits (at least their sum), else its planned
+    cost, with the run budget as the backstop (decision 42); ``cap`` is the most items
+    admitted.
     """
 
     id: str

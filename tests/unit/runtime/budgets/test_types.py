@@ -9,7 +9,7 @@ def test_budget_narrow_takes_the_field_wise_minimum() -> None:
 
 def test_limits_defaults_follow_the_adr() -> None:
     lim = Limits()
-    assert (lim.turn_limit, lim.stop_veto_limit, lim.restart_limit) == (10, 3, 3)
+    assert (lim.turn_limit, lim.stop_veto_limit, lim.restart_limit) == (None, 3, 3)
     assert lim.backoff == Backoff()
 
 

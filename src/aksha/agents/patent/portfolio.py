@@ -32,15 +32,12 @@ from . import rules
 SUPERVISE_ABOVE = 8
 """At or below this many candidates every one gets deep work and no supervisor turn runs."""
 
-PRIOR_ART_TURNS = 6
-"""The prior-art Task's turn limit: search, fetch what matches, save, finish."""
-
-SAVE_TURNS = 2
-"""The compare and recommend Tasks' turn limit: save, then finish."""
-
-DEEP_EFFORT = PRIOR_ART_TURNS + 2 * SAVE_TURNS
-"""Model turns one candidate's deep tier may cost: the sum of its Tasks' turn limits, so
-the runtime fails an instance before it overruns what admission counted for it."""
+DEEP_EFFORT = 10
+"""Model turns admission counts for one candidate's deep tier: about six for prior art
+(search, fetch what matches, save, finish) and two each for compare and recommend (save,
+then finish). It is the planned cost, not a cap: the deep Tasks declare no turn limit
+(decision 42), so a live model that needs more turns takes them, and the run budget is
+the backstop."""
 
 DEEP_CAP = 10
 """The most candidates admitted to the deep tier at once."""

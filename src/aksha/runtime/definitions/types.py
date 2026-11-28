@@ -112,7 +112,7 @@ class Agent:
     fakes: str = "fakes"
     phrases: str | None = "phrases.json"
     extensions: tuple[str, ...] = ()
-    requires_api: str = ">=2.0,<3"
+    requires_api: str = ">=3.0,<4"
     concurrency: int = 1
     invalidation: InvalidationMode = DEFAULT_MODE
     invalidation_keys: InvalidationKeys = DEFAULT_KEYS
