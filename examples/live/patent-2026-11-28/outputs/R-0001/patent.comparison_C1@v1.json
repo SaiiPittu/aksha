@@ -1,0 +1,75 @@
+{
+  "ref": "patent.comparison/C1@v1",
+  "saved_at_event": 439,
+  "content": {
+    "absence": {
+      "scope": {
+        "query": "Uploaded thermal-array/background/motion and threshold searches, priority follow-ups SYN-PRI-2021-0412 and SYN-PRI-2022-0118, and web search site:patents.google.com patent thermopile occupancy background baseline calibration PIR door closed thermal array adaptive"
+      },
+      "statement": "Exact C1 gate and implementation details not found in the retained references"
+    },
+    "candidate": "C1",
+    "cells": [
+      {
+        "element": "8 × 8 thermopile array, PIR and radio-linked door contact",
+        "family": "SYN-PRI-2021-0412",
+        "state": "partial"
+      },
+      {
+        "element": "8 × 8 thermopile array, PIR and radio-linked door contact",
+        "family": "SYN-PRI-2022-0118",
+        "state": "not_found"
+      },
+      {
+        "element": "20-minute PIR quiet plus closed door",
+        "family": "SYN-PRI-2021-0412",
+        "state": "partial"
+      },
+      {
+        "element": "20-minute PIR quiet plus closed door",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      },
+      {
+        "element": "Per-pixel window mean and standard deviation",
+        "family": "SYN-PRI-2021-0412",
+        "state": "partial"
+      },
+      {
+        "element": "Per-pixel window mean and standard deviation",
+        "family": "SYN-PRI-2022-0118",
+        "state": "not_found"
+      },
+      {
+        "element": "Once-per-minute 0.99/0.01 baseline update",
+        "family": "SYN-PRI-2021-0412",
+        "state": "partial"
+      },
+      {
+        "element": "Once-per-minute 0.99/0.01 baseline update",
+        "family": "SYN-PRI-2022-0118",
+        "state": "partial"
+      },
+      {
+        "element": "Ten-minute per-pixel learning freeze after person detection",
+        "family": "SYN-PRI-2021-0412",
+        "state": "not_found"
+      },
+      {
+        "element": "Ten-minute per-pixel learning freeze after person detection",
+        "family": "SYN-PRI-2022-0118",
+        "state": "not_found"
+      },
+      {
+        "element": "Per-pixel threshold at baseline plus four standard deviations",
+        "family": "SYN-PRI-2021-0412",
+        "state": "partial"
+      },
+      {
+        "element": "Per-pixel threshold at baseline plus four standard deviations",
+        "family": "SYN-PRI-2022-0118",
+        "state": "not_found"
+      }
+    ]
+  }
+}

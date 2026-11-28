@@ -1,0 +1,172 @@
+{
+  "content": {
+    "candidate": "C2",
+    "comparison": [
+      {
+        "cite": {
+          "quote": "computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan.",
+          "span": "EX-0410"
+        },
+        "feature": "Working-height footprint and seat coverage",
+        "status": "found"
+      },
+      {
+        "cite": {
+          "quote": "penalising mount points within a minimum distance of a doorway.",
+          "span": "EX-0411"
+        },
+        "feature": "Doorway exposure",
+        "status": "partial"
+      },
+      {
+        "absence": {
+          "scope": {
+            "query": "syn-pri-2019-0630"
+          },
+          "statement": "These details were not found in the retrieved placement family."
+        },
+        "feature": "Overlap and heat-source scoring; post-install marked-spot walk test; exact 1.2 m and 90 degree parameters",
+        "status": "not_found"
+      }
+    ],
+    "families": [
+      {
+        "coverage": {
+          "count": 2,
+          "scope": {
+            "query": "syn-pri-2019-0630"
+          },
+          "statement": "Publications returned by shared-priority search"
+        },
+        "members": [
+          "SYN-PUB-0009",
+          "SYN-PUB-0010"
+        ],
+        "priority_number": "SYN-PRI-2019-0630"
+      }
+    ],
+    "publications": [
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan.",
+              "span": "EX-0368"
+            },
+            "number": 1
+          }
+        ],
+        "filing_date": {
+          "cite": {
+            "quote": "\"filing\": \"2020-06-29\"",
+            "span": "EX-0383"
+          }
+        },
+        "kind_code": "A1",
+        "number": "SYN-PUB-0009",
+        "priority_claim": {
+          "cite": {
+            "quote": "SYN-PRI-2019-0630",
+            "span": "EX-0381"
+          }
+        },
+        "priority_date": {
+          "cite": {
+            "quote": "\"priority\": \"2019-06-30\"",
+            "span": "EX-0384"
+          }
+        },
+        "publication_date": {
+          "cite": {
+            "quote": "\"publication\": \"2021-01-07\"",
+            "span": "EX-0385"
+          }
+        },
+        "status_observations": [
+          {
+            "as_of": "2026-10-01",
+            "cite": {
+              "quote": "\"wording\": \"Published application\"",
+              "span": "EX-0368"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Published application"
+          }
+        ],
+        "title": "Planning mount points for ceiling occupancy sensors"
+      },
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of planning sensor placement comprising: computing, for each candidate mount point, a footprint of a ceiling sensor at a working height from a field of view and a ceiling height; and selecting mount points that maximise coverage of seat locations in a floor plan.",
+              "span": "EX-0410"
+            },
+            "number": 1
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, further comprising penalising mount points within a minimum distance of a doorway.",
+              "span": "EX-0411"
+            },
+            "number": 2
+          }
+        ],
+        "filing_date": {
+          "cite": {
+            "quote": "\"filing\": \"2020-06-29\"",
+            "span": "EX-0406"
+          }
+        },
+        "grant_date": {
+          "cite": {
+            "quote": "\"grant\": \"2023-08-22\"",
+            "span": "EX-0409"
+          }
+        },
+        "kind_code": "B2",
+        "number": "SYN-PUB-0010",
+        "priority_claim": {
+          "cite": {
+            "quote": "SYN-PRI-2019-0630",
+            "span": "EX-0389"
+          }
+        },
+        "priority_date": {
+          "cite": {
+            "quote": "\"priority\": \"2019-06-30\"",
+            "span": "EX-0407"
+          }
+        },
+        "publication_date": {
+          "cite": {
+            "quote": "\"publication\": \"2021-01-07\"",
+            "span": "EX-0408"
+          }
+        },
+        "status_observations": [
+          {
+            "as_of": "2026-10-01",
+            "cite": {
+              "quote": "\"wording\": \"Granted - in force\"",
+              "span": "EX-0389"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Granted - in force"
+          }
+        ],
+        "title": "Planning mount points for ceiling occupancy sensors"
+      }
+    ],
+    "query": {
+      "family": "syn-pri-2019-0630",
+      "uploaded": [
+        "sensor placement | mount point | footprint",
+        "coverage | field of view | occupancy"
+      ],
+      "web": "patent sensor placement floor plan coverage overlap field of view occupancy sensor placement layout optimization"
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.prior_art/C2@v1"
+}

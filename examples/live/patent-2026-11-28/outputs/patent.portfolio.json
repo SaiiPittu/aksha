@@ -1,0 +1,20 @@
+{
+  "content": {
+    "candidates": [
+      "C1"
+    ],
+    "plan": {
+      "candidates": [
+        "C1"
+      ],
+      "forms": [],
+      "prior_art": false,
+      "priority_cutoff": 0,
+      "send": true
+    },
+    "recipient": "counsel-primary",
+    "send_status": "not_sent"
+  },
+  "freshness": "current",
+  "ref": "patent.portfolio@v2"
+}

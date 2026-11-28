@@ -1,0 +1,13 @@
+{
+  "ref": "patent.selection@v1",
+  "saved_at_event": 924,
+  "content": {
+    "based_on": "patent.table@v1",
+    "recommendations": {
+      "C1": "collect_more_evidence"
+    },
+    "selected": [
+      "C1"
+    ]
+  }
+}

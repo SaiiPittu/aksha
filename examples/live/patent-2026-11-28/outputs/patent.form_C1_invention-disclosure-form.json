@@ -1,0 +1,303 @@
+{
+  "content": {
+    "candidate": "C1",
+    "counts": {
+      "complete": 10,
+      "missing": 0,
+      "needs_counsel_confirmation": 4
+    },
+    "fields": [
+      {
+        "field": "title",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "cite": {
+            "quote": "Engineering note: self-calibrating thermal baseline",
+            "span": "EX-0073"
+          }
+        }
+      },
+      {
+        "field": "candidate_id",
+        "required": false,
+        "status": "complete",
+        "value": "C1"
+      },
+      {
+        "field": "problem",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "cite": {
+            "quote": "The thermal baseline drifts when HVAC (heating, ventilation and air conditioning) cycles, causing false \"occupied\" readings in empty rooms. Sun on the floor in the afternoon does the same.",
+            "span": "EX-0078"
+          }
+        }
+      },
+      {
+        "field": "mechanism_steps",
+        "required": false,
+        "status": "complete",
+        "value": [
+          {
+            "cite": {
+              "quote": "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link.",
+              "span": "EX-0081"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+              "span": "EX-0083"
+            }
+          },
+          {
+            "cite": {
+              "quote": "During a verified-empty window, record each pixel's mean temperature and its standard deviation over the window.",
+              "span": "EX-0085"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Update the baseline slowly: new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute.",
+              "span": "EX-0087"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background.",
+              "span": "EX-0089"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation.",
+              "span": "EX-0091"
+            }
+          }
+        ]
+      },
+      {
+        "field": "parameters",
+        "required": false,
+        "status": "complete",
+        "value": [
+          {
+            "cite": {
+              "quote": "8 x 8 thermopile array (64 pixels)",
+              "span": "EX-0081"
+            }
+          },
+          {
+            "cite": {
+              "quote": "no motion for 20 minutes",
+              "span": "EX-0083"
+            }
+          },
+          {
+            "cite": {
+              "quote": "new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute.",
+              "span": "EX-0087"
+            }
+          },
+          {
+            "cite": {
+              "quote": "in the last 10 minutes",
+              "span": "EX-0089"
+            }
+          },
+          {
+            "cite": {
+              "quote": "baseline + 4 x that pixel's standard deviation.",
+              "span": "EX-0091"
+            }
+          }
+        ]
+      },
+      {
+        "field": "alternatives_considered",
+        "required": false,
+        "status": "complete",
+        "value": [
+          {
+            "cite": {
+              "quote": "Fixed nightly recalibration at 03:00. Rejected: it fails in 24-hour offices and misses afternoon sun drift.",
+              "span": "EX-0029"
+            }
+          },
+          {
+            "cite": {
+              "quote": "Updating whenever the PIR is quiet, without the door gate. Rejected in bench tests: a person reading at a desk can stay PIR-quiet for 20 minutes.",
+              "span": "EX-0031"
+            }
+          }
+        ]
+      },
+      {
+        "field": "difference_from_known_approaches",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "absence": {
+            "scope": {
+              "query": "Uploaded thermal-array/background/motion and threshold searches, priority follow-ups SYN-PRI-2021-0412 and SYN-PRI-2022-0118, and web search site:patents.google.com patent thermopile occupancy background baseline calibration PIR door closed thermal array adaptive"
+            },
+            "statement": "Exact C1 gate and implementation details not found in the retained references"
+          },
+          "matrix": "patent.comparison/C1@v1",
+          "references": [
+            {
+              "cite": {
+                "quote": "During periods of low activity, the background frame is updated as a running average of recent frames. A pixel is marked occupied when its reading exceeds the background by a threshold derived from that pixel's noise.",
+                "span": "EX-0251"
+              }
+            },
+            {
+              "cite": {
+                "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period.",
+                "span": "EX-0299"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "field": "contributors",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "counsel_question": "Who contributed to conception of each element?",
+          "records": [
+            {
+              "cite": {
+                "quote": "Asha Rao,Stillroom,firmware lead,C1,Wrote the gated baseline update rule and the engineering note,2026-01-14,\"employment, standard IP assignment\"",
+                "span": "EX-0101"
+              }
+            },
+            {
+              "cite": {
+                "quote": "Ravi Menon,Stillroom,embedded engineer,C1,Implemented the gated update in firmware fw-0.9.3,2026-02-02,\"employment, standard IP assignment\"",
+                "span": "EX-0102"
+              }
+            },
+            {
+              "cite": {
+                "quote": "Dr. Wei Lin,Northgate University,outside consultant,C1,Reviewed the thermal noise model,2026-01-21,\"consulting agreement CA-2025-11, effective 2025-12-01\"",
+                "span": "EX-0103"
+              }
+            },
+            {
+              "cite": {
+                "quote": "Daniel Sato,Stillroom,founder and CEO,C1,Presented the self-calibration demo at the trade show,2026-03-10,\"founder, IP assignment\"",
+                "span": "EX-0104"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "field": "conception_date_and_records",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "cite": {
+            "quote": "DISC-05,2026-01-05,C1,outside email,Dr. Lin suggested using the door contact as a room-sealed signal for calibration,private email to Asha Rao,no,P-05",
+            "span": "EX-0024"
+          },
+          "counsel_question": "What do the email, preceding call records and engineering note establish about conception of each element?",
+          "elapsed_days": 327
+        }
+      },
+      {
+        "field": "public_disclosures",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "elapsed_days": 263,
+          "event": {
+            "cite": {
+              "quote": "DISC-01,2026-03-10,C1,trade-show demo,Live demo plus one slide describing the PIR-quiet and door-closed baseline gate,\"Smart Workplace Expo 2026, Rotterdam, open floor, about 200 visitors\",yes",
+              "span": "EX-0020"
+            }
+          },
+          "handouts": {
+            "cite": {
+              "quote": "None recorded. Whether the slide was photographed by visitors is unknown.",
+              "span": "EX-0133"
+            }
+          },
+          "not_on_slide": {
+            "cite": {
+              "quote": "The update weight, the per-pixel freeze and the threshold multiplier were not on the slide.",
+              "span": "EX-0130"
+            }
+          },
+          "shown": {
+            "cite": {
+              "quote": "no motion for 20 minutes and the door closed.",
+              "span": "EX-0127"
+            }
+          }
+        }
+      },
+      {
+        "field": "outside_resources",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "agreement": {
+            "cite": {
+              "quote": "consulting agreement CA-2025-11, effective 2025-12-01",
+              "span": "EX-0103"
+            }
+          },
+          "counsel_question": "What did Lin contribute to conception, and what confidentiality, consultancy and university IP terms applied?",
+          "suggestion": {
+            "cite": {
+              "quote": "Why not use the door contact as a room-sealed signal, and only relearn the\nbaseline when the room is sealed and the PIR has been quiet for a while?",
+              "span": "EX-0112"
+            }
+          }
+        }
+      },
+      {
+        "field": "implementation_evidence",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "cite": {
+            "quote": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.",
+            "span": "EX-0035"
+          }
+        }
+      },
+      {
+        "field": "figure_list",
+        "required": false,
+        "status": "complete",
+        "value": {
+          "proposed": [
+            "Sensor and door-contact block diagram",
+            "Baseline update and freeze flowchart",
+            "Per-pixel threshold diagram"
+          ]
+        }
+      },
+      {
+        "field": "open_questions_for_counsel",
+        "required": false,
+        "status": "needs_counsel_confirmation",
+        "value": {
+          "counsel_question": "How should counsel assess the gate and per-pixel learning controls in light of the expo disclosure, prior-art comparison and Lin's contribution? Can the team supply the original expo materials, BL-2026-011, consultant correspondence and signed agreements? Why was the 20-minute window chosen?"
+        }
+      }
+    ],
+    "file": "input/templates/invention-disclosure-form.md",
+    "form": "Invention disclosure form (blank)",
+    "template": "invention-disclosure-form",
+    "template_version": "sha256:91b3338bc119906f1c3e2151c54988ff3a961ebd03ec3528cbabb5e6aeb29451"
+  },
+  "freshness": "current",
+  "ref": "patent.form/C1~invention-disclosure-form@v1"
+}

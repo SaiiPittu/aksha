@@ -1,0 +1,10 @@
+{
+  "content": {
+    "candidate": "C1",
+    "packet": "patent.packet/C1@v1",
+    "question": "Who should receive patent.packet/C1@v1, and do you approve sending this exact version to that recipient?",
+    "status": "not_sent"
+  },
+  "freshness": "current",
+  "ref": "patent.handoff/C1@v1"
+}

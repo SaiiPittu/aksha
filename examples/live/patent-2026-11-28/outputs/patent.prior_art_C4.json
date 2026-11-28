@@ -1,0 +1,148 @@
+{
+  "content": {
+    "candidate": "C4",
+    "families": [
+      {
+        "absence": {
+          "scope": {
+            "query": "syn-pri-2021-1103"
+          },
+          "statement": "No additional uploaded family member identified."
+        },
+        "members": [
+          "SYN-PUB-0007"
+        ],
+        "priority_claim": {
+          "cite": {
+            "quote": "SYN-PRI-2021-1103",
+            "span": "EX-0345"
+          },
+          "value": "SYN-PRI-2021-1103"
+        }
+      }
+    ],
+    "publications": [
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "A battery-powered occupancy sensor comprising a passive infrared detector and a high-power sensing element, wherein the passive infrared detector wakes the high-power sensing element for a fixed observation window upon detecting motion, and the high-power sensing element is switched off if no occupant is classified within the window.",
+              "span": "EX-0332"
+            },
+            "number": 1
+          }
+        ],
+        "comparison": [
+          {
+            "cite": {
+              "quote": "A PIR detector wakes a high-power sensing element for a fixed window.",
+              "span": "EX-0350"
+            },
+            "status": "found"
+          },
+          {
+            "absence": {
+              "scope": {
+                "query": "(pir | thermopile | heartbeat | sampling) AND (motion | wake | wakes | observation window | duty cycle | heartbeat | count changes)"
+              },
+              "statement": "Specific thermopile sampling timing, staged fallback, and count-change messages with periodic heartbeat not found in matching uploaded text."
+            },
+            "candidate_evidence": [
+              {
+                "cite": {
+                  "quote": "When the PIR fires, power the thermopile and sample once per second for a 60 second window.",
+                  "span": "EX-0216"
+                }
+              },
+              {
+                "cite": {
+                  "quote": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings.",
+                  "span": "EX-0218"
+                }
+              },
+              {
+                "cite": {
+                  "quote": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit.",
+                  "span": "EX-0220"
+                }
+              }
+            ],
+            "status": "not_found"
+          }
+        ],
+        "filing_date": {
+          "cite": {
+            "quote": "\"filing\": \"2022-11-02\"",
+            "span": "EX-0347"
+          },
+          "value": "2022-11-02"
+        },
+        "kind_code": {
+          "cite": {
+            "quote": "\"kind_code\": \"A1\"",
+            "span": "EX-0336"
+          },
+          "value": "A1"
+        },
+        "number": {
+          "cite": {
+            "quote": "SYN-PUB-0007",
+            "span": "EX-0334"
+          },
+          "value": "SYN-PUB-0007"
+        },
+        "office": {
+          "cite": {
+            "quote": "SYN-Office-1",
+            "span": "EX-0335"
+          },
+          "value": "SYN-Office-1"
+        },
+        "priority_date": {
+          "cite": {
+            "quote": "\"priority\": \"2021-11-03\"",
+            "span": "EX-0348"
+          },
+          "value": "2021-11-03"
+        },
+        "publication_date": {
+          "cite": {
+            "quote": "\"publication\": \"2023-05-11\"",
+            "span": "EX-0349"
+          },
+          "value": "2023-05-11"
+        },
+        "status_observations": [
+          {
+            "as_of": "2026-10-01",
+            "cite": {
+              "quote": "\"wording\": \"Pending\",\n      \"source\": \"SYN-Office-1 register\",\n      \"as_of\": \"2026-10-01\"",
+              "span": "EX-0332"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Pending"
+          }
+        ],
+        "title": {
+          "cite": {
+            "quote": "Low-power occupancy sensor with motion-triggered sensing window",
+            "span": "EX-0346"
+          }
+        }
+      }
+    ],
+    "query": {
+      "uploaded": [
+        "pir | thermopile | heartbeat | sampling",
+        "motion | wake | wakes | observation window | duty cycle | heartbeat | count changes",
+        "syn-pri-2021-1103"
+      ],
+      "web": [
+        "patent PIR wakes thermopile occupancy sensor low power sampling occupancy change heartbeat",
+        "\"SYN-PRI-2021-1103\" \"motion-triggered sensing window\""
+      ]
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.prior_art/C4@v1"
+}

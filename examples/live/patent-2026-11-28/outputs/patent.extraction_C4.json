@@ -1,0 +1,135 @@
+{
+  "content": {
+    "business_priority": {
+      "cite": {
+        "quote": "2. **Battery install with no cabling.** Our sales pitch is a 15 minute install with no electrician. Battery life of two years or more is the line buyers ask about first. Relates to C4.",
+        "span": "EX-0013"
+      },
+      "rank": 2
+    },
+    "candidate": {
+      "cite": {
+        "quote": "Candidate: C4, battery-saving sampling",
+        "span": "EX-0208"
+      },
+      "value": "C4"
+    },
+    "contributors": [
+      {
+        "cite": {
+          "quote": "Ravi Menon,Stillroom,embedded engineer,C4,Designed the event-driven sampling schedule and heartbeat,2026-01-28,\"employment, standard IP assignment\"",
+          "span": "EX-0228"
+        },
+        "contribution": "Designed the event-driven sampling schedule and heartbeat",
+        "inventorship": {
+          "question": "Who contributed to conception?",
+          "status": "needs_counsel_confirmation"
+        },
+        "name": "Ravi Menon",
+        "outside_contributions": {
+          "question": "Did anyone outside Stillroom contribute to C4?",
+          "status": "needs_counsel_confirmation"
+        },
+        "ownership": {
+          "question": "What does the executed assignment cover?",
+          "status": "needs_counsel_confirmation"
+        }
+      }
+    ],
+    "disclosures": [
+      {
+        "cite": {
+          "quote": "DISC-03,2026-06-02,C4,blog post,\"Full description of event-driven sampling, the 60 second window and the 15 minute heartbeat\",\"public, stillroom.example/blog\",yes",
+          "span": "EX-0022"
+        },
+        "date": "2026-06-02",
+        "describes_fully": true,
+        "elapsed_days": 179,
+        "public": "yes",
+        "question": "Can counsel review the original post to confirm which mechanism details it actually disclosed?"
+      },
+      {
+        "cite": {
+          "quote": "Battery-life chart and a summary of the sampling schedule,\"seed investors, number of recipients not recorded\",unclear",
+          "span": "EX-0023"
+        },
+        "date": null,
+        "describes_fully": false,
+        "elapsed_days": null,
+        "public": "unclear",
+        "question": "When was the email sent, to whom, and under what confidentiality terms?"
+      }
+    ],
+    "implementation": {
+      "cite": {
+        "quote": "Prototype firmware fw-0.8.1 on two units. Power profile not yet measured.",
+        "span": "EX-0065"
+      },
+      "estimate": {
+        "cite": {
+          "quote": "| Average current, estimated | 0.2 | mA | engineering estimate, not measured |",
+          "span": "EX-0058"
+        }
+      },
+      "status": "prototype"
+    },
+    "mechanism": {
+      "alternatives": [
+        {
+          "cite": {
+            "quote": "Fixed one-second sampling with radio batching every minute. Rejected: the thermopile alone draws too much.",
+            "span": "EX-0061"
+          }
+        }
+      ],
+      "problem": {
+        "cite": {
+          "quote": "Reading the thermopile and sending over the radio every second empties a 3,000 mAh battery in about two months.",
+          "span": "EX-0211"
+        }
+      },
+      "steps": [
+        {
+          "cite": {
+            "quote": "Keep the thermopile and the radio off by default; the PIR stays on.",
+            "span": "EX-0214"
+          }
+        },
+        {
+          "cite": {
+            "quote": "When the PIR fires, power the thermopile and sample once per second for a 60 second window.",
+            "span": "EX-0216"
+          }
+        },
+        {
+          "cite": {
+            "quote": "If no occupant is classified in the window, drop back to one sample every 10 seconds, then to PIR-only after 5 minutes of empty readings.",
+            "span": "EX-0218"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Send a radio message only when the count changes, plus a heartbeat every 15 minutes so silence is not mistaken for a dead unit.",
+            "span": "EX-0220"
+          }
+        }
+      ]
+    },
+    "missing_documents": [
+      {
+        "question": "Can you provide an archived copy of the public blog post and any revisions?"
+      },
+      {
+        "question": "Can you supply the investor email, chart, headers, recipient list and applicable confidentiality terms?"
+      },
+      {
+        "question": "Can you provide the signed IP assignment and any outside contributor agreements?"
+      },
+      {
+        "question": "Can you provide measured power profiles and battery-life validation for the prototype?"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.extraction/C4@v1"
+}

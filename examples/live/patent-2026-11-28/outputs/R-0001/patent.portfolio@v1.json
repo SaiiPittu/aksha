@@ -1,0 +1,70 @@
+{
+  "ref": "patent.portfolio@v1",
+  "saved_at_event": 72,
+  "content": {
+    "candidates": [
+      {
+        "business_importance": {
+          "from_research": "unknown",
+          "research": [],
+          "summary": {
+            "cite": {
+              "quote": "Accuracy with still occupants",
+              "span": "EX-0010"
+            }
+          }
+        },
+        "id": "C1"
+      },
+      {
+        "business_importance": {
+          "from_research": "unknown",
+          "research": [],
+          "summary": {
+            "cite": {
+              "quote": "Battery life of two years or more is the line buyers ask about first.",
+              "span": "EX-0012"
+            }
+          }
+        },
+        "id": "C4"
+      },
+      {
+        "business_importance": {
+          "from_research": "unknown",
+          "research": [],
+          "summary": {
+            "cite": {
+              "quote": "No image may leave the device.",
+              "span": "EX-0014"
+            }
+          }
+        },
+        "id": "C3"
+      },
+      {
+        "business_importance": {
+          "from_research": "unknown",
+          "research": [],
+          "summary": {
+            "cite": {
+              "quote": "Useful, but not a reason a buyer chooses us.",
+              "span": "EX-0016"
+            }
+          }
+        },
+        "id": "C2"
+      }
+    ],
+    "plan": {
+      "candidates": [],
+      "forms": [
+        "input/templates/invention-disclosure-form.md",
+        "input/templates/filing-information-worksheet.md"
+      ],
+      "prior_art": true,
+      "priority_cutoff": 0,
+      "send": false
+    }
+  }
+}

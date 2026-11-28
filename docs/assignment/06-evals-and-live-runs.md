@@ -1,13 +1,13 @@
 # Evals, held-out worlds and live runs
 
-*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`; the three live runs below are from 28 Nov 2026.*
+*Status on 28 Nov 2026. Read against `origin/main` at commit `738febd`; the live runs below are all from 28 Nov 2026.*
 
 The problem: a harness can pass every test and still be a scripted demo, and an agent can do well on the world it was built on and fail on the next one. A reviewer needs to know which claims rest on code and tests, which rest on synthetic worlds the agents were tuned on, which rest on worlds nobody tuned for, and which rest on a real model. This page separates the four, gives the real numbers for each, and says what each one does not prove.
 
 Two kinds of claim, kept apart throughout:
 
 1. Harness guarantees are proven offline, by code and tests with rule-based fake models: permissions, citations, invalidation, approvals, one send per key, crash recovery. They hold whatever the model writes.
-2. Model-in-the-loop performance is proven only by live runs on a real model. Three live runs are reported below, and none of them finished all its work; the main cause was a harness bug, described below, that is being fixed.
+2. Model-in-the-loop performance is proven only by live runs on a real model. Three live runs before the fixes are reported first, and none of them finished all its work; the main cause was a harness bug, described below and since fixed. The runs after the fixes follow them.
 
 ## Four tiers of evidence
 
@@ -237,6 +237,11 @@ The fixes merged on 28 Nov 2026, each its own pull request:
 2. [#115](https://github.com/SaiiPittu/aksha/pull/115): a run asks each fast-class request (decide or extract) once; a retry asks only the call that failed.
 3. [#116](https://github.com/SaiiPittu/aksha/pull/116): an empty comparison needs a scoped absence claim, and a world frames its own synthetic pages, so the model does not read the "synthetic" label as a reason to drop every seller.
 4. [#117](https://github.com/SaiiPittu/aksha/pull/117): a limit runs the completion check and ends a Task as a finish would, and no Task declares a turn limit by default (decision 42).
+5. [#120](https://github.com/SaiiPittu/aksha/pull/120): the person chooses. The patent `select` Task always asks, the runtime saves the selection from the answer, and the option labels come from each candidate's code-checked recommendation.
+6. [#121](https://github.com/SaiiPittu/aksha/pull/121): the Patent Agent uses the shared tools (`search_inputs`, `read_document`) and a shared form tool (`read_form`, `fill_form`), and a fast classifier that abstains never hides a blank form.
+7. [#122](https://github.com/SaiiPittu/aksha/pull/122): a plan that names its forms by file matches the forms filled by name.
+
+#116 changed only the research path; the other six apply to both agents or to the Patent Agent.
 
 #### Research, before and after
 
@@ -257,16 +262,76 @@ The final run, 28 Nov 2026, had the settings of run (b): `openai/gpt-6.2-sol` th
 
 The exported events, inspector output, saved outputs and trace are in [examples/live/research-2026-11-28/](../../examples/live/research-2026-11-28/README.md), with the commands to repeat it. It is not a recording, so it does not replay.
 
-#### Patent
+#### Patent, before and after
 
-The Patent Agent's run after the fixes is in progress. A live run exposed the model making the person's selection itself, instead of asking; that is being fixed before the run is repeated.
+Every patent run had the same prompt as run (c), the same 21 input files and the same model binding (`sha256:0b0fe981...` in each `run.started` event), and ran as `R-0001` in its own store. Each run found one new problem, and each problem was fixed in its own pull request before the next run.
+
+| Run | Code | Time | Outcome | Root cause | Fixed in |
+| --- | --- | --- | --- | --- | --- |
+| (c) | `main` at `b0ce9ef`, before the fixes | 45.1 min | `blocked` on the C2, C3 and C4 extractions | The per-key bug; each publication read also took 122 to 226 seconds. | #114, #115 |
+| (d) | `main` at `2cd4ae7`, #114 and #115 | 14.6 min | `blocked` on `candidate[C2]/deep/recommend` | A correct save on the last allowed turn was discarded by the turn limit. | #117 |
+| (e) | `4ec7523`, the code merged as #117 | 12.5 min | `complete`, but hollow | The model saved its own selection without asking, and nothing was prepared. | #120 |
+| (f) | `4ab5b15`, the first commit of #120 | 15.1 min | `blocked` on `prepare[C1]` | A classifier that abstained hid the blank disclosure form; every option label was `:`. | #121, and #120's review for the labels |
+| (g) | `29be30b`, the code merged as #121 | 14.3 min | `blocked` on `prepare[C1]` | Both forms were filled, but the plan named forms by file and the check compared by name. | #122 |
+| final | `main` at `0ba2f2f`, #114 to #122 | 16.9 min | `complete` (`completion_checks_passed`) | None: the person chose C1, both forms were filled, and the packet was saved and held unsent, as the request asked. | |
+
+Times run from `run.started` to `run.ended` and include the wait for the person's answer in runs (f), (g) and the final run, 30, 16 and 23 seconds.
+
+Run (d), 28 Nov 2026, 11:22 to 11:37 IST (India Standard Time), store `live-chat-patent-after1`:
+
+1. What it did: each extraction instance saved under its own key (events 233, 330, 411 and 479), which shows #114 working. The 21 publication reads took at most 0.2 seconds each, against 122 to 226 seconds in run (c), which shows #115 working. All four candidates reached the deep tier.
+2. How it ended: `blocked: candidate[C2]/deep, candidate[C2]/deep/recommend` (event 1025). C1, C3 and C4 passed their recommendation checks.
+3. Root cause: C2's recommendation was refused twice, once for its next action (event 738) and once for the missing fixed sentence (event 751). The model then saved version 3 with `collect_more_evidence` and the sentence (event 756), on turn 6, the last its limit allowed (2 turns times the live factor of 3). The turn limit ended the instance as failed without running the check on that save (event 765), so its parent was blocked (event 760).
+4. Fixed in #117: a limit now runs the completion check first, and no Task declares a turn limit by default.
+
+Run (e), 28 Nov 2026, 13:51 to 14:03 IST, store `live-chat-patent-after2-selfselected`:
+
+1. What it did: all four candidates got extraction, prior art, comparison and a recommendation, each `collect_more_evidence` (version 2 of each). The `table` step wrote, as chat text, "Take C1 and C4 to patent counsel, in that order." (event 904).
+2. How it ended: `complete` (event 921), with no question asked and no form, packet or send.
+3. Root cause: in `select` the model saved `patent.selection` itself (event 913) as a list of objects, C1 and C4 each with its documents. The check `selection_saved` only asked that a selection exist, so it passed (event 920). The fan-out over `selected` read no key from a list of objects, so `prepare`, `packet` and `send` ran no instances.
+4. Fixed in #120: `select` always asks, the runtime saves the selection from the answer as a list of codes, the check `chosen_by_person` compares the two, and a key list holding an item no key can be read from is refused `key_invalid`.
+
+Run (f), 28 Nov 2026, 15:13 to 15:28 IST, store `live-chat-patent-after3-template`:
+
+1. What it did: it asked `I-0001` (event 758), "Which candidates should go to counsel?", followed by one short line per candidate. Every option label was `:`, because the labels were read from table rows that held only `candidate`, `quotes` and `question`. The answer was C1 (event 763), and the saved selection recorded `{"C1": null}` as its recommendations (event 768).
+2. In `prepare[C1]`, `list_templates` listed only the filing-information worksheet (event 791), though the same listing in `scope` had named both blank forms (event 43). The model filled the worksheet (event 834). Every attempt at the invention disclosure form was refused: `read_template` with `not_found` (event 814), then `fill_form` with `unknown_template` three times (events 842, 853 and 862).
+3. How it ended: `blocked: prepare[C1]` (event 867), after `forms_filled` refused three finishes with "fill the forms ['invention-disclosure-form']" (events 848, 857 and 866).
+4. Root cause: the second listing's fast document-kind decision abstained on 5 of its 21 calls, the blank disclosure form among them, and a listing filtered by kind dropped any input whose kind was undecided.
+5. Fixed in #121: a form whose kind decision abstains is recognised by its structure, a listing filtered by kind keeps an undecided input, and the patent form tools are replaced by the shared `read_form` and `fill_form`. The empty labels were fixed in #120's review: labels and recommendations are read from each candidate's recommendation.
+
+Run (g), 28 Nov 2026, 17:34 to 17:48 IST, store `live-chat-patent-after4-formnames`:
+
+1. What it did: it asked `I-0001` (event 812), "Which candidates should go to counsel?", with one labelled option per candidate. Each label is that candidate's next action, drawn from the table and the four recommendations. The answer was C1 (event 817), and the selection saved `{"recommendations": {"C1": "collect_more_evidence"}, "selected": ["C1"]}` (event 822).
+2. `prepare[C1]` filled both forms. `patent.form/C1~invention-disclosure-form@v1` (event 876) has 14 fields: 9 complete, 4 `needs_counsel_confirmation` and 1 missing. `patent.form/C1~filing-information-worksheet@v1` (event 914) has 11 fields: 2 complete, 6 `needs_counsel_confirmation` and 3 missing.
+3. How it ended: `blocked: prepare[C1]` (event 988), after `forms_filled` refused three finishes (events 927, 969 and 987) with "fill the forms ['input/templates/invention-disclosure-form.md', 'input/templates/filing-information-worksheet.md']".
+4. Root cause: the portfolio's plan named the forms by file (`patent.portfolio@v1`, event 55), while filled forms are keyed by name (`C1~invention-disclosure-form`), so the check never found them.
+5. Fixed in #122: the check compares forms by name.
+
+The final run, 28 Nov 2026, 18:16 to 18:33 IST, store `live-chat-patent-final`, session `S-30c81cb04260`, with the settings of run (c) and the mock counsel mailbox bound (`AKSHA_SYSTEMS=counsel_mail=mailbox:...`):
+
+1. What it did: all four candidates got an extraction, a prior-art search, a comparison and a recommendation. Every first recommendation put free text in `next_action` and was refused (events 472, 592, 729 and 858); every accepted version says `collect_more_evidence`.
+2. The question: `I-0001` (event 914), 12.4 minutes in, "Which candidates should go to counsel? All four need more evidence: ...", one option per candidate, each labelled `collect_more_evidence`. The answer was C1 (event 919), and the runtime saved `patent.selection@v1` from it (event 924, origin `choice`).
+3. The forms: `patent.form/C1~invention-disclosure-form@v1` (event 988) has 14 fields, 10 complete and 4 `needs_counsel_confirmation`. `patent.form/C1~filing-information-worksheet@v1` (event 1023) has 11, 2 complete, 6 `needs_counsel_confirmation` and 3 missing.
+4. The packet and hand-off: `patent.packet/C1@v1` (event 1050) opens with "Needs counsel confirmation". The plan had `send: false`, because the request asked to prepare. So `send[C1]` saved `patent.handoff/C1@v1` (event 1072) with status `not_sent` and the question "Who should receive patent.packet/C1@v1, and do you approve sending this exact version to that recipient?" No approval was asked; the mock mailbox stayed empty.
+5. How it ended: `complete` at event 1080, 4.1 minutes after the answer, with 89 model calls and 186 citations bound. `aksha verify` on a copy of the store printed `chain ok` (1,472 events, including the two runs below).
+
+The exported events, inspector output, saved outputs and traces are in [examples/live/patent-2026-11-28/](../../examples/live/patent-2026-11-28/README.md), with the commands to repeat it. The live send is not tried; the approve-and-send step is shown offline by `aksha demo`: an approval bound to the exact packet version, and one delivery after the sending process is killed mid-send.
+
+#### What a follow-up showed
+
+Two follow-ups came after the final run, both "Please send the C1 counsel-review packet to our primary patent counsel (counsel-primary) for review."
+
+1. `R-0002` (event 1083) went by mistake to a new session, `S-c61c5cddee89`. It re-planned with `patent.portfolio@v2` (event 1096): C1 only, `forms: []`, `prior_art: false`, `send: true`, and saved C1's extraction, prior art, comparison, recommendation and table again. It was stopped with `aksha stop` (event 1366) while its selection question `I-0002` waited, and ended `stopped` (event 1368).
+2. `R-0003` (event 1371) went to the right session, `S-30c81cb04260`. It ran the declared recipe again from `scope`, reusing `R-0002`'s versions up to the table (events 1375 to 1396), asked the selection again as `I-0003` (event 1414), and entered `prepare[C1]` while that question waited. The check `forms_filled` did not count `R-0001`'s two forms, which this run had not reused. The model read both blank forms but filled neither, and said three times that the sending tool was unavailable here. The check refused all three finishes and the instance failed (event 1459). The answer C1 came after that (event 1461), and the run ended `blocked: prepare[C1]` (event 1471).
+
+The finding: a follow-up in a finished conversation restarts the agent's declared recipe instead of continuing the conversation. The person asked for one step, the send of a packet that already existed, and got a re-plan, the same question again and a failed preparation. Cross-run reuse is keyed by the agent's writer, not by session, so the stray run's plan also reached the right session ([limitations, item 21](../limitations.md)). The next step is a single-session design in which a follow-up continues its conversation ([limitations, what comes next](../limitations.md#what-comes-next)); status on 28 Nov 2026: planned, not built.
 
 ## Top limitations
 
 The full list is on the [limitations page](../limitations.md). The ones that bear on this page:
 
 1. The evals run in fake model mode only; no eval set has run live (item 12).
-2. Live-model evidence is thin: one research run, after the fixes, ended complete with 5 of 5 competitors; the earlier research runs ended partial, and no Patent Agent run has yet finished live. Item 11 describes only run (a), the one that is recorded.
+2. Live-model evidence is thin: one research run and one patent run, after the fixes, ended complete on the assignment's example prompts, and the earlier runs ended partial or blocked. The patent run saved a packet but did not send it, as its request asked; a live send has not been tried, and a follow-up asking for the send ended blocked. Item 11 describes only run (a), the one that is recorded.
 3. Three of the six held-out worlds are no longer strictly held out, and the offline patent comparison counts words, so most remaining patent failures are matrix cells (item 19).
 4. A world's offline web ranks pages by shared words; live web search has been tested only against a stub (item 17).
 5. A replay answers only what was recorded, so a change to an agent's prompt or tools makes its recordings stale (item 18).
@@ -284,4 +349,6 @@ Read on branch `docs/assignment` at commit `738febd`, 28 Nov 2026.
 - Rule table, completion checks and prompts: `src/aksha/agents/patent/rules.py`, `src/aksha/agents/patent/checks.py`, `src/aksha/agents/research/agent.py` (`evidence` uses the default `max_finish_vetoes`, three), `src/aksha/agents/research/prompts/evidence.md`.
 - Test count: `.venv/bin/python -m pytest --collect-only -q` after `make venv` printed `3742 tests collected`, 28 Nov 2026.
 - Final research run after the fixes: the maintainer's live store `aksha-live/live-chat-research-final/aksha.sqlite`, read from a copy with `aksha verify` (576 events, chain ok), `aksha inspect R-0001`, `aksha show` and `aksha trace R-0001 --out <folder>`, exported to `examples/live/research-2026-11-28/`; compared with `src/aksha/data/worlds/stillroom/key.json`.
+- Patent runs after the fixes, (d) to (g): the maintainer's live stores `live-chat-patent-after1`, `live-chat-patent-after2-selfselected`, `live-chat-patent-after3-template` and `live-chat-patent-after4-formnames` under `aksha-live/`, read from copies with Python's `sqlite3` (1,026, 922, 868 and 989 events). Code versions from each `run.started` event's `runtime_commit`; times from its `run.started` and `run.ended` events; tool timings from `step.completed` events; turn limits from `src/aksha/agents/patent/portfolio.py` before #117 (`SAVE_TURNS = 2`). Run (c)'s store is `aksha-live/live-chat-patent-before`.
+- Final patent run and the follow-ups: the maintainer's live store `aksha-live/live-chat-patent-final/aksha.sqlite`, read from a copy with `aksha verify` (1,472 events, chain ok), `aksha status`, `aksha inspect` of `R-0001`, `R-0002` and `R-0003`, `aksha show`, `aksha trace R-0001` and `aksha trace R-0003`, and Python's `sqlite3` for event times and earlier versions; exported to `examples/live/patent-2026-11-28/`. Check behaviour from `src/aksha/agents/patent/checks.py` (`forms_filled`) and `src/aksha/runtime/tasks/view.py` (`hidden`).
 - Earlier live fixes: [live-mode page](../live-mode.md), and commit `5b11d46` for the schema fix.

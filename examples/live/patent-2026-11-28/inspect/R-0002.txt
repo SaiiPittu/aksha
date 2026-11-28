@@ -1,0 +1,648 @@
+{
+  "agent": "patent",
+  "budget": {
+    "active_ms": 3600000,
+    "model_turns": 480,
+    "tool_calls": 2700
+  },
+  "definition_hash": "sha256:774c4c23b4ec93256c5fea803221d0fb2634e0651771acadcaabe68085f76a2a",
+  "ended": {
+    "outcome": "stopped",
+    "reason": "stop_requested"
+  },
+  "headless": false,
+  "outcome": "stopped",
+  "run": "R-0002",
+  "run_mode": "live",
+  "session": "S-c61c5cddee89",
+  "state": "ended",
+  "steps": [
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1089,
+      "step": "R-0002/scope/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1093,
+      "step": "R-0002/scope/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1095,
+      "step": "R-0002/scope/t02/c01"
+    },
+    {
+      "code": "interrupted",
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1099,
+      "step": "R-0002/scope/t03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1109,
+      "step": "R-0002/candidate[C1]/extract/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1114,
+      "step": "R-0002/candidate[C1]/extract/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 1116,
+      "step": "R-0002/candidate[C1]/extract/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1122,
+      "step": "R-0002/candidate[C1]/extract/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1124,
+      "step": "R-0002/candidate[C1]/extract/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1128,
+      "step": "R-0002/candidate[C1]/extract/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1130,
+      "step": "R-0002/candidate[C1]/extract/t04/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1135,
+      "step": "R-0002/candidate[C1]/extract/t04/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1139,
+      "step": "R-0002/candidate[C1]/extract/t04/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1143,
+      "step": "R-0002/candidate[C1]/extract/t04/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1147,
+      "step": "R-0002/candidate[C1]/extract/t04/c05"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 1151,
+      "step": "R-0002/candidate[C1]/extract/t04/c06"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1156,
+      "step": "R-0002/candidate[C1]/extract/t05"
+    },
+    {
+      "code": "quote_not_verbatim",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 1158,
+      "step": "R-0002/candidate[C1]/extract/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1161,
+      "step": "R-0002/candidate[C1]/extract/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1163,
+      "step": "R-0002/candidate[C1]/extract/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1184,
+      "step": "R-0002/candidate[C1]/extract/t07"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1192,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1199,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 1201,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1206,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1210,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1212,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1216,
+      "step": "R-0002/candidate[C1]/deep/prior_art/t05"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1222,
+      "step": "R-0002/candidate[C1]/deep/compare/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1229,
+      "step": "R-0002/candidate[C1]/deep/compare/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1231,
+      "step": "R-0002/candidate[C1]/deep/compare/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1235,
+      "step": "R-0002/candidate[C1]/deep/compare/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1237,
+      "step": "R-0002/candidate[C1]/deep/compare/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1243,
+      "step": "R-0002/candidate[C1]/deep/recommend/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1249,
+      "step": "R-0002/candidate[C1]/deep/recommend/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1255,
+      "step": "R-0002/candidate[C1]/deep/recommend/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1257,
+      "step": "R-0002/candidate[C1]/deep/recommend/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1261,
+      "step": "R-0002/candidate[C1]/deep/recommend/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1263,
+      "step": "R-0002/candidate[C1]/deep/recommend/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1269,
+      "step": "R-0002/candidate[C1]/deep/recommend/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1271,
+      "step": "R-0002/candidate[C1]/deep/recommend/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1279,
+      "step": "R-0002/table/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1292,
+      "step": "R-0002/table/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1294,
+      "step": "R-0002/table/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1298,
+      "step": "R-0002/table/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1300,
+      "step": "R-0002/table/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1306,
+      "step": "R-0002/select/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1316,
+      "step": "R-0002/select/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "ask",
+      "outcome": "ok",
+      "seq": 1318,
+      "step": "R-0002/select/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1325,
+      "step": "R-0002/prepare[C1]/t01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1335,
+      "step": "R-0002/prepare[C1]/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 1337,
+      "step": "R-0002/prepare[C1]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1343,
+      "step": "R-0002/prepare[C1]/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1345,
+      "step": "R-0002/prepare[C1]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1349,
+      "step": "R-0002/prepare[C1]/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_form",
+      "outcome": "ok",
+      "seq": 1351,
+      "step": "R-0002/prepare[C1]/t04/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_form",
+      "outcome": "ok",
+      "seq": 1356,
+      "step": "R-0002/prepare[C1]/t04/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1361,
+      "step": "R-0002/prepare[C1]/t05"
+    }
+  ],
+  "stop_decisions": [
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 1088,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 1092,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 1098,
+      "verdict": "continue"
+    },
+    {
+      "cause": "resume",
+      "instance": null,
+      "seq": 1100,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1108,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1113,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1121,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1127,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1155,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1160,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 1183,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 1191,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 1198,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 1205,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 1209,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 1215,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/compare",
+      "seq": 1221,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/compare",
+      "seq": 1228,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/compare",
+      "seq": 1234,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 1242,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 1254,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 1260,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 1268,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "table",
+      "seq": 1278,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "table",
+      "seq": 1291,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "table",
+      "seq": 1297,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 1305,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 1315,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 1321,
+      "verdict": "hold"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1324,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1334,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1342,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1348,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1360,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": null,
+      "seq": 1364,
+      "verdict": "hold"
+    },
+    {
+      "cause": "resume",
+      "instance": null,
+      "seq": 1369,
+      "verdict": "stop"
+    }
+  ],
+  "waiting_on": []
+}

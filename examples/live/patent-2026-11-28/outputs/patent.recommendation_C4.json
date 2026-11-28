@@ -1,0 +1,67 @@
+{
+  "content": {
+    "business_importance": {
+      "from_research": "unknown",
+      "note": "Research outputs support business importance only; they are not evidence of technical novelty or prior art.",
+      "research": [],
+      "summary": {
+        "cite": {
+          "quote": "Battery life of two years or more is the line buyers ask about first.",
+          "span": "EX-0012"
+        }
+      }
+    },
+    "candidate": "C4",
+    "next_action": "collect_more_evidence",
+    "why": {
+      "comparison": {
+        "family": "SYN-PRI-2021-1103",
+        "source": "patent.comparison/C4@v1",
+        "states": [
+          "partial",
+          "partial",
+          "not_found",
+          "not_found"
+        ]
+      },
+      "disclosure": {
+        "cite": {
+          "quote": "DISC-03,2026-06-02,C4,blog post,\"Full description of event-driven sampling, the 60 second window and the 15 minute heartbeat\",\"public, stillroom.example/blog\",yes",
+          "span": "EX-0022"
+        },
+        "date": "2026-06-02",
+        "elapsed_days": 179,
+        "question": "Can you provide the original post and revisions?"
+      },
+      "implementation": {
+        "cite": {
+          "quote": "Prototype firmware fw-0.8.1 on two units. Power profile not yet measured.",
+          "span": "EX-0065"
+        },
+        "question": "Can you provide measured power profiles and battery-life validation?"
+      },
+      "inventorship": {
+        "question": "Who contributed to conception?",
+        "status": "needs_counsel_confirmation"
+      },
+      "investor_email": {
+        "cite": {
+          "quote": "Battery-life chart and a summary of the sampling schedule,\"seed investors, number of recipients not recorded\",unclear",
+          "span": "EX-0023"
+        },
+        "date": null,
+        "question": "When was it sent, to whom, and under what confidentiality terms?"
+      },
+      "outside_contributions": {
+        "question": "Did anyone outside Stillroom contribute?",
+        "status": "needs_counsel_confirmation"
+      },
+      "ownership": {
+        "question": "Can you provide the signed assignment, and what does it cover?",
+        "status": "needs_counsel_confirmation"
+      }
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.recommendation/C4@v2"
+}

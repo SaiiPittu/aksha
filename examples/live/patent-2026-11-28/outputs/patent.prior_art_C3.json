@@ -1,0 +1,216 @@
+{
+  "content": {
+    "candidate": "C3",
+    "comparison": [
+      {
+        "cite": {
+          "quote": "transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+          "span": "EX-0298"
+        },
+        "feature": "Local processing, count-only transmission and overlap subtraction",
+        "status": "found"
+      },
+      {
+        "cite": {
+          "quote": "The method of claim 1, wherein room counts are aggregated to floor level.",
+          "span": "EX-0319"
+        },
+        "feature": "Floor-level aggregation",
+        "status": "found"
+      },
+      {
+        "absence": {
+          "scope": {
+            "query": "(overlap | overlapping) AND (occupancy | people counting | people), prior_art_publication"
+          },
+          "statement": "Specific implementation details not found in reviewed uploaded publications"
+        },
+        "feature": "Explicit minimum of two overlap counts, per-device pixel marking at install, 30-second reporting and single-regular-occupant grouping with minimum three rooms",
+        "status": "not_found"
+      }
+    ],
+    "coverage": {
+      "count": 4,
+      "scope": {
+        "query": "(overlap | overlapping) AND (occupancy | people counting | people), prior_art_publication"
+      },
+      "statement": "Uploaded publications matching both groups"
+    },
+    "families": [
+      {
+        "cite": {
+          "quote": "SYN-PRI-2020-0907",
+          "span": "EX-0428"
+        },
+        "members": [
+          "SYN-PUB-0003",
+          "SYN-PUB-0004"
+        ],
+        "priority_number": "SYN-PRI-2020-0907"
+      },
+      {
+        "cite": {
+          "quote": "SYN-PRI-2022-0118, 2022-01-18",
+          "span": "EX-0329"
+        },
+        "members": [
+          "SYN-PUB-0005",
+          "SYN-PUB-0006"
+        ],
+        "priority_number": "SYN-PRI-2022-0118"
+      }
+    ],
+    "publications": [
+      {
+        "cite": {
+          "quote": "Frames from overlapping thermal sensors are merged on a server into one room image before counting.",
+          "span": "EX-0436"
+        },
+        "claims": [
+          {
+            "cite": {
+              "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image.",
+              "span": "EX-0415"
+            },
+            "number": 1
+          }
+        ],
+        "filing_date": "2021-09-06",
+        "kind_code": "A1",
+        "number": "SYN-PUB-0003",
+        "priority_date": "2020-09-07",
+        "publication_date": "2022-03-17",
+        "status": [
+          {
+            "as_of": "2026-09-15",
+            "cite": {
+              "quote": "\"wording\": \"Pending\"",
+              "span": "EX-0415"
+            },
+            "source": "SYN-Office-1 register",
+            "wording": "Pending"
+          }
+        ]
+      },
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "A system comprising a plurality of thermal sensors with overlapping fields of view and a server configured to receive frames from each sensor, register the frames to a common grid, merge the registered frames into a single room image, and count persons in the single room image.",
+              "span": "EX-0439"
+            },
+            "number": 1
+          }
+        ],
+        "filing_date": "2021-09-06",
+        "kind_code": "A1",
+        "number": "SYN-PUB-0004",
+        "priority_date": "2020-09-07",
+        "publication_date": "2022-04-06",
+        "status": [
+          {
+            "as_of": "2026-09-15",
+            "cite": {
+              "quote": "Application deemed to be withdrawn",
+              "span": "EX-0439"
+            },
+            "source": "SYN-Office-2 register",
+            "wording": "Application deemed to be withdrawn"
+          }
+        ]
+      },
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "A method of counting occupants of a room monitored by a first sensor and a second sensor with an overlap region, comprising: at each sensor, counting persons locally and counting persons within the overlap region; transmitting only the counts; and computing a room count as the sum of the counts minus the overlap count.",
+              "span": "EX-0298"
+            },
+            "number": 1
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein each sensor updates a background estimate only while no motion has been detected for a holding period.",
+              "span": "EX-0299"
+            },
+            "number": 2
+          }
+        ],
+        "filing_date": "2023-01-17",
+        "kind_code": "A1",
+        "number": "SYN-PUB-0005",
+        "priority_date": "2022-01-18",
+        "publication_date": "2023-07-20",
+        "status": [
+          {
+            "as_of": "2025-02-11",
+            "cite": {
+              "quote": "Application closed - patent granted",
+              "span": "EX-0279"
+            },
+            "source": "SYN-Office-2 register",
+            "wording": "Application closed - patent granted"
+          }
+        ]
+      },
+      {
+        "claims": [
+          {
+            "cite": {
+              "quote": "of the counts minus the overlap count, wherein the sensors transmit no image data.",
+              "span": "EX-0317"
+            },
+            "number": 1
+          },
+          {
+            "cite": {
+              "quote": "The method of claim 1, wherein room counts are aggregated to floor level.",
+              "span": "EX-0319"
+            },
+            "number": 2
+          }
+        ],
+        "filing_date": "2023-01-17",
+        "grant_date": "2025-02-11",
+        "kind_code": "B1",
+        "number": "SYN-PUB-0006",
+        "priority_date": "2022-01-18",
+        "publication_date": {
+          "question": "Is a separate publication date recorded?",
+          "value": null
+        },
+        "status": [
+          {
+            "cite": {
+              "quote": "Granted",
+              "span": "EX-0330"
+            },
+            "source": "SYN-PUB-0006 B1, page 1",
+            "wording": "Granted"
+          },
+          {
+            "cite": {
+              "quote": "Legal status (register extract, 2026-08-03): Lapsed - renewal fee not paid (2025-11-30).",
+              "span": "EX-0321"
+            },
+            "source": "register extract, 2026-08-03",
+            "wording": "Lapsed - renewal fee not paid (2025-11-30)."
+          }
+        ]
+      }
+    ],
+    "query": {
+      "priority": [
+        "SYN-PRI-2020-0907",
+        "SYN-PRI-2022-0118"
+      ],
+      "uploaded": "(overlap | overlapping) AND (occupancy | people counting | people), prior_art_publication",
+      "web": [
+        "patent people counting overlapping camera fields subtract minimum overlap count occupancy",
+        "\"SYN-PRI-2022-0118\" OR \"SYN-PRI-2020-0907\" privacy-preserving occupancy overlapping sensors"
+      ]
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.prior_art/C3@v1"
+}

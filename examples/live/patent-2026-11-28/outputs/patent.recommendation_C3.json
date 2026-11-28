@@ -1,0 +1,61 @@
+{
+  "content": {
+    "business_importance": {
+      "from_research": "unknown",
+      "note": "Research outputs support business importance only; they are not evidence of technical novelty or prior art.",
+      "research": [],
+      "summary": {
+        "cite": {
+          "quote": "3. **Privacy story for EU works councils.** No image may leave the device. Works councils in Germany and the Netherlands ask for this in writing. Relates to C3.",
+          "span": "EX-0015"
+        }
+      }
+    },
+    "candidate": "C3",
+    "next_action": "collect_more_evidence",
+    "why": {
+      "inventorship": {
+        "question": "Who contributed to the conception of each mechanism step?",
+        "status": "needs_counsel_confirmation"
+      },
+      "mechanism": {
+        "cite": {
+          "quote": "The room aggregator computes room count = A + B - min(overlap_A, overlap_B).",
+          "span": "EX-0189"
+        }
+      },
+      "missing_documents": [
+        {
+          "question": "Can you provide executed NDA-2026-03 and the materials shown in the pilot?",
+          "value": null
+        },
+        {
+          "question": "Can you provide the executed IP assignment and any agreements with outside contributors?",
+          "value": null
+        },
+        {
+          "question": "Can you provide a system diagram and pilot test results?",
+          "value": null
+        }
+      ],
+      "outside_contributions": {
+        "question": "Did any customer or other outside party contribute to C3?",
+        "status": "needs_counsel_confirmation"
+      },
+      "ownership": {
+        "question": "Is there an executed assignment covering C3?",
+        "status": "needs_counsel_confirmation"
+      },
+      "pilot": {
+        "cite": {
+          "quote": "Aggregator running in the pilot at a customer office since 15 Apr 2026, under NDA.",
+          "span": "EX-0056"
+        },
+        "question": "Which mechanism details were actually shared or visible to the facilities team?"
+      },
+      "summary": "Focus the evidence collection on the specific overlap correction and privacy roll-up rather than count-only transmission alone."
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.recommendation/C3@v2"
+}

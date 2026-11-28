@@ -1,0 +1,14 @@
+{
+  "content": {
+    "candidate": "C1",
+    "families": [],
+    "publications": [],
+    "query": {
+      "question": "Should a prior-art review be run for C1?",
+      "reason": "The portfolio plan sets prior_art to false; the preliminary uploaded-publication search was not a completed review.",
+      "status": "not_checked"
+    }
+  },
+  "freshness": "current",
+  "ref": "patent.prior_art/C1@v2"
+}

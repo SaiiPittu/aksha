@@ -1,0 +1,30 @@
+{
+  "content": {
+    "candidate": "C2",
+    "cells": [
+      {
+        "element": "Working-height footprint and seat coverage",
+        "family": "SYN-PRI-2019-0630",
+        "state": "disclosed"
+      },
+      {
+        "element": "Doorway exposure",
+        "family": "SYN-PRI-2019-0630",
+        "state": "partial"
+      },
+      {
+        "absence": {
+          "scope": {
+            "query": "syn-pri-2019-0630"
+          },
+          "statement": "These details were not found in the retrieved placement family."
+        },
+        "element": "Overlap and heat-source scoring; post-install marked-spot walk test; exact 1.2 m and 90 degree parameters",
+        "family": "SYN-PRI-2019-0630",
+        "state": "not_found"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.comparison/C2@v1"
+}

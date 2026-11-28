@@ -1,0 +1,44 @@
+{
+  "ref": "patent.table@v1",
+  "saved_at_event": 892,
+  "content": {
+    "rows": [
+      {
+        "candidate": "C1",
+        "cite": {
+          "artifact": "patent.recommendation/C1@v2",
+          "path": "/why"
+        },
+        "next_action": "collect_more_evidence",
+        "why": "Working firmware; public demo of gate; outside conception and assignment questions."
+      },
+      {
+        "candidate": "C2",
+        "cite": {
+          "artifact": "patent.recommendation/C2@v2",
+          "path": "/why"
+        },
+        "next_action": "collect_more_evidence",
+        "why": "Sketch; placement-family overlap; verify walk test and contractor contribution."
+      },
+      {
+        "candidate": "C3",
+        "cite": {
+          "artifact": "patent.recommendation/C3@v2",
+          "path": "/why"
+        },
+        "next_action": "collect_more_evidence",
+        "why": "Customer pilot; document overlap correction, privacy roll-up and NDA scope."
+      },
+      {
+        "candidate": "C4",
+        "cite": {
+          "artifact": "patent.recommendation/C4@v2",
+          "path": "/why"
+        },
+        "next_action": "collect_more_evidence",
+        "why": "Public blog disclosure; prototype power unmeasured; verify investor-email circumstances."
+      }
+    ]
+  }
+}

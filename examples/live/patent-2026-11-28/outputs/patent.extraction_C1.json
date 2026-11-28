@@ -1,0 +1,150 @@
+{
+  "content": {
+    "business_priority": {
+      "cite": {
+        "quote": "1. **Accuracy with still occupants.** Facilities buyers reject sensors that report a room empty while someone is in it. Losing a pilot over \"the lights went off while I was sitting\" is our most common failure story. Relates to C1.",
+        "span": "EX-0011"
+      },
+      "rank": 1
+    },
+    "candidate": "C1",
+    "contributors": {
+      "inventorship": {
+        "question": "Who contributed to conception?",
+        "status": "needs_counsel_confirmation"
+      },
+      "outside_contributions": {
+        "cite": {
+          "quote": "Why not use the door contact as a room-sealed signal, and only relearn the\nbaseline when the room is sealed and the PIR has been quiet for a while?",
+          "span": "EX-0112"
+        },
+        "question": "How should counsel treat Dr. Wei Lin's suggestion and any university rights?",
+        "status": "needs_counsel_confirmation"
+      },
+      "ownership": {
+        "question": "What do the executed agreements assign?",
+        "status": "needs_counsel_confirmation"
+      },
+      "records": [
+        {
+          "cite": {
+            "quote": "Wrote the gated baseline update rule and the engineering note",
+            "span": "EX-0101"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Implemented the gated update in firmware fw-0.9.3",
+            "span": "EX-0102"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Reviewed the thermal noise model",
+            "span": "EX-0103"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Presented the self-calibration demo at the trade show",
+            "span": "EX-0104"
+          }
+        }
+      ]
+    },
+    "disclosures": [
+      {
+        "cite": {
+          "quote": "DISC-01,2026-03-10,C1,trade-show demo,Live demo plus one slide describing the PIR-quiet and door-closed baseline gate",
+          "span": "EX-0020"
+        },
+        "date": "2026-03-10",
+        "describes_fully": false,
+        "elapsed_days": 263,
+        "not_shown": {
+          "cite": {
+            "quote": "The update weight, the per-pixel freeze and the threshold multiplier were not on the slide.",
+            "span": "EX-0130"
+          }
+        },
+        "public": "yes"
+      },
+      {
+        "cite": {
+          "quote": "DISC-05,2026-01-05,C1,outside email,Dr. Lin suggested using the door contact as a room-sealed signal for calibration,private email to Asha Rao,no,P-05",
+          "span": "EX-0024"
+        },
+        "date": "2026-01-05",
+        "describes_fully": false,
+        "elapsed_days": 327,
+        "public": "no"
+      }
+    ],
+    "implementation": {
+      "cite": {
+        "quote": "Firmware build fw-0.9.3 runs the gated update on the four test units in the 3rd-floor meeting room. Bench log reference BL-2026-011.",
+        "span": "EX-0035"
+      },
+      "status": "built_and_tested"
+    },
+    "mechanism": {
+      "question": "What supports the 20-minute choice?",
+      "steps": [
+        {
+          "cite": {
+            "quote": "The Stillroom S1 ceiling unit holds an 8 x 8 thermopile array (64 pixels) and a PIR (passive infrared) motion sensor, and reads the room's door contact over the local radio link.",
+            "span": "EX-0081"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Treat the room as verified empty only when the PIR has seen no motion for 20 minutes and the door contact reports closed.",
+            "span": "EX-0083"
+          }
+        },
+        {
+          "cite": {
+            "quote": "During a verified-empty window, record each pixel's mean temperature and its standard deviation over the window.",
+            "span": "EX-0085"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Update the baseline slowly: new baseline = 0.99 x old baseline + 0.01 x window mean, once per minute.",
+            "span": "EX-0087"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Freeze learning in any pixel where a person was detected in the last 10 minutes, so a still person is never absorbed into the background.",
+            "span": "EX-0089"
+          }
+        },
+        {
+          "cite": {
+            "quote": "Set each pixel's detection threshold to baseline + 4 x that pixel's standard deviation.",
+            "span": "EX-0091"
+          }
+        }
+      ]
+    },
+    "missing_documents": [
+      {
+        "cite": {
+          "quote": "Bench log reference BL-2026-011.",
+          "span": "EX-0099"
+        },
+        "question": "Can you provide the bench log?"
+      },
+      {
+        "cite": {
+          "quote": "consulting agreement CA-2025-11, effective 2025-12-01",
+          "span": "EX-0103"
+        },
+        "question": "Can you provide the executed consulting agreement and relevant assignments?"
+      }
+    ]
+  },
+  "freshness": "current",
+  "ref": "patent.extraction/C1@v2"
+}

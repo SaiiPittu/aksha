@@ -1,0 +1,2116 @@
+{
+  "agent": "patent",
+  "budget": {
+    "active_ms": 3600000,
+    "model_turns": 480,
+    "tool_calls": 2700
+  },
+  "definition_hash": "sha256:774c4c23b4ec93256c5fea803221d0fb2634e0651771acadcaabe68085f76a2a",
+  "ended": {
+    "outcome": "complete",
+    "reason": "completion_checks_passed"
+  },
+  "headless": false,
+  "outcome": "complete",
+  "run": "R-0001",
+  "run_mode": "live",
+  "session": "S-30c81cb04260",
+  "state": "ended",
+  "steps": [
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 30,
+      "step": "R-0001/scope/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 32,
+      "step": "R-0001/scope/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 38,
+      "step": "R-0001/scope/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 40,
+      "step": "R-0001/scope/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 44,
+      "step": "R-0001/scope/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 48,
+      "step": "R-0001/scope/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 52,
+      "step": "R-0001/scope/t02/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 56,
+      "step": "R-0001/scope/t02/c05"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 60,
+      "step": "R-0001/scope/t02/c06"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 65,
+      "step": "R-0001/scope/t03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 69,
+      "step": "R-0001/scope/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 71,
+      "step": "R-0001/scope/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 79,
+      "step": "R-0001/scope/t05"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 87,
+      "step": "R-0001/candidate[C1]/extract/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 91,
+      "step": "R-0001/candidate[C1]/extract/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 97,
+      "step": "R-0001/candidate[C1]/extract/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 99,
+      "step": "R-0001/candidate[C1]/extract/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 104,
+      "step": "R-0001/candidate[C1]/extract/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 108,
+      "step": "R-0001/candidate[C1]/extract/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 112,
+      "step": "R-0001/candidate[C1]/extract/t02/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 116,
+      "step": "R-0001/candidate[C1]/extract/t02/c05"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 120,
+      "step": "R-0001/candidate[C1]/extract/t02/c06"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 125,
+      "step": "R-0001/candidate[C1]/extract/t03"
+    },
+    {
+      "code": "quote_not_verbatim",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 127,
+      "step": "R-0001/candidate[C1]/extract/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 130,
+      "step": "R-0001/candidate[C1]/extract/t04"
+    },
+    {
+      "code": "quote_not_verbatim",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 132,
+      "step": "R-0001/candidate[C1]/extract/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 135,
+      "step": "R-0001/candidate[C1]/extract/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 137,
+      "step": "R-0001/candidate[C1]/extract/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 159,
+      "step": "R-0001/candidate[C1]/extract/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 161,
+      "step": "R-0001/candidate[C1]/extract/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 167,
+      "step": "R-0001/candidate[C2]/extract/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 171,
+      "step": "R-0001/candidate[C2]/extract/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 177,
+      "step": "R-0001/candidate[C2]/extract/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 179,
+      "step": "R-0001/candidate[C2]/extract/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 183,
+      "step": "R-0001/candidate[C2]/extract/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 187,
+      "step": "R-0001/candidate[C2]/extract/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 191,
+      "step": "R-0001/candidate[C2]/extract/t02/c04"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 197,
+      "step": "R-0001/candidate[C2]/extract/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 199,
+      "step": "R-0001/candidate[C2]/extract/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 221,
+      "step": "R-0001/candidate[C2]/extract/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 223,
+      "step": "R-0001/candidate[C2]/extract/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 229,
+      "step": "R-0001/candidate[C3]/extract/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 233,
+      "step": "R-0001/candidate[C3]/extract/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 239,
+      "step": "R-0001/candidate[C3]/extract/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 241,
+      "step": "R-0001/candidate[C3]/extract/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 245,
+      "step": "R-0001/candidate[C3]/extract/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 249,
+      "step": "R-0001/candidate[C3]/extract/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 253,
+      "step": "R-0001/candidate[C3]/extract/t02/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 257,
+      "step": "R-0001/candidate[C3]/extract/t02/c05"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 262,
+      "step": "R-0001/candidate[C3]/extract/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 264,
+      "step": "R-0001/candidate[C3]/extract/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 283,
+      "step": "R-0001/candidate[C3]/extract/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 285,
+      "step": "R-0001/candidate[C3]/extract/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 291,
+      "step": "R-0001/candidate[C4]/extract/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 295,
+      "step": "R-0001/candidate[C4]/extract/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 301,
+      "step": "R-0001/candidate[C4]/extract/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 303,
+      "step": "R-0001/candidate[C4]/extract/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 307,
+      "step": "R-0001/candidate[C4]/extract/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 311,
+      "step": "R-0001/candidate[C4]/extract/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 315,
+      "step": "R-0001/candidate[C4]/extract/t02/c04"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 320,
+      "step": "R-0001/candidate[C4]/extract/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 322,
+      "step": "R-0001/candidate[C4]/extract/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 338,
+      "step": "R-0001/candidate[C4]/extract/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 340,
+      "step": "R-0001/candidate[C4]/extract/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 348,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 353,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 358,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 360,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 363,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 366,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t02/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 370,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 372,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 377,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 381,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 385,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c04"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 389,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c05"
+    },
+    {
+      "kind": "tool",
+      "name": "fetch_url",
+      "outcome": "ok",
+      "seq": 393,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t03/c06"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 398,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 400,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t04/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 403,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t04/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 406,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t04/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 410,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 412,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 424,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 426,
+      "step": "R-0001/candidate[C1]/deep/prior_art/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 432,
+      "step": "R-0001/candidate[C1]/deep/compare/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 438,
+      "step": "R-0001/candidate[C1]/deep/compare/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 442,
+      "step": "R-0001/candidate[C1]/deep/compare/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 444,
+      "step": "R-0001/candidate[C1]/deep/compare/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 450,
+      "step": "R-0001/candidate[C1]/deep/recommend/t01"
+    },
+    {
+      "code": "span_not_seen",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 456,
+      "step": "R-0001/candidate[C1]/deep/recommend/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 459,
+      "step": "R-0001/candidate[C1]/deep/recommend/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 461,
+      "step": "R-0001/candidate[C1]/deep/recommend/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 468,
+      "step": "R-0001/candidate[C1]/deep/recommend/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 470,
+      "step": "R-0001/candidate[C1]/deep/recommend/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 474,
+      "step": "R-0001/candidate[C1]/deep/recommend/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 476,
+      "step": "R-0001/candidate[C1]/deep/recommend/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 483,
+      "step": "R-0001/candidate[C1]/deep/recommend/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 485,
+      "step": "R-0001/candidate[C1]/deep/recommend/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 494,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 499,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t01/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 503,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t01/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 506,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t01/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 510,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 512,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 517,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t02/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 522,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 524,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 528,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 530,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 550,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 552,
+      "step": "R-0001/candidate[C2]/deep/prior_art/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 558,
+      "step": "R-0001/candidate[C2]/deep/compare/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 564,
+      "step": "R-0001/candidate[C2]/deep/compare/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 568,
+      "step": "R-0001/candidate[C2]/deep/compare/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 570,
+      "step": "R-0001/candidate[C2]/deep/compare/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 576,
+      "step": "R-0001/candidate[C2]/deep/recommend/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 582,
+      "step": "R-0001/candidate[C2]/deep/recommend/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 588,
+      "step": "R-0001/candidate[C2]/deep/recommend/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 590,
+      "step": "R-0001/candidate[C2]/deep/recommend/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 594,
+      "step": "R-0001/candidate[C2]/deep/recommend/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 596,
+      "step": "R-0001/candidate[C2]/deep/recommend/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 602,
+      "step": "R-0001/candidate[C2]/deep/recommend/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 604,
+      "step": "R-0001/candidate[C2]/deep/recommend/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 613,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 618,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t01/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 622,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t01/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 625,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t01/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 629,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 631,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 636,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t02/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 640,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t02/c03"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 644,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t02/c04"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 649,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 651,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t03/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 654,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t03/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 657,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t03/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 661,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t04"
+    },
+    {
+      "code": "cite_invalid",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 663,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 666,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 668,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 686,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 688,
+      "step": "R-0001/candidate[C3]/deep/prior_art/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 694,
+      "step": "R-0001/candidate[C3]/deep/compare/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 700,
+      "step": "R-0001/candidate[C3]/deep/compare/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 704,
+      "step": "R-0001/candidate[C3]/deep/compare/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 706,
+      "step": "R-0001/candidate[C3]/deep/compare/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 712,
+      "step": "R-0001/candidate[C3]/deep/recommend/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 718,
+      "step": "R-0001/candidate[C3]/deep/recommend/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 725,
+      "step": "R-0001/candidate[C3]/deep/recommend/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 727,
+      "step": "R-0001/candidate[C3]/deep/recommend/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 731,
+      "step": "R-0001/candidate[C3]/deep/recommend/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 733,
+      "step": "R-0001/candidate[C3]/deep/recommend/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 740,
+      "step": "R-0001/candidate[C3]/deep/recommend/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 742,
+      "step": "R-0001/candidate[C3]/deep/recommend/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 751,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 756,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 761,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 763,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 768,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t02/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 772,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 774,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t03/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "web_search",
+      "outcome": "ok",
+      "seq": 777,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t03/c02"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 780,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t03/c03"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 784,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t04"
+    },
+    {
+      "code": "quote_not_verbatim",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 786,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 789,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t05"
+    },
+    {
+      "code": "quote_too_short",
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "error",
+      "seq": 791,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 794,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 796,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 814,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t07"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 816,
+      "step": "R-0001/candidate[C4]/deep/prior_art/t07/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 822,
+      "step": "R-0001/candidate[C4]/deep/compare/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 828,
+      "step": "R-0001/candidate[C4]/deep/compare/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 832,
+      "step": "R-0001/candidate[C4]/deep/compare/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 834,
+      "step": "R-0001/candidate[C4]/deep/compare/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 840,
+      "step": "R-0001/candidate[C4]/deep/recommend/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 846,
+      "step": "R-0001/candidate[C4]/deep/recommend/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 854,
+      "step": "R-0001/candidate[C4]/deep/recommend/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 856,
+      "step": "R-0001/candidate[C4]/deep/recommend/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 860,
+      "step": "R-0001/candidate[C4]/deep/recommend/t03"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 862,
+      "step": "R-0001/candidate[C4]/deep/recommend/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 870,
+      "step": "R-0001/candidate[C4]/deep/recommend/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 872,
+      "step": "R-0001/candidate[C4]/deep/recommend/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 880,
+      "step": "R-0001/table/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 891,
+      "step": "R-0001/table/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 899,
+      "step": "R-0001/table/t02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 905,
+      "step": "R-0001/select/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "ask",
+      "outcome": "ok",
+      "seq": 913,
+      "step": "R-0001/select/t01/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 922,
+      "step": "R-0001/select/t02/c01/derived"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 926,
+      "step": "R-0001/select/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 928,
+      "step": "R-0001/select/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 934,
+      "step": "R-0001/prepare[C1]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "list_inputs",
+      "outcome": "ok",
+      "seq": 942,
+      "step": "R-0001/prepare[C1]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 948,
+      "step": "R-0001/prepare[C1]/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "read_form",
+      "outcome": "ok",
+      "seq": 950,
+      "step": "R-0001/prepare[C1]/t02/c01"
+    },
+    {
+      "kind": "tool",
+      "name": "read_form",
+      "outcome": "ok",
+      "seq": 955,
+      "step": "R-0001/prepare[C1]/t02/c02"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 960,
+      "step": "R-0001/prepare[C1]/t03"
+    },
+    {
+      "code": "span_not_seen",
+      "kind": "tool",
+      "name": "fill_form",
+      "outcome": "error",
+      "seq": 962,
+      "step": "R-0001/prepare[C1]/t03/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 965,
+      "step": "R-0001/prepare[C1]/t04"
+    },
+    {
+      "kind": "tool",
+      "name": "search_inputs",
+      "outcome": "ok",
+      "seq": 967,
+      "step": "R-0001/prepare[C1]/t04/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 971,
+      "step": "R-0001/prepare[C1]/t05"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 973,
+      "step": "R-0001/prepare[C1]/t05/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 978,
+      "step": "R-0001/prepare[C1]/t06"
+    },
+    {
+      "kind": "tool",
+      "name": "read_document",
+      "outcome": "ok",
+      "seq": 980,
+      "step": "R-0001/prepare[C1]/t06/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 985,
+      "step": "R-0001/prepare[C1]/t07"
+    },
+    {
+      "kind": "tool",
+      "name": "fill_form",
+      "outcome": "ok",
+      "seq": 987,
+      "step": "R-0001/prepare[C1]/t07/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1020,
+      "step": "R-0001/prepare[C1]/t08"
+    },
+    {
+      "kind": "tool",
+      "name": "fill_form",
+      "outcome": "ok",
+      "seq": 1022,
+      "step": "R-0001/prepare[C1]/t08/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1031,
+      "step": "R-0001/prepare[C1]/t09"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1033,
+      "step": "R-0001/prepare[C1]/t09/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1039,
+      "step": "R-0001/packet[C1]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1049,
+      "step": "R-0001/packet[C1]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1058,
+      "step": "R-0001/packet[C1]/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1060,
+      "step": "R-0001/packet[C1]/t02/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1066,
+      "step": "R-0001/send[C1]/t01"
+    },
+    {
+      "kind": "tool",
+      "name": "save_artifact",
+      "outcome": "ok",
+      "seq": 1071,
+      "step": "R-0001/send[C1]/t01/c01"
+    },
+    {
+      "kind": "model",
+      "name": "generate",
+      "outcome": "ok",
+      "seq": 1075,
+      "step": "R-0001/send[C1]/t02"
+    },
+    {
+      "kind": "tool",
+      "name": "finish",
+      "outcome": "ok",
+      "seq": 1077,
+      "step": "R-0001/send[C1]/t02/c01"
+    }
+  ],
+  "stop_decisions": [
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 29,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 37,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 64,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 68,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "scope",
+      "seq": 78,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 86,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 96,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 124,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 129,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 134,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/extract",
+      "seq": 158,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/extract",
+      "seq": 166,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/extract",
+      "seq": 176,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/extract",
+      "seq": 196,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/extract",
+      "seq": 220,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/extract",
+      "seq": 228,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/extract",
+      "seq": 238,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/extract",
+      "seq": 261,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/extract",
+      "seq": 282,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/extract",
+      "seq": 290,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/extract",
+      "seq": 300,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/extract",
+      "seq": 319,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/extract",
+      "seq": 337,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 347,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 357,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 369,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 397,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 409,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/prior_art",
+      "seq": 423,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/compare",
+      "seq": 431,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/compare",
+      "seq": 441,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 449,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 458,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 467,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 473,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C1]/deep/recommend",
+      "seq": 482,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/prior_art",
+      "seq": 493,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/prior_art",
+      "seq": 509,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/prior_art",
+      "seq": 521,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/prior_art",
+      "seq": 527,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/prior_art",
+      "seq": 549,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/compare",
+      "seq": 557,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/compare",
+      "seq": 567,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/recommend",
+      "seq": 575,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/recommend",
+      "seq": 587,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/recommend",
+      "seq": 593,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C2]/deep/recommend",
+      "seq": 601,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 612,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 628,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 648,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 660,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 665,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/prior_art",
+      "seq": 685,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/compare",
+      "seq": 693,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/compare",
+      "seq": 703,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/recommend",
+      "seq": 711,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/recommend",
+      "seq": 724,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/recommend",
+      "seq": 730,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C3]/deep/recommend",
+      "seq": 739,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 750,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 760,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 771,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 783,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 788,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 793,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/prior_art",
+      "seq": 813,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/compare",
+      "seq": 821,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/compare",
+      "seq": 831,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/recommend",
+      "seq": 839,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/recommend",
+      "seq": 853,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/recommend",
+      "seq": 859,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "candidate[C4]/deep/recommend",
+      "seq": 869,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "table",
+      "seq": 879,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "table",
+      "seq": 898,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 904,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 916,
+      "verdict": "hold"
+    },
+    {
+      "cause": "continuation",
+      "instance": null,
+      "seq": 917,
+      "verdict": "hold"
+    },
+    {
+      "cause": "continuation",
+      "instance": "select",
+      "seq": 921,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 933,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 947,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 959,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 964,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 970,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 977,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 984,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1019,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "prepare[C1]",
+      "seq": 1030,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "packet[C1]",
+      "seq": 1038,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "packet[C1]",
+      "seq": 1057,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "send[C1]",
+      "seq": 1065,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": "send[C1]",
+      "seq": 1074,
+      "verdict": "continue"
+    },
+    {
+      "cause": "continuation",
+      "instance": null,
+      "seq": 1081,
+      "verdict": "stop"
+    }
+  ],
+  "waiting_on": []
+}
